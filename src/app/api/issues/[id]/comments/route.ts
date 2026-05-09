@@ -1,6 +1,13 @@
+import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { comment, commentAttachment, issue, team } from "@/lib/db/schema";
+import {
+  comment,
+  commentAttachment,
+  issue,
+  issueHistory,
+  team,
+} from "@/lib/db/schema";
 import {
   buildNotificationValues,
   insertNotifications,
@@ -60,8 +67,13 @@ export async function POST(
   }
 
   const { id } = await params;
+  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  if (!workspaceId) {
+    return NextResponse.json({ error: "No workspace found" }, { status: 400 });
+  }
+
   const currentIssue = await findIssueRecord(id);
-  if (!currentIssue) {
+  if (!currentIssue || currentIssue.workspaceId !== workspaceId) {
     return NextResponse.json({ error: "Issue not found" }, { status: 404 });
   }
 
@@ -158,6 +170,18 @@ export async function POST(
       if (attachmentRows.length > 0) {
         await tx.insert(commentAttachment).values(attachmentRows);
       }
+
+      await tx.insert(issueHistory).values({
+        issueId: currentIssue.id,
+        actorId: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email ?? null,
+        eventType: "comment_created",
+        metadata: {
+          commentId,
+          attachmentCount: attachmentRows.length,
+        },
+      });
 
       return insertedComment[0];
     });

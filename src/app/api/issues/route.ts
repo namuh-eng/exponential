@@ -1,6 +1,13 @@
+import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { issue, issueLabel, team, workflowState } from "@/lib/db/schema";
+import {
+  issue,
+  issueHistory,
+  issueLabel,
+  team,
+  workflowState,
+} from "@/lib/db/schema";
 import { normalizeIssueDescriptionHtml } from "@/lib/issue-description";
 import {
   buildNotificationValues,
@@ -38,8 +45,13 @@ export async function POST(request: Request) {
   }
 
   // Get team to generate identifier
+  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  if (!workspaceId) {
+    return NextResponse.json({ error: "No workspace found" }, { status: 400 });
+  }
+
   const teams = await db
-    .select({ id: team.id, key: team.key })
+    .select({ id: team.id, key: team.key, workspaceId: team.workspaceId })
     .from(team)
     .where(eq(team.id, teamId))
     .limit(1);
@@ -49,6 +61,9 @@ export async function POST(request: Request) {
   }
 
   const teamRecord = teams[0];
+  if (teamRecord.workspaceId !== workspaceId) {
+    return NextResponse.json({ error: "Team not found" }, { status: 404 });
+  }
 
   // Get next issue number for this team
   const maxResult = await db
@@ -114,6 +129,19 @@ export async function POST(request: Request) {
         })),
       );
     }
+
+    await tx.insert(issueHistory).values({
+      issueId: createdIssue.id,
+      actorId: session.user.id,
+      actorName: session.user.name ?? null,
+      actorEmail: session.user.email ?? null,
+      eventType: "created",
+      metadata: {
+        identifier: createdIssue.identifier,
+        title: createdIssue.title,
+        teamId,
+      },
+    });
 
     return createdIssue;
   });

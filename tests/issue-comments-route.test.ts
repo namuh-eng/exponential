@@ -6,6 +6,8 @@ const resolveMentionedUserIdsMock = vi.fn();
 const buildNotificationValuesMock = vi.fn();
 const insertNotificationsMock = vi.fn();
 const insertCommentValuesMock = vi.fn();
+const insertHistoryValuesMock = vi.fn();
+const resolveActiveWorkspaceIdMock = vi.fn();
 const randomUuidMock = vi.spyOn(crypto, "randomUUID");
 
 vi.mock("@/lib/auth", () => ({
@@ -29,11 +31,16 @@ vi.mock("@/lib/notifications", () => ({
   insertNotifications: insertNotificationsMock,
 }));
 
+vi.mock("@/lib/active-workspace", () => ({
+  resolveActiveWorkspaceId: resolveActiveWorkspaceIdMock,
+}));
+
 vi.mock("@/lib/db/schema", () => ({
   issue: {},
   team: {},
   comment: { __name: "comment" },
   commentAttachment: { __name: "commentAttachment" },
+  issueHistory: { __name: "issueHistory" },
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -54,8 +61,13 @@ vi.mock("@/lib/db", () => ({
         }) => Promise<unknown>,
       ) => {
         const tx = {
-          insert: (_table: { __name?: string }) => ({
+          insert: (table: { __name?: string }) => ({
             values: (...valuesArgs: unknown[]) => {
+              if (table.__name === "issueHistory") {
+                insertHistoryValuesMock(...valuesArgs);
+                return Promise.resolve();
+              }
+
               insertCommentValuesMock(...valuesArgs);
               return {
                 returning: vi.fn().mockResolvedValue([
@@ -94,8 +106,14 @@ describe("issue comments route", () => {
     randomUuidMock.mockReset();
     randomUuidMock.mockReturnValue("comment-1");
     getSessionMock.mockResolvedValue({
-      user: { id: "user-1", name: "Ashley", image: null },
+      user: {
+        id: "user-1",
+        name: "Ashley",
+        email: "ashley@example.com",
+        image: null,
+      },
     });
+    resolveActiveWorkspaceIdMock.mockResolvedValue("workspace-1");
     issueLimitMock.mockReset();
     issueLimitMock.mockResolvedValue([issueRecord]);
     resolveMentionedUserIdsMock.mockResolvedValue(["user-3"]);
@@ -176,6 +194,17 @@ describe("issue comments route", () => {
       body: "Hello @user-3",
       issueId: "issue-1",
       userId: "user-1",
+    });
+    expect(insertHistoryValuesMock).toHaveBeenCalledWith({
+      issueId: "issue-1",
+      actorId: "user-1",
+      actorName: "Ashley",
+      actorEmail: "ashley@example.com",
+      eventType: "comment_created",
+      metadata: {
+        commentId: "comment-1",
+        attachmentCount: 0,
+      },
     });
     expect(insertNotificationsMock).toHaveBeenCalledWith([
       { type: "mentioned", userId: "user-3" },

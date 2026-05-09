@@ -1,9 +1,11 @@
+import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
   comment,
   commentAttachment,
   issue,
+  issueHistory,
   issueLabel,
   label,
   project,
@@ -40,10 +42,12 @@ async function findIssueRecord(id: string) {
       createdAt: issue.createdAt,
       updatedAt: issue.updatedAt,
       teamId: issue.teamId,
+      workspaceId: team.workspaceId,
       canceledAt: issue.canceledAt,
       completedAt: issue.completedAt,
     })
     .from(issue)
+    .innerJoin(team, eq(issue.teamId, team.id))
     .where(eq(issue.identifier, id))
     .limit(1);
 
@@ -69,10 +73,12 @@ async function findIssueRecord(id: string) {
       createdAt: issue.createdAt,
       updatedAt: issue.updatedAt,
       teamId: issue.teamId,
+      workspaceId: team.workspaceId,
       canceledAt: issue.canceledAt,
       completedAt: issue.completedAt,
     })
     .from(issue)
+    .innerJoin(team, eq(issue.teamId, team.id))
     .where(eq(issue.id, id))
     .limit(1);
 
@@ -89,9 +95,13 @@ export async function GET(
   }
 
   const { id } = await params;
+  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  if (!workspaceId) {
+    return NextResponse.json({ error: "No workspace found" }, { status: 400 });
+  }
 
   const iss = await findIssueRecord(id);
-  if (!iss) {
+  if (!iss || iss.workspaceId !== workspaceId) {
     return NextResponse.json({ error: "Issue not found" }, { status: 404 });
   }
 
@@ -316,6 +326,11 @@ export async function PATCH(
   }
 
   const { id } = await params;
+  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  if (!workspaceId) {
+    return NextResponse.json({ error: "No workspace found" }, { status: 400 });
+  }
+
   const body = (await request.json()) as {
     title?: string;
     description?: string | null;
@@ -324,13 +339,14 @@ export async function PATCH(
   };
 
   const existingIssue = await findIssueRecord(id);
-  if (!existingIssue) {
+  if (!existingIssue || existingIssue.workspaceId !== workspaceId) {
     return NextResponse.json({ error: "Issue not found" }, { status: 404 });
   }
 
   const updateData: Partial<typeof issue.$inferInsert> = {
     updatedAt: new Date(),
   };
+  const changedFields: string[] = [];
 
   if (body.title !== undefined) {
     const nextTitle = body.title.trim();
@@ -342,10 +358,17 @@ export async function PATCH(
     }
 
     updateData.title = nextTitle;
+    if (nextTitle !== existingIssue.title) {
+      changedFields.push("title");
+    }
   }
 
   if (body.description !== undefined) {
-    updateData.description = normalizeIssueDescriptionHtml(body.description);
+    const nextDescription = normalizeIssueDescriptionHtml(body.description);
+    updateData.description = nextDescription;
+    if (nextDescription !== existingIssue.description) {
+      changedFields.push("description");
+    }
   }
 
   if (body.stateId !== undefined) {
@@ -368,6 +391,9 @@ export async function PATCH(
     }
 
     updateData.stateId = nextState.id;
+    if (nextState.id !== existingIssue.stateId) {
+      changedFields.push("stateId");
+    }
     updateData.completedAt =
       nextState.category === "completed" ? new Date() : null;
     updateData.canceledAt =
@@ -390,6 +416,9 @@ export async function PATCH(
 
   if (body.sortOrder !== undefined) {
     updateData.sortOrder = body.sortOrder;
+    if (body.sortOrder !== existingIssue.sortOrder) {
+      changedFields.push("sortOrder");
+    }
   }
 
   const updated = await db
@@ -404,6 +433,20 @@ export async function PATCH(
       stateId: issue.stateId,
       sortOrder: issue.sortOrder,
     });
+
+  if (updated[0] && changedFields.length > 0) {
+    await db.insert(issueHistory).values({
+      issueId: existingIssue.id,
+      actorId: session.user.id,
+      actorName: session.user.name ?? null,
+      actorEmail: session.user.email ?? null,
+      eventType: "updated",
+      metadata: {
+        changedFields,
+        identifier: existingIssue.identifier,
+      },
+    });
+  }
 
   if (
     body.stateId !== undefined &&
@@ -433,8 +476,13 @@ export async function DELETE(
   }
 
   const { id } = await params;
+  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  if (!workspaceId) {
+    return NextResponse.json({ error: "No workspace found" }, { status: 400 });
+  }
+
   const existingIssue = await findIssueRecord(id);
-  if (!existingIssue) {
+  if (!existingIssue || existingIssue.workspaceId !== workspaceId) {
     return NextResponse.json({ error: "Issue not found" }, { status: 404 });
   }
 

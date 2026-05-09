@@ -6,9 +6,11 @@ const maxWhereMock = vi.fn();
 const defaultStateLimitMock = vi.fn();
 const insertIssueValuesMock = vi.fn();
 const insertLabelsValuesMock = vi.fn();
+const insertHistoryValuesMock = vi.fn();
 const buildNotificationValuesMock = vi.fn();
 const insertNotificationsMock = vi.fn();
 const normalizeIssueDescriptionHtmlMock = vi.fn();
+const resolveActiveWorkspaceIdMock = vi.fn();
 let selectCallCount = 0;
 
 vi.mock("@/lib/auth", () => ({
@@ -21,6 +23,10 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/issue-description", () => ({
   normalizeIssueDescriptionHtml: normalizeIssueDescriptionHtmlMock,
+}));
+
+vi.mock("@/lib/active-workspace", () => ({
+  resolveActiveWorkspaceId: resolveActiveWorkspaceIdMock,
 }));
 
 vi.mock("@/lib/notifications", () => ({
@@ -77,6 +83,15 @@ vi.mock("@/lib/db", () => ({
               };
             }
 
+            if (typedTable.__name === "issueHistory") {
+              return {
+                values: (...valuesArgs: unknown[]) => {
+                  insertHistoryValuesMock(...valuesArgs);
+                  return Promise.resolve();
+                },
+              };
+            }
+
             return {
               values: (...valuesArgs: unknown[]) => {
                 insertIssueValuesMock(...valuesArgs);
@@ -111,6 +126,7 @@ vi.mock("@/lib/db", () => ({
 
 vi.mock("@/lib/db/schema", () => ({
   issue: { __name: "issue" },
+  issueHistory: { __name: "issueHistory" },
   issueLabel: { __name: "issueLabel" },
   team: {},
   workflowState: {},
@@ -125,8 +141,13 @@ describe("issues route", () => {
     vi.resetModules();
     vi.clearAllMocks();
     selectCallCount = 0;
-    getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
-    teamLimitMock.mockResolvedValue([{ id: "team-1", key: "ENG" }]);
+    getSessionMock.mockResolvedValue({
+      user: { id: "user-1", name: "Ashley", email: "ashley@example.com" },
+    });
+    resolveActiveWorkspaceIdMock.mockResolvedValue("workspace-1");
+    teamLimitMock.mockResolvedValue([
+      { id: "team-1", key: "ENG", workspaceId: "workspace-1" },
+    ]);
     maxWhereMock.mockResolvedValue([{ maxNum: 7 }]);
     defaultStateLimitMock.mockResolvedValue([{ id: "state-backlog" }]);
     normalizeIssueDescriptionHtmlMock.mockReturnValue("<p>normalized</p>");
@@ -242,6 +263,18 @@ describe("issues route", () => {
       { issueId: "issue-1", labelId: "label-1" },
       { issueId: "issue-1", labelId: "label-2" },
     ]);
+    expect(insertHistoryValuesMock).toHaveBeenCalledWith({
+      issueId: "issue-1",
+      actorId: "user-1",
+      actorName: "Ashley",
+      actorEmail: "ashley@example.com",
+      eventType: "created",
+      metadata: {
+        identifier: "ENG-8",
+        title: "Ship this",
+        teamId: "team-1",
+      },
+    });
     expect(insertNotificationsMock).toHaveBeenCalledWith([
       { type: "assigned", userId: "user-2" },
     ]);
