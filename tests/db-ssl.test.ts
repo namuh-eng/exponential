@@ -100,7 +100,7 @@ describe("db/index.ts SSL configuration", () => {
     expect(Pool).toHaveBeenCalledWith(
       expect.objectContaining({
         connectionString:
-          "postgresql://postgres:password@localhost:5432/namuh_linear",
+          "postgresql://postgres:password@localhost:5432/whetline",
         ssl: undefined,
       }),
     );

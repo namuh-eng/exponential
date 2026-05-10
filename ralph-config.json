@@ -1,6 +1,6 @@
 {
   "targetUrl": "https://linear.app",
-  "targetName": "namuh-linear",
+  "targetName": "whetline",
   "cloudProvider": "aws",
   "deploymentTier": "team",
   "framework": "nextjs",
