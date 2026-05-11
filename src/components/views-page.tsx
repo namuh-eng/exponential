@@ -21,8 +21,8 @@ interface ViewTeam {
   name: string;
 }
 
-const ISSUE_FILTER_STORAGE_PREFIX = "namuh-linear-filters:team:";
-const PROJECT_VIEW_STORAGE_KEY = "namuh-linear-project-view:workspace";
+const ISSUE_FILTER_STORAGE_PREFIX = "whetline-filters:team:";
+const PROJECT_VIEW_STORAGE_KEY = "whetline-project-view:workspace";
 
 function getStorage(): Pick<
   Storage,

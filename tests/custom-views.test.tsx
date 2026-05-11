@@ -146,7 +146,7 @@ describe("ViewsPage", () => {
 
   it("creates issue views with captured team filters", async () => {
     window.localStorage.setItem(
-      "namuh-linear-filters:team:ONB",
+      "whetline-filters:team:ONB",
       JSON.stringify([{ type: "status", operator: "is", values: ["started"] }]),
     );
 
@@ -193,7 +193,7 @@ describe("ViewsPage", () => {
 
     fireEvent.click(await screen.findByText("High priority onboarding"));
 
-    expect(window.localStorage.getItem("namuh-linear-filters:team:ONB")).toBe(
+    expect(window.localStorage.getItem("whetline-filters:team:ONB")).toBe(
       JSON.stringify([{ type: "priority", operator: "is", values: ["high"] }]),
     );
     expect(push).toHaveBeenCalledWith("/team/ONB/all");
@@ -211,7 +211,7 @@ describe("ViewsPage", () => {
     fireEvent.click(screen.getByText("Project progress"));
 
     expect(
-      window.localStorage.getItem("namuh-linear-project-view:workspace"),
+      window.localStorage.getItem("whetline-project-view:workspace"),
     ).toBe(
       JSON.stringify({
         statusFilter: "started",

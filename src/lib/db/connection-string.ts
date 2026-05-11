@@ -7,7 +7,7 @@ export function getDatabaseUrl() {
   const password = process.env.DB_PASSWORD ?? "password";
   const host = process.env.DB_HOST ?? "localhost";
   const port = process.env.DB_PORT ?? "5432";
-  const name = process.env.DB_NAME ?? "namuh_linear";
+  const name = process.env.DB_NAME ?? "whetline";
 
   return `postgresql://${user}:${password}@${host}:${port}/${name}`;
 }

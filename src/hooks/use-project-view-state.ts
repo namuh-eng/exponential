@@ -12,7 +12,7 @@ export interface ProjectViewState {
   teamId: string | null;
 }
 
-const PROJECT_VIEW_STORAGE_PREFIX = "namuh-linear-project-view:";
+const PROJECT_VIEW_STORAGE_PREFIX = "whetline-project-view:";
 
 const defaultProjectViewState: ProjectViewState = {
   statusFilter: "all",

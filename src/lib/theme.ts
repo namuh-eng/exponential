@@ -1,5 +1,5 @@
-export const APP_THEME_STORAGE_KEY = "namuh-linear-theme";
-export const APP_THEME_CHANGE_EVENT = "namuh-linear:theme-change";
+export const APP_THEME_STORAGE_KEY = "whetline-theme";
+export const APP_THEME_CHANGE_EVENT = "whetline:theme-change";
 
 export type AppTheme = "system" | "light" | "dark";
 

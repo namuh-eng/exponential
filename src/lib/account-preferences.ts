@@ -1,7 +1,7 @@
 import { type AppTheme, isAppTheme } from "@/lib/theme";
 
 export const ACCOUNT_PREFERENCES_CHANGE_EVENT =
-  "namuh-linear:account-preferences-change";
+  "whetline:account-preferences-change";
 
 export type DefaultHomeView = "my-issues" | "inbox" | "active-issues";
 export type DisplayNamesPreference = "full" | "first";

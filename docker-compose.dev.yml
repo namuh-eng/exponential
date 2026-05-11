@@ -15,7 +15,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: namuh-linear:dev
+    image: whetline:dev
     environment:
       NODE_ENV: development
     volumes:

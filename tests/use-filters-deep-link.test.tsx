@@ -42,7 +42,7 @@ describe("useFilters hook", () => {
     });
 
     // Check LocalStorage
-    const stored = localStorage.getItem("namuh-linear-filters:test-scope");
+    const stored = localStorage.getItem("whetline-filters:test-scope");
     expect(JSON.parse(stored!)).toEqual([{ type: "priority", operator: "is", values: ["high"] }]);
 
     // Check URL Sync

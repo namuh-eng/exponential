@@ -4,7 +4,7 @@ import type { FilterCondition } from "@/components/filter-bar";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-const FILTER_STORAGE_PREFIX = "namuh-linear-filters:";
+const FILTER_STORAGE_PREFIX = "whetline-filters:";
 
 function getStorage(): Pick<
   Storage,

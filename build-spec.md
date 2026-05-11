@@ -1,4 +1,4 @@
-# Build Spec — Linear Clone (namuh-linear)
+# Build Spec — Linear Clone (whetline)
 
 > **Status**: COMPLETE — all pages inspected, ready for build phase
 
