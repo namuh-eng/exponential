@@ -210,9 +210,7 @@ describe("ViewsPage", () => {
 
     fireEvent.click(screen.getByText("Project progress"));
 
-    expect(
-      window.localStorage.getItem("whetline-project-view:workspace"),
-    ).toBe(
+    expect(window.localStorage.getItem("whetline-project-view:workspace")).toBe(
       JSON.stringify({
         statusFilter: "started",
         sortBy: "progress-desc",

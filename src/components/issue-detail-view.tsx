@@ -85,6 +85,16 @@ interface IssueDetail {
   updatedAt: string;
 }
 
+type IssueHistoryEventType = "created" | "updated" | "comment_created";
+
+interface IssueHistoryEvent {
+  id: string;
+  type: IssueHistoryEventType;
+  metadata: Record<string, unknown>;
+  actor: { id: string; name: string | null; email: string | null } | null;
+  createdAt: string;
+}
+
 const QUICK_REACTIONS = ["👍", "🚀", "👀", "❤️"];
 const DESCRIPTION_ACTIONS: ReadonlyArray<{
   label: string;
@@ -126,6 +136,102 @@ function formatFileSize(size: number): string {
   }
 
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeHistoryEvent(value: unknown): IssueHistoryEvent | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const { id, type, metadata, actor, createdAt } = value;
+  if (
+    typeof id !== "string" ||
+    (type !== "created" && type !== "updated" && type !== "comment_created") ||
+    typeof createdAt !== "string"
+  ) {
+    return null;
+  }
+
+  const normalizedActor = isRecord(actor)
+    ? {
+        id: typeof actor.id === "string" ? actor.id : "",
+        name: typeof actor.name === "string" ? actor.name : null,
+        email: typeof actor.email === "string" ? actor.email : null,
+      }
+    : null;
+
+  return {
+    id,
+    type,
+    metadata: isRecord(metadata) ? metadata : {},
+    actor: normalizedActor,
+    createdAt,
+  };
+}
+
+function getHistoryActorName(event: IssueHistoryEvent): string {
+  return event.actor?.name ?? event.actor?.email ?? "Someone";
+}
+
+function getChangedFieldsLabel(metadata: Record<string, unknown>): string {
+  const changedFields = metadata.changedFields;
+  if (
+    !Array.isArray(changedFields) ||
+    !changedFields.every((field): field is string => typeof field === "string")
+  ) {
+    return "issue details";
+  }
+
+  const labels = changedFields.map((field) => {
+    switch (field) {
+      case "stateId":
+        return "status";
+      case "assigneeId":
+        return "assignee";
+      case "projectId":
+        return "project";
+      default:
+        return field.replace(/Id$/, "");
+    }
+  });
+
+  if (labels.length === 0) {
+    return "issue details";
+  }
+
+  if (labels.length === 1) {
+    return labels[0] ?? "issue details";
+  }
+
+  return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+}
+
+function getHistoryEventDescription(event: IssueHistoryEvent): string {
+  const actorName = getHistoryActorName(event);
+
+  switch (event.type) {
+    case "created": {
+      const legacySuffix =
+        event.metadata.migrationFallback === true ? " from legacy data" : "";
+      return `${actorName} created this issue${legacySuffix}`;
+    }
+    case "updated":
+      return `${actorName} updated ${getChangedFieldsLabel(event.metadata)}`;
+    case "comment_created": {
+      const attachmentCount = event.metadata.attachmentCount;
+      const attachmentLabel =
+        typeof attachmentCount === "number" && attachmentCount > 0
+          ? ` with ${attachmentCount} ${
+              attachmentCount === 1 ? "attachment" : "attachments"
+            }`
+          : "";
+      return `${actorName} added a comment${attachmentLabel}`;
+    }
+  }
 }
 
 function AttachmentChip({
@@ -212,6 +318,9 @@ function CommentReactions({
 export function IssueDetailView({ issueId }: { issueId: string }) {
   const [issue, setIssue] = useState<IssueDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [historyEvents, setHistoryEvents] = useState<IssueHistoryEvent[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [savingField, setSavingField] = useState<
     "title" | "description" | null
   >(null);
@@ -237,6 +346,33 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
     window.localStorage.setItem(LAST_ISSUE_STORAGE_KEY, issueId);
   }, [issueId]);
 
+  const fetchHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const res = await fetch(`/api/issues/${issueId}/history`);
+      if (!res.ok) {
+        throw new Error("Failed to load issue history");
+      }
+
+      const json = (await res.json()) as unknown;
+      const history =
+        isRecord(json) && Array.isArray(json.history)
+          ? json.history
+              .map((event) => normalizeHistoryEvent(event))
+              .filter((event): event is IssueHistoryEvent => event !== null)
+          : [];
+      setHistoryEvents(history);
+    } catch {
+      setHistoryEvents([]);
+      setHistoryError(
+        "Couldn’t load activity history. Comments are still available.",
+      );
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [issueId]);
+
   const fetchIssue = useCallback(async () => {
     setLoading(true);
     try {
@@ -258,6 +394,10 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
   useEffect(() => {
     void fetchIssue();
   }, [fetchIssue]);
+
+  useEffect(() => {
+    void fetchHistory();
+  }, [fetchHistory]);
 
   useEffect(() => {
     if (!issue) {
@@ -315,6 +455,7 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
             }
           : current,
       );
+      void fetchHistory();
     } finally {
       setSavingField(null);
     }
@@ -422,6 +563,7 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
       setCommentBody("");
       setPendingAttachments([]);
       window.dispatchEvent(new CustomEvent("notifications:changed"));
+      void fetchHistory();
 
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
@@ -746,6 +888,48 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
                 Activity
               </h2>
 
+              {historyLoading && (
+                <div className="mb-4 rounded-[18px] border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
+                  Loading activity history...
+                </div>
+              )}
+
+              {historyError && (
+                <div className="mb-4 rounded-[18px] border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
+                  {historyError}
+                </div>
+              )}
+
+              {!historyLoading && !historyError && historyEvents.length > 0 && (
+                <div className="mb-5 space-y-3">
+                  {historyEvents.map((event) => (
+                    <div
+                      key={event.id}
+                      className="flex gap-3 rounded-[18px] border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-3"
+                    >
+                      <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--color-accent)]" />
+                      <div className="min-w-0">
+                        <div className="text-[13px] text-[var(--color-text-primary)]">
+                          {getHistoryEventDescription(event)}
+                        </div>
+                        <div className="mt-1 text-[12px] text-[var(--color-text-secondary)]">
+                          {formatFullDate(event.createdAt)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!historyLoading &&
+              !historyError &&
+              historyEvents.length === 0 &&
+              issue.comments.length === 0 ? (
+                <p className="text-[13px] text-[var(--color-text-secondary)]">
+                  No activity yet
+                </p>
+              ) : null}
+
               {issue.comments.length > 0 ? (
                 <div className="space-y-5">
                   {issue.comments.map((comment) => (
@@ -789,11 +973,7 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
                     </div>
                   ))}
                 </div>
-              ) : (
-                <p className="text-[13px] text-[var(--color-text-secondary)]">
-                  No activity yet
-                </p>
-              )}
+              ) : null}
 
               <div className="mt-6 rounded-[24px] border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-4">
                 <textarea

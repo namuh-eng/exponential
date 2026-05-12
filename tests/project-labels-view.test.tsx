@@ -14,13 +14,25 @@ describe("ProjectLabelsPage component", () => {
 
   const mockLabelsData = {
     labels: [
-      { id: "l1", name: "Roadmap", color: "#ff0000", description: "Strategic initiatives", issueCount: 5 },
-      { id: "l2", name: "Internal", color: "#00ff00", description: null, issueCount: 0 },
+      {
+        id: "l1",
+        name: "Roadmap",
+        color: "#ff0000",
+        description: "Strategic initiatives",
+        issueCount: 5,
+      },
+      {
+        id: "l2",
+        name: "Internal",
+        color: "#00ff00",
+        description: null,
+        issueCount: 0,
+      },
     ],
   };
 
   it("renders loading state then project labels", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => mockLabelsData,
     });
@@ -41,7 +53,7 @@ describe("ProjectLabelsPage component", () => {
   });
 
   it("shows empty state when no labels exist", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => ({ labels: [] }),
     });
@@ -54,7 +66,7 @@ describe("ProjectLabelsPage component", () => {
   });
 
   it("shows error message when fetch fails", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: false,
     });
 

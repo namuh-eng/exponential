@@ -17,10 +17,12 @@ const lastIssueLimitMock = vi.fn();
 const updateSetMock = vi.fn();
 const updateWhereMock = vi.fn();
 const updateReturningMock = vi.fn();
+const insertHistoryValuesMock = vi.fn();
 const getDownloadUrlMock = vi.fn();
 const normalizeIssueDescriptionHtmlMock = vi.fn();
 const buildNotificationValuesMock = vi.fn();
 const insertNotificationsMock = vi.fn();
+const resolveActiveWorkspaceIdMock = vi.fn();
 let selectCallCount = 0;
 
 vi.mock("@/lib/auth", () => ({
@@ -33,6 +35,10 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/issue-description", () => ({
   normalizeIssueDescriptionHtml: normalizeIssueDescriptionHtmlMock,
+}));
+
+vi.mock("@/lib/active-workspace", () => ({
+  resolveActiveWorkspaceId: resolveActiveWorkspaceIdMock,
 }));
 
 vi.mock("@/lib/notifications", () => ({
@@ -52,8 +58,10 @@ vi.mock("@/lib/db", () => ({
       if (selection && "identifier" in selection && "number" in selection) {
         return {
           from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              limit: issueLimitMock,
+            innerJoin: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                limit: issueLimitMock,
+              }),
             }),
           }),
         };
@@ -184,6 +192,12 @@ vi.mock("@/lib/db", () => ({
         };
       },
     })),
+    insert: vi.fn(() => ({
+      values: (...valuesArgs: unknown[]) => {
+        insertHistoryValuesMock(...valuesArgs);
+        return Promise.resolve();
+      },
+    })),
     delete: vi.fn(() => ({
       where: vi.fn().mockResolvedValue([{ id: "issue-1" }]),
     })),
@@ -199,7 +213,10 @@ describe("issue detail route", () => {
     vi.resetModules();
     vi.clearAllMocks();
     selectCallCount = 0;
-    getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
+    getSessionMock.mockResolvedValue({
+      user: { id: "user-1", name: "Ashley", email: "ashley@example.com" },
+    });
+    resolveActiveWorkspaceIdMock.mockResolvedValue("workspace-1");
     issueLimitMock.mockResolvedValue([
       {
         id: "issue-1",
@@ -218,6 +235,7 @@ describe("issue detail route", () => {
         createdAt: new Date("2026-04-23T09:00:00.000Z"),
         updatedAt: new Date("2026-04-23T10:00:00.000Z"),
         teamId: "team-1",
+        workspaceId: "workspace-1",
         canceledAt: null,
         completedAt: null,
       },
@@ -448,6 +466,17 @@ describe("issue detail route", () => {
     expect(insertNotificationsMock).toHaveBeenCalledWith([
       { type: "status_change", userId: "user-2" },
     ]);
+    expect(insertHistoryValuesMock).toHaveBeenCalledWith({
+      issueId: "issue-1",
+      actorId: "user-1",
+      actorName: "Ashley",
+      actorEmail: "ashley@example.com",
+      eventType: "updated",
+      metadata: {
+        changedFields: ["title", "description", "stateId"],
+        identifier: "ENG-1",
+      },
+    });
     await expect(response.json()).resolves.toEqual({
       id: "issue-1",
       title: "Updated title",

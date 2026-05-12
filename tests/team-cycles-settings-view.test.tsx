@@ -36,7 +36,7 @@ describe("TeamCyclesSettingsPage component", () => {
   };
 
   it("renders loading state then cycles", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => mockCyclesData,
     });
@@ -55,7 +55,7 @@ describe("TeamCyclesSettingsPage component", () => {
   });
 
   it("shows disabled warning when cycles are disabled", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => ({
         ...mockCyclesData,
@@ -67,12 +67,14 @@ describe("TeamCyclesSettingsPage component", () => {
     render(<TeamCyclesSettingsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Cycles are currently disabled for this team/i)).toBeDefined();
+      expect(
+        screen.getByText(/Cycles are currently disabled for this team/i),
+      ).toBeDefined();
     });
   });
 
   it("shows empty state when no cycles exist", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => ({
         ...mockCyclesData,
@@ -83,7 +85,9 @@ describe("TeamCyclesSettingsPage component", () => {
     render(<TeamCyclesSettingsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("No cycles have been created for this team.")).toBeDefined();
+      expect(
+        screen.getByText("No cycles have been created for this team."),
+      ).toBeDefined();
     });
   });
 });

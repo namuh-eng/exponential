@@ -1,9 +1,8 @@
-import { auth } from "@/lib/auth";
+import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { label, team, teamMember, workflowState } from "@/lib/db/schema";
 import { findAccessibleTeam } from "@/lib/teams";
 import { and, count, eq, ne } from "drizzle-orm";
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 type TeamSettingsFlags = {
@@ -89,9 +88,9 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ key: string }> },
 ) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
   }
 
   const { key } = await params;
@@ -108,9 +107,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ key: string }> },
 ) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
   }
 
   const { key } = await params;
@@ -280,9 +279,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ key: string }> },
 ) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
   }
 
   const { key } = await params;

@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
   initiative,
@@ -7,7 +7,7 @@ import {
   project,
 } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 async function resolveWorkspaceId(userId: string) {
@@ -34,9 +34,9 @@ async function resolveWorkspaceId(userId: string) {
 }
 
 export async function GET(_request: Request) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
   }
 
   const workspaceId = await resolveWorkspaceId(session.user.id);
@@ -84,9 +84,9 @@ export async function GET(_request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
   }
 
   const workspaceId = await resolveWorkspaceId(session.user.id);

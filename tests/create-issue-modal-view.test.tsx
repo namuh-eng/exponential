@@ -22,15 +22,9 @@ const mockOptions = {
     { value: "urgent", label: "Urgent" },
     { value: "high", label: "High" },
   ],
-  assignees: [
-    { id: "u1", name: "Ashley", image: null },
-  ],
-  labels: [
-    { id: "l1", name: "Bug", color: "#f00" },
-  ],
-  projects: [
-    { id: "p1", name: "Agent Speed", icon: "⚡" },
-  ],
+  assignees: [{ id: "u1", name: "Ashley", image: null }],
+  labels: [{ id: "l1", name: "Bug", color: "#f00" }],
+  projects: [{ id: "p1", name: "Agent Speed", icon: "⚡" }],
 };
 
 describe("CreateIssueModal UI", () => {
@@ -55,11 +49,15 @@ describe("CreateIssueModal UI", () => {
 
     render(<CreateIssueModal {...defaultProps} />);
 
-    expect(screen.getByLabelText("Create issue for Engineering")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Create issue for Engineering"),
+    ).toBeInTheDocument();
     expect(screen.getByText("New issue")).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalledWith("/api/teams/ENG/create-issue-options");
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/teams/ENG/create-issue-options",
+      );
     });
   });
 
@@ -148,13 +146,19 @@ describe("CreateIssueModal UI", () => {
     fireEvent.click(screen.getByRole("button", { name: "Status" }));
     const todoOption = await screen.findByRole("button", { name: "Todo" });
     fireEvent.click(todoOption);
-    expect(screen.queryByRole("button", { name: "Todo" })).not.toBeInTheDocument(); // Menu closed
-    expect(screen.getByRole("button", { name: "Status" })).toHaveTextContent("Todo");
+    expect(
+      screen.queryByRole("button", { name: "Todo" }),
+    ).not.toBeInTheDocument(); // Menu closed
+    expect(screen.getByRole("button", { name: "Status" })).toHaveTextContent(
+      "Todo",
+    );
 
     // Change priority
     fireEvent.click(screen.getByRole("button", { name: "Priority" }));
     const urgentOption = await screen.findByRole("button", { name: "Urgent" });
     fireEvent.click(urgentOption);
-    expect(screen.getByRole("button", { name: "Priority" })).toHaveTextContent("Urgent");
+    expect(screen.getByRole("button", { name: "Priority" })).toHaveTextContent(
+      "Urgent",
+    );
   });
 });

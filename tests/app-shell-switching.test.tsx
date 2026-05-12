@@ -1,8 +1,8 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "@/app/(app)/app-shell";
 import { usePathname } from "next/navigation";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Mock next/navigation
 vi.mock("next/navigation", () => ({
@@ -23,26 +23,30 @@ describe("AppShell context switching", () => {
     teamName: "Team A",
     teamId: "t-a",
     teamKey: "TA",
-    teams: [{ id: "t-a", name: "Team A", key: "TA" }, { id: "t-b", name: "Team B", key: "TB" }],
+    teams: [
+      { id: "t-a", name: "Team A", key: "TA" },
+      { id: "t-b", name: "Team B", key: "TB" },
+    ],
   };
 
   it("switches context when navigating between teams", async () => {
     // Initial path: Team A
     vi.mocked(usePathname).mockReturnValue("/team/TA/all");
-    
+
     const fetchMock = vi.fn().mockImplementation((url) => {
       if (url.includes("/api/teams/TB/context")) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            workspaceId: "ws-1",
-            workspaceName: "My Workspace",
-            workspaceInitials: "MW",
-            teamId: "t-b",
-            teamName: "Team B",
-            teamKey: "TB",
-            teams: baseProps.teams
-          }),
+          json: () =>
+            Promise.resolve({
+              workspaceId: "ws-1",
+              workspaceName: "My Workspace",
+              workspaceInitials: "MW",
+              teamId: "t-b",
+              teamName: "Team B",
+              teamKey: "TB",
+              teams: baseProps.teams,
+            }),
         });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
@@ -52,7 +56,7 @@ describe("AppShell context switching", () => {
     const { rerender } = render(
       <AppShell {...baseProps}>
         <div data-testid="child">Content</div>
-      </AppShell>
+      </AppShell>,
     );
 
     // Initial check (from props)
@@ -63,12 +67,14 @@ describe("AppShell context switching", () => {
     rerender(
       <AppShell {...baseProps}>
         <div data-testid="child">Content</div>
-      </AppShell>
+      </AppShell>,
     );
 
     // Wait for context fetch and update
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/teams/TB/context"));
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/api/teams/TB/context"),
+      );
     });
 
     await waitFor(() => {
@@ -78,12 +84,15 @@ describe("AppShell context switching", () => {
 
   it("handles navigation to settings and back correctly", async () => {
     vi.mocked(usePathname).mockReturnValue("/team/TA/all");
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) }),
+    );
 
     const { rerender } = render(
       <AppShell {...baseProps}>
         <div data-testid="child">Content</div>
-      </AppShell>
+      </AppShell>,
     );
 
     expect(screen.getByText("Team A")).toBeInTheDocument();
@@ -93,7 +102,7 @@ describe("AppShell context switching", () => {
     rerender(
       <AppShell {...baseProps}>
         <div data-testid="child">Content</div>
-      </AppShell>
+      </AppShell>,
     );
 
     // Sidebar should still be visible in desktop (default state)

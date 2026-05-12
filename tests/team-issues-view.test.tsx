@@ -1,9 +1,4 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -38,7 +33,12 @@ const mockIssuesData = {
       ],
     },
     {
-      state: { id: "s3", name: "In Progress", category: "started", color: "#3b82f6" },
+      state: {
+        id: "s3",
+        name: "In Progress",
+        category: "started",
+        color: "#3b82f6",
+      },
       issues: [
         {
           id: "iss-2",
@@ -85,7 +85,7 @@ describe("TeamIssuesPage UI", () => {
     expect(await screen.findByText("Engineering")).toBeInTheDocument();
     expect(screen.getByText("Fix bug")).toBeInTheDocument();
     expect(screen.getByText("Working on it")).toBeInTheDocument();
-    
+
     const countElements = screen.getAllByText(/2 issues/i);
     expect(countElements.length).toBeGreaterThan(0);
   });
@@ -124,7 +124,7 @@ describe("TeamIssuesPage UI", () => {
     await screen.findByText("Engineering");
 
     fireEvent.click(screen.getByRole("button", { name: "Display options" }));
-    
+
     const boardLayoutButton = screen.getByRole("button", { name: "Board" });
     fireEvent.click(boardLayoutButton);
 

@@ -20,12 +20,16 @@ vi.mock("@/lib/s3", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/s3")>();
   return {
     ...actual,
-    getUploadUrl: vi.fn().mockImplementation(async () => "https://signed-upload-url"),
-    getDownloadUrl: vi.fn().mockImplementation(async () => "https://signed-download-url"),
+    getUploadUrl: vi
+      .fn()
+      .mockImplementation(async () => "https://signed-upload-url"),
+    getDownloadUrl: vi
+      .fn()
+      .mockImplementation(async () => "https://signed-download-url"),
   };
 });
 
-import { getDownloadUrl, getUploadUrl, buildKey } from "@/lib/s3";
+import { buildKey, getDownloadUrl, getUploadUrl } from "@/lib/s3";
 
 describe("S3 Utility logic", () => {
   it("builds correct storage keys", () => {

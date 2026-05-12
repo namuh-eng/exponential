@@ -1,8 +1,14 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import { afterEach, describe, expect, it, vi } from "vitest";
 import { CommandPalette } from "@/components/command-palette";
 import { OPEN_COMMAND_PALETTE_EVENT } from "@/lib/command-palette";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Mock next/navigation
 const pushMock = vi.fn();
@@ -18,7 +24,7 @@ describe("CommandPalette component", () => {
 
   it("is hidden by default and opens on Cmd+K", async () => {
     render(<CommandPalette teamKey="ENG" />);
-    
+
     expect(screen.queryByLabelText("Command palette")).not.toBeInTheDocument();
 
     // Trigger Cmd+K
@@ -32,7 +38,9 @@ describe("CommandPalette component", () => {
     render(<CommandPalette teamKey="ENG" />);
     window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT));
 
-    await waitFor(() => expect(screen.getByLabelText("Command palette")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByLabelText("Command palette")).toBeInTheDocument(),
+    );
 
     const input = screen.getByPlaceholderText(/type a command/i);
 
@@ -57,16 +65,24 @@ describe("CommandPalette component", () => {
   it("searches issues and navigates to result", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve([
-        { id: "i-1", identifier: "ENG-1", title: "Search Result Issue", priority: "high" }
-      ]),
+      json: () =>
+        Promise.resolve([
+          {
+            id: "i-1",
+            identifier: "ENG-1",
+            title: "Search Result Issue",
+            priority: "high",
+          },
+        ]),
     });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<CommandPalette teamKey="ENG" workspaceId="ws-1" />);
     window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT));
 
-    await waitFor(() => expect(screen.getByLabelText("Command palette")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByLabelText("Command palette")).toBeInTheDocument(),
+    );
 
     const input = screen.getByPlaceholderText(/type a command/i);
     fireEvent.change(input, { target: { value: "Search Result" } });
@@ -75,7 +91,7 @@ describe("CommandPalette component", () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         expect.stringContaining("q=Search+Result"),
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -94,19 +110,33 @@ describe("CommandPalette component", () => {
     render(<CommandPalette teamKey="ENG" />);
     window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT));
 
-    await waitFor(() => expect(screen.getByLabelText("Command palette")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByLabelText("Command palette")).toBeInTheDocument(),
+    );
 
     // Escape
-    fireEvent.keyDown(screen.getByPlaceholderText(/type a command/i), { key: "Escape" });
-    await waitFor(() => expect(screen.queryByLabelText("Command palette")).not.toBeInTheDocument());
+    fireEvent.keyDown(screen.getByPlaceholderText(/type a command/i), {
+      key: "Escape",
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByLabelText("Command palette"),
+      ).not.toBeInTheDocument(),
+    );
 
     // Re-open
     window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT));
-    await waitFor(() => expect(screen.getByLabelText("Command palette")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByLabelText("Command palette")).toBeInTheDocument(),
+    );
 
     // Click backdrop
     const backdrop = screen.getByRole("presentation");
     fireEvent.click(backdrop);
-    await waitFor(() => expect(screen.queryByLabelText("Command palette")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.queryByLabelText("Command palette"),
+      ).not.toBeInTheDocument(),
+    );
   });
 });

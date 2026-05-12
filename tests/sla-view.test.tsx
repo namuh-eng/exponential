@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import { afterEach, describe, expect, it } from "vitest";
 import SLAPage from "@/app/(app)/settings/sla/page";
+import { afterEach, describe, expect, it } from "vitest";
 
 describe("SLAPage component", () => {
   afterEach(() => {
@@ -12,11 +12,16 @@ describe("SLAPage component", () => {
     render(<SLAPage />);
 
     expect(screen.getByText("Loading...")).toBeInTheDocument();
-    
-    await waitFor(() => {
-      expect(screen.getByText("SLAs")).toBeInTheDocument();
-      expect(screen.getByText(/Set service level agreements/)).toBeInTheDocument();
-      expect(screen.getByText("No SLAs")).toBeInTheDocument();
-    }, { timeout: 2000 });
+
+    await waitFor(
+      () => {
+        expect(screen.getByText("SLAs")).toBeInTheDocument();
+        expect(
+          screen.getByText(/Set service level agreements/),
+        ).toBeInTheDocument();
+        expect(screen.getByText("No SLAs")).toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
   });
 });

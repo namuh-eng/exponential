@@ -132,11 +132,21 @@ describe("ProjectDetailPage UI", () => {
     fireEvent.click(screen.getByRole("button", { name: "Activity" }));
 
     // Find the Activity title which is a heading inside the content area
-    const contentArea = screen.getByText("Updated project properties").closest("div[class*='space-y-3']");
+    const contentArea = screen
+      .getByText("Updated project properties")
+      .closest("div[class*='space-y-3']");
     expect(contentArea).not.toBeNull();
     if (contentArea) {
-      expect(within(contentArea).getByText("Updated project properties")).toBeInTheDocument();
-      expect(within(contentArea).getByText("Changed status to started")).toBeInTheDocument();
+      expect(
+        within(contentArea as HTMLElement).getByText(
+          "Updated project properties",
+        ),
+      ).toBeInTheDocument();
+      expect(
+        within(contentArea as HTMLElement).getByText(
+          "Changed status to started",
+        ),
+      ).toBeInTheDocument();
     }
   });
 
@@ -167,7 +177,9 @@ describe("ProjectDetailPage UI", () => {
     const descSection = screen.getByText("Description").closest("div");
     expect(descSection).not.toBeNull();
     if (descSection) {
-      fireEvent.click(within(descSection).getByRole("button", { name: "Edit" }));
+      fireEvent.click(
+        within(descSection).getByRole("button", { name: "Edit" }),
+      );
     }
 
     const textarea = screen.getByPlaceholderText(

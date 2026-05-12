@@ -1,7 +1,13 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import { afterEach, describe, expect, it, vi } from "vitest";
 import InitiativesPage from "@/app/(app)/initiatives/page";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mockInitiatives = [
   {
@@ -31,10 +37,13 @@ describe("InitiativesPage component", () => {
   });
 
   it("renders loading state then initiative list", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ initiatives: mockInitiatives }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ initiatives: mockInitiatives }),
+      }),
+    );
 
     render(<InitiativesPage />);
     expect(screen.getByText("Loading...")).toBeInTheDocument();
@@ -48,10 +57,13 @@ describe("InitiativesPage component", () => {
   });
 
   it("switches tabs to show planned initiatives", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ initiatives: mockInitiatives }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ initiatives: mockInitiatives }),
+      }),
+    );
 
     render(<InitiativesPage />);
     await waitFor(() => screen.getByText("Core Overhaul"));
@@ -65,19 +77,34 @@ describe("InitiativesPage component", () => {
   });
 
   it("opens create form and submits new initiative", async () => {
-    const fetchMock = vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ initiatives: mockInitiatives }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ initiatives: [...mockInitiatives, { id: "init-3", name: "New Feature", status: "active", projectCount: 0, completedProjectCount: 0, createdAt: new Date().toISOString() }] }),
-      })
+    const fetchMock = vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ initiatives: mockInitiatives }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ success: true }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            initiatives: [
+              ...mockInitiatives,
+              {
+                id: "init-3",
+                name: "New Feature",
+                status: "active",
+                projectCount: 0,
+                completedProjectCount: 0,
+                createdAt: new Date().toISOString(),
+              },
+            ],
+          }),
+        }),
     );
 
     render(<InitiativesPage />);
@@ -86,25 +113,33 @@ describe("InitiativesPage component", () => {
     fireEvent.click(screen.getByText("New initiative"));
     expect(screen.getByPlaceholderText("Initiative name")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText("Initiative name"), { target: { value: "New Feature" } });
-    
+    fireEvent.change(screen.getByPlaceholderText("Initiative name"), {
+      target: { value: "New Feature" },
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "Create initiative" }));
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith("/api/initiatives", expect.objectContaining({
-        method: "POST",
-        body: expect.stringContaining('"name":"New Feature"'),
-      }));
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/initiatives",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"name":"New Feature"'),
+        }),
+      );
     });
 
     await waitFor(() => screen.getByText("New Feature"));
   });
 
   it("handles keyboard shortcut N then I to open create form", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ initiatives: [] }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ initiatives: [] }),
+      }),
+    );
 
     render(<InitiativesPage />);
     await waitFor(() => screen.getByText("Initiatives"));

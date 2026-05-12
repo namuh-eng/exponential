@@ -4,11 +4,10 @@ import {
   readAccountPreferencesFromUserSettings,
   writeAccountPreferencesToUserSettings,
 } from "@/lib/account-preferences";
-import { auth } from "@/lib/auth";
+import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { user } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 async function findCurrentUser(userId: string) {
@@ -25,9 +24,9 @@ async function findCurrentUser(userId: string) {
 }
 
 export async function GET() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
   }
 
   const currentUser = await findCurrentUser(session.user.id);
@@ -43,9 +42,9 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
   }
 
   const currentUser = await findCurrentUser(session.user.id);

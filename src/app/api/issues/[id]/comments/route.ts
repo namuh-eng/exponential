@@ -1,6 +1,13 @@
-import { auth } from "@/lib/auth";
+import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
+import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { comment, commentAttachment, issue, team } from "@/lib/db/schema";
+import {
+  comment,
+  commentAttachment,
+  issue,
+  issueHistory,
+  team,
+} from "@/lib/db/schema";
 import {
   buildNotificationValues,
   insertNotifications,
@@ -8,7 +15,6 @@ import {
 } from "@/lib/notifications";
 import { buildKey, deleteFile, getDownloadUrl, uploadFile } from "@/lib/s3";
 import { eq } from "drizzle-orm";
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 async function findIssueRecord(id: string) {
@@ -55,14 +61,19 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
   }
 
   const { id } = await params;
+  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  if (!workspaceId) {
+    return NextResponse.json({ error: "No workspace found" }, { status: 400 });
+  }
+
   const currentIssue = await findIssueRecord(id);
-  if (!currentIssue) {
+  if (!currentIssue || currentIssue.workspaceId !== workspaceId) {
     return NextResponse.json({ error: "Issue not found" }, { status: 404 });
   }
 
@@ -159,6 +170,18 @@ export async function POST(
       if (attachmentRows.length > 0) {
         await tx.insert(commentAttachment).values(attachmentRows);
       }
+
+      await tx.insert(issueHistory).values({
+        issueId: currentIssue.id,
+        actorId: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email ?? null,
+        eventType: "comment_created",
+        metadata: {
+          commentId,
+          attachmentCount: attachmentRows.length,
+        },
+      });
 
       return insertedComment[0];
     });

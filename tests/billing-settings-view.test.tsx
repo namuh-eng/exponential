@@ -21,7 +21,7 @@ describe("BillingSettingsPage component", () => {
   };
 
   it("renders loading state then billing info", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => mockWorkspaceData,
     });
@@ -35,13 +35,15 @@ describe("BillingSettingsPage component", () => {
     });
 
     expect(screen.getByText("Standard Plan")).toBeDefined();
-    expect(screen.getByText("Advanced features for small teams.")).toBeDefined();
+    expect(
+      screen.getByText("Advanced features for small teams."),
+    ).toBeDefined();
     expect(screen.getByText("Payment methods")).toBeDefined();
     expect(screen.getByText("Invoices")).toBeDefined();
   });
 
   it("shows free plan by default", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => ({
         workspace: { ...mockWorkspaceData.workspace, plan: "free" },
@@ -56,14 +58,16 @@ describe("BillingSettingsPage component", () => {
   });
 
   it("shows error message when fetch fails", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: false,
     });
 
     render(<BillingSettingsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Unable to load billing information.")).toBeDefined();
+      expect(
+        screen.getByText("Unable to load billing information."),
+      ).toBeDefined();
     });
   });
 });

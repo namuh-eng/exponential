@@ -1,6 +1,6 @@
+import TeamSlackSettingsPage from "@/app/(app)/settings/teams/[key]/slack-notifications/page";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import TeamSlackSettingsPage from "@/app/(app)/settings/teams/[key]/slack-notifications/page";
 import "@testing-library/jest-dom/vitest";
 
 // Mock next/navigation
@@ -22,6 +22,8 @@ describe("TeamSlackSettingsPage", () => {
     });
 
     expect(screen.getByText("Slack is not connected")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Connect Slack" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Connect Slack" }),
+    ).toBeInTheDocument();
   });
 });

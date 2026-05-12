@@ -56,15 +56,18 @@ describe("ProfilePage UI", () => {
 
   it("updates profile information", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
-        if (url.toString().includes("/api/account/profile") && !url.toString().includes("workspace")) {
-            return Promise.resolve({
-                ok: true,
-                json: async () => ({
-                  profile: { ...mockProfileData.profile, name: "Ashley Updated" }
-                }),
-            } as Response);
-        }
-        return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
+      if (
+        url.toString().includes("/api/account/profile") &&
+        !url.toString().includes("workspace")
+      ) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            profile: { ...mockProfileData.profile, name: "Ashley Updated" },
+          }),
+        } as Response);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
     });
 
     render(<ProfilePage />);
@@ -76,13 +79,13 @@ describe("ProfilePage UI", () => {
     fireEvent.click(screen.getByRole("button", { name: "Update" }));
 
     await waitFor(() => {
-        expect(fetchSpy).toHaveBeenCalledWith(
-          "/api/account/profile",
-          expect.objectContaining({
-            method: "PATCH",
-            body: expect.stringContaining('"name":"Ashley Updated"'),
-          })
-        );
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/account/profile",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining('"name":"Ashley Updated"'),
+        }),
+      );
     });
 
     expect(screen.getByText("Profile updated.")).toBeInTheDocument();
@@ -90,19 +93,19 @@ describe("ProfilePage UI", () => {
 
   it("opens leave workspace dialog and confirms", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
-        if (url.toString().includes("/api/account/profile/workspace")) {
-            return Promise.resolve({
-                ok: true,
-                json: async () => ({ redirectTo: "/login" }),
-            } as Response);
-        }
-        if (url.toString().includes("/api/account/profile")) {
-             return Promise.resolve({
-                ok: true,
-                json: async () => mockProfileData,
-            } as Response);
-        }
-        return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
+      if (url.toString().includes("/api/account/profile/workspace")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ redirectTo: "/login" }),
+        } as Response);
+      }
+      if (url.toString().includes("/api/account/profile")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockProfileData,
+        } as Response);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
     });
 
     render(<ProfilePage />);
@@ -112,23 +115,26 @@ describe("ProfilePage UI", () => {
 
     // Check dialog content
     expect(screen.getByText("Leave workspace?")).toBeInTheDocument();
-    expect(screen.getByText(/You will lose access to Namuh/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/You will lose access to Namuh/i),
+    ).toBeInTheDocument();
 
     // Find the button inside the dialog
-    const confirmButton = screen.getAllByRole("button", { name: "Leave workspace" }).find(btn => 
-      btn.closest("dialog")
-    );
-    
-    if (!confirmButton) throw new Error("Could not find confirm button in dialog");
+    const confirmButton = screen
+      .getAllByRole("button", { name: "Leave workspace" })
+      .find((btn) => btn.closest("dialog"));
+
+    if (!confirmButton)
+      throw new Error("Could not find confirm button in dialog");
     fireEvent.click(confirmButton);
 
     await waitFor(() => {
-        expect(fetchSpy).toHaveBeenCalledWith(
-          "/api/account/profile/workspace",
-          expect.objectContaining({ method: "DELETE" })
-        );
-        expect(pushMock).toHaveBeenCalledWith("/login");
-        expect(refreshMock).toHaveBeenCalled();
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/account/profile/workspace",
+        expect.objectContaining({ method: "DELETE" }),
+      );
+      expect(pushMock).toHaveBeenCalledWith("/login");
+      expect(refreshMock).toHaveBeenCalled();
     });
   });
 });

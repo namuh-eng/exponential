@@ -7,7 +7,6 @@ const { sendMock, SESv2ClientMock, SendEmailCommandMock } = vi.hoisted(() => {
   const sendMock = vi.fn<(cmd: unknown) => Promise<unknown>>(() =>
     Promise.resolve({ MessageId: "test-msg-id" }),
   );
-  // biome-ignore lint/complexity/noStaticOnlyClass: vitest 4 requires class-based mocks for `new` calls
   class SESv2ClientMock {
     send = sendMock;
   }

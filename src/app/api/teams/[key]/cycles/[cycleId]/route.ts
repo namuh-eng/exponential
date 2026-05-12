@@ -1,20 +1,19 @@
-import { auth } from "@/lib/auth";
+import { requireApiSession } from "@/lib/api-auth";
 import { cycleRangesOverlap, parseCycleDateInput } from "@/lib/cycle-utils";
 import { db } from "@/lib/db";
 import { cycle, issue, user, workflowState } from "@/lib/db/schema";
 import { getLabelsForIssues } from "@/lib/issue-labels";
 import { getTeamByKey, getTeamIdByKey } from "@/lib/teams";
 import { and, asc, desc, eq } from "drizzle-orm";
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ key: string; cycleId: string }> },
 ) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response } = await requireApiSession();
+  if (response) {
+    return response;
   }
 
   const { key, cycleId } = await params;
@@ -119,9 +118,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ key: string; cycleId: string }> },
 ) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response } = await requireApiSession();
+  if (response) {
+    return response;
   }
 
   const { key, cycleId } = await params;
@@ -223,9 +222,9 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ key: string; cycleId: string }> },
 ) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response } = await requireApiSession();
+  if (response) {
+    return response;
   }
 
   const { key, cycleId } = await params;

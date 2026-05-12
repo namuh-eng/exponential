@@ -228,42 +228,49 @@ describe("ProjectsPage", () => {
   });
 
   it("toggles the create project form and submits", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url, init) => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation((url, init) => {
         if (url === "/api/projects" && init?.method === "POST") {
-            return Promise.resolve({ ok: true, json: async () => ({ id: "p3" }) } as Response);
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ id: "p3" }),
+          } as Response);
         }
         return Promise.resolve({
-            ok: true,
-            json: async () => ({ projects: [] }),
+          ok: true,
+          json: async () => ({ projects: [] }),
         } as Response);
-    });
+      });
 
     render(<ProjectsPage />);
-    
+
     // Renders empty state first
-    const createBtn = await screen.findByRole("button", { name: "Create project" });
+    const createBtn = await screen.findByRole("button", {
+      name: "Create project",
+    });
     fireEvent.click(createBtn);
 
     // Form should appear
     const nameInput = screen.getByPlaceholderText("Project name");
     fireEvent.change(nameInput, { target: { value: "New Project" } });
-    
+
     const descInput = screen.getByPlaceholderText("Description (optional)");
     fireEvent.change(descInput, { target: { value: "A new description" } });
 
     fireEvent.click(screen.getByRole("button", { name: "Create project" }));
 
     await waitFor(() => {
-        expect(fetchSpy).toHaveBeenCalledWith(
-            "/api/projects",
-            expect.objectContaining({
-                method: "POST",
-                body: JSON.stringify({
-                    name: "New Project",
-                    description: "A new description",
-                }),
-            })
-        );
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/projects",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            name: "New Project",
+            description: "A new description",
+          }),
+        }),
+      );
     });
   });
 });

@@ -65,7 +65,7 @@ describe("InboxPage UI", () => {
 
     expect(await screen.findByText("Inbox")).toBeInTheDocument();
     expect(screen.getByText("1 unread")).toBeInTheDocument();
-    
+
     // Check both notifications exist in the list
     expect(screen.getAllByText("A bug to fix").length).toBeGreaterThan(0);
     expect(screen.getByText("New task")).toBeInTheDocument();
@@ -73,33 +73,38 @@ describe("InboxPage UI", () => {
 
   it("marks a notification as read when selected", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
-        if (url.toString().includes("/api/notifications") && !url.toString().includes("/read")) {
-            return Promise.resolve({
-                ok: true,
-                json: async () => mockInboxData,
-            } as Response);
-        }
-        if (url.toString().includes("/api/notifications/n1/read")) {
-            return Promise.resolve({
-                ok: true,
-                json: async () => ({ success: true }),
-            } as Response);
-        }
-        return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
+      if (
+        url.toString().includes("/api/notifications") &&
+        !url.toString().includes("/read")
+      ) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockInboxData,
+        } as Response);
+      }
+      if (url.toString().includes("/api/notifications/n1/read")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ success: true }),
+        } as Response);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
     });
 
     render(<InboxPage />);
     const notifications = await screen.findAllByText("A bug to fix");
     // The one in the list is usually the one inside the button/row
-    const notificationRow = notifications[0].closest("button[data-testid='notification-row']");
+    const notificationRow = notifications[0].closest(
+      "button[data-testid='notification-row']",
+    );
     expect(notificationRow).not.toBeNull();
     if (notificationRow) fireEvent.click(notificationRow);
 
     await waitFor(() => {
-        expect(fetchSpy).toHaveBeenCalledWith(
-          "/api/notifications/n1/read",
-          expect.objectContaining({ method: "PATCH" })
-        );
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/notifications/n1/read",
+        expect.objectContaining({ method: "PATCH" }),
+      );
     });
   });
 
@@ -132,7 +137,9 @@ describe("InboxPage UI", () => {
     render(<InboxPage />);
     await screen.findAllByText("A bug to fix");
 
-    fireEvent.click(screen.getByLabelText("Sort inbox notifications by priority"));
+    fireEvent.click(
+      screen.getByLabelText("Sort inbox notifications by priority"),
+    );
 
     // After sorting by priority, "New task" (urgent) should be first
     const rows = screen.getAllByTestId("notification-row");

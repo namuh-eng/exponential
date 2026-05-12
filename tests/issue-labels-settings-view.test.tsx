@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -32,10 +38,13 @@ describe("IssueLabelsPage component", () => {
   });
 
   it("renders loading state then label list", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ labels: mockLabels }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ labels: mockLabels }),
+      }),
+    );
 
     render(<IssueLabelsPage />);
     expect(screen.getByText("Loading...")).toBeInTheDocument();
@@ -51,10 +60,13 @@ describe("IssueLabelsPage component", () => {
   });
 
   it("filters labels by name", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ labels: mockLabels }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ labels: mockLabels }),
+      }),
+    );
 
     render(<IssueLabelsPage />);
     await waitFor(() => screen.getByText("Bug"));
@@ -67,50 +79,67 @@ describe("IssueLabelsPage component", () => {
   });
 
   it("opens create modal and submits new label", async () => {
-    const fetchMock = vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ labels: mockLabels }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({}),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ labels: [...mockLabels, { id: "l-3", name: "New Label" }] }),
-      })
+    const fetchMock = vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ labels: mockLabels }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({}),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            labels: [...mockLabels, { id: "l-3", name: "New Label" }],
+          }),
+        }),
     );
 
     render(<IssueLabelsPage />);
     await waitFor(() => screen.getByText("Bug"));
 
     fireEvent.click(screen.getByText("New label"));
-    expect(screen.getByRole("heading", { name: "Create label" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Create label" }),
+    ).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText("Label name"), { target: { value: "Improvement" } });
-    fireEvent.change(screen.getByPlaceholderText("Add label description..."), { target: { value: "General improvements" } });
+    fireEvent.change(screen.getByPlaceholderText("Label name"), {
+      target: { value: "Improvement" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Add label description..."), {
+      target: { value: "General improvements" },
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Create label" }));
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith("/api/labels", expect.objectContaining({
-        method: "POST",
-        body: expect.stringContaining('"name":"Improvement"'),
-      }));
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/labels",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"name":"Improvement"'),
+        }),
+      );
     });
   });
 
   it("updates label description inline", async () => {
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ labels: mockLabels }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({}),
-      })
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ labels: mockLabels }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({}),
+        }),
     );
 
     render(<IssueLabelsPage />);
@@ -125,10 +154,13 @@ describe("IssueLabelsPage component", () => {
     fireEvent.blur(input);
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith("/api/labels/l-2", expect.objectContaining({
-        method: "PATCH",
-        body: expect.stringContaining('"description":"Cool stuff"'),
-      }));
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/labels/l-2",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining('"description":"Cool stuff"'),
+        }),
+      );
     });
 
     expect(screen.getByText("Cool stuff")).toBeInTheDocument();

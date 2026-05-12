@@ -32,21 +32,23 @@ describe("TeamLabelsSettingsPage component", () => {
   };
 
   it("renders loading state then team labels", async () => {
-    (fetch as any).mockImplementation((url: string) => {
-      if (url.includes("/settings")) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => mockTeamData,
-        });
-      }
-      if (url.includes("/labels")) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => mockLabelsData,
-        });
-      }
-      return Promise.reject(new Error("Unknown URL"));
-    });
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (url: string) => {
+        if (url.includes("/settings")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => mockTeamData,
+          });
+        }
+        if (url.includes("/labels")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => mockLabelsData,
+          });
+        }
+        return Promise.reject(new Error("Unknown URL"));
+      },
+    );
 
     render(<TeamLabelsSettingsPage />);
 

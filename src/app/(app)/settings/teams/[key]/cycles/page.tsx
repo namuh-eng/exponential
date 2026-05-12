@@ -86,7 +86,8 @@ export default function TeamCyclesSettingsPage() {
             className="text-amber-200 underline underline-offset-2"
           >
             General settings
-          </Link>.
+          </Link>
+          .
         </div>
       )}
 
@@ -106,7 +107,8 @@ export default function TeamCyclesSettingsPage() {
                   {cycle.name || `Cycle ${cycle.number}`}
                 </div>
                 <div className="text-[12px] text-[var(--color-text-tertiary)]">
-                  {new Date(cycle.startDate).toLocaleDateString()} – {new Date(cycle.endDate).toLocaleDateString()}
+                  {new Date(cycle.startDate).toLocaleDateString()} –{" "}
+                  {new Date(cycle.endDate).toLocaleDateString()}
                 </div>
               </div>
               <div className="text-right">

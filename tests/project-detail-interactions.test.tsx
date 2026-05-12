@@ -1,8 +1,14 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProjectDetailPage } from "@/components/project-detail-page";
 import { useParams } from "next/navigation";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
   useParams: vi.fn(),
@@ -38,30 +44,40 @@ describe("ProjectDetailPage interactions", () => {
     activity: [],
     milestones: [],
     issueGroups: [],
-    progress: { total: 0, completed: 0, percentage: 0, assignees: [], labels: [] },
+    progress: {
+      total: 0,
+      completed: 0,
+      percentage: 0,
+      assignees: [],
+      labels: [],
+    },
   };
 
   it("updates project status via the properties modal", async () => {
     vi.mocked(useParams).mockReturnValue({ slug: "mobile-app" });
-    
-    const fetchMock = vi.fn()
+
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockProjectData),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({
-          ...mockProjectData,
-          project: { ...mockProjectData.project, status: "started" }
-        }),
+        json: () =>
+          Promise.resolve({
+            ...mockProjectData,
+            project: { ...mockProjectData.project, status: "started" },
+          }),
       });
 
     vi.stubGlobal("fetch", fetchMock);
 
     render(<ProjectDetailPage />);
 
-    await waitFor(() => expect(screen.getByText("Mobile App")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Mobile App")).toBeInTheDocument(),
+    );
 
     // Open properties editor
     const editButtons = screen.getAllByRole("button", { name: /edit/i });
@@ -78,10 +94,13 @@ describe("ProjectDetailPage interactions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/projects/mobile-app", expect.objectContaining({
-        method: "PATCH",
-        body: expect.stringContaining('"status":"started"'),
-      }));
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/projects/mobile-app",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining('"status":"started"'),
+        }),
+      );
     });
 
     // Check if the UI updated (Summary status should be 'Started' or 'In Progress' depending on display)
@@ -91,41 +110,62 @@ describe("ProjectDetailPage interactions", () => {
 
   it("adds a new link resource to the project", async () => {
     vi.mocked(useParams).mockReturnValue({ slug: "mobile-app" });
-    
-    const fetchMock = vi.fn()
+
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockProjectData),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({
-          ...mockProjectData,
-          resources: [{ id: "res-1", title: "Design Doc", type: "link", url: "https://figma.com", createdAt: new Date().toISOString() }]
-        }),
+        json: () =>
+          Promise.resolve({
+            ...mockProjectData,
+            resources: [
+              {
+                id: "res-1",
+                title: "Design Doc",
+                type: "link",
+                url: "https://figma.com",
+                createdAt: new Date().toISOString(),
+              },
+            ],
+          }),
       });
 
     vi.stubGlobal("fetch", fetchMock);
 
     render(<ProjectDetailPage />);
 
-    await waitFor(() => expect(screen.getByText("Mobile App")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Mobile App")).toBeInTheDocument(),
+    );
 
     // Open resource form
-    fireEvent.click(screen.getByRole("button", { name: /\+ add document or link/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /\+ add document or link/i }),
+    );
 
     // Fill form
-    fireEvent.change(screen.getByPlaceholderText(/resource title/i), { target: { value: "Design Doc" } });
-    fireEvent.change(screen.getByPlaceholderText(/https:\/\/\.\.\./i), { target: { value: "https://figma.com" } });
+    fireEvent.change(screen.getByPlaceholderText(/resource title/i), {
+      target: { value: "Design Doc" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/https:\/\/\.\.\./i), {
+      target: { value: "https://figma.com" },
+    });
 
     // Submit
     fireEvent.click(screen.getByRole("button", { name: /add resource/i }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/projects/mobile-app", expect.objectContaining({
-        method: "PATCH",
-        body: expect.stringContaining('"title":"Design Doc"'),
-      }));
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/projects/mobile-app",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining('"title":"Design Doc"'),
+        }),
+      );
     });
 
     expect(screen.getByText("Design Doc")).toBeInTheDocument();

@@ -47,20 +47,20 @@ describe("PreferencesPage UI", () => {
 
   it("renders preferences and updates a toggle", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
-        if (url.toString().includes("/api/account/preferences")) {
-            return Promise.resolve({
-                ok: true,
-                json: async () => mockPreferencesData,
-            } as Response);
-        }
-        return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
+      if (url.toString().includes("/api/account/preferences")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockPreferencesData,
+        } as Response);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
     });
 
     render(<PreferencesPage />);
 
     // Wait for data to load
     await waitFor(() => {
-        expect(screen.getByText("Preferences")).toBeInTheDocument();
+      expect(screen.getByText("Preferences")).toBeInTheDocument();
     });
 
     const pointerToggle = screen.getByLabelText("Use pointer cursors");
@@ -69,20 +69,20 @@ describe("PreferencesPage UI", () => {
     fireEvent.click(pointerToggle);
 
     await waitFor(() => {
-        expect(pointerToggle).toHaveAttribute("aria-checked", "true");
+      expect(pointerToggle).toHaveAttribute("aria-checked", "true");
     });
     expect(screen.getByText("Saved")).toBeInTheDocument();
   });
 
   it("updates a select preference", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
-        if (url.toString().includes("/api/account/preferences")) {
-            return Promise.resolve({
-                ok: true,
-                json: async () => mockPreferencesData,
-            } as Response);
-        }
-        return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
+      if (url.toString().includes("/api/account/preferences")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockPreferencesData,
+        } as Response);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
     });
 
     render(<PreferencesPage />);
@@ -92,13 +92,13 @@ describe("PreferencesPage UI", () => {
     fireEvent.change(homeViewSelect, { target: { value: "my-issues" } });
 
     await waitFor(() => {
-        expect(fetchSpy).toHaveBeenCalledWith(
-          "/api/account/preferences",
-          expect.objectContaining({
-            method: "PATCH",
-            body: expect.stringContaining('"defaultHomeView":"my-issues"'),
-          })
-        );
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/account/preferences",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining('"defaultHomeView":"my-issues"'),
+        }),
+      );
     });
   });
 
@@ -121,13 +121,13 @@ describe("PreferencesPage UI", () => {
     fireEvent.change(inboxVisibility, { target: { value: "hide" } });
 
     await waitFor(() => {
-        expect(globalThis.fetch).toHaveBeenCalledWith(
-          "/api/account/preferences",
-          expect.objectContaining({
-            method: "PATCH",
-            body: expect.stringContaining('"inbox":false'),
-          })
-        );
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "/api/account/preferences",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining('"inbox":false'),
+        }),
+      );
     });
 
     fireEvent.click(screen.getByLabelText("Close modal dialog"));
@@ -135,7 +135,7 @@ describe("PreferencesPage UI", () => {
   });
 
   it("changes theme", async () => {
-     vi.spyOn(globalThis, "fetch").mockResolvedValue({
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
       json: async () => mockPreferencesData,
     } as Response);
@@ -147,13 +147,13 @@ describe("PreferencesPage UI", () => {
     fireEvent.click(lightThemeCard);
 
     await waitFor(() => {
-        expect(globalThis.fetch).toHaveBeenCalledWith(
-          "/api/account/preferences",
-          expect.objectContaining({
-            method: "PATCH",
-            body: expect.stringContaining('"theme":"light"'),
-          })
-        );
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "/api/account/preferences",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining('"theme":"light"'),
+        }),
+      );
     });
   });
 });

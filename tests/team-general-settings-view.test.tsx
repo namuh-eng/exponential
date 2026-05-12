@@ -1,6 +1,12 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TeamGeneralSettingsPage from "@/app/(app)/settings/teams/[key]/general/page";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
 // Mock next/navigation
@@ -129,12 +135,12 @@ describe("TeamGeneralSettingsPage", () => {
         return Promise.resolve({
           ok: false,
           json: () => Promise.resolve({ error: "Conflict on identifier" }),
-        });
+        } as Response);
       }
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ team: mockTeam }),
-      });
+      } as Response);
     });
 
     render(<TeamGeneralSettingsPage />);
@@ -151,7 +157,7 @@ describe("TeamGeneralSettingsPage", () => {
     vi.mocked(global.fetch).mockImplementationOnce(() =>
       Promise.resolve({
         ok: false,
-      }),
+      } as Response),
     );
 
     render(<TeamGeneralSettingsPage />);

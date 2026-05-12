@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
   comment,
@@ -11,13 +11,12 @@ import {
 } from "@/lib/db/schema";
 import { getLabelsForIssues } from "@/lib/issue-labels";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
   }
 
   const userId = session.user.id;

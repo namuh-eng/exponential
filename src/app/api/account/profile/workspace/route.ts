@@ -1,15 +1,14 @@
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
-import { auth } from "@/lib/auth";
+import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member } from "@/lib/db/schema";
 import { and, desc, eq } from "drizzle-orm";
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 export async function DELETE() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
   }
 
   const activeWorkspaceId = await resolveActiveWorkspaceId(session.user.id);

@@ -9,7 +9,6 @@ const {
   getSignedUrlMock,
 } = vi.hoisted(() => {
   const sendMock = vi.fn(() => Promise.resolve({}));
-  // biome-ignore lint/complexity/noStaticOnlyClass: vitest 4 requires class-based mocks for `new` calls
   class S3ClientMock {
     send = sendMock;
   }

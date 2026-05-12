@@ -23,6 +23,7 @@ describe("Database schema", () => {
     { table: schema.cycle, name: "cycle" },
     { table: schema.issue, name: "issue" },
     { table: schema.issueLabel, name: "issue_label" },
+    { table: schema.issueHistory, name: "issue_history" },
     { table: schema.issueRelation, name: "issue_relation" },
     { table: schema.comment, name: "comment" },
     { table: schema.reaction, name: "reaction" },
@@ -72,6 +73,14 @@ describe("Database schema", () => {
       "blocked_by",
       "duplicate",
       "related",
+    ]);
+  });
+
+  it("defines issueHistoryEventType enum", () => {
+    expect(schema.issueHistoryEventType.enumValues).toEqual([
+      "created",
+      "updated",
+      "comment_created",
     ]);
   });
 
@@ -202,6 +211,7 @@ describe("Database schema", () => {
     expect(schema.workspaceRelations).toBeDefined();
     expect(schema.teamRelations).toBeDefined();
     expect(schema.issueRelations).toBeDefined();
+    expect(schema.issueHistoryRelations).toBeDefined();
     expect(schema.projectRelations).toBeDefined();
     expect(schema.cycleRelations).toBeDefined();
     expect(schema.initiativeRelations).toBeDefined();
@@ -216,7 +226,7 @@ describe("Database schema", () => {
 
   // ── Total table count ────────────────────────────────────────────
 
-  it("has exactly 27 tables covering all data models", () => {
-    expect(expectedTables).toHaveLength(27);
+  it("has exactly 28 tables covering all data models", () => {
+    expect(expectedTables).toHaveLength(28);
   });
 });

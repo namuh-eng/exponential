@@ -26,13 +26,15 @@ describe("AISettingsPage component", () => {
   };
 
   it("renders loading state initially", () => {
-    (fetch as any).mockResolvedValue(new Promise(() => {}));
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      new Promise(() => {}),
+    );
     render(<AISettingsPage />);
     expect(screen.getByText("Loading...")).toBeDefined();
   });
 
   it("renders analytics data and team summary cards", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => mockAnalyticsData,
     });
@@ -51,19 +53,21 @@ describe("AISettingsPage component", () => {
   });
 
   it("shows error message when fetch fails", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: false,
     });
 
     render(<AISettingsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Unable to load workspace analytics.")).toBeDefined();
+      expect(
+        screen.getByText("Unable to load workspace analytics."),
+      ).toBeDefined();
     });
   });
 
   it("shows empty state in table when no active issues", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => ({
         ...mockAnalyticsData,

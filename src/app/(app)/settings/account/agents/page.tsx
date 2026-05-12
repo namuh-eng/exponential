@@ -157,7 +157,8 @@ export default function AgentPersonalizationPage() {
                 Automatically fix linting and type errors
               </div>
               <div className="text-[12px] text-[var(--color-text-secondary)]">
-                Agents will proactively suggest and apply fixes for common errors
+                Agents will proactively suggest and apply fixes for common
+                errors
               </div>
             </div>
             <Toggle

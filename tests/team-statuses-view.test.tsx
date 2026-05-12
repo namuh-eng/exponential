@@ -1,9 +1,4 @@
-import {
-  cleanup,
-  render,
-  screen,
-  within,
-} from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -19,7 +14,13 @@ const mockStatusesData = {
   statuses: {
     triage: [],
     backlog: [
-      { id: "s1", name: "Backlog", issueCount: 5, description: "Planned work", isDefault: true },
+      {
+        id: "s1",
+        name: "Backlog",
+        issueCount: 5,
+        description: "Planned work",
+        isDefault: true,
+      },
     ],
     unstarted: [
       { id: "s2", name: "Todo", issueCount: 2, description: "Ready to start" },
@@ -54,7 +55,9 @@ describe("TeamIssueStatusesPage", () => {
 
     const statusItems = await screen.findAllByTestId("status-item");
 
-    const backlogRow = statusItems.find(el => within(el).queryByText("Backlog"));
+    const backlogRow = statusItems.find((el) =>
+      within(el).queryByText("Backlog"),
+    );
     expect(backlogRow).toBeDefined();
     if (backlogRow) {
       expect(within(backlogRow).getByText("5 issues")).toBeInTheDocument();
@@ -62,10 +65,14 @@ describe("TeamIssueStatusesPage", () => {
       expect(within(backlogRow).getByText("Default")).toBeInTheDocument();
     }
 
-    expect(statusItems.some(el => within(el).queryByText("Todo"))).toBe(true);
-    expect(statusItems.some(el => within(el).queryByText("In Progress"))).toBe(true);
-    expect(statusItems.some(el => within(el).queryByText("Done"))).toBe(true);
-    expect(statusItems.some(el => within(el).queryByText("Canceled"))).toBe(true);
+    expect(statusItems.some((el) => within(el).queryByText("Todo"))).toBe(true);
+    expect(
+      statusItems.some((el) => within(el).queryByText("In Progress")),
+    ).toBe(true);
+    expect(statusItems.some((el) => within(el).queryByText("Done"))).toBe(true);
+    expect(statusItems.some((el) => within(el).queryByText("Canceled"))).toBe(
+      true,
+    );
   });
 
   it("shows category headers", async () => {

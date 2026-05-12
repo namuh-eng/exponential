@@ -12,20 +12,23 @@ describe("Workspace Analytics API", () => {
     workspaceId: "ws-1",
     completedLast30Days: [
       { teamId: "t-1", teamName: "Engineering", completedCount: 25 },
-      { teamId: "t-2", teamName: "Design", completedCount: 10 }
+      { teamId: "t-2", teamName: "Design", completedCount: 10 },
     ],
     activeIssues: [
       { teamId: "t-1", teamName: "Engineering", activeCount: 12 },
-      { teamId: "t-2", teamName: "Design", activeCount: 5 }
+      { teamId: "t-2", teamName: "Design", activeCount: 5 },
     ],
-    period: "Last 30 days"
+    period: "Last 30 days",
   };
 
   it("fetches aggregated workspace data from the API", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockWorkspaceAnalytics),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockWorkspaceAnalytics),
+      }),
+    );
 
     const res = await fetch("/api/analytics/workspace");
     const data = await res.json();

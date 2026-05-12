@@ -97,7 +97,11 @@ describe("InitiativesPage", () => {
         "/api/initiatives",
         expect.objectContaining({
           method: "POST",
-          body: JSON.stringify({ name: "Super Growth", description: "More scale", status: "active" }),
+          body: JSON.stringify({
+            name: "Super Growth",
+            description: "More scale",
+            status: "active",
+          }),
         }),
       );
     });

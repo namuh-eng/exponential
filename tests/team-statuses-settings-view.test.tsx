@@ -1,6 +1,6 @@
+import TeamIssueStatusesPage from "@/app/(app)/settings/teams/[key]/statuses/page";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import TeamIssueStatusesPage from "@/app/(app)/settings/teams/[key]/statuses/page";
 import "@testing-library/jest-dom/vitest";
 
 // Mock next/navigation
@@ -14,10 +14,22 @@ vi.mock("@/components/icons/status-icon", () => ({
 }));
 
 const mockStatuses = {
-  triage: [{ id: "s1", name: "Triage", issueCount: 5, description: "New issues" }],
+  triage: [
+    { id: "s1", name: "Triage", issueCount: 5, description: "New issues" },
+  ],
   backlog: [{ id: "s2", name: "Backlog", issueCount: 0, description: null }],
-  unstarted: [{ id: "s3", name: "Todo", issueCount: 10, description: "Planned", isDefault: true }],
-  started: [{ id: "s4", name: "In Progress", issueCount: 2, description: null }],
+  unstarted: [
+    {
+      id: "s3",
+      name: "Todo",
+      issueCount: 10,
+      description: "Planned",
+      isDefault: true,
+    },
+  ],
+  started: [
+    { id: "s4", name: "In Progress", issueCount: 2, description: null },
+  ],
   completed: [{ id: "s5", name: "Done", issueCount: 100, description: null }],
   canceled: [{ id: "s6", name: "Canceled", issueCount: 1, description: null }],
 };
@@ -55,7 +67,7 @@ describe("TeamIssueStatusesPage", () => {
 
     // Check status items
     expect(screen.getByText("New issues")).toBeInTheDocument();
-    
+
     expect(screen.getAllByText("Todo").length).toBeGreaterThan(0);
     expect(screen.getByText("Default")).toBeInTheDocument();
     expect(screen.getByText("10 issues")).toBeInTheDocument();
@@ -66,7 +78,7 @@ describe("TeamIssueStatusesPage", () => {
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ statuses: null }),
-      }),
+      } as Response),
     );
 
     render(<TeamIssueStatusesPage />);
@@ -81,10 +93,12 @@ describe("TeamIssueStatusesPage", () => {
 
     const select = screen.getByRole("combobox");
     expect(select).toBeInTheDocument();
-    
+
     // Check if some statuses from different categories are options
     expect(screen.getByRole("option", { name: "Triage" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Done" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Canceled" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Canceled" }),
+    ).toBeInTheDocument();
   });
 });

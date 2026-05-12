@@ -133,7 +133,8 @@ export default function TeamAgentsSettingsPage() {
             Agent guidance
           </h3>
           <p className="mb-4 text-[13px] text-[var(--color-text-secondary)]">
-            Custom instructions for AI agents when they are working on issues for this team.
+            Custom instructions for AI agents when they are working on issues
+            for this team.
           </p>
           <textarea
             value={agentGuidance}
@@ -149,10 +150,13 @@ export default function TeamAgentsSettingsPage() {
             Auto-assignment
           </h3>
           <p className="text-[13px] text-[var(--color-text-secondary)]">
-            AI agents can automatically assign issues to team members based on their expertise and current load.
+            AI agents can automatically assign issues to team members based on
+            their expertise and current load.
           </p>
           <div className="mt-4 flex items-center justify-between">
-            <span className="text-[13px] text-[var(--color-text-primary)]">Enable auto-assignment</span>
+            <span className="text-[13px] text-[var(--color-text-primary)]">
+              Enable auto-assignment
+            </span>
             <Toggle
               enabled={autoAssignment}
               onChange={(v) => {

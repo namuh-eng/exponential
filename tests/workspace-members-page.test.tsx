@@ -5,7 +5,9 @@ import MembersPage from "../src/app/(app)/settings/members/page";
 
 // Mock the components used in the page
 vi.mock("@/components/avatar", () => ({
-  Avatar: ({ name }: { name: string }) => <div data-testid="avatar">{name}</div>,
+  Avatar: ({ name }: { name: string }) => (
+    <div data-testid="avatar">{name}</div>
+  ),
 }));
 
 describe("MembersPage component", () => {
@@ -70,7 +72,7 @@ describe("MembersPage component", () => {
   };
 
   it("renders the members list and summary counts", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => mockMembersData,
     });
@@ -84,7 +86,9 @@ describe("MembersPage component", () => {
     });
 
     expect(screen.getAllByText("Teammate").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("pending@example.com").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("pending@example.com").length).toBeGreaterThan(
+      0,
+    );
     expect(screen.getAllByText("Active").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Pending").length).toBeGreaterThan(0);
 
@@ -94,32 +98,42 @@ describe("MembersPage component", () => {
   });
 
   it("opens the invite dialog and adds/removes rows", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => mockMembersData,
     });
 
     render(<MembersPage />);
-    await waitFor(() => expect(screen.getAllByText("Ashley").length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(screen.getAllByText("Ashley").length).toBeGreaterThan(0),
+    );
 
     const inviteButton = screen.getByRole("button", { name: /invite/i });
     await userEvent.click(inviteButton);
 
     expect(screen.getByText("Invite members")).toBeDefined();
 
-    const addAnotherButton = screen.getByRole("button", { name: /add another/i });
+    const addAnotherButton = screen.getByRole("button", {
+      name: /add another/i,
+    });
     await userEvent.click(addAnotherButton);
 
-    expect(screen.getAllByPlaceholderText("teammate@company.com")).toHaveLength(2);
+    expect(screen.getAllByPlaceholderText("teammate@company.com")).toHaveLength(
+      2,
+    );
 
-    const removeButtons = screen.getAllByRole("button", { name: /remove invite/i });
+    const removeButtons = screen.getAllByRole("button", {
+      name: /remove invite/i,
+    });
     await userEvent.click(removeButtons[0]);
 
-    expect(screen.getAllByPlaceholderText("teammate@company.com")).toHaveLength(1);
+    expect(screen.getAllByPlaceholderText("teammate@company.com")).toHaveLength(
+      1,
+    );
   });
 
   it("exports members to CSV", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => mockMembersData,
     });
@@ -128,17 +142,17 @@ describe("MembersPage component", () => {
     const originalCreateElement = document.createElement.bind(document);
     vi.spyOn(document, "createElement").mockImplementation((tagName) => {
       if (tagName === "a") {
-        return {
-          click: clickMock,
-          set href(v: string) {},
-          set download(v: string) {},
-        } as any;
+        const anchor = originalCreateElement("a");
+        anchor.click = clickMock;
+        return anchor;
       }
       return originalCreateElement(tagName);
     });
 
     render(<MembersPage />);
-    await waitFor(() => expect(screen.getAllByText("Ashley").length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(screen.getAllByText("Ashley").length).toBeGreaterThan(0),
+    );
 
     const exportButton = screen.getByRole("button", { name: /export csv/i });
     await userEvent.click(exportButton);
@@ -148,25 +162,30 @@ describe("MembersPage component", () => {
   });
 
   it("updates member role", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => mockMembersData,
     });
 
     render(<MembersPage />);
-    await waitFor(() => expect(screen.getAllByText("Teammate").length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(screen.getAllByText("Teammate").length).toBeGreaterThan(0),
+    );
 
     const roleSelect = screen.getByLabelText("Role for teammate@example.com");
     await userEvent.selectOptions(roleSelect, "admin");
 
-    expect(fetch).toHaveBeenCalledWith("/api/workspaces/members", expect.objectContaining({
-      method: "PATCH",
-      body: JSON.stringify({
-        id: "m2",
-        kind: "member",
-        role: "admin",
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/workspaces/members",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          id: "m2",
+          kind: "member",
+          role: "admin",
+        }),
       }),
-    }));
+    );
 
     await waitFor(() => {
       expect(screen.getByText("Member role updated.")).toBeDefined();
@@ -174,14 +193,16 @@ describe("MembersPage component", () => {
   });
 
   it("shows empty state when no members exist", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => ({ ...mockMembersData, members: [] }),
     });
 
     render(<MembersPage />);
     await waitFor(() => {
-      expect(screen.getByText("No members yet. Invite your team to get started.")).toBeDefined();
+      expect(
+        screen.getByText("No members yet. Invite your team to get started."),
+      ).toBeDefined();
     });
   });
 });

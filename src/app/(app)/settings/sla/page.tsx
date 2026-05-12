@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
+import { useEffect, useState } from "react";
 
 export default function SLAPage() {
   const [loading, setLoading] = useState(true);
@@ -12,7 +12,9 @@ export default function SLAPage() {
   }, []);
 
   if (loading) {
-    return <div className="p-8 text-[var(--color-text-tertiary)]">Loading...</div>;
+    return (
+      <div className="p-8 text-[var(--color-text-tertiary)]">Loading...</div>
+    );
   }
 
   return (
@@ -21,7 +23,8 @@ export default function SLAPage() {
         SLAs
       </h1>
       <p className="mt-3 text-[14px] text-[var(--color-text-secondary)]">
-        Set service level agreements to track and ensure timely response to issues.
+        Set service level agreements to track and ensure timely response to
+        issues.
       </p>
 
       <div className="mt-8">

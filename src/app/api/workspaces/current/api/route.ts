@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
+import { requireApiSession } from "@/lib/api-auth";
 import {
   GRAPHQL_DOCS_URL,
   OAUTH_APPLICATIONS_DOCS_URL,
@@ -15,11 +16,9 @@ import {
   readWorkspaceApiSettings,
   serializeWorkspaceApiSettings,
 } from "@/lib/api-settings";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { apiKey, member, user, webhook, workspace } from "@/lib/db/schema";
 import { and, desc, eq } from "drizzle-orm";
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 type WorkspaceAccess = {
@@ -178,10 +177,10 @@ async function buildApiPayload(access: WorkspaceAccess) {
 }
 
 async function loadAuthenticatedAccess() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
     return {
-      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      error: authResponse,
       access: null,
     };
   }

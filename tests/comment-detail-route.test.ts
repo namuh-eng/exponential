@@ -22,7 +22,6 @@ vi.mock("@/lib/db", () => ({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockImplementation((...args) => {
           const result = selectMock(...args);
-          // biome-ignore lint/suspicious/noThenProperty: <explanation>
           const promise = Promise.resolve(result);
           // @ts-ignore
           promise.limit = vi.fn().mockResolvedValue(result);
@@ -33,18 +32,23 @@ vi.mock("@/lib/db", () => ({
     update: vi.fn(() => ({
       set: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: "comment-1", body: "updated" }]),
+          returning: vi
+            .fn()
+            .mockResolvedValue([{ id: "comment-1", body: "updated" }]),
         }),
       }),
     })),
     delete: vi.fn(() => ({
       where: vi.fn().mockResolvedValue([{ id: "comment-1" }]),
     })),
-    transaction: vi.fn(async (cb: (tx: any) => Promise<unknown>) => cb({
-      delete: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([]),
-      }),
-    })),
+    transaction: vi.fn(
+      async (cb: (tx: { delete: typeof vi.fn }) => Promise<unknown>) =>
+        cb({
+          delete: vi.fn().mockReturnValue({
+            where: vi.fn().mockResolvedValue([]),
+          }),
+        }),
+    ),
   },
 }));
 
@@ -64,12 +68,15 @@ describe("comment detail route", () => {
     getSessionMock.mockResolvedValue(null);
     const { PATCH } = await import("@/app/api/comments/[id]/route");
 
-    const response = await PATCH(new Request("http://localhost", {
-      method: "PATCH",
-      body: JSON.stringify({ body: "new body" }),
-    }), {
-      params: Promise.resolve({ id: "comment-1" }),
-    });
+    const response = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({ body: "new body" }),
+      }),
+      {
+        params: Promise.resolve({ id: "comment-1" }),
+      },
+    );
 
     expect(response.status).toBe(401);
   });
@@ -77,12 +84,15 @@ describe("comment detail route", () => {
   it("updates a comment", async () => {
     const { PATCH } = await import("@/app/api/comments/[id]/route");
 
-    const response = await PATCH(new Request("http://localhost", {
-      method: "PATCH",
-      body: JSON.stringify({ body: "updated body" }),
-    }), {
-      params: Promise.resolve({ id: "comment-1" }),
-    });
+    const response = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({ body: "updated body" }),
+      }),
+      {
+        params: Promise.resolve({ id: "comment-1" }),
+      },
+    );
 
     expect(response.status).toBe(200);
     const payload = await response.json();
@@ -97,11 +107,14 @@ describe("comment detail route", () => {
 
     const { DELETE } = await import("@/app/api/comments/[id]/route");
 
-    const response = await DELETE(new Request("http://localhost", {
-      method: "DELETE",
-    }), {
-      params: Promise.resolve({ id: "comment-1" }),
-    });
+    const response = await DELETE(
+      new Request("http://localhost", {
+        method: "DELETE",
+      }),
+      {
+        params: Promise.resolve({ id: "comment-1" }),
+      },
+    );
 
     expect(response.status).toBe(200);
     expect(deleteFileMock).toHaveBeenCalledWith("file-1");

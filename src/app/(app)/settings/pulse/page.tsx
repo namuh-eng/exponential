@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
+import { useEffect, useState } from "react";
 
 export default function PulseSettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -12,7 +12,9 @@ export default function PulseSettingsPage() {
   }, []);
 
   if (loading) {
-    return <div className="p-8 text-[var(--color-text-tertiary)]">Loading...</div>;
+    return (
+      <div className="p-8 text-[var(--color-text-tertiary)]">Loading...</div>
+    );
   }
 
   return (

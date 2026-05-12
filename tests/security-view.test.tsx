@@ -48,7 +48,9 @@ describe("SecurityPage UI", () => {
 
     render(<SecurityPage />);
 
-    expect(screen.getByText("Loading security settings...")).toBeInTheDocument();
+    expect(
+      screen.getByText("Loading security settings..."),
+    ).toBeInTheDocument();
 
     expect(await screen.findByText("Workspace access")).toBeInTheDocument();
     expect(screen.getByText("acme.com")).toBeInTheDocument();
@@ -58,7 +60,8 @@ describe("SecurityPage UI", () => {
   });
 
   it("toggles invite links and persists", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch")
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce({
         ok: true,
         json: async () => mockSecurityData,
@@ -90,7 +93,8 @@ describe("SecurityPage UI", () => {
   });
 
   it("adds an approved email domain", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch")
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce({
         ok: true,
         json: async () => mockSecurityData,
@@ -113,21 +117,32 @@ describe("SecurityPage UI", () => {
     const input = screen.getByPlaceholderText("example.com");
     fireEvent.change(input, { target: { value: "test.com" } });
 
-    fireEvent.submit(screen.getByText("Add approved domain").closest("div")!.querySelector("form")!);
+    const form = screen
+      .getByText("Add approved domain")
+      .closest("div")
+      ?.querySelector("form");
+    if (!form) {
+      throw new Error("Expected approved domain form");
+    }
+
+    fireEvent.submit(form);
 
     await waitFor(() => {
       expect(fetchSpy).toHaveBeenCalledWith(
         "/api/workspaces/current/security",
         expect.objectContaining({
           method: "PATCH",
-          body: expect.stringContaining('"approvedEmailDomains":["acme.com","test.com"]'),
+          body: expect.stringContaining(
+            '"approvedEmailDomains":["acme.com","test.com"]',
+          ),
         }),
       );
     });
   });
 
   it("removes an approved email domain", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch")
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce({
         ok: true,
         json: async () => mockSecurityData,
@@ -159,7 +174,8 @@ describe("SecurityPage UI", () => {
   });
 
   it("updates a permission level", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch")
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce({
         ok: true,
         json: async () => mockSecurityData,

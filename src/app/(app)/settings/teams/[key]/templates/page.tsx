@@ -67,7 +67,8 @@ export default function TeamTemplatesSettingsPage() {
         </button>
       </div>
       <p className="mt-2 text-[13px] text-[var(--color-text-tertiary)]">
-        Create reusable templates for issues, documents, and projects for the ${data.team.name} team.
+        Create reusable templates for issues, documents, and projects for the $
+        {data.team.name} team.
       </p>
 
       <div className="mt-8 flex flex-col gap-2">

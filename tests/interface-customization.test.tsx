@@ -1,7 +1,14 @@
-import { cleanup, fireEvent, render, screen, waitFor, act } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import { afterEach, describe, expect, it, vi } from "vitest";
 import AccountPreferencesPage from "@/app/(app)/settings/account/preferences/page";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Mock next/navigation
 vi.mock("next/navigation", () => ({
@@ -22,11 +29,12 @@ describe("Theme and Interface Customization", () => {
       theme: "light",
       fontSize: "default",
       pointerCursors: false,
-    }
+    },
   };
 
   it("applies theme change instantly to the document element", async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockPreferences),
@@ -41,7 +49,9 @@ describe("Theme and Interface Customization", () => {
     render(<AccountPreferencesPage />);
 
     // Wait for initial load
-    await waitFor(() => expect(screen.getByText("Preferences")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Preferences")).toBeInTheDocument(),
+    );
 
     // Switch to Dark theme
     const darkButton = screen.getByRole("button", { name: /dark/i });
@@ -53,21 +63,29 @@ describe("Theme and Interface Customization", () => {
 
     // Verify persistence call
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/account/preferences", expect.objectContaining({
-        method: "PATCH",
-        body: expect.stringContaining('"theme":"dark"'),
-      }));
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/account/preferences",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining('"theme":"dark"'),
+        }),
+      );
     });
   });
 
   it("toggles pointer cursors and updates dataset", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockPreferences),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockPreferences),
+      }),
+    );
 
     render(<AccountPreferencesPage />);
-    await waitFor(() => expect(screen.getByText("Preferences")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Preferences")).toBeInTheDocument(),
+    );
 
     const toggle = screen.getByRole("switch", { name: /pointer cursors/i });
     fireEvent.click(toggle);

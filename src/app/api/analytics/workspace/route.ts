@@ -41,8 +41,8 @@ export async function GET() {
       and(
         eq(team.workspaceId, workspaceId),
         eq(workflowState.category, "completed"),
-        gte(issue.completedAt, thirtyDaysAgo)
-      )
+        gte(issue.completedAt, thirtyDaysAgo),
+      ),
     )
     .groupBy(team.id, team.name);
 
@@ -59,8 +59,8 @@ export async function GET() {
     .where(
       and(
         eq(team.workspaceId, workspaceId),
-        sql`${workflowState.category} IN ('unstarted', 'started')`
-      )
+        sql`${workflowState.category} IN ('unstarted', 'started')`,
+      ),
     )
     .groupBy(team.id, team.name);
 
@@ -68,6 +68,6 @@ export async function GET() {
     workspaceId,
     completedLast30Days: completedStats,
     activeIssues: activeStats,
-    period: "Last 30 days"
+    period: "Last 30 days",
   });
 }

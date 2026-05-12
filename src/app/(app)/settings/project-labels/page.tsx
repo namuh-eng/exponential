@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
+import { useEffect, useState } from "react";
 
 interface ProjectLabel {
   id: string;
@@ -35,7 +35,9 @@ export default function ProjectLabelsPage() {
   }, []);
 
   if (loading) {
-    return <div className="p-8 text-[var(--color-text-tertiary)]">Loading...</div>;
+    return (
+      <div className="p-8 text-[var(--color-text-tertiary)]">Loading...</div>
+    );
   }
 
   return (
@@ -52,7 +54,8 @@ export default function ProjectLabelsPage() {
         </button>
       </div>
       <p className="mt-3 text-[14px] text-[var(--color-text-secondary)]">
-        Create and manage labels specifically for projects to help with categorization and reporting.
+        Create and manage labels specifically for projects to help with
+        categorization and reporting.
       </p>
 
       {errorMessage && (
@@ -94,7 +97,8 @@ export default function ProjectLabelsPage() {
                 </div>
                 <div className="flex items-center gap-4">
                   <span className="text-[12px] text-[var(--color-text-tertiary)]">
-                    {label.issueCount} {label.issueCount === 1 ? "issue" : "issues"}
+                    {label.issueCount}{" "}
+                    {label.issueCount === 1 ? "issue" : "issues"}
                   </span>
                   <button
                     type="button"

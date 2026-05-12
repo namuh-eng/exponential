@@ -41,7 +41,7 @@ export default function TeamDiscussionSummariesSettingsPage() {
 
   useEffect(() => {
     setLoading(false);
-  }, [teamKey]);
+  }, []);
 
   if (loading) {
     return (
@@ -66,7 +66,8 @@ export default function TeamDiscussionSummariesSettingsPage() {
         Discussion summaries
       </h1>
       <p className="mt-2 text-[13px] text-[var(--color-text-tertiary)]">
-        Auto-generate AI summaries for long comment threads to help team members get up to speed quickly.
+        Auto-generate AI summaries for long comment threads to help team members
+        get up to speed quickly.
       </p>
 
       <div className="mt-8 rounded-lg border border-[var(--color-border)] p-4">

@@ -3,7 +3,7 @@
 import { EmptyState } from "@/components/empty-state";
 import { NotificationRow } from "@/components/notification-row";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const PRIORITY_SORT_ORDER: Record<string, number> = {
   urgent: 0,
@@ -52,7 +52,6 @@ export default function InboxPage() {
 
       setNotifications(nextNotifications);
       setUnreadCount(nextUnreadCount);
-      emitNotificationChange(nextUnreadCount);
 
       return nextNotifications;
     } catch {
@@ -125,23 +124,30 @@ export default function InboxPage() {
     [notifications, unreadCount],
   );
 
-  const visibleNotifications = [...notifications]
-    .filter((notification) => !showUnreadOnly || notification.readAt === null)
-    .sort((left, right) => {
-      if (sortMode === "priority") {
-        const priorityDiff =
-          PRIORITY_SORT_ORDER[left.issuePriority] -
-          PRIORITY_SORT_ORDER[right.issuePriority];
+  const visibleNotifications = useMemo(
+    () =>
+      [...notifications]
+        .filter(
+          (notification) => !showUnreadOnly || notification.readAt === null,
+        )
+        .sort((left, right) => {
+          if (sortMode === "priority") {
+            const priorityDiff =
+              PRIORITY_SORT_ORDER[left.issuePriority] -
+              PRIORITY_SORT_ORDER[right.issuePriority];
 
-        if (priorityDiff !== 0) {
-          return priorityDiff;
-        }
-      }
+            if (priorityDiff !== 0) {
+              return priorityDiff;
+            }
+          }
 
-      return (
-        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
-      );
-    });
+          return (
+            new Date(right.createdAt).getTime() -
+            new Date(left.createdAt).getTime()
+          );
+        }),
+    [notifications, showUnreadOnly, sortMode],
+  );
 
   useEffect(() => {
     if (visibleNotifications.length === 0) {

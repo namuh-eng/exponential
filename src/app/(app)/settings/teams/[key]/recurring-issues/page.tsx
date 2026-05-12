@@ -11,7 +11,7 @@ export default function TeamRecurringIssuesSettingsPage() {
 
   useEffect(() => {
     setLoading(false);
-  }, [teamKey]);
+  }, []);
 
   if (loading) {
     return (

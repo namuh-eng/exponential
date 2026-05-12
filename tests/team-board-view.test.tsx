@@ -88,7 +88,7 @@ describe("TeamBoardPage UI", () => {
     await screen.findByText("Engineering");
 
     fireEvent.click(screen.getByRole("button", { name: "Display options" }));
-    
+
     const listLayoutButton = screen.getByRole("button", { name: "List" });
     fireEvent.click(listLayoutButton);
 
@@ -104,6 +104,8 @@ describe("TeamBoardPage UI", () => {
     render(<TeamBoardPage />);
 
     expect(await screen.findByText("No issues")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Create issue" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Create issue" }),
+    ).toBeInTheDocument();
   });
 });

@@ -1,6 +1,6 @@
+import TeamHierarchySettingsPage from "@/app/(app)/settings/teams/[key]/hierarchy/page";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import TeamHierarchySettingsPage from "@/app/(app)/settings/teams/[key]/hierarchy/page";
 import "@testing-library/jest-dom/vitest";
 
 // Mock next/navigation

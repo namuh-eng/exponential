@@ -1,8 +1,8 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import { afterEach, describe, expect, it, vi } from "vitest";
 import TeamAnalyticsPage from "@/app/(app)/team/[key]/analytics/page";
 import { useParams } from "next/navigation";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
   useParams: vi.fn(),
@@ -18,19 +18,22 @@ describe("TeamAnalyticsPage component", () => {
     team: { id: "t-1", name: "Engineering" },
     cycleMetrics: [
       { id: "c-1", name: "Sprint 1", total: 10, completed: 8, percentage: 80 },
-      { id: "c-2", name: "Sprint 2", total: 5, completed: 5, percentage: 100 }
+      { id: "c-2", name: "Sprint 2", total: 5, completed: 5, percentage: 100 },
     ],
     velocity: 4,
-    period: "Last 4 weeks"
+    period: "Last 4 weeks",
   };
 
   it("renders analytics data and cycle progress bars", async () => {
     vi.mocked(useParams).mockReturnValue({ key: "ENG" });
-    
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockAnalyticsData),
-    }));
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockAnalyticsData),
+      }),
+    );
 
     render(<TeamAnalyticsPage />);
 
@@ -47,21 +50,27 @@ describe("TeamAnalyticsPage component", () => {
 
   it("shows empty state when no metrics are available", async () => {
     vi.mocked(useParams).mockReturnValue({ key: "EMPTY" });
-    
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        team: { id: "t-2", name: "Empty Team" },
-        cycleMetrics: [],
-        velocity: 0,
-        period: "Last 4 weeks"
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            team: { id: "t-2", name: "Empty Team" },
+            cycleMetrics: [],
+            velocity: 0,
+            period: "Last 4 weeks",
+          }),
       }),
-    }));
+    );
 
     render(<TeamAnalyticsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("No cycle data available for this team.")).toBeInTheDocument();
+      expect(
+        screen.getByText("No cycle data available for this team."),
+      ).toBeInTheDocument();
     });
   });
 });

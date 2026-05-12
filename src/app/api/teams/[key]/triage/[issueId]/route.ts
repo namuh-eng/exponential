@@ -1,9 +1,8 @@
-import { auth } from "@/lib/auth";
+import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issue, workflowState } from "@/lib/db/schema";
 import { getTeamIdByKey } from "@/lib/teams";
 import { and, asc, eq } from "drizzle-orm";
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 // Accept or decline a triage issue
@@ -11,9 +10,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ key: string; issueId: string }> },
 ) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response } = await requireApiSession();
+  if (response) {
+    return response;
   }
 
   const { key, issueId } = await params;

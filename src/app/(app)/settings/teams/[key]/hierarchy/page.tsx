@@ -11,7 +11,7 @@ export default function TeamHierarchySettingsPage() {
 
   useEffect(() => {
     setLoading(false);
-  }, [teamKey]);
+  }, []);
 
   if (loading) {
     return (
@@ -36,7 +36,8 @@ export default function TeamHierarchySettingsPage() {
         Parent team
       </h1>
       <p className="mt-2 text-[13px] text-[var(--color-text-tertiary)]">
-        Set this team as a sub-team of another team to organize team hierarchies.
+        Set this team as a sub-team of another team to organize team
+        hierarchies.
       </p>
 
       <div className="mt-8 rounded-lg border border-[var(--color-border)] p-4">
@@ -50,7 +51,8 @@ export default function TeamHierarchySettingsPage() {
           </select>
         </label>
         <p className="mt-3 text-[12px] text-[var(--color-text-tertiary)]">
-          Team hierarchies allow you to roll up data and filter by parent team in views.
+          Team hierarchies allow you to roll up data and filter by parent team
+          in views.
         </p>
       </div>
     </div>

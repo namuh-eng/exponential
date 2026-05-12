@@ -28,7 +28,7 @@ format:
 # Unit tests (Vitest) — only shows failures, summary on success
 test: test-header
 	@. ./hack/run_silent.sh && \
-	run_silent_with_test_count "Unit Tests passed" "npx vitest run" "vitest"
+	run_silent_with_test_count "Unit Tests passed" "TZ=Asia/Seoul npx vitest run" "vitest"
 
 # E2E tests (Playwright — requires dev server running)
 test-e2e:

@@ -1,14 +1,14 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 
 interface InviteEntry {
   email: string;
   role: "admin" | "member" | "guest";
 }
 
-export default function InviteTeamPage() {
+function InviteTeamContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const workspaceId = searchParams.get("workspaceId") ?? "";
@@ -278,5 +278,19 @@ export default function InviteTeamPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function InviteTeamPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-[#090909]">
+          <span className="text-[13px] text-[#6b6f76]">Loading...</span>
+        </div>
+      }
+    >
+      <InviteTeamContent />
+    </Suspense>
   );
 }

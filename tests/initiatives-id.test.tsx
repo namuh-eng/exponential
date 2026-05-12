@@ -122,9 +122,12 @@ describe("InitiativeDetailPage", () => {
       target: { value: "atRisk" },
     });
 
-    fireEvent.change(screen.getByPlaceholderText("Post the latest initiative update."), {
-      target: { value: "Hit a snag" },
-    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Post the latest initiative update."),
+      {
+        target: { value: "Hit a snag" },
+      },
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Post update" }));
 
@@ -133,7 +136,10 @@ describe("InitiativeDetailPage", () => {
         "/api/initiatives/init-1",
         expect.objectContaining({
           method: "PATCH",
-          body: JSON.stringify({ initiativeUpdate: "Hit a snag", updateHealth: "atRisk" }),
+          body: JSON.stringify({
+            initiativeUpdate: "Hit a snag",
+            updateHealth: "atRisk",
+          }),
         }),
       );
     });

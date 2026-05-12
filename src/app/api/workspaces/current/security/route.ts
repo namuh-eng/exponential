@@ -1,10 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
-import { auth } from "@/lib/auth";
+import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 type PermissionLevel = "admins" | "members" | "anyone";
@@ -250,9 +249,9 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 export async function GET(request: Request) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
   }
 
   const currentWorkspace = await findCurrentWorkspace(session.user.id);
@@ -277,9 +276,9 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
   }
 
   const currentWorkspace = await findCurrentWorkspace(session.user.id);

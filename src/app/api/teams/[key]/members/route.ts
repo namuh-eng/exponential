@@ -1,18 +1,17 @@
-import { auth } from "@/lib/auth";
+import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { teamMember, user } from "@/lib/db/schema";
 import { findAccessibleTeam } from "@/lib/teams";
-import { eq } from "drizzle-orm";
-import { headers } from "next/headers";
+import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ key: string }> },
 ) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
   }
 
   const { key } = await params;
@@ -28,7 +27,7 @@ export async function GET(
       userId: teamMember.userId,
       name: user.name,
       email: user.email,
-      role: teamMember.role,
+      role: sql<string>`'member'`,
     })
     .from(teamMember)
     .innerJoin(user, eq(teamMember.userId, user.id))

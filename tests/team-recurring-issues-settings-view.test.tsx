@@ -16,8 +16,16 @@ describe("TeamRecurringIssuesSettingsPage component", () => {
     render(<TeamRecurringIssuesSettingsPage />);
 
     expect(screen.getByText("Recurring issues")).toBeDefined();
-    expect(screen.getByText(/Set up scheduled issues that repeat/i)).toBeDefined();
-    expect(screen.getByRole("button", { name: "New recurring issue" })).toBeDefined();
-    expect(screen.getByText("No recurring issues have been configured for this team.")).toBeDefined();
+    expect(
+      screen.getByText(/Set up scheduled issues that repeat/i),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "New recurring issue" }),
+    ).toBeDefined();
+    expect(
+      screen.getByText(
+        "No recurring issues have been configured for this team.",
+      ),
+    ).toBeDefined();
   });
 });

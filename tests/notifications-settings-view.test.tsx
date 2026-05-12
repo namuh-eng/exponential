@@ -14,15 +14,50 @@ vi.mock("next/navigation", () => ({
   useParams: () => ({}),
 }));
 
-import { NotificationsOverviewPage, NotificationChannelPage } from "@/app/(app)/settings/account/notifications/notifications-client";
+import {
+  NotificationChannelPage,
+  NotificationsOverviewPage,
+} from "@/app/(app)/settings/account/notifications/notifications-client";
 
 const mockNotificationSettings = {
   accountNotifications: {
     channels: {
-      desktop: { enabled: true, events: { assignments: true, statusChanges: true, mentions: true, comments: true } },
-      mobile: { enabled: false, events: { assignments: true, statusChanges: false, mentions: true, comments: false } },
-      email: { enabled: true, events: { assignments: false, statusChanges: false, mentions: true, comments: false } },
-      slack: { enabled: false, events: { assignments: false, statusChanges: false, mentions: false, comments: false } },
+      desktop: {
+        enabled: true,
+        events: {
+          assignments: true,
+          statusChanges: true,
+          mentions: true,
+          comments: true,
+        },
+      },
+      mobile: {
+        enabled: false,
+        events: {
+          assignments: true,
+          statusChanges: false,
+          mentions: true,
+          comments: false,
+        },
+      },
+      email: {
+        enabled: true,
+        events: {
+          assignments: false,
+          statusChanges: false,
+          mentions: true,
+          comments: false,
+        },
+      },
+      slack: {
+        enabled: false,
+        events: {
+          assignments: false,
+          statusChanges: false,
+          mentions: false,
+          comments: false,
+        },
+      },
     },
     updatesFromLinear: {
       showInSidebar: true,
@@ -45,13 +80,13 @@ describe("NotificationsOverviewPage UI", () => {
 
   it("renders notification settings and toggles an update", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
-        if (url.toString().includes("/api/account/notifications")) {
-            return Promise.resolve({
-                ok: true,
-                json: async () => mockNotificationSettings,
-            } as Response);
-        }
-        return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
+      if (url.toString().includes("/api/account/notifications")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockNotificationSettings,
+        } as Response);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
     });
 
     render(<NotificationsOverviewPage />);
@@ -65,7 +100,7 @@ describe("NotificationsOverviewPage UI", () => {
     fireEvent.click(sidebarToggle);
 
     await waitFor(() => {
-        expect(sidebarToggle).toHaveAttribute("aria-checked", "false");
+      expect(sidebarToggle).toHaveAttribute("aria-checked", "false");
     });
 
     expect(screen.getByText("Saved")).toBeInTheDocument();
@@ -81,11 +116,13 @@ describe("NotificationsOverviewPage UI", () => {
     await screen.findByText("Notifications");
 
     // Desktop: enabled and all events true -> "Enabled for all notifications"
-    expect(screen.getByText("Enabled for all notifications")).toBeInTheDocument();
-    
+    expect(
+      screen.getByText("Enabled for all notifications"),
+    ).toBeInTheDocument();
+
     // Mobile: disabled -> "Disabled"
     expect(screen.getAllByText("Disabled").length).toBeGreaterThan(0);
-    
+
     // Email: enabled but some events false -> "Enabled for mentions" (based on mock events)
     expect(screen.getByText("Enabled for mentions")).toBeInTheDocument();
   });
@@ -99,20 +136,24 @@ describe("NotificationChannelPage UI", () => {
 
   it("renders channel settings and updates an event preference", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
-        if (url.toString().includes("/api/account/notifications")) {
-            return Promise.resolve({
-                ok: true,
-                json: async () => mockNotificationSettings,
-            } as Response);
-        }
-        return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
+      if (url.toString().includes("/api/account/notifications")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockNotificationSettings,
+        } as Response);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
     });
 
     render(<NotificationChannelPage channel="desktop" />);
 
     // Wait for data
     expect(await screen.findByText("Desktop")).toBeInTheDocument();
-    expect(screen.getByText("Configure desktop alerts for activity in your workspace.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Configure desktop alerts for activity in your workspace.",
+      ),
+    ).toBeInTheDocument();
 
     const assignmentsToggle = screen.getByLabelText("Assignments");
     expect(assignmentsToggle).toHaveAttribute("aria-checked", "true");
@@ -120,7 +161,7 @@ describe("NotificationChannelPage UI", () => {
     fireEvent.click(assignmentsToggle);
 
     await waitFor(() => {
-        expect(assignmentsToggle).toHaveAttribute("aria-checked", "false");
+      expect(assignmentsToggle).toHaveAttribute("aria-checked", "false");
     });
   });
 });

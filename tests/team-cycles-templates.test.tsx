@@ -1,10 +1,10 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import { afterEach, describe, expect, it, vi } from "vitest";
 import TeamCyclesSettingsPage from "@/app/(app)/settings/teams/[key]/cycles/page";
-import TeamTemplatesSettingsPage from "@/app/(app)/settings/teams/[key]/templates/page";
 import TeamSlackSettingsPage from "@/app/(app)/settings/teams/[key]/slack-notifications/page";
+import TeamTemplatesSettingsPage from "@/app/(app)/settings/teams/[key]/templates/page";
 import { useParams } from "next/navigation";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
   useParams: vi.fn(),
@@ -45,15 +45,20 @@ describe("Team Cycles & Templates Settings", () => {
 
     expect(screen.getByText("Slack notifications")).toBeInTheDocument();
     expect(screen.getByText("Slack is not connected")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Connect Slack" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Connect Slack" }),
+    ).toBeInTheDocument();
   });
 
   it("renders team cycles settings with data", async () => {
     vi.mocked(useParams).mockReturnValue({ key: "ENG" });
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockCyclesData),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockCyclesData),
+      }),
+    );
 
     render(<TeamCyclesSettingsPage />);
 
@@ -65,29 +70,42 @@ describe("Team Cycles & Templates Settings", () => {
 
   it("shows disabled warning when cycles are off", async () => {
     vi.mocked(useParams).mockReturnValue({ key: "ENG" });
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        ...mockCyclesData,
-        team: { ...mockCyclesData.team, cyclesEnabled: false },
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            ...mockCyclesData,
+            team: { ...mockCyclesData.team, cyclesEnabled: false },
+          }),
       }),
-    }));
+    );
 
     render(<TeamCyclesSettingsPage />);
 
-    await waitFor(() => expect(screen.getByText(/Cycles are currently disabled/)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Cycles are currently disabled/),
+      ).toBeInTheDocument(),
+    );
   });
 
   it("renders team templates settings with data", async () => {
     vi.mocked(useParams).mockReturnValue({ key: "ENG" });
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockTemplatesData),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockTemplatesData),
+      }),
+    );
 
     render(<TeamTemplatesSettingsPage />);
 
-    await waitFor(() => expect(screen.getByText("Templates")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Templates")).toBeInTheDocument(),
+    );
     expect(screen.getByText("Bug Report")).toBeInTheDocument();
     expect(screen.getByText("Standard bug report")).toBeInTheDocument();
   });

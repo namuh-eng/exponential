@@ -1,6 +1,6 @@
+import TeamCyclesSettingsPage from "@/app/(app)/settings/teams/[key]/cycles/page";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import TeamCyclesSettingsPage from "@/app/(app)/settings/teams/[key]/cycles/page";
 import "@testing-library/jest-dom/vitest";
 
 // Mock next/navigation
@@ -76,12 +76,14 @@ describe("TeamCyclesSettingsPage", () => {
             ...mockCyclesResponse,
             team: { ...mockCyclesResponse.team, cyclesEnabled: false },
           }),
-      }),
+      } as Response),
     );
 
     render(<TeamCyclesSettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText(/Cycles are currently disabled/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Cycles are currently disabled/),
+      ).toBeInTheDocument();
     });
   });
 
@@ -94,12 +96,14 @@ describe("TeamCyclesSettingsPage", () => {
             ...mockCyclesResponse,
             cycles: [],
           }),
-      }),
+      } as Response),
     );
 
     render(<TeamCyclesSettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText("No cycles have been created for this team.")).toBeInTheDocument();
+      expect(
+        screen.getByText("No cycles have been created for this team."),
+      ).toBeInTheDocument();
     });
   });
 
@@ -108,7 +112,7 @@ describe("TeamCyclesSettingsPage", () => {
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve(null),
-      }),
+      } as Response),
     );
 
     render(<TeamCyclesSettingsPage />);

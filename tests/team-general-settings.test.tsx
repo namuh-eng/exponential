@@ -59,7 +59,9 @@ describe("TeamGeneralSettingsPage", () => {
     expect(await screen.findByDisplayValue("Engineering")).toBeInTheDocument();
     expect(screen.getByText("🚀")).toBeInTheDocument();
     expect(screen.getByDisplayValue("ENG")).toBeInTheDocument();
-    expect(screen.getByLabelText("Timezone")).toHaveValue("Pacific Time (America/Los_Angeles)");
+    expect(screen.getByLabelText("Timezone")).toHaveValue(
+      "Pacific Time (America/Los_Angeles)",
+    );
   });
 
   it("updates team name and saves changes", async () => {

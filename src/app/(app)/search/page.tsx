@@ -1,8 +1,16 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { useEffect, useState, Suspense } from "react";
 import { IssueRow, priorityMap } from "@/components/issue-row";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+
+type StatusCategory =
+  | "triage"
+  | "backlog"
+  | "unstarted"
+  | "started"
+  | "completed"
+  | "canceled";
 
 interface SearchResult {
   id: string;
@@ -10,7 +18,7 @@ interface SearchResult {
   title: string;
   priority: string;
   stateName: string;
-  stateCategory: string;
+  stateCategory: StatusCategory;
   stateColor: string;
   assigneeName?: string;
   assigneeImage?: string;
@@ -62,7 +70,7 @@ function SearchContent() {
                 identifier={issue.identifier}
                 title={issue.title}
                 priority={priorityMap[issue.priority] ?? 0}
-                statusCategory={issue.stateCategory as any}
+                statusCategory={issue.stateCategory}
                 statusColor={issue.stateColor}
                 assigneeName={issue.assigneeName}
                 assigneeImage={issue.assigneeImage}

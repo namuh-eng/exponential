@@ -1,6 +1,12 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TeamWorkflowsSettingsPage from "@/app/(app)/settings/teams/[key]/workflows/page";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
 // Mock next/navigation
@@ -27,7 +33,10 @@ describe("TeamWorkflowsSettingsPage", () => {
         if (url === "/api/teams/TEAM/settings" && options?.method === "PATCH") {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({ team: { ...mockTeam, ...JSON.parse(options.body) } }),
+            json: () =>
+              Promise.resolve({
+                team: { ...mockTeam, ...JSON.parse(options.body) },
+              }),
           });
         }
         return Promise.reject(new Error("Unhandled fetch"));
@@ -48,7 +57,9 @@ describe("TeamWorkflowsSettingsPage", () => {
       expect(screen.getByText("Workflows & automations")).toBeInTheDocument();
     });
 
-    expect(screen.getByLabelText("Enable detailed issue history")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Enable detailed issue history"),
+    ).toBeInTheDocument();
   });
 
   it("handles toggling detailed history and saving", async () => {
@@ -77,12 +88,12 @@ describe("TeamWorkflowsSettingsPage", () => {
   it("shows error message when save fails", async () => {
     vi.mocked(global.fetch).mockImplementation((url, options) => {
       if (url === "/api/teams/TEAM/settings" && options?.method === "PATCH") {
-        return Promise.resolve({ ok: false });
+        return Promise.resolve({ ok: false } as Response);
       }
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ team: mockTeam }),
-      });
+      } as Response);
     });
 
     render(<TeamWorkflowsSettingsPage />);
@@ -91,7 +102,9 @@ describe("TeamWorkflowsSettingsPage", () => {
     fireEvent.click(screen.getByLabelText("Enable detailed issue history"));
 
     await waitFor(() => {
-      expect(screen.getByText("Failed to update workflow settings")).toBeInTheDocument();
+      expect(
+        screen.getByText("Failed to update workflow settings"),
+      ).toBeInTheDocument();
     });
   });
 
@@ -100,7 +113,7 @@ describe("TeamWorkflowsSettingsPage", () => {
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ team: null }),
-      }),
+      } as Response),
     );
 
     render(<TeamWorkflowsSettingsPage />);

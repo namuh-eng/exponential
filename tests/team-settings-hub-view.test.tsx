@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TeamSettingsHubPage from "../src/app/(app)/settings/teams/[key]/page";
@@ -36,7 +42,7 @@ describe("TeamSettingsHubPage component", () => {
   };
 
   it("renders loading state then team settings hub", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => mockTeamData,
     });
@@ -58,18 +64,24 @@ describe("TeamSettingsHubPage component", () => {
   });
 
   it("handles team deletion flow", async () => {
-    (fetch as any).mockImplementation((url: string, init?: any) => {
-      if (init?.method === "POST") {
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (url: string, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              success: true,
+              redirectTo: "/settings",
+              message: "Engineering was deleted.",
+            }),
+          });
+        }
         return Promise.resolve({
           ok: true,
-          json: async () => ({ success: true, redirectTo: "/settings", message: "Engineering was deleted." }),
+          json: async () => mockTeamData,
         });
-      }
-      return Promise.resolve({
-        ok: true,
-        json: async () => mockTeamData,
-      });
-    });
+      },
+    );
 
     render(<TeamSettingsHubPage />);
     await waitFor(() => screen.getByText("Engineering"));
@@ -77,33 +89,48 @@ describe("TeamSettingsHubPage component", () => {
     fireEvent.click(screen.getByText("Delete team"));
 
     expect(screen.getByText("Delete team?")).toBeDefined();
-    expect(screen.getByText(/Deleting a team permanently removes its team-scoped data/i)).toBeDefined();
+    expect(
+      screen.getByText(
+        /Deleting a team permanently removes its team-scoped data/i,
+      ),
+    ).toBeDefined();
 
-    const deleteButton = screen.getAllByRole("button", { name: "Delete team" })[1];
+    const deleteButton = screen.getAllByRole("button", {
+      name: "Delete team",
+    })[1];
     fireEvent.click(deleteButton);
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith("/api/teams/ENG/settings", expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ action: "delete" }),
-      }));
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/teams/ENG/settings",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ action: "delete" }),
+        }),
+      );
       expect(screen.getByText("Engineering was deleted.")).toBeDefined();
     });
   });
 
   it("handles leave team flow", async () => {
-    (fetch as any).mockImplementation((url: string, init?: any) => {
-      if (init?.method === "POST") {
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (url: string, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              success: true,
+              redirectTo: "/settings",
+              message: "Left Engineering.",
+            }),
+          });
+        }
         return Promise.resolve({
           ok: true,
-          json: async () => ({ success: true, redirectTo: "/settings", message: "Left Engineering." }),
+          json: async () => mockTeamData,
         });
-      }
-      return Promise.resolve({
-        ok: true,
-        json: async () => mockTeamData,
-      });
-    });
+      },
+    );
 
     render(<TeamSettingsHubPage />);
     await waitFor(() => screen.getByText("Engineering"));
@@ -111,21 +138,26 @@ describe("TeamSettingsHubPage component", () => {
     fireEvent.click(screen.getByText("Leave team"));
 
     expect(screen.getByText("Leave team?")).toBeDefined();
-    
-    const confirmButton = screen.getAllByRole("button", { name: "Leave team" })[1];
+
+    const confirmButton = screen.getAllByRole("button", {
+      name: "Leave team",
+    })[1];
     fireEvent.click(confirmButton);
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith("/api/teams/ENG/settings", expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ action: "leave" }),
-      }));
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/teams/ENG/settings",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ action: "leave" }),
+        }),
+      );
       expect(screen.getByText("Left Engineering.")).toBeDefined();
     });
   });
 
   it("shows team not found when team is missing", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => ({ team: null }),
     });

@@ -1,11 +1,10 @@
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
-import { auth } from "@/lib/auth";
+import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, user, workspace, workspaceInvitation } from "@/lib/db/schema";
 import { sendInvitationEmail } from "@/lib/email";
 import { createInviteToken } from "@/lib/invite-tokens";
 import { and, eq } from "drizzle-orm";
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 interface InviteRequest {
@@ -17,9 +16,9 @@ interface InviteRequest {
 }
 
 export async function POST(request: Request) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
   }
 
   const body = (await request.json()) as InviteRequest;

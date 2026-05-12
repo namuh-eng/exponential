@@ -114,7 +114,8 @@ export default function TeamWorkflowsSettingsPage() {
         Workflows & automations
       </h1>
       <p className="mt-2 text-[13px] text-[var(--color-text-tertiary)]">
-        Manage how work flows through your team and configure automated behaviors.
+        Manage how work flows through your team and configure automated
+        behaviors.
       </p>
 
       <div className="mt-8 rounded-lg border border-[var(--color-border)] p-4">

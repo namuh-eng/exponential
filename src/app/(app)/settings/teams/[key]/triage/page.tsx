@@ -114,7 +114,8 @@ export default function TeamTriageSettingsPage() {
         Triage
       </h1>
       <p className="mt-2 text-[13px] text-[var(--color-text-tertiary)]">
-        Enable triage to review and categorize incoming issues before they enter the team backlog.
+        Enable triage to review and categorize incoming issues before they enter
+        the team backlog.
       </p>
 
       <div className="mt-8 rounded-lg border border-[var(--color-border)] p-4">

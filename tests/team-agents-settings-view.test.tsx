@@ -1,6 +1,12 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TeamAgentsSettingsPage from "@/app/(app)/settings/teams/[key]/agents/page";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
 // Mock next/navigation
@@ -28,7 +34,10 @@ describe("TeamAgentsSettingsPage", () => {
         if (url === "/api/teams/TEAM/settings" && options?.method === "PATCH") {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({ team: { ...mockTeam, ...JSON.parse(options.body) } }),
+            json: () =>
+              Promise.resolve({
+                team: { ...mockTeam, ...JSON.parse(options.body) },
+              }),
           });
         }
         return Promise.reject(new Error("Unhandled fetch"));
@@ -93,12 +102,12 @@ describe("TeamAgentsSettingsPage", () => {
   it("shows error message when save fails", async () => {
     vi.mocked(global.fetch).mockImplementation((url, options) => {
       if (url === "/api/teams/TEAM/settings" && options?.method === "PATCH") {
-        return Promise.resolve({ ok: false });
+        return Promise.resolve({ ok: false } as Response);
       }
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ team: mockTeam }),
-      });
+      } as Response);
     });
 
     render(<TeamAgentsSettingsPage />);
@@ -107,7 +116,9 @@ describe("TeamAgentsSettingsPage", () => {
     fireEvent.click(screen.getByLabelText("Enable auto-assignment"));
 
     await waitFor(() => {
-      expect(screen.getByText("Failed to update agent settings")).toBeInTheDocument();
+      expect(
+        screen.getByText("Failed to update agent settings"),
+      ).toBeInTheDocument();
     });
   });
 
@@ -116,7 +127,7 @@ describe("TeamAgentsSettingsPage", () => {
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ team: null }),
-      }),
+      } as Response),
     );
 
     render(<TeamAgentsSettingsPage />);

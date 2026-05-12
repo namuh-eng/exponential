@@ -1,6 +1,12 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TeamTriageSettingsPage from "@/app/(app)/settings/teams/[key]/triage/page";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
 // Mock next/navigation
@@ -27,7 +33,10 @@ describe("TeamTriageSettingsPage", () => {
         if (url === "/api/teams/TEAM/settings" && options?.method === "PATCH") {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({ team: { ...mockTeam, ...JSON.parse(options.body) } }),
+            json: () =>
+              Promise.resolve({
+                team: { ...mockTeam, ...JSON.parse(options.body) },
+              }),
           });
         }
         return Promise.reject(new Error("Unhandled fetch"));
@@ -77,12 +86,12 @@ describe("TeamTriageSettingsPage", () => {
   it("shows error message when save fails", async () => {
     vi.mocked(global.fetch).mockImplementation((url, options) => {
       if (url === "/api/teams/TEAM/settings" && options?.method === "PATCH") {
-        return Promise.resolve({ ok: false });
+        return Promise.resolve({ ok: false } as Response);
       }
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ team: mockTeam }),
-      });
+      } as Response);
     });
 
     render(<TeamTriageSettingsPage />);
@@ -91,7 +100,9 @@ describe("TeamTriageSettingsPage", () => {
     fireEvent.click(screen.getByLabelText("Enable triage"));
 
     await waitFor(() => {
-      expect(screen.getByText("Failed to update triage settings")).toBeInTheDocument();
+      expect(
+        screen.getByText("Failed to update triage settings"),
+      ).toBeInTheDocument();
     });
   });
 
@@ -100,7 +111,7 @@ describe("TeamTriageSettingsPage", () => {
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ team: null }),
-      }),
+      } as Response),
     );
 
     render(<TeamTriageSettingsPage />);

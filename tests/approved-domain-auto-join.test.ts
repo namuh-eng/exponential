@@ -2,11 +2,11 @@ import { autoJoinWorkspaceForApprovedDomain } from "@/lib/approved-domain-auto-j
 import { db } from "@/lib/db";
 import { member, team, teamMember, user, workspace } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
-import { describe, expect, it, beforeAll, afterAll } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
-const TEST_WS_ID = "00000000-0000-0000-0000-000000000002";
-const TEST_TEAM_ID = "00000000-0000-0000-0000-000000000003";
+const TEST_USER_ID = "10000000-0000-0000-0000-000000000001";
+const TEST_WS_ID = "10000000-0000-0000-0000-000000000002";
+const TEST_TEAM_ID = "10000000-0000-0000-0000-000000000003";
 
 describe("Approved domain auto-join logic", () => {
   beforeAll(async () => {
@@ -27,7 +27,6 @@ describe("Approved domain auto-join logic", () => {
     await db.insert(workspace).values({
       id: TEST_WS_ID,
       name: "Acme Corp",
-      slug: "acme",
       urlSlug: "acme",
       approvedEmailDomains: ["acme.com"],
     });
@@ -57,16 +56,28 @@ describe("Approved domain auto-join logic", () => {
     expect(joinedWorkspaceId).toBe(TEST_WS_ID);
 
     // Verify workspace membership
-    const [membership] = await db.select().from(member).where(
-      and(eq(member.userId, TEST_USER_ID), eq(member.workspaceId, TEST_WS_ID))
-    );
+    const [membership] = await db
+      .select()
+      .from(member)
+      .where(
+        and(
+          eq(member.userId, TEST_USER_ID),
+          eq(member.workspaceId, TEST_WS_ID),
+        ),
+      );
     expect(membership).toBeDefined();
     expect(membership.role).toBe("member");
 
     // Verify team membership
-    const [teamMembership] = await db.select().from(teamMember).where(
-      and(eq(teamMember.userId, TEST_USER_ID), eq(teamMember.teamId, TEST_TEAM_ID))
-    );
+    const [teamMembership] = await db
+      .select()
+      .from(teamMember)
+      .where(
+        and(
+          eq(teamMember.userId, TEST_USER_ID),
+          eq(teamMember.teamId, TEST_TEAM_ID),
+        ),
+      );
     expect(teamMembership).toBeDefined();
   });
 

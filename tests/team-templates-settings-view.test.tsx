@@ -31,7 +31,7 @@ describe("TeamTemplatesSettingsPage component", () => {
   };
 
   it("renders loading state then team templates", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => mockTemplatesData,
     });
@@ -41,7 +41,9 @@ describe("TeamTemplatesSettingsPage component", () => {
     expect(screen.getByText("Loading...")).toBeDefined();
 
     await waitFor(() => {
-      expect(screen.getByText(/Create reusable templates for issues/i)).toBeDefined();
+      expect(
+        screen.getByText(/Create reusable templates for issues/i),
+      ).toBeDefined();
     });
 
     expect(screen.getAllByText(/Engineering/i).length).toBeGreaterThan(0);
@@ -51,7 +53,7 @@ describe("TeamTemplatesSettingsPage component", () => {
   });
 
   it("shows empty state when no templates exist", async () => {
-    (fetch as any).mockResolvedValue({
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => ({
         ...mockTemplatesData,
@@ -62,7 +64,9 @@ describe("TeamTemplatesSettingsPage component", () => {
     render(<TeamTemplatesSettingsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("No templates have been created for this team.")).toBeDefined();
+      expect(
+        screen.getByText("No templates have been created for this team."),
+      ).toBeDefined();
     });
   });
 });

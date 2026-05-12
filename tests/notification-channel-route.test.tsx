@@ -9,13 +9,21 @@ vi.mock("next/navigation", () => ({
   notFound: vi.fn(),
 }));
 
-import { NotificationChannelPage } from "@/app/(app)/settings/account/notifications/notifications-client";
 import NotificationChannelSettingsPage from "@/app/(app)/settings/account/notifications/[channel]/page";
+import { NotificationChannelPage } from "@/app/(app)/settings/account/notifications/notifications-client";
 
 const mockNotificationSettings = {
   accountNotifications: {
     channels: {
-      desktop: { enabled: true, events: { assignments: true, statusChanges: true, mentions: true, comments: true } },
+      desktop: {
+        enabled: true,
+        events: {
+          assignments: true,
+          statusChanges: true,
+          mentions: true,
+          comments: true,
+        },
+      },
     },
   },
 };
@@ -35,7 +43,7 @@ describe("NotificationChannelSettingsPage (Route)", () => {
     const Page = await NotificationChannelSettingsPage({
       params: Promise.resolve({ channel: "desktop" }),
     });
-    
+
     render(Page);
 
     expect(await screen.findByText("Desktop")).toBeInTheDocument();
@@ -43,7 +51,7 @@ describe("NotificationChannelSettingsPage (Route)", () => {
 
   it("calls notFound for an invalid channel", async () => {
     const { notFound } = await import("next/navigation");
-    
+
     await NotificationChannelSettingsPage({
       params: Promise.resolve({ channel: "invalid-channel" }),
     });

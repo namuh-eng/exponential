@@ -85,6 +85,12 @@ export const notificationType = pgEnum("notification_type", [
 
 export const viewLayout = pgEnum("view_layout", ["list", "board", "timeline"]);
 
+export const issueHistoryEventType = pgEnum("issue_history_event_type", [
+  "created",
+  "updated",
+  "comment_created",
+]);
+
 export const estimateType = pgEnum("estimate_type", [
   "not_in_use",
   "linear",
@@ -476,6 +482,30 @@ export const issueLabel = pgTable(
   (t) => [uniqueIndex("issue_label_issue_label_idx").on(t.issueId, t.labelId)],
 );
 
+// ─── Issue History ──────────────────────────────────────────────────
+
+export const issueHistory = pgTable(
+  "issue_history",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    issueId: uuid("issue_id")
+      .notNull()
+      .references(() => issue.id, { onDelete: "cascade" }),
+    actorId: text("actor_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    actorName: text("actor_name"),
+    actorEmail: text("actor_email"),
+    eventType: issueHistoryEventType("event_type").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("issue_history_issue_created_idx").on(t.issueId, t.createdAt),
+    index("issue_history_actor_idx").on(t.actorId),
+  ],
+);
+
 // ─── Issue Relation ──────────────────────────────────────────────────
 
 export const issueRelation = pgTable(
@@ -805,9 +835,15 @@ export const issueRelations = relations(issue, ({ one, many }) => ({
   subIssues: many(issue, { relationName: "parentIssue" }),
   labels: many(issueLabel),
   comments: many(comment),
+  history: many(issueHistory),
   relations: many(issueRelation, { relationName: "source" }),
   relatedFrom: many(issueRelation, { relationName: "target" }),
   notifications: many(notification),
+}));
+
+export const issueHistoryRelations = relations(issueHistory, ({ one }) => ({
+  issue: one(issue, { fields: [issueHistory.issueId], references: [issue.id] }),
+  actor: one(user, { fields: [issueHistory.actorId], references: [user.id] }),
 }));
 
 export const issueLabelRelations = relations(issueLabel, ({ one }) => ({

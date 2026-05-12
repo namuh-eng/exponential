@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
+import { useEffect, useState } from "react";
 
 interface WorkspaceBillingData {
   id: string;
@@ -33,7 +33,9 @@ export default function BillingSettingsPage() {
   }, []);
 
   if (loading) {
-    return <div className="p-8 text-[var(--color-text-tertiary)]">Loading...</div>;
+    return (
+      <div className="p-8 text-[var(--color-text-tertiary)]">Loading...</div>
+    );
   }
 
   const planLabels: Record<string, string> = {
@@ -56,7 +58,8 @@ export default function BillingSettingsPage() {
         Billing
       </h1>
       <p className="mt-3 text-[14px] text-[var(--color-text-secondary)]">
-        Manage your plan, payment methods, and invoices for <strong>{billing?.name}</strong>.
+        Manage your plan, payment methods, and invoices for{" "}
+        <strong>{billing?.name}</strong>.
       </p>
 
       {errorMessage && (

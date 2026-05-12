@@ -1,5 +1,5 @@
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
-import { auth } from "@/lib/auth";
+import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
 import {
@@ -8,7 +8,6 @@ import {
   validateWorkspaceName,
 } from "@/lib/workspace-creation";
 import { and, desc, eq, ne } from "drizzle-orm";
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 const DEFAULT_REGION = "United States";
@@ -47,9 +46,12 @@ function readWorkspaceSettings(settings: unknown) {
       ? parsed.fiscalMonth
       : DEFAULT_FISCAL_MONTH;
 
+  const plan = typeof parsed.plan === "string" ? parsed.plan : "free";
+
   return {
     region,
     fiscalMonth,
+    plan,
   };
 }
 
@@ -90,9 +92,9 @@ async function findCurrentWorkspace(userId: string) {
 }
 
 export async function GET() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
   }
 
   const currentWorkspace = await findCurrentWorkspace(session.user.id);
@@ -111,15 +113,15 @@ export async function GET() {
       logo: currentWorkspace.logoUrl,
       region: currentWorkspace.region,
       fiscalMonth: currentWorkspace.fiscalMonth,
-      plan: (currentWorkspace.settings as any)?.plan ?? "free",
+      plan: readWorkspaceSettings(currentWorkspace.settings).plan,
     },
   });
 }
 
 export async function PATCH(request: Request) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
   }
 
   const currentWorkspace = await findCurrentWorkspace(session.user.id);
@@ -233,15 +235,15 @@ export async function PATCH(request: Request) {
       logo,
       region: currentWorkspace.region,
       fiscalMonth,
-      plan: (currentWorkspace.settings as any)?.plan ?? "free",
+      plan: readWorkspaceSettings(currentWorkspace.settings).plan,
     },
   });
 }
 
 export async function DELETE() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
   }
 
   const currentWorkspace = await findCurrentWorkspace(session.user.id);

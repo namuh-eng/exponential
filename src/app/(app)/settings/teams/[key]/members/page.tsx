@@ -79,7 +79,7 @@ export default function TeamMembersSettingsPage() {
             <tr className="border-bottom border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-tertiary)]">
               <th className="px-4 py-2 font-medium">User</th>
               <th className="px-4 py-2 font-medium">Role</th>
-              <th className="px-4 py-2 font-medium"></th>
+              <th className="px-4 py-2 font-medium" />
             </tr>
           </thead>
           <tbody>
