@@ -366,6 +366,25 @@ describe("Login page", () => {
     });
   });
 
+  it("uses the current workspace root URL when requesting a magic link from a rewritten login", async () => {
+    mockLocation.pathname = "/foreverbrowsing";
+    mockLocation.search = "";
+    render(<LoginPage />);
+    fireEvent.click(screen.getByText("Continue with email"));
+
+    const input = screen.getByPlaceholderText("Enter your email address…");
+    fireEvent.change(input, { target: { value: "test@example.com" } });
+    fireEvent.submit(input.closest("form") as HTMLFormElement);
+
+    await vi.waitFor(() => {
+      expect(signIn.magicLink).toHaveBeenCalledWith({
+        email: "test@example.com",
+        callbackURL: "http://localhost:3015/foreverbrowsing",
+        errorCallbackURL: "http://localhost:3015/foreverbrowsing",
+      });
+    });
+  });
+
   it("uses the current workspace deep-link URL when requesting a magic link from a rewritten login", async () => {
     mockLocation.pathname = "/foreverbrowsing/team/ENG/all";
     mockLocation.search = "?view=list&error=INVALID_TOKEN";

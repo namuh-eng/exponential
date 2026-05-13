@@ -62,9 +62,9 @@ function isWorkspaceSlugSegment(segment: string | undefined) {
 function isWorkspaceScopedAppPath(pathname: string) {
   const segments = getPathSegments(pathname);
   return (
-    segments.length > 1 &&
     isWorkspaceSlugSegment(segments[0]) &&
-    isAppRoutePrefix(segments[1])
+    (segments.length === 1 ||
+      (segments.length > 1 && isAppRoutePrefix(segments[1])))
   );
 }
 
@@ -133,13 +133,6 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(canonicalUrl);
   }
 
-  const workspaceRootRedirect = getWorkspaceRootRedirect(pathname);
-  if (workspaceRootRedirect) {
-    const workspaceRootUrl = request.nextUrl.clone();
-    workspaceRootUrl.pathname = workspaceRootRedirect;
-    return NextResponse.redirect(workspaceRootUrl);
-  }
-
   // Allow public paths
   if (isPublicPath(pathname)) {
     return NextResponse.next();
@@ -168,6 +161,13 @@ export async function proxy(request: NextRequest) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", callbackUrl);
     return NextResponse.redirect(loginUrl);
+  }
+
+  const workspaceRootRedirect = getWorkspaceRootRedirect(pathname);
+  if (workspaceRootRedirect) {
+    const workspaceRootUrl = request.nextUrl.clone();
+    workspaceRootUrl.pathname = workspaceRootRedirect;
+    return NextResponse.redirect(workspaceRootUrl);
   }
 
   const canonicalTeamRedirect = getCanonicalTeamRedirect(pathname);

@@ -71,6 +71,7 @@ describe("Auth proxy", () => {
   });
 
   it.each([
+    "/foreverbrowsing",
     "/foreverbrowsing/settings/account/security",
     "/foreverbrowsing/team/ENG/all",
     "/foreverbrowsing/projects",
@@ -92,6 +93,21 @@ describe("Auth proxy", () => {
       );
     },
   );
+
+  it("redirects authenticated workspace roots to the default inbox without dropping search", async () => {
+    mockRedirect.mockClear();
+    mockRewrite.mockClear();
+    const { proxy } = await import("@/proxy");
+    const req = createMockRequest("/foreverbrowsing?view=list", {
+      "better-auth.session_token": "valid-session-token",
+    });
+    await proxy(req as never);
+    expect(mockRewrite).not.toHaveBeenCalled();
+    expect(mockRedirect).toHaveBeenCalled();
+    const redirectUrl = mockRedirect.mock.calls[0][0] as URL;
+    expect(redirectUrl.pathname).toBe("/foreverbrowsing/inbox");
+    expect(redirectUrl.search).toBe("?view=list");
+  });
 
   it("redirects to /login when no session cookie", async () => {
     mockRedirect.mockClear();
