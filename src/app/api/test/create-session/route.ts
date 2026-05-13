@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    return await createTestSession(email, body?.name);
+    return await createTestSession(email, body?.name, request.url);
   } catch (error) {
     if (shouldRenderDatabaseBootstrapError(error)) {
       return NextResponse.json(
@@ -65,7 +65,11 @@ export async function POST(request: Request) {
   }
 }
 
-async function createTestSession(email: string, name: string | undefined) {
+async function createTestSession(
+  email: string,
+  name: string | undefined,
+  requestUrl: string,
+) {
   const existingUser = await db
     .select({
       id: user.id,
@@ -114,6 +118,8 @@ async function createTestSession(email: string, name: string | undefined) {
     authContext.secret,
   )}`;
   const sessionCookie = authContext.authCookies.sessionToken;
+  const shouldSecureActiveWorkspaceCookie =
+    new URL(requestUrl).protocol === "https:";
 
   const response = NextResponse.json({
     success: true,
@@ -127,7 +133,7 @@ async function createTestSession(email: string, name: string | undefined) {
   response.cookies.set("activeWorkspaceId", canonicalContext.workspace.id, {
     path: "/",
     sameSite: "lax",
-    secure: sessionCookie.attributes.secure ?? false,
+    secure: shouldSecureActiveWorkspaceCookie,
   });
   response.cookies.set(
     "activeWorkspaceSlug",
@@ -135,7 +141,7 @@ async function createTestSession(email: string, name: string | undefined) {
     {
       path: "/",
       sameSite: "lax",
-      secure: sessionCookie.attributes.secure ?? false,
+      secure: shouldSecureActiveWorkspaceCookie,
     },
   );
 

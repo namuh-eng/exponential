@@ -1,5 +1,7 @@
+import { chooseActiveWorkspace } from "@/lib/active-workspace";
 import { autoJoinWorkspaceForApprovedDomain } from "@/lib/approved-domain-auto-join";
 import { auth } from "@/lib/auth";
+import { CANONICAL_WORKSPACE_SLUG } from "@/lib/canonical-routes";
 import { db } from "@/lib/db";
 import { member, team, workspace } from "@/lib/db/schema";
 import {
@@ -73,6 +75,9 @@ export default async function AppLayout({
   try {
     const cookieStore = await cookies();
     const preferredWorkspaceId = cookieStore.get("activeWorkspaceId")?.value;
+    const preferredWorkspaceSlug = cookieStore.get(
+      "activeWorkspaceSlug",
+    )?.value;
     const requestedWorkspaceSlug = requestHeaders.get("x-workspace-slug");
     const sourcePath = requestHeaders.get("x-workspace-source-path");
 
@@ -103,13 +108,42 @@ export default async function AppLayout({
       }
     }
 
-    let ws = requestedWorkspaceSlug
-      ? memberships.find(
-          (membership) => membership.workspaceSlug === requestedWorkspaceSlug,
+    if (
+      !memberships.some(
+        (membership) => membership.workspaceSlug === CANONICAL_WORKSPACE_SLUG,
+      )
+    ) {
+      const [canonicalMembership] = await db
+        .select({
+          workspaceId: member.workspaceId,
+          workspaceName: workspace.name,
+          workspaceSlug: workspace.urlSlug,
+        })
+        .from(member)
+        .innerJoin(workspace, eq(member.workspaceId, workspace.id))
+        .where(
+          and(
+            eq(member.userId, session.user.id),
+            eq(workspace.urlSlug, CANONICAL_WORKSPACE_SLUG),
+          ),
         )
-      : (memberships.find(
-          (membership) => membership.workspaceId === preferredWorkspaceId,
-        ) ?? memberships[0]);
+        .limit(1);
+
+      if (canonicalMembership) {
+        memberships.push(canonicalMembership);
+      }
+    }
+
+    const normalizedSourcePath = sourcePath
+      ? normalizeAppPath(sourcePath)
+      : null;
+    let ws = chooseActiveWorkspace(memberships, {
+      requestedWorkspaceSlug,
+      preferredWorkspaceSlug,
+      preferredWorkspaceId,
+      ignoreGeneratedRootRedirectPreference:
+        normalizedSourcePath?.startsWith("/my-issues") ?? false,
+    });
 
     if (!ws && requestedWorkspaceSlug) {
       [ws] = await db
@@ -133,8 +167,7 @@ export default async function AppLayout({
       notFound();
     }
 
-    if (!requestedWorkspaceSlug && sourcePath) {
-      const normalizedSourcePath = normalizeAppPath(sourcePath);
+    if (!requestedWorkspaceSlug && normalizedSourcePath) {
       const firstSegment = normalizedSourcePath.split("/").filter(Boolean)[0];
 
       if (isAppRoutePrefix(firstSegment)) {

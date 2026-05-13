@@ -7,6 +7,65 @@ async function expectRenderedAppPage(page: import("@playwright/test").Page) {
 }
 
 test.describe("Canonical Forever Browsing routes", () => {
+  test("canonicalizes My Issues personal routes and tab navigation to Forever Browsing", async ({
+    page,
+  }) => {
+    const suffix = Date.now().toString(36);
+    const staleWorkspaceSlug = `root-redirect-${suffix}`;
+
+    const staleWorkspaceResponse = await page.request.post("/api/workspaces", {
+      data: {
+        name: `Root Redirect ${suffix}`,
+        urlSlug: staleWorkspaceSlug,
+      },
+    });
+    expect(staleWorkspaceResponse.status()).toBe(201);
+
+    await page.goto(`/${staleWorkspaceSlug}/inbox`);
+    await expect(page.getByLabel("Workspace switcher")).toContainText(
+      "Root Redirect",
+    );
+
+    const sessionResponse = await page.evaluate(async () => {
+      const response = await fetch("/api/test/create-session", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "test@example.com" }),
+      });
+
+      return {
+        status: response.status,
+        workspaceSlug: (
+          (await response.json()) as { workspace?: { urlSlug?: string } }
+        ).workspace?.urlSlug,
+      };
+    });
+    expect(sessionResponse).toEqual({
+      status: 200,
+      workspaceSlug: "foreverbrowsing",
+    });
+
+    await page.goto("/my-issues/assigned");
+    await expect(page).toHaveURL(/\/foreverbrowsing\/my-issues\/assigned$/);
+    await expect(
+      page.getByRole("heading", { name: "My Issues" }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Workspace switcher")).toContainText(
+      "Forever Browsing",
+    );
+    await expect(
+      page.getByRole("link", { name: /My Issues/ }).first(),
+    ).toHaveAttribute("href", "/foreverbrowsing/my-issues/assigned");
+
+    for (const tab of ["created", "subscribed", "activity", "assigned"]) {
+      await page.getByRole("button", { name: new RegExp(tab, "i") }).click();
+      await expect(page).toHaveURL(
+        new RegExp(`/foreverbrowsing/my-issues/${tab}$`),
+      );
+    }
+  });
+
   test("renders canonical workspace/team deep links and redirects legacy ENG route", async ({
     page,
   }) => {
