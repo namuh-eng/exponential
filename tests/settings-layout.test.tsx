@@ -162,7 +162,28 @@ describe("Settings Layout Shell", () => {
     );
 
     expect(screen.getByText("AI & Agents")).toBeInTheDocument();
+    expect(screen.getByText("Initiatives")).toBeInTheDocument();
+    expect(screen.getByText("Documents")).toBeInTheDocument();
     expect(screen.getByText("Integrations")).toBeInTheDocument();
+
+    expect(screen.getByText("Initiatives").closest("a")).toHaveAttribute(
+      "href",
+      "/namuh/settings/initiatives",
+    );
+  });
+
+  it("highlights Initiatives in the Features section", () => {
+    currentPathname = "/settings/initiatives";
+    render(
+      <SettingsLayout>
+        <div>Content</div>
+      </SettingsLayout>,
+    );
+
+    const initiativesLink = screen.getByText("Initiatives").closest("a");
+    expect(initiativesLink?.className).toContain(
+      "bg-[var(--color-surface-active)]",
+    );
   });
 
   it("renders the dynamic Your teams section", () => {
