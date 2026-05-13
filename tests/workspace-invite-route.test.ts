@@ -86,6 +86,7 @@ describe("workspace invite route", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
     getSessionMock.mockResolvedValue({
       user: { id: "user-1", name: "Ashley" },
     });
@@ -113,7 +114,7 @@ describe("workspace invite route", () => {
     const { POST } = await import("@/app/api/workspaces/invite/route");
 
     const response = await POST(
-      new Request("http://localhost", {
+      new Request("http://localhost:3015/api/workspaces/invite", {
         method: "POST",
         body: JSON.stringify({
           invites: [{ email: "new@test.com", role: "member" }],
@@ -124,7 +125,34 @@ describe("workspace invite route", () => {
     expect(response.status).toBe(200);
     const payload = await response.json();
     expect(payload.results[0].status).toBe("sent");
-    expect(sendInvitationEmailMock).toHaveBeenCalled();
+    expect(sendInvitationEmailMock).toHaveBeenCalledWith(
+      "new@test.com",
+      "Namuh",
+      "Ashley",
+      "http://localhost:3015/accept-invite?token=token-123",
+    );
+  });
+
+  it("uses the configured app URL for invitation links when provided", async () => {
+    vi.stubEnv("BETTER_AUTH_URL", "https://whetline.example");
+    const { POST } = await import("@/app/api/workspaces/invite/route");
+
+    const response = await POST(
+      new Request("http://localhost:3015/api/workspaces/invite", {
+        method: "POST",
+        body: JSON.stringify({
+          invites: [{ email: "new@test.com", role: "member" }],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(sendInvitationEmailMock).toHaveBeenCalledWith(
+      "new@test.com",
+      "Namuh",
+      "Ashley",
+      "https://whetline.example/accept-invite?token=token-123",
+    );
   });
 
   it("blocks invites from non-admins", async () => {

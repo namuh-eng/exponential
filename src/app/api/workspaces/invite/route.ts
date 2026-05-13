@@ -1,5 +1,6 @@
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
+import { buildAppUrl, getRequestAppUrl } from "@/lib/app-url";
 import { db } from "@/lib/db";
 import { member, user, workspace, workspaceInvitation } from "@/lib/db/schema";
 import { sendInvitationEmail } from "@/lib/email";
@@ -70,7 +71,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
   }
 
-  const baseUrl = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+  const baseUrl = getRequestAppUrl(request);
   const results: {
     email: string;
     status: "sent" | "failed";
@@ -110,7 +111,10 @@ export async function POST(request: Request) {
         email,
         role: invite.role,
       });
-      const inviteUrl = `${baseUrl}/accept-invite?token=${encodeURIComponent(inviteToken)}`;
+      const inviteUrl = buildAppUrl(
+        baseUrl,
+        `/accept-invite?token=${encodeURIComponent(inviteToken)}`,
+      );
       await sendInvitationEmail(email, ws.name, session.user.name, inviteUrl);
       await db
         .insert(workspaceInvitation)

@@ -1,4 +1,5 @@
 import { randomInt } from "node:crypto";
+import { getConfiguredAppUrl } from "@/lib/app-url";
 import { db } from "@/lib/db";
 import { sendMagicLinkEmail } from "@/lib/email";
 import { betterAuth } from "better-auth";
@@ -8,11 +9,7 @@ import { magicLink } from "better-auth/plugins";
 const PRODUCTION_BUILD_PHASE = "phase-production-build";
 
 function getBetterAuthUrl() {
-  return (
-    process.env.BETTER_AUTH_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000"
-  );
+  return getConfiguredAppUrl();
 }
 
 function getBetterAuthSecret() {
