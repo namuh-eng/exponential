@@ -11,10 +11,12 @@ import { ViewsPage } from "@/components/views-page";
 
 const push = vi.fn();
 let searchParams = new URLSearchParams();
+let pathname = "/views/issues";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn(), back: vi.fn() }),
   useSearchParams: () => searchParams,
+  usePathname: () => pathname,
   useParams: () => ({ key: "ONB" }),
 }));
 
@@ -72,6 +74,27 @@ function buildViewsResponse() {
         updatedAt: "2026-01-01T00:00:00Z",
       },
       {
+        id: "view-board",
+        name: "Onboarding board",
+        layout: "board",
+        isPersonal: false,
+        owner: { name: "Jane Smith", image: null },
+        teamId: "team-1",
+        teamKey: "ONB",
+        teamName: "Onboarding QA Team",
+        entityType: "issues",
+        scope: "team",
+        filterState: {
+          entityType: "issues",
+          scope: "team",
+          issueFilters: [{ type: "status", operator: "is", values: ["todo"] }],
+          projectStatusFilter: "all",
+          projectSortBy: "created-desc",
+        },
+        createdAt: "2026-01-03T00:00:00Z",
+        updatedAt: "2026-01-03T00:00:00Z",
+      },
+      {
         id: "view-2",
         name: "Project progress",
         layout: "list",
@@ -106,6 +129,7 @@ describe("ViewsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     searchParams = new URLSearchParams();
+    pathname = "/views/issues";
     storage.clear();
   });
 
@@ -230,6 +254,78 @@ describe("ViewsPage", () => {
       JSON.stringify([{ type: "priority", operator: "is", values: ["high"] }]),
     );
     expect(push).toHaveBeenCalledWith("/team/ONB/all");
+  });
+
+  it("preserves the workspace slug when opening issue list and board views", async () => {
+    pathname = "/root-redirect-mp4g501w/views/issues";
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => buildViewsResponse(),
+    });
+
+    render(<ViewsPage initialTab="issues" />);
+    await waitForLoaded();
+
+    fireEvent.click(await screen.findByText("High priority onboarding"));
+    expect(push).toHaveBeenLastCalledWith(
+      "/root-redirect-mp4g501w/team/ONB/all",
+    );
+
+    fireEvent.click(await screen.findByText("Onboarding board"));
+    expect(push).toHaveBeenLastCalledWith(
+      "/root-redirect-mp4g501w/team/ONB/board",
+    );
+  });
+
+  it("preserves the workspace slug when opening project views", async () => {
+    pathname = "/root-redirect-mp4g501w/views/projects";
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => buildViewsResponse(),
+    });
+
+    render(<ViewsPage initialTab="projects" />);
+    await waitForLoaded();
+
+    fireEvent.click(screen.getByText("Project progress"));
+
+    expect(push).toHaveBeenCalledWith("/root-redirect-mp4g501w/projects");
+  });
+
+  it("preserves the workspace slug and query string when switching view tabs", async () => {
+    pathname = "/root-redirect-mp4g501w/views/issues";
+    searchParams = new URLSearchParams("team=ONB&peek=true");
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => buildViewsResponse(),
+    });
+
+    render(<ViewsPage initialTab="issues" />);
+    await waitForLoaded();
+
+    fireEvent.click(screen.getByRole("button", { name: "Projects" }));
+
+    expect(push).toHaveBeenCalledWith(
+      "/root-redirect-mp4g501w/views/projects?team=ONB&peek=true",
+    );
+  });
+
+  it("preserves the workspace slug when clearing the active team pill", async () => {
+    pathname = "/root-redirect-mp4g501w/views/issues";
+    searchParams = new URLSearchParams("team=ONB&peek=true");
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => buildViewsResponse(),
+    });
+
+    render(<ViewsPage initialTab="issues" />);
+    await waitForLoaded();
+
+    fireEvent.click(screen.getByRole("button", { name: "Onboarding QA Team" }));
+
+    expect(push).toHaveBeenCalledWith(
+      "/root-redirect-mp4g501w/views/issues?peek=true",
+    );
   });
 
   it("opens project views by restoring project view state", async () => {

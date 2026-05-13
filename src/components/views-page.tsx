@@ -13,7 +13,16 @@ import {
   projectViewSortOptions,
   projectViewStatusOptions,
 } from "@/lib/views";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import {
+  getWorkspaceSlugFromPath,
+  withWorkspaceSlug,
+} from "@/lib/workspace-paths";
+import {
+  useParams,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface ViewTeam {
@@ -547,7 +556,13 @@ export function ViewsPage({
 }) {
   const router = useRouter();
   const params = useParams<{ key?: string }>();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const workspaceSlug = getWorkspaceSlugFromPath(pathname);
+  const pushWorkspacePath = useCallback(
+    (path: string) => router.push(withWorkspaceSlug(path, workspaceSlug)),
+    [router, workspaceSlug],
+  );
   const [views, setViews] = useState<ViewSummary[]>([]);
   const [teams, setTeams] = useState<ViewTeam[]>([]);
   const [loading, setLoading] = useState(true);
@@ -604,15 +619,23 @@ export function ViewsPage({
   const handleTabChange = (tab: ViewEntityType) => {
     setActiveTab(tab);
     if (initialTeamKey || routeTeamKey) {
-      router.push(`/team/${encodeURIComponent(activeTeamKey ?? "")}/views`);
+      pushWorkspacePath(
+        `/team/${encodeURIComponent(activeTeamKey ?? "")}/views`,
+      );
       return;
     }
 
     const basePath = tab === "issues" ? "/views/issues" : "/views/projects";
-    const query = activeTeamKey
-      ? `?team=${encodeURIComponent(activeTeamKey)}`
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    if (activeTeamKey) {
+      nextSearchParams.set("team", activeTeamKey);
+    } else {
+      nextSearchParams.delete("team");
+    }
+    const query = nextSearchParams.toString()
+      ? `?${nextSearchParams.toString()}`
       : "";
-    router.push(`${basePath}${query}`);
+    pushWorkspacePath(`${basePath}${query}`);
   };
 
   const handleOpenView = (view: ViewSummary) => {
@@ -622,7 +645,7 @@ export function ViewsPage({
       }
 
       writeStoredIssueFilters(view.teamKey, view.filterState.issueFilters);
-      router.push(
+      pushWorkspacePath(
         view.layout === "board"
           ? `/team/${view.teamKey}/board`
           : `/team/${view.teamKey}/all`,
@@ -635,7 +658,7 @@ export function ViewsPage({
       sortBy: view.filterState.projectSortBy,
       teamId: view.teamId,
     });
-    router.push("/projects");
+    pushWorkspacePath("/projects");
   };
 
   const handleDeleteView = async (view: ViewSummary) => {
@@ -710,11 +733,20 @@ export function ViewsPage({
         {activeTeam && (
           <button
             type="button"
-            onClick={() =>
-              router.push(
-                activeTab === "issues" ? "/views/issues" : "/views/projects",
-              )
-            }
+            onClick={() => {
+              const nextSearchParams = new URLSearchParams(
+                searchParams.toString(),
+              );
+              nextSearchParams.delete("team");
+              const query = nextSearchParams.toString()
+                ? `?${nextSearchParams.toString()}`
+                : "";
+              pushWorkspacePath(
+                `${
+                  activeTab === "issues" ? "/views/issues" : "/views/projects"
+                }${query}`,
+              );
+            }}
             className="rounded-md border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)]"
           >
             {activeTeam.name}
