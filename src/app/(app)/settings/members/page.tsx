@@ -337,7 +337,7 @@ export default function MembersPage() {
             </span>
           </span>
           <span>
-            Application{" "}
+            Invited{" "}
             <span className="font-medium text-[var(--color-text-secondary)]">
               {pendingCount}
             </span>

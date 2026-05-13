@@ -89,12 +89,13 @@ describe("MembersPage component", () => {
     expect(screen.getAllByText("pending@example.com").length).toBeGreaterThan(
       0,
     );
-    expect(screen.getAllByText("Active").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Pending").length).toBeGreaterThan(0);
-
-    // Check counts
-    expect(screen.getByText("2")).toBeDefined(); // Active count
-    expect(screen.getByText("1")).toBeDefined(); // Pending count
+    expect(
+      screen.getByText((_, element) => element?.textContent === "Active 2"),
+    ).toBeDefined();
+    expect(
+      screen.getByText((_, element) => element?.textContent === "Invited 1"),
+    ).toBeDefined();
+    expect(screen.queryByText("Application")).toBeNull();
   });
 
   it("opens the invite dialog and adds/removes rows", async () => {
