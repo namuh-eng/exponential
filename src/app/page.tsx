@@ -56,17 +56,19 @@ export default async function Home() {
     currentUser?.settings,
   );
 
+  const workspaceBase = `/${memberships[0].workspaceSlug}`;
+
   if (accountPreferences.defaultHomeView === "inbox") {
-    redirect("/inbox");
+    redirect(`${workspaceBase}/inbox`);
   }
 
   if (accountPreferences.defaultHomeView === "my-issues") {
-    redirect("/my-issues/assigned");
+    redirect(`${workspaceBase}/my-issues/assigned`);
   }
 
   if (teams.length > 0) {
-    redirect(`/team/${teams[0].key}/all`);
+    redirect(`${workspaceBase}/team/${teams[0].key}/all`);
   }
 
-  redirect("/team");
+  redirect(`${workspaceBase}/team`);
 }

@@ -51,19 +51,32 @@ function getCanonicalSettingsPath(pathname: string) {
   return null;
 }
 
+function isWorkspaceSlugSegment(segment: string | undefined) {
+  return segment && !isAppRoutePrefix(segment) && !isPublicRoutePrefix(segment);
+}
+
 function getSlugRewrite(pathname: string) {
   const segments = getPathSegments(pathname);
 
   if (
     segments.length > 1 &&
-    !isAppRoutePrefix(segments[0]) &&
-    !isPublicRoutePrefix(segments[0]) &&
+    isWorkspaceSlugSegment(segments[0]) &&
     isAppRoutePrefix(segments[1])
   ) {
     return {
       slug: decodeURIComponent(segments[0]),
       pathname: `/${segments.slice(1).join("/")}`,
     };
+  }
+
+  return null;
+}
+
+function getWorkspaceRootRedirect(pathname: string) {
+  const segments = getPathSegments(pathname);
+
+  if (segments.length === 1 && isWorkspaceSlugSegment(segments[0])) {
+    return `/${segments[0]}/inbox`;
   }
 
   return null;
@@ -77,6 +90,13 @@ export async function proxy(request: NextRequest) {
     const canonicalUrl = request.nextUrl.clone();
     canonicalUrl.pathname = canonicalSettingsPath;
     return NextResponse.redirect(canonicalUrl);
+  }
+
+  const workspaceRootRedirect = getWorkspaceRootRedirect(pathname);
+  if (workspaceRootRedirect) {
+    const workspaceRootUrl = request.nextUrl.clone();
+    workspaceRootUrl.pathname = workspaceRootRedirect;
+    return NextResponse.redirect(workspaceRootUrl);
   }
 
   // Allow public paths

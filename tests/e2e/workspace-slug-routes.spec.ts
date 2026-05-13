@@ -18,6 +18,9 @@ test.describe("Workspace slug routes", () => {
     };
     const teamKey = workspacePayload.team.key;
 
+    await page.goto(`/${workspaceSlug}`);
+    await expect(page).toHaveURL(new RegExp(`/${workspaceSlug}/inbox$`));
+
     await page.goto(`/${workspaceSlug}/inbox`);
     await expect(page.getByText("Inbox").first()).toBeVisible();
     await expect(
