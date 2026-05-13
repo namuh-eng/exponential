@@ -243,9 +243,6 @@ export function AuthPage({
         }
         setGoogleConfigured(false);
         setPasskeyConfigured(false);
-        setError(
-          "Google sign-in is unavailable right now. Use email or SAML SSO instead.",
-        );
       }
     }
 
@@ -409,7 +406,7 @@ export function AuthPage({
             <button
               type="button"
               onClick={handleGoogleLogin}
-              disabled={loading || googleConfigured !== true}
+              disabled={loading}
               className="auth-primary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
               <svg
@@ -440,12 +437,6 @@ export function AuthPage({
                 ? "Checking Google sign-in"
                 : "Continue with Google"}
             </button>
-            {googleConfigured === false && (
-              <p className="pt-1 text-center text-sm text-[var(--auth-error)]">
-                Google sign-in is not configured. Use email or SAML SSO instead.
-              </p>
-            )}
-
             <button
               type="button"
               onClick={() => {

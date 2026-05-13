@@ -15,6 +15,11 @@ test.describe("Unauthenticated workspace deep links", () => {
       await expect(
         page.getByRole("heading", { name: "Log in to Linear" }),
       ).toBeVisible();
+      await expect(
+        page.getByText(
+          "Google sign-in is not configured. Use email or SAML SSO instead.",
+        ),
+      ).toHaveCount(0);
       const expectedUrl = new URL(deepLink, "http://localhost:3000");
       await expect(page).toHaveURL((url) => {
         return (
@@ -47,6 +52,11 @@ test.describe("Unauthenticated workspace deep links", () => {
     await expect(
       page.getByRole("heading", { name: "Log in to Linear" }),
     ).toBeVisible();
+    await expect(
+      page.getByText(
+        "Google sign-in is not configured. Use email or SAML SSO instead.",
+      ),
+    ).toHaveCount(0);
 
     await page.getByRole("button", { name: "Continue with email" }).click();
     await page
@@ -70,6 +80,11 @@ test.describe("Unauthenticated workspace deep links", () => {
     await expect(
       page.getByRole("heading", { name: "Log in to Linear" }),
     ).toBeVisible();
+    await expect(
+      page.getByText(
+        "Google sign-in is not configured. Use email or SAML SSO instead.",
+      ),
+    ).toHaveCount(0);
 
     await page.goto("/signup");
     await expect(page).toHaveURL(/\/signup$/);

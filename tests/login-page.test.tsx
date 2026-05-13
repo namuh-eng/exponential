@@ -236,7 +236,47 @@ describe("Login page", () => {
     });
   });
 
-  it("does not call Better Auth social sign-in when Google is not configured", async () => {
+  it("does not show a Google configuration warning on initial login load when Google is unavailable", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ providers: { google: false } }),
+    });
+
+    render(<LoginPage />);
+
+    const button = await screen.findByRole("button", {
+      name: /Continue with Google/i,
+    });
+
+    expect(button.hasAttribute("disabled")).toBe(false);
+    expect(
+      screen.queryByText(
+        "Google sign-in is not configured. Use email or SAML SSO instead.",
+      ),
+    ).toBeNull();
+    expect(signIn.social).not.toHaveBeenCalled();
+  });
+
+  it("does not show a Google configuration warning on initial workspace login load", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ providers: { google: false } }),
+    });
+    mockLocation.pathname = "/foreverbrowsing/inbox";
+
+    render(<LoginPage />);
+
+    await screen.findByRole("button", { name: /Continue with Google/i });
+
+    expect(
+      screen.queryByText(
+        "Google sign-in is not configured. Use email or SAML SSO instead.",
+      ),
+    ).toBeNull();
+    expect(signIn.social).not.toHaveBeenCalled();
+  });
+
+  it("shows a visible Google error after clicking Google when Google is not configured", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ providers: { google: false } }),
@@ -246,13 +286,14 @@ describe("Login page", () => {
     const button = await screen.findByRole("button", {
       name: /Continue with Google/i,
     });
+    fireEvent.click(button);
 
-    expect(button.hasAttribute("disabled")).toBe(true);
     expect(
       screen.getByText(
         "Google sign-in is not configured. Use email or SAML SSO instead.",
       ),
     ).toBeDefined();
+    expect(button.hasAttribute("disabled")).toBe(false);
     expect(signIn.social).not.toHaveBeenCalled();
   });
 
