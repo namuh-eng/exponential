@@ -7,6 +7,8 @@ const issueCountsGroupByMock = vi.fn();
 const projectTeamRowsInArrayMock = vi.fn();
 const insertReturningMock = vi.fn();
 const teamLimitMock = vi.fn();
+const projectInsertValuesMock = vi.fn();
+const projectTeamInsertValuesMock = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: {
@@ -23,8 +25,6 @@ vi.mock("@/lib/active-workspace", () => ({
 vi.mock("@/lib/db", () => ({
   db: {
     select: vi.fn((selection?: Record<string, unknown>) => {
-      // resolveActiveWorkspaceId / memberships (already mocked in lib)
-
       // projects lookup
       if (selection && "slug" in selection && "leadId" in selection) {
         return {
@@ -53,11 +53,13 @@ vi.mock("@/lib/db", () => ({
         };
       }
 
-      // team lookup for slug generation/POST
+      // team lookup for POST context validation
       if (
         selection &&
+        "id" in selection &&
         "key" in selection &&
-        Object.keys(selection).length === 2
+        "name" in selection &&
+        Object.keys(selection).length === 3
       ) {
         return {
           from: vi.fn().mockReturnThis(),
@@ -85,11 +87,33 @@ vi.mock("@/lib/db", () => ({
         limit: vi.fn().mockResolvedValue([]),
       };
     }),
-    insert: vi.fn(() => ({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue(insertReturningMock()),
-      }),
-    })),
+    transaction: vi.fn(async (callback) => {
+      let insertCall = 0;
+      const tx = {
+        insert: vi.fn(() => {
+          insertCall += 1;
+          if (insertCall === 1) {
+            return {
+              values: vi.fn((values) => {
+                projectInsertValuesMock(values);
+                return {
+                  returning: vi.fn().mockResolvedValue(insertReturningMock()),
+                };
+              }),
+            };
+          }
+
+          return {
+            values: vi.fn((values) => {
+              projectTeamInsertValuesMock(values);
+              return Promise.resolve([]);
+            }),
+          };
+        }),
+      };
+
+      return callback(tx);
+    }),
   },
 }));
 
@@ -126,7 +150,9 @@ describe("projects collection route", () => {
         teamName: "Engineering",
       },
     ]);
-    teamLimitMock.mockReturnValue([{ id: "team-1", key: "ENG" }]);
+    teamLimitMock.mockReturnValue([
+      { id: "team-1", key: "ENG", name: "Engineering" },
+    ]);
     insertReturningMock.mockReturnValue([{ id: "proj-2", slug: "new-proj" }]);
   });
 
@@ -151,18 +177,70 @@ describe("projects collection route", () => {
     expect(payload.projects[0].teams.length).toBe(1);
   });
 
-  it("creates a project", async () => {
+  it("creates a workspace project without team links when no team context is supplied", async () => {
     const { POST } = await import("@/app/api/projects/route");
 
     const response = await POST(
       new Request("http://localhost/api/projects", {
         method: "POST",
-        body: JSON.stringify({ name: "New Project", teamIds: ["team-1"] }),
+        body: JSON.stringify({ name: "New Project" }),
       }),
     );
 
     expect(response.status).toBe(201);
     const payload = await response.json();
     expect(payload.id).toBe("proj-2");
+    expect(payload.teams).toEqual([]);
+    expect(projectInsertValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "New Project",
+        workspaceId: "workspace-1",
+      }),
+    );
+    expect(projectTeamInsertValuesMock).not.toHaveBeenCalled();
   });
+
+  it("creates a projectTeam association when teamKey context is supplied", async () => {
+    const { POST } = await import("@/app/api/projects/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/projects", {
+        method: "POST",
+        body: JSON.stringify({ name: "New Project", teamKey: "ENG" }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    const payload = await response.json();
+    expect(payload.teams).toEqual([
+      { id: "team-1", key: "ENG", name: "Engineering" },
+    ]);
+    expect(projectTeamInsertValuesMock).toHaveBeenCalledWith([
+      { projectId: "proj-2", teamId: "team-1" },
+    ]);
+  });
+
+  it.each([
+    ["teamKey", "OUT"],
+    ["teamId", "other-team"],
+  ])(
+    "rejects %s context outside the active workspace without creating an orphan project",
+    async (field, value) => {
+      teamLimitMock.mockReturnValue([]);
+      const { POST } = await import("@/app/api/projects/route");
+
+      const response = await POST(
+        new Request("http://localhost/api/projects", {
+          method: "POST",
+          body: JSON.stringify({ name: "New Project", [field]: value }),
+        }),
+      );
+
+      expect(response.status).toBe(400);
+      const payload = await response.json();
+      expect(payload.error).toBe("Team not found in active workspace");
+      expect(projectInsertValuesMock).not.toHaveBeenCalled();
+      expect(projectTeamInsertValuesMock).not.toHaveBeenCalled();
+    },
+  );
 });

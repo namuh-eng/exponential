@@ -127,6 +127,7 @@ export function ProjectsPage({
         body: JSON.stringify({
           name: formData.get("name"),
           description: formData.get("description"),
+          ...(teamKey ? { teamKey } : {}),
         }),
       });
 
@@ -135,7 +136,7 @@ export function ProjectsPage({
         await fetchProjects();
       }
     },
-    [fetchProjects],
+    [fetchProjects, teamKey],
   );
 
   if (loading) {

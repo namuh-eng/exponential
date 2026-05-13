@@ -2,7 +2,7 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issue, project, projectTeam, team, user } from "@/lib/db/schema";
-import { count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 function sanitizeProjectSlug(value: string) {
@@ -162,6 +162,64 @@ export async function POST(request: Request) {
     );
   }
 
+  const requestedTeamKeys = [
+    typeof body.teamKey === "string" ? body.teamKey.trim() : null,
+    ...(Array.isArray(body.teamKeys)
+      ? body.teamKeys.map((value: unknown) =>
+          typeof value === "string" ? value.trim() : null,
+        )
+      : []),
+  ].filter((value): value is string => Boolean(value));
+  const requestedTeamIds = [
+    typeof body.teamId === "string" ? body.teamId.trim() : null,
+    ...(Array.isArray(body.teamIds)
+      ? body.teamIds.map((value: unknown) =>
+          typeof value === "string" ? value.trim() : null,
+        )
+      : []),
+  ].filter((value): value is string => Boolean(value));
+
+  const linkedTeamsById = new Map<
+    string,
+    { id: string; key: string; name: string }
+  >();
+
+  for (const teamKey of new Set(requestedTeamKeys)) {
+    const teamRows = await db
+      .select({ id: team.id, key: team.key, name: team.name })
+      .from(team)
+      .where(and(eq(team.workspaceId, workspaceId), eq(team.key, teamKey)))
+      .limit(1);
+
+    const teamRecord = teamRows[0] ?? null;
+    if (!teamRecord) {
+      return NextResponse.json(
+        { error: "Team not found in active workspace" },
+        { status: 400 },
+      );
+    }
+
+    linkedTeamsById.set(teamRecord.id, teamRecord);
+  }
+
+  for (const teamId of new Set(requestedTeamIds)) {
+    const teamRows = await db
+      .select({ id: team.id, key: team.key, name: team.name })
+      .from(team)
+      .where(and(eq(team.workspaceId, workspaceId), eq(team.id, teamId)))
+      .limit(1);
+
+    const teamRecord = teamRows[0] ?? null;
+    if (!teamRecord) {
+      return NextResponse.json(
+        { error: "Team not found in active workspace" },
+        { status: 400 },
+      );
+    }
+
+    linkedTeamsById.set(teamRecord.id, teamRecord);
+  }
+
   let finalSlug = slug;
   let suffix = 2;
   const takenSlugs = new Set(
@@ -178,16 +236,33 @@ export async function POST(request: Request) {
     suffix += 1;
   }
 
-  const [newProject] = await db
-    .insert(project)
-    .values({
-      name,
-      description,
-      slug: finalSlug,
-      workspaceId,
-      leadId: session.user.id,
-    })
-    .returning();
+  const linkedTeams = Array.from(linkedTeamsById.values());
+  const newProject = await db.transaction(async (tx) => {
+    const [createdProject] = await tx
+      .insert(project)
+      .values({
+        name,
+        description,
+        slug: finalSlug,
+        workspaceId,
+        leadId: session.user.id,
+      })
+      .returning();
 
-  return NextResponse.json(newProject, { status: 201 });
+    if (linkedTeams.length > 0) {
+      await tx.insert(projectTeam).values(
+        linkedTeams.map((linkedTeam) => ({
+          projectId: createdProject.id,
+          teamId: linkedTeam.id,
+        })),
+      );
+    }
+
+    return createdProject;
+  });
+
+  return NextResponse.json(
+    { ...newProject, teams: linkedTeams },
+    { status: 201 },
+  );
 }

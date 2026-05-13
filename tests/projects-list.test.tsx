@@ -274,6 +274,86 @@ describe("ProjectsPage", () => {
     });
   });
 
+  it("submits team context from a team-scoped empty projects page", async () => {
+    let created = false;
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation((url, init) => {
+        if (url === "/api/teams/ONB/settings") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              team: { id: "team-1", key: "ONB", name: "Onboarding QA Team" },
+            }),
+          } as Response);
+        }
+
+        if (url === "/api/projects" && init?.method === "POST") {
+          created = true;
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              id: "project-1",
+              slug: "onboarding-roadmap",
+              teams: [{ id: "team-1", key: "ONB", name: "Onboarding QA Team" }],
+            }),
+          } as Response);
+        }
+
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            projects: created
+              ? [
+                  {
+                    id: "project-1",
+                    name: "Onboarding roadmap",
+                    icon: "O",
+                    slug: "onboarding-roadmap",
+                    status: "planned",
+                    priority: "none",
+                    health: "No updates",
+                    lead: null,
+                    teams: [
+                      { id: "team-1", key: "ONB", name: "Onboarding QA Team" },
+                    ],
+                    targetDate: null,
+                    progress: 0,
+                    createdAt: "2026-04-05T00:00:00.000Z",
+                  },
+                ]
+              : [],
+          }),
+        } as Response);
+      });
+
+    render(<ProjectsPage initialTeamKey="ONB" />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Create project" }),
+    );
+    fireEvent.change(screen.getByPlaceholderText("Project name"), {
+      target: { value: "Onboarding roadmap" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create project" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/projects",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            name: "Onboarding roadmap",
+            description: "",
+            teamKey: "ONB",
+          }),
+        }),
+      );
+    });
+    expect(await screen.findByText("Onboarding roadmap")).toBeInTheDocument();
+    expect(screen.getByText("1 of 1 projects")).toBeInTheDocument();
+  });
+
   it("renders team-scoped projects and validates the team route", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
       if (url === "/api/teams/ONB/settings") {
