@@ -158,6 +158,35 @@ test.describe("Canonical Forever Browsing routes", () => {
     ).not.toBeVisible();
   });
 
+  test("team issue list counts match visible all, active, and backlog rows", async ({
+    page,
+  }) => {
+    const routes = ["all", "active", "backlog"] as const;
+
+    for (const route of routes) {
+      await page.goto(`/foreverbrowsing/team/ENG/${route}`);
+      await expect(page).toHaveURL(
+        new RegExp(`/foreverbrowsing/team/ENG/${route}$`),
+      );
+      await expect(
+        page.getByRole("heading", { name: "Engineering" }),
+      ).toBeVisible();
+
+      const visibleIssueRows = page.locator('a[href*="/team/ENG/issue/"]');
+      const visibleIssueCount = await visibleIssueRows.count();
+      await expect(
+        page.getByText(`${visibleIssueCount} issues`, { exact: true }),
+      ).toHaveCount(2);
+
+      if (route === "active") {
+        expect(visibleIssueCount).toBe(0);
+        await expect(page.getByText("5 issues", { exact: true })).toHaveCount(
+          0,
+        );
+      }
+    }
+  });
+
   test("issue detail canonical routes render and Back to issues lands on workspace team all", async ({
     page,
   }) => {

@@ -70,6 +70,101 @@ const mockIssuesData = {
   },
 };
 
+const tabCountIssuesData = {
+  team: { id: "team-1", name: "Engineering", key: "ENG" },
+  groups: [
+    {
+      state: {
+        id: "todo",
+        name: "Todo",
+        category: "unstarted",
+        color: "#f59e0b",
+      },
+      issues: [],
+    },
+    {
+      state: {
+        id: "started",
+        name: "In Progress",
+        category: "started",
+        color: "#3b82f6",
+      },
+      issues: [],
+    },
+    {
+      state: {
+        id: "backlog",
+        name: "Backlog",
+        category: "backlog",
+        color: "#999",
+      },
+      issues: [
+        {
+          id: "iss-backlog-1",
+          identifier: "ENG-10",
+          title: "Backlog issue 1",
+          priority: "high",
+          stateId: "backlog",
+          assignee: null,
+          labels: [],
+          createdAt: "2026-04-20T00:00:00Z",
+        },
+        {
+          id: "iss-backlog-2",
+          identifier: "ENG-11",
+          title: "Backlog issue 2",
+          priority: "medium",
+          stateId: "backlog",
+          assignee: null,
+          labels: [],
+          createdAt: "2026-04-21T00:00:00Z",
+        },
+        {
+          id: "iss-backlog-3",
+          identifier: "ENG-12",
+          title: "Backlog issue 3",
+          priority: "low",
+          stateId: "backlog",
+          assignee: null,
+          labels: [],
+          createdAt: "2026-04-22T00:00:00Z",
+        },
+      ],
+    },
+    {
+      state: {
+        id: "done",
+        name: "Done",
+        category: "completed",
+        color: "#10b981",
+      },
+      issues: [
+        {
+          id: "iss-done-1",
+          identifier: "ENG-13",
+          title: "Completed issue 1",
+          priority: "none",
+          stateId: "done",
+          assignee: null,
+          labels: [],
+          createdAt: "2026-04-23T00:00:00Z",
+        },
+        {
+          id: "iss-done-2",
+          identifier: "ENG-14",
+          title: "Completed issue 2",
+          priority: "none",
+          stateId: "done",
+          assignee: null,
+          labels: [],
+          createdAt: "2026-04-24T00:00:00Z",
+        },
+      ],
+    },
+  ],
+  filterOptions: mockIssuesData.filterOptions,
+};
+
 describe("TeamIssuesPage UI", () => {
   afterEach(() => {
     cleanup();
@@ -128,6 +223,32 @@ describe("TeamIssuesPage UI", () => {
     );
     expect(screen.getByText("Fix bug")).toBeInTheDocument();
     expect(screen.queryByText("Working on it")).not.toBeInTheDocument();
+  });
+
+  it("shows toolbar and footer counts for the visible all, active, and backlog tabs", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => tabCountIssuesData,
+    } as Response);
+
+    mockPathname = "/team/ENG/all";
+    const { unmount } = render(<TeamIssuesPage />);
+    await screen.findByText("Engineering");
+    expect(screen.getAllByText("5 issues")).toHaveLength(2);
+    unmount();
+
+    mockPathname = "/team/ENG/active";
+    render(<ActiveTeamIssuesPage />);
+    await screen.findByText("Engineering");
+    expect(screen.getAllByText("0 issues")).toHaveLength(2);
+    expect(screen.queryByText("5 issues")).not.toBeInTheDocument();
+    cleanup();
+
+    mockPathname = "/team/ENG/backlog";
+    render(<BacklogTeamIssuesPage />);
+    await screen.findByText("Engineering");
+    expect(screen.getAllByText("3 issues")).toHaveLength(2);
+    expect(screen.queryByText("5 issues")).not.toBeInTheDocument();
   });
 
   it("changes tab clicks into URL navigation while preserving filters", async () => {

@@ -203,6 +203,11 @@ export default function TeamIssuesPage() {
       }));
   }, [data?.groups, routeTab, filters]);
 
+  const visibleIssueCount = filteredGroups.reduce(
+    (sum, g) => sum + g.issues.length,
+    0,
+  );
+
   const tabs = [
     { id: "all", label: "All issues" },
     { id: "active", label: "Active" },
@@ -341,7 +346,7 @@ export default function TeamIssuesPage() {
         </div>
         <div className="flex-1" />
         <span className="mr-2 text-[12px] text-[var(--color-text-secondary)]">
-          {totalIssues} issues
+          {visibleIssueCount} issues
         </span>
         {/* Display options trigger */}
         <div className="relative">
@@ -438,7 +443,7 @@ export default function TeamIssuesPage() {
 
       {/* Footer */}
       <div className="flex items-center border-t border-[var(--color-border)] px-4 py-1.5 text-[12px] text-[var(--color-text-secondary)]">
-        {totalIssues} issues
+        {visibleIssueCount} issues
       </div>
 
       <CreateIssueModal
