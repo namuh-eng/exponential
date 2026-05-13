@@ -5,6 +5,8 @@ const appRoutePrefixes = [
   "project",
   "views",
   "team",
+  "members",
+  "teams",
   "issue",
   "initiatives",
   "settings",
@@ -36,7 +38,12 @@ export function isPublicRoutePrefix(segment: string | undefined) {
 
 export function normalizeAppPath(pathname: string) {
   const segments = getPathSegments(pathname);
-  if (segments.length > 1 && isAppRoutePrefix(segments[1])) {
+  if (
+    segments.length > 1 &&
+    !isAppRoutePrefix(segments[0]) &&
+    !isPublicRoutePrefix(segments[0]) &&
+    isAppRoutePrefix(segments[1])
+  ) {
     return `/${segments.slice(1).join("/")}`;
   }
 
@@ -45,7 +52,12 @@ export function normalizeAppPath(pathname: string) {
 
 export function getWorkspaceSlugFromPath(pathname: string) {
   const segments = getPathSegments(pathname);
-  if (segments.length > 1 && isAppRoutePrefix(segments[1])) {
+  if (
+    segments.length > 1 &&
+    !isAppRoutePrefix(segments[0]) &&
+    !isPublicRoutePrefix(segments[0]) &&
+    isAppRoutePrefix(segments[1])
+  ) {
     return decodeURIComponent(segments[0]);
   }
 
@@ -76,6 +88,8 @@ export function stripWorkspaceSlug(
   if (
     workspaceSlug &&
     segments[0] === workspaceSlug &&
+    !isAppRoutePrefix(segments[0]) &&
+    !isPublicRoutePrefix(segments[0]) &&
     segments.length > 1 &&
     isAppRoutePrefix(segments[1])
   ) {

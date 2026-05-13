@@ -9,21 +9,27 @@ const mockRedirect = vi.fn(
     }),
 );
 const mockNext = vi.fn(() => new Response(null, { status: 200 }));
+const mockRewrite = vi.fn(
+  (url: URL) => new Response(url.toString(), { status: 200 }),
+);
 
 vi.mock("next/server", () => ({
   NextResponse: {
     redirect: mockRedirect,
     next: mockNext,
+    rewrite: mockRewrite,
   },
 }));
 
 function createMockRequest(path: string, cookies: Record<string, string> = {}) {
   const url = new URL(`http://localhost:3000${path}`);
+  const nextUrl = {
+    pathname: url.pathname,
+    search: url.search,
+    clone: () => new URL(url.toString()),
+  };
   return {
-    nextUrl: {
-      pathname: url.pathname,
-      search: url.search,
-    },
+    nextUrl,
     url: url.toString(),
     cookies: {
       get: (name: string) =>
@@ -106,6 +112,29 @@ describe("Auth proxy", () => {
       "better-auth.session_token": "valid-session-token",
     });
     await proxy(req as never);
+    expect(mockNext).toHaveBeenCalled();
+  });
+
+  it("rewrites workspace-prefixed members and teams routes", async () => {
+    mockRewrite.mockClear();
+    const { proxy } = await import("@/proxy");
+    const req = createMockRequest("/foreverbrowsing/members", {
+      "better-auth.session_token": "valid-session-token",
+    });
+    await proxy(req as never);
+    expect(mockRewrite).toHaveBeenCalled();
+    expect(mockRewrite.mock.calls[0]?.[0].pathname).toBe("/members");
+  });
+
+  it("does not rewrite settings teams routes as workspace-prefixed directory routes", async () => {
+    mockRewrite.mockClear();
+    mockNext.mockClear();
+    const { proxy } = await import("@/proxy");
+    const req = createMockRequest("/settings/teams/ENG/general", {
+      "better-auth.session_token": "valid-session-token",
+    });
+    await proxy(req as never);
+    expect(mockRewrite).not.toHaveBeenCalled();
     expect(mockNext).toHaveBeenCalled();
   });
 

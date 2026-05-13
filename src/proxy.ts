@@ -32,6 +32,7 @@ function getSlugRewrite(pathname: string) {
 
   if (
     segments.length > 1 &&
+    !isAppRoutePrefix(segments[0]) &&
     !isPublicRoutePrefix(segments[0]) &&
     isAppRoutePrefix(segments[1])
   ) {

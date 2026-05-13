@@ -201,13 +201,23 @@ describe("Sidebar", () => {
     expect(screen.getByText("More")).toBeDefined();
   });
 
-  it("toggles More menu to show Settings and Teams", () => {
+  it("toggles More menu to show Settings, Members, and Teams", () => {
     render(<Sidebar />);
     expect(screen.queryByText("Settings")).toBeNull();
 
     fireEvent.click(screen.getByText("More"));
     expect(screen.getByText("Settings")).toBeDefined();
+    expect(screen.getByText("Members")).toBeDefined();
     expect(screen.getByText("Teams")).toBeDefined();
+
+    expect(screen.getByRole("link", { name: /Members/i })).toHaveAttribute(
+      "href",
+      "/members",
+    );
+    expect(screen.getByRole("link", { name: /Teams/i })).toHaveAttribute(
+      "href",
+      "/teams",
+    );
 
     fireEvent.click(screen.getByText("More"));
     expect(screen.queryByText("Settings")).toBeNull();
@@ -261,6 +271,31 @@ describe("Sidebar", () => {
 
     const issuesLink = screen.getByText("Issues").closest("a");
     expect(issuesLink?.getAttribute("href")).toBe("/team/ENG/all");
+
+    fireEvent.click(screen.getByText("More"));
+    expect(screen.getByRole("link", { name: /Members/i })).toHaveAttribute(
+      "href",
+      "/members",
+    );
+    expect(screen.getByRole("link", { name: /Teams/i })).toHaveAttribute(
+      "href",
+      "/teams",
+    );
+  });
+
+  it("uses workspace-prefixed directory links and active state", () => {
+    mockPathname = "/foreverbrowsing/teams";
+    render(<Sidebar workspaceSlug="foreverbrowsing" teamKey="ENG" />);
+
+    fireEvent.click(screen.getByText("More"));
+
+    expect(screen.getByRole("link", { name: /Members/i })).toHaveAttribute(
+      "href",
+      "/foreverbrowsing/members",
+    );
+    const teamsLink = screen.getByRole("link", { name: /Teams/i });
+    expect(teamsLink).toHaveAttribute("href", "/foreverbrowsing/teams");
+    expect(teamsLink.className).toContain("bg-[var(--color-surface-active)]");
   });
 
   it("keeps Issues highlighted on URL-addressable team issue list routes", () => {
