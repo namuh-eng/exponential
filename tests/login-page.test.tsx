@@ -51,6 +51,14 @@ describe("Login page", () => {
     render(<LoginPage />);
 
     expect(
+      screen.getAllByRole("button").map((button) => button.textContent?.trim()),
+    ).toEqual([
+      "Continue with Google",
+      "Continue with email",
+      "Continue with SAML SSO",
+      "Log in with passkey",
+    ]);
+    expect(
       screen.getByRole("button", { name: /Continue with Google/i }),
     ).toBeDefined();
     expect(
@@ -334,6 +342,13 @@ describe("Login page", () => {
   it("matches Linear's signup auth method surface", () => {
     render(<SignupPage />);
 
+    expect(
+      screen.getAllByRole("button").map((button) => button.textContent?.trim()),
+    ).toEqual([
+      "Continue with Google",
+      "Continue with email",
+      "Continue with SAML SSO",
+    ]);
     expect(
       screen.getByRole("button", { name: /Continue with Google/i }),
     ).toBeDefined();
