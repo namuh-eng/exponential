@@ -17,9 +17,13 @@ export default defineConfig({
       testMatch: /auth\.setup\.ts/,
     },
     {
+      name: "unauth",
+      testMatch: /auth-deeplink\.spec\.ts/,
+    },
+    {
       name: "chromium",
       dependencies: ["setup"],
-      testIgnore: /auth\.setup\.ts/,
+      testIgnore: [/auth\.setup\.ts/, /auth-deeplink\.spec\.ts/],
       use: {
         storageState: authFile,
       },

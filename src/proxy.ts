@@ -59,6 +59,15 @@ function isWorkspaceSlugSegment(segment: string | undefined) {
   return segment && !isAppRoutePrefix(segment) && !isPublicRoutePrefix(segment);
 }
 
+function isWorkspaceScopedAppPath(pathname: string) {
+  const segments = getPathSegments(pathname);
+  return (
+    segments.length > 1 &&
+    isWorkspaceSlugSegment(segments[0]) &&
+    isAppRoutePrefix(segments[1])
+  );
+}
+
 function getSlugRewrite(pathname: string) {
   const segments = getPathSegments(pathname);
 
@@ -133,8 +142,17 @@ export async function proxy(request: NextRequest) {
     request.cookies.get("__Secure-better-auth.session_token")?.value;
 
   if (!sessionToken) {
+    const callbackUrl = `${pathname}${search}`;
+
+    if (isWorkspaceScopedAppPath(pathname)) {
+      const rewriteUrl = request.nextUrl.clone();
+      rewriteUrl.pathname = "/login";
+      rewriteUrl.searchParams.set("callbackUrl", callbackUrl);
+      return NextResponse.rewrite(rewriteUrl);
+    }
+
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("callbackUrl", `${pathname}${search}`);
+    loginUrl.searchParams.set("callbackUrl", callbackUrl);
     return NextResponse.redirect(loginUrl);
   }
 

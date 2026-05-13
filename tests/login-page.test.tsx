@@ -31,6 +31,7 @@ describe("Login page", () => {
     cleanup();
     vi.clearAllMocks();
     assignMock.mockReset();
+    mockLocation.pathname = "/login";
     mockLocation.search = "";
     Object.defineProperty(window.navigator, "credentials", {
       value: undefined,
@@ -172,6 +173,30 @@ describe("Login page", () => {
     });
   });
 
+  it("uses the current workspace deep-link URL for Google sign-in when login is rendered by rewrite", () => {
+    mockLocation.pathname = "/foreverbrowsing/settings/account/security";
+    mockLocation.search = "?tab=sessions";
+    render(<LoginPage />);
+    fireEvent.click(screen.getByText("Continue with Google"));
+    expect(signIn.social).toHaveBeenCalledWith({
+      provider: "google",
+      callbackURL:
+        "http://localhost:3015/foreverbrowsing/settings/account/security?tab=sessions",
+    });
+  });
+
+  it("sanitizes explicit callbackUrl values before falling back to the rewritten workspace URL", () => {
+    mockLocation.pathname = "/foreverbrowsing/projects";
+    mockLocation.search = "?callbackUrl=https%3A%2F%2Fevil.example%2Fphish";
+    render(<LoginPage />);
+    fireEvent.click(screen.getByText("Continue with Google"));
+    expect(signIn.social).toHaveBeenCalledWith({
+      provider: "google",
+      callbackURL:
+        "http://localhost:3015/foreverbrowsing/projects?callbackUrl=https%3A%2F%2Fevil.example%2Fphish",
+    });
+  });
+
   it("matches Linear's focused login email step", () => {
     render(<LoginPage />);
     fireEvent.click(screen.getByText("Continue with email"));
@@ -253,6 +278,27 @@ describe("Login page", () => {
         callbackURL: "http://localhost:3015/accept-invite?token=signed-token",
         errorCallbackURL:
           "http://localhost:3015/login?callbackUrl=%2Faccept-invite%3Ftoken%3Dsigned-token",
+      });
+    });
+  });
+
+  it("uses the current workspace deep-link URL when requesting a magic link from a rewritten login", async () => {
+    mockLocation.pathname = "/foreverbrowsing/team/ENG/all";
+    mockLocation.search = "?view=list&error=INVALID_TOKEN";
+    render(<LoginPage />);
+    fireEvent.click(screen.getByText("Continue with email"));
+
+    const input = screen.getByPlaceholderText("Enter your email address…");
+    fireEvent.change(input, { target: { value: "test@example.com" } });
+    fireEvent.submit(input.closest("form") as HTMLFormElement);
+
+    await vi.waitFor(() => {
+      expect(signIn.magicLink).toHaveBeenCalledWith({
+        email: "test@example.com",
+        callbackURL:
+          "http://localhost:3015/foreverbrowsing/team/ENG/all?view=list",
+        errorCallbackURL:
+          "http://localhost:3015/foreverbrowsing/team/ENG/all?view=list",
       });
     });
   });

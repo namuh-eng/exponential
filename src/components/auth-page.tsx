@@ -15,6 +15,25 @@ const authErrorMessages: Record<string, string> = {
     "That sign-in code has already been used. Request a new email to continue.",
 };
 
+function isSafeLocalCallback(
+  callbackUrl: string | null,
+): callbackUrl is string {
+  return Boolean(callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//"));
+}
+
+function getCurrentPathCallback(): string {
+  const { pathname } = window.location;
+
+  if (pathname === "/login" || pathname === "/signup") {
+    return "/";
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  params.delete("error");
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
 function getSafeCallbackPath(): string {
   if (typeof window === "undefined") {
     return "/";
@@ -24,22 +43,30 @@ function getSafeCallbackPath(): string {
     "callbackUrl",
   );
 
-  if (
-    !callbackUrl ||
-    !callbackUrl.startsWith("/") ||
-    callbackUrl.startsWith("//")
-  ) {
-    return "/";
+  if (isSafeLocalCallback(callbackUrl)) {
+    return callbackUrl;
   }
 
-  return callbackUrl;
+  return getCurrentPathCallback();
 }
 
 function getAbsoluteCallbackUrl(callbackPath: string): string {
   return new URL(callbackPath, window.location.origin).toString();
 }
 
+function isWorkspaceLoginSurface(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.location.pathname !== "/login" &&
+    window.location.pathname !== "/signup"
+  );
+}
+
 function getErrorCallbackUrl(callbackPath: string): string {
+  if (isWorkspaceLoginSurface()) {
+    return getAbsoluteCallbackUrl(getCurrentPathCallback());
+  }
+
   const errorCallbackUrl = new URL("/login", window.location.origin);
   if (callbackPath !== "/") {
     errorCallbackUrl.searchParams.set("callbackUrl", callbackPath);
