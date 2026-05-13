@@ -17,6 +17,7 @@ describe("Database schema", () => {
     { table: schema.workflowState, name: "workflow_state" },
     { table: schema.label, name: "label" },
     { table: schema.project, name: "project" },
+    { table: schema.projectTemplate, name: "project_template" },
     { table: schema.projectTeam, name: "project_team" },
     { table: schema.projectMember, name: "project_member" },
     { table: schema.projectMilestone, name: "project_milestone" },
@@ -213,6 +214,7 @@ describe("Database schema", () => {
     expect(schema.issueRelations).toBeDefined();
     expect(schema.issueHistoryRelations).toBeDefined();
     expect(schema.projectRelations).toBeDefined();
+    expect(schema.projectTemplateRelations).toBeDefined();
     expect(schema.cycleRelations).toBeDefined();
     expect(schema.initiativeRelations).toBeDefined();
     expect(schema.commentRelations).toBeDefined();
@@ -226,7 +228,7 @@ describe("Database schema", () => {
 
   // ── Total table count ────────────────────────────────────────────
 
-  it("has exactly 28 tables covering all data models", () => {
-    expect(expectedTables).toHaveLength(28);
+  it("has exactly 29 tables covering all data models", () => {
+    expect(expectedTables).toHaveLength(29);
   });
 });

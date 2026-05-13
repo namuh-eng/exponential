@@ -24,6 +24,7 @@
       "packages/sdk/dist",
       "test-results",
       "playwright-report",
+      "tests/e2e/.auth",
       "*.config.js",
       "postcss.config.js",
       "coverage",

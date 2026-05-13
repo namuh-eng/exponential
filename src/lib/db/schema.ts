@@ -339,6 +339,27 @@ export const project = pgTable(
   ],
 );
 
+// ─── Project Template ────────────────────────────────────────────────
+
+export const projectTemplate = pgTable(
+  "project_template",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    createdById: text("created_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    settings: jsonb("settings").default({}),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("project_template_workspace_idx").on(t.workspaceId)],
+);
+
 // ─── Project Team (many-to-many) ─────────────────────────────────────
 
 export const projectTeam = pgTable(
@@ -730,6 +751,7 @@ export const userRelations = relations(user, ({ many }) => ({
   teamMemberships: many(teamMember),
   createdIssues: many(issue, { relationName: "creator" }),
   assignedIssues: many(issue, { relationName: "assignee" }),
+  projectTemplates: many(projectTemplate),
   comments: many(comment),
   notifications: many(notification, { relationName: "recipient" }),
 }));
@@ -740,6 +762,7 @@ export const workspaceRelations = relations(workspace, ({ many }) => ({
   teams: many(team),
   labels: many(label),
   projects: many(project),
+  projectTemplates: many(projectTemplate),
   initiatives: many(initiative),
   customViews: many(customView),
   apiKeys: many(apiKey),
@@ -891,6 +914,20 @@ export const projectRelations = relations(project, ({ one, many }) => ({
   issues: many(issue),
   initiativeProjects: many(initiativeProject),
 }));
+
+export const projectTemplateRelations = relations(
+  projectTemplate,
+  ({ one }) => ({
+    workspace: one(workspace, {
+      fields: [projectTemplate.workspaceId],
+      references: [workspace.id],
+    }),
+    createdBy: one(user, {
+      fields: [projectTemplate.createdById],
+      references: [user.id],
+    }),
+  }),
+);
 
 export const projectTeamRelations = relations(projectTeam, ({ one }) => ({
   project: one(project, {

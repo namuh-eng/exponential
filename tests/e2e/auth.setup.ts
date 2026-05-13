@@ -1,9 +1,13 @@
-import { mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { expect, test as setup } from "@playwright/test";
 
 const authFile = "tests/e2e/.auth/user.json";
 
 function readDotEnvValue(name: string) {
+  if (!existsSync(".env")) {
+    return undefined;
+  }
+
   const envContent = readFileSync(".env", "utf-8");
   const match = envContent.match(new RegExp(`^${name}=(.+)$`, "m"));
   return match?.[1]?.trim().replace(/^['"]|['"]$/g, "");
