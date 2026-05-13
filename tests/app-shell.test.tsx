@@ -40,6 +40,7 @@ import { AppShell } from "@/app/(app)/app-shell";
 import { Sidebar } from "@/components/sidebar";
 import {
   OPEN_COMMAND_PALETTE_EVENT,
+  OPEN_CREATE_ISSUE_EVENT,
   OPEN_CREATE_ISSUE_FULLSCREEN_EVENT,
 } from "@/lib/command-palette";
 
@@ -519,7 +520,55 @@ describe("AppShell", () => {
     });
   });
 
-  it("opens the global create issue modal when the fullscreen command event fires", async () => {
+  it("opens the compact create issue modal when the regular command event fires", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/api/notifications")) {
+        return {
+          ok: true,
+          json: async () => ({ unreadCount: 2, notifications: [] }),
+        } as Response;
+      }
+      if (url.includes("/api/account/preferences")) {
+        return {
+          ok: true,
+          json: async () => ({ accountPreferences: {} }),
+        } as Response;
+      }
+      if (url.includes("/create-issue-options")) {
+        return {
+          ok: true,
+          json: async () => createIssueOptionsResponse,
+        } as Response;
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    render(
+      <AppShell
+        workspaceName="WS"
+        workspaceInitials="WS"
+        teamName="Eng"
+        teamId="team-1"
+        teamKey="ENG"
+        teams={[{ id: "team-1", name: "Eng", key: "ENG" }]}
+      >
+        <div>Content</div>
+      </AppShell>,
+    );
+
+    window.dispatchEvent(new CustomEvent(OPEN_CREATE_ISSUE_EVENT));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Create issue for Eng")).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByLabelText("Create issue fullscreen for Eng"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens the fullscreen create issue composer when the fullscreen command event fires", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
       if (url.includes("/api/notifications")) {
@@ -560,7 +609,10 @@ describe("AppShell", () => {
     window.dispatchEvent(new CustomEvent(OPEN_CREATE_ISSUE_FULLSCREEN_EVENT));
 
     await waitFor(() => {
-      expect(screen.getByText("New issue")).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("Create issue fullscreen for Eng"),
+      ).toBeInTheDocument();
     });
+    expect(screen.getByText("Fullscreen composer")).toBeInTheDocument();
   });
 });

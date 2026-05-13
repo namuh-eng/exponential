@@ -41,6 +41,7 @@ interface ShellContext {
 }
 
 const AppShellContext = createContext<ShellContext | null>(null);
+type CreateIssueMode = "modal" | "fullscreen";
 
 export function useAppShellContext() {
   return useContext(AppShellContext);
@@ -87,7 +88,8 @@ export function AppShell({
 }: AppShellProps) {
   const pathname = stripWorkspaceSlug(usePathname(), workspaceSlug);
   const isSettingsRoute = pathname.startsWith("/settings");
-  const [showCreateIssue, setShowCreateIssue] = useState(false);
+  const [createIssueMode, setCreateIssueMode] =
+    useState<CreateIssueMode | null>(null);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
   const [accountPreferences, setAccountPreferences] =
     useState<AccountPreferences>(DEFAULT_ACCOUNT_PREFERENCES);
@@ -277,7 +279,11 @@ export function AppShell({
 
   useEffect(() => {
     function handleOpenCreateIssue() {
-      setShowCreateIssue(true);
+      setCreateIssueMode("modal");
+    }
+
+    function handleOpenCreateIssueFullscreen() {
+      setCreateIssueMode("fullscreen");
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -293,13 +299,13 @@ export function AppShell({
       }
 
       event.preventDefault();
-      setShowCreateIssue(true);
+      setCreateIssueMode("modal");
     }
 
     window.addEventListener(OPEN_CREATE_ISSUE_EVENT, handleOpenCreateIssue);
     window.addEventListener(
       OPEN_CREATE_ISSUE_FULLSCREEN_EVENT,
-      handleOpenCreateIssue,
+      handleOpenCreateIssueFullscreen,
     );
     document.addEventListener("keydown", handleKeyDown);
 
@@ -310,7 +316,7 @@ export function AppShell({
       );
       window.removeEventListener(
         OPEN_CREATE_ISSUE_FULLSCREEN_EVENT,
-        handleOpenCreateIssue,
+        handleOpenCreateIssueFullscreen,
       );
       document.removeEventListener("keydown", handleKeyDown);
     };
@@ -330,7 +336,7 @@ export function AppShell({
             teamKey={shellContext.teamKey}
             teams={shellContext.teams}
             inboxUnreadCount={inboxUnreadCount}
-            onCreateIssue={() => setShowCreateIssue(true)}
+            onCreateIssue={() => setCreateIssueMode("modal")}
             accountPreferences={accountPreferences}
             workspaceSlug={shellContext.workspaceSlug}
           />
@@ -353,8 +359,9 @@ export function AppShell({
           </div>
         </main>
         <CreateIssueModal
-          open={showCreateIssue}
-          onClose={() => setShowCreateIssue(false)}
+          open={createIssueMode !== null}
+          onClose={() => setCreateIssueMode(null)}
+          variant={createIssueMode ?? "modal"}
           teamId={shellContext.teamId}
           teamKey={shellContext.teamKey}
           teamName={shellContext.teamName}

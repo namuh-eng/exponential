@@ -13,6 +13,7 @@ import {
 interface CreateIssueModalProps {
   open: boolean;
   onClose: () => void;
+  variant?: "modal" | "fullscreen";
   teamKey: string;
   teamName: string;
   teamId: string;
@@ -237,6 +238,7 @@ function ToolbarButton({
 export function CreateIssueModal({
   open,
   onClose,
+  variant = "modal",
   teamKey,
   teamName,
   teamId,
@@ -403,6 +405,7 @@ export function CreateIssueModal({
     selectedLabelIds.includes(labelItem.id),
   );
   const canSubmit = title.trim().length > 0 && !submitting && !loadingOptions;
+  const isFullscreen = variant === "fullscreen";
 
   async function handleSubmit() {
     if (!canSubmit) {
@@ -674,7 +677,12 @@ export function CreateIssueModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[14vh]">
+    <div
+      className={classNames(
+        "fixed inset-0 z-50 flex justify-center",
+        isFullscreen ? "items-stretch p-4" : "items-start pt-[14vh]",
+      )}
+    >
       <div
         className="absolute inset-0 bg-black/55"
         onClick={onClose}
@@ -691,8 +699,17 @@ export function CreateIssueModal({
       <dialog
         open
         aria-modal="true"
-        aria-label={`Create issue for ${teamName}`}
-        className="relative z-10 w-full max-w-[760px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-content-bg)] shadow-2xl"
+        aria-label={
+          isFullscreen
+            ? `Create issue fullscreen for ${teamName}`
+            : `Create issue for ${teamName}`
+        }
+        className={classNames(
+          "relative z-10 w-full border border-[var(--color-border)] bg-[var(--color-content-bg)] shadow-2xl",
+          isFullscreen
+            ? "flex h-[calc(100vh-2rem)] max-w-[1120px] flex-col rounded-3xl"
+            : "max-w-[760px] rounded-2xl",
+        )}
       >
         <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
           <span className="flex items-center gap-1.5 rounded-md bg-[var(--color-surface)] px-2 py-0.5 text-[12px] font-medium text-[var(--color-text-primary)]">
@@ -716,6 +733,11 @@ export function CreateIssueModal({
           <span className="text-[13px] text-[var(--color-text-primary)]">
             New issue
           </span>
+          {isFullscreen && (
+            <span className="rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
+              Fullscreen composer
+            </span>
+          )}
           <div className="flex-1" />
           <button
             type="button"
@@ -740,7 +762,12 @@ export function CreateIssueModal({
           </button>
         </div>
 
-        <div className="px-4 pb-3 pt-4">
+        <div
+          className={classNames(
+            "px-4 pb-3 pt-4",
+            isFullscreen && "flex-1 overflow-y-auto px-8 py-8",
+          )}
+        >
           <div
             ref={titleRef}
             role="textbox"
@@ -761,6 +788,7 @@ export function CreateIssueModal({
             }}
             className={classNames(
               "relative min-h-[42px] w-full whitespace-pre-wrap break-words bg-transparent text-[36px] font-semibold leading-[1.15] text-[var(--color-text-primary)] focus:outline-none",
+              isFullscreen && "text-[44px]",
               !title &&
                 "before:pointer-events-none before:absolute before:left-0 before:top-0 before:text-[var(--color-text-tertiary)] before:content-[attr(data-placeholder)]",
             )}
@@ -779,6 +807,7 @@ export function CreateIssueModal({
             }
             className={classNames(
               "relative mt-4 min-h-[96px] w-full whitespace-pre-wrap break-words bg-transparent text-[15px] leading-6 text-[var(--color-text-primary)] focus:outline-none",
+              isFullscreen && "min-h-[360px] text-[16px] leading-7",
               !descriptionHtml &&
                 "before:pointer-events-none before:absolute before:left-0 before:top-0 before:text-[var(--color-text-tertiary)] before:content-[attr(data-placeholder)]",
             )}
