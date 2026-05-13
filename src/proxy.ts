@@ -99,6 +99,20 @@ function getCanonicalTeamRedirect(pathname: string) {
   return null;
 }
 
+function getCanonicalIssueRedirect(pathname: string) {
+  const segments = getPathSegments(pathname);
+
+  if (
+    segments[0] === "issue" &&
+    /^ENG-\d+$/.test(segments[1] ?? "") &&
+    segments.length === 2
+  ) {
+    return `/${CANONICAL_WORKSPACE_SLUG}/${segments.join("/")}`;
+  }
+
+  return null;
+}
+
 function getWorkspaceRootRedirect(pathname: string) {
   const segments = getPathSegments(pathname);
 
@@ -162,6 +176,14 @@ export async function proxy(request: NextRequest) {
     canonicalTeamUrl.pathname = canonicalTeamRedirect;
     return NextResponse.redirect(canonicalTeamUrl);
   }
+
+  const canonicalIssueRedirect = getCanonicalIssueRedirect(pathname);
+  if (canonicalIssueRedirect) {
+    const canonicalIssueUrl = request.nextUrl.clone();
+    canonicalIssueUrl.pathname = canonicalIssueRedirect;
+    return NextResponse.redirect(canonicalIssueUrl);
+  }
+
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-workspace-source-path", pathname);
 

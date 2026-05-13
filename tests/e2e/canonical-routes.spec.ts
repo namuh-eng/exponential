@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
 
+async function expectRenderedAppPage(page: import("@playwright/test").Page) {
+  await expect(
+    page.getByText("This page could not be found"),
+  ).not.toBeVisible();
+}
+
 test.describe("Canonical Forever Browsing routes", () => {
   test("renders canonical workspace/team deep links and redirects legacy ENG route", async ({
     page,
@@ -19,7 +25,10 @@ test.describe("Canonical Forever Browsing routes", () => {
       ),
     ).not.toBeVisible();
     await expect(
-      page.getByRole("heading", { name: /All issues|No issues/ }),
+      page.getByRole("heading", { name: "Engineering" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "All issues" }),
     ).toBeVisible();
     await expect(
       page.locator('a[href="/foreverbrowsing/team/ENG/all"]').first(),
@@ -33,8 +42,9 @@ test.describe("Canonical Forever Browsing routes", () => {
       ),
     ).not.toBeVisible();
     await expect(
-      page.getByRole("heading", { name: /No issues|Backlog|Todo|In Progress/ }),
+      page.getByRole("heading", { name: "Engineering" }),
     ).toBeVisible();
+    await expect(page.getByText("Backlog").first()).toBeVisible();
     await expect(
       page.getByText("This page could not be found"),
     ).not.toBeVisible();
@@ -51,7 +61,10 @@ test.describe("Canonical Forever Browsing routes", () => {
     await page.goto("/team/ENG/all");
     await expect(page).toHaveURL(/\/foreverbrowsing\/team\/ENG\/all$/);
     await expect(
-      page.getByRole("heading", { name: /All issues|No issues/ }),
+      page.getByRole("heading", { name: "Engineering" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "All issues" }),
     ).toBeVisible();
     await expect(
       page.getByText("This page could not be found"),
@@ -60,8 +73,9 @@ test.describe("Canonical Forever Browsing routes", () => {
     await page.goto("/team/ENG/board");
     await expect(page).toHaveURL(/\/foreverbrowsing\/team\/ENG\/board$/);
     await expect(
-      page.getByRole("heading", { name: /No issues|Backlog|Todo|In Progress/ }),
+      page.getByRole("heading", { name: "Engineering" }),
     ).toBeVisible();
+    await expect(page.getByText("Backlog").first()).toBeVisible();
     await expect(
       page.getByText("This page could not be found"),
     ).not.toBeVisible();
@@ -83,5 +97,35 @@ test.describe("Canonical Forever Browsing routes", () => {
     await expect(
       page.getByText("This page could not be found"),
     ).not.toBeVisible();
+  });
+
+  test("issue detail canonical routes render and Back to issues lands on workspace team all", async ({
+    page,
+  }) => {
+    await page.goto("/team/ENG/issue/ENG-1");
+    await expect(page).toHaveURL(/\/foreverbrowsing\/team\/ENG\/issue\/ENG-1$/);
+    await expect(page.getByText("ENG-1").first()).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Back to issues" }),
+    ).toBeVisible();
+    await expectRenderedAppPage(page);
+
+    await page.getByRole("link", { name: "Back to issues" }).click();
+    await expect(page).toHaveURL(/\/foreverbrowsing\/team\/ENG\/all$/);
+    await expect(
+      page.getByRole("heading", { name: "Engineering" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "All issues" }),
+    ).toBeVisible();
+    await expectRenderedAppPage(page);
+
+    await page.goto("/issue/ENG-1");
+    await expect(page).toHaveURL(/\/foreverbrowsing\/issue\/ENG-1$/);
+    await expect(page.getByText("ENG-1").first()).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Back to issues" }),
+    ).toBeVisible();
+    await expectRenderedAppPage(page);
   });
 });

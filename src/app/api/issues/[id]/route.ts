@@ -1,4 +1,4 @@
-import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
+import { resolveRequestWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
@@ -20,10 +20,16 @@ import {
   insertNotifications,
 } from "@/lib/notifications";
 import { getDownloadUrl } from "@/lib/s3";
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
-async function findIssueRecord(id: string) {
+function isUuidLike(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
+async function findIssueRecord(id: string, workspaceId: string) {
   const issues = await db
     .select({
       id: issue.id,
@@ -48,11 +54,15 @@ async function findIssueRecord(id: string) {
     })
     .from(issue)
     .innerJoin(team, eq(issue.teamId, team.id))
-    .where(eq(issue.identifier, id))
+    .where(and(eq(issue.identifier, id), eq(team.workspaceId, workspaceId)))
     .limit(1);
 
   if (issues.length > 0) {
     return issues[0];
+  }
+
+  if (!isUuidLike(id)) {
+    return null;
   }
 
   const byId = await db
@@ -79,7 +89,7 @@ async function findIssueRecord(id: string) {
     })
     .from(issue)
     .innerJoin(team, eq(issue.teamId, team.id))
-    .where(eq(issue.id, id))
+    .where(and(eq(issue.id, id), eq(team.workspaceId, workspaceId)))
     .limit(1);
 
   return byId[0] ?? null;
@@ -95,12 +105,15 @@ export async function GET(
   }
 
   const { id } = await params;
-  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  const workspaceId = await resolveRequestWorkspaceId(
+    session.user.id,
+    _request,
+  );
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace found" }, { status: 400 });
   }
 
-  const iss = await findIssueRecord(id);
+  const iss = await findIssueRecord(id, workspaceId);
   if (!iss || iss.workspaceId !== workspaceId) {
     return NextResponse.json({ error: "Issue not found" }, { status: 404 });
   }
@@ -326,7 +339,7 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  const workspaceId = await resolveRequestWorkspaceId(session.user.id, request);
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace found" }, { status: 400 });
   }
@@ -338,7 +351,7 @@ export async function PATCH(
     sortOrder?: number;
   };
 
-  const existingIssue = await findIssueRecord(id);
+  const existingIssue = await findIssueRecord(id, workspaceId);
   if (!existingIssue || existingIssue.workspaceId !== workspaceId) {
     return NextResponse.json({ error: "Issue not found" }, { status: 404 });
   }
@@ -476,12 +489,15 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  const workspaceId = await resolveRequestWorkspaceId(
+    session.user.id,
+    _request,
+  );
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace found" }, { status: 400 });
   }
 
-  const existingIssue = await findIssueRecord(id);
+  const existingIssue = await findIssueRecord(id, workspaceId);
   if (!existingIssue || existingIssue.workspaceId !== workspaceId) {
     return NextResponse.json({ error: "Issue not found" }, { status: 404 });
   }

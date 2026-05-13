@@ -22,7 +22,7 @@ const getDownloadUrlMock = vi.fn();
 const normalizeIssueDescriptionHtmlMock = vi.fn();
 const buildNotificationValuesMock = vi.fn();
 const insertNotificationsMock = vi.fn();
-const resolveActiveWorkspaceIdMock = vi.fn();
+const resolveRequestWorkspaceIdMock = vi.fn();
 let selectCallCount = 0;
 
 vi.mock("@/lib/auth", () => ({
@@ -38,7 +38,7 @@ vi.mock("@/lib/issue-description", () => ({
 }));
 
 vi.mock("@/lib/active-workspace", () => ({
-  resolveActiveWorkspaceId: resolveActiveWorkspaceIdMock,
+  resolveRequestWorkspaceId: resolveRequestWorkspaceIdMock,
 }));
 
 vi.mock("@/lib/notifications", () => ({
@@ -216,7 +216,7 @@ describe("issue detail route", () => {
     getSessionMock.mockResolvedValue({
       user: { id: "user-1", name: "Ashley", email: "ashley@example.com" },
     });
-    resolveActiveWorkspaceIdMock.mockResolvedValue("workspace-1");
+    resolveRequestWorkspaceIdMock.mockResolvedValue("workspace-1");
     issueLimitMock.mockResolvedValue([
       {
         id: "issue-1",

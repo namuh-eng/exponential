@@ -213,6 +213,19 @@ describe("Auth proxy", () => {
     expect(mockNext).toHaveBeenCalled();
   });
 
+  it("redirects legacy canonical ENG issue routes to workspace-scoped routes", async () => {
+    mockRedirect.mockClear();
+    const { proxy } = await import("@/proxy");
+    const req = createMockRequest("/issue/ENG-1?focusedComment=c-1", {
+      "__Secure-better-auth.session_token": "valid-session-token",
+    });
+    await proxy(req as never);
+    expect(mockRedirect).toHaveBeenCalled();
+    const redirectUrl = mockRedirect.mock.calls[0][0] as URL;
+    expect(redirectUrl.pathname).toBe("/foreverbrowsing/issue/ENG-1");
+    expect(redirectUrl.search).toBe("?focusedComment=c-1");
+  });
+
   it.each(["/all", "/board"])(
     "redirects legacy canonical ENG team%s routes to workspace-scoped routes",
     async (teamRoute) => {
