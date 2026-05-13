@@ -1,6 +1,6 @@
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
-import { requireApiSession } from "@/lib/api-auth";
+import { createApiKeyHash, requireApiSession } from "@/lib/api-auth";
 import {
   GRAPHQL_DOCS_URL,
   OAUTH_APPLICATIONS_DOCS_URL,
@@ -40,10 +40,6 @@ function createSecret(prefix: string) {
   return `${prefix}_${randomBytes(24).toString("hex")}`;
 }
 
-function createKeyHash(secret: string) {
-  return createHash("sha256").update(secret).digest("hex");
-}
-
 function normalizeAbsoluteUrl(value: unknown) {
   if (typeof value !== "string") {
     return null;
@@ -63,8 +59,10 @@ function normalizeAbsoluteUrl(value: unknown) {
 
 async function getWorkspaceAccess(
   userId: string,
+  workspaceIdOverride?: string,
 ): Promise<WorkspaceAccess | null> {
-  const workspaceId = await resolveActiveWorkspaceId(userId);
+  const workspaceId =
+    workspaceIdOverride ?? (await resolveActiveWorkspaceId(userId));
   if (!workspaceId) {
     return null;
   }
@@ -185,7 +183,10 @@ async function loadAuthenticatedAccess() {
     };
   }
 
-  const access = await getWorkspaceAccess(session.user.id);
+  const access = await getWorkspaceAccess(
+    session.user.id,
+    "apiKey" in session ? session.apiKey.workspaceId : undefined,
+  );
   if (!access) {
     return {
       error: NextResponse.json(
@@ -410,7 +411,7 @@ export async function POST(request: Request) {
   const secret = createSecret("lin_api");
   await db.insert(apiKey).values({
     name,
-    keyHash: createKeyHash(secret),
+    keyHash: createApiKeyHash(secret),
     keyPrefix: `${secret.slice(0, 12)}…`,
     userId: access.userId,
     workspaceId: access.workspaceId,

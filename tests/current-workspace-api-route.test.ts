@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const getSessionMock = vi.fn();
 const resolveActiveWorkspaceIdMock = vi.fn();
 const accessLimitMock = vi.fn();
+const apiKeyLimitMock = vi.fn();
 const webhooksOrderByMock = vi.fn();
 const apiKeysOrderByMock = vi.fn();
 const updateSetMock = vi.fn();
 const updateWhereMock = vi.fn();
 let selectCallCount = 0;
+let requestHeaders = new Headers();
 
 vi.mock("@/lib/auth", () => ({
   auth: {
@@ -57,6 +59,20 @@ vi.mock("@/lib/db", () => ({
     select: vi.fn((selection: Record<string, unknown>) => {
       selectCallCount += 1;
 
+      if ("apiKeyId" in selection) {
+        return {
+          from: vi.fn().mockReturnValue({
+            innerJoin: vi.fn().mockReturnValue({
+              innerJoin: vi.fn().mockReturnValue({
+                where: vi.fn().mockReturnValue({
+                  limit: apiKeyLimitMock,
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+
       if ("memberRole" in selection) {
         return {
           from: vi.fn().mockReturnValue({
@@ -103,7 +119,7 @@ vi.mock("@/lib/db", () => ({
 }));
 
 vi.mock("next/headers", () => ({
-  headers: async () => new Headers(),
+  headers: async () => requestHeaders,
 }));
 
 describe("current workspace api route", () => {
@@ -111,8 +127,10 @@ describe("current workspace api route", () => {
     vi.resetModules();
     vi.clearAllMocks();
     selectCallCount = 0;
+    requestHeaders = new Headers();
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
     resolveActiveWorkspaceIdMock.mockResolvedValue("workspace-1");
+    apiKeyLimitMock.mockResolvedValue([]);
     accessLimitMock.mockResolvedValue([
       {
         workspaceId: "workspace-1",
@@ -166,6 +184,73 @@ describe("current workspace api route", () => {
     await expect(response.json()).resolves.toEqual({
       error: "No active workspace found",
     });
+  });
+
+  it("accepts a generated member API key bearer token without a browser session", async () => {
+    getSessionMock.mockResolvedValue(null);
+    requestHeaders = new Headers({
+      authorization: "Bearer lin_api_validsecret",
+    });
+    apiKeyLimitMock.mockResolvedValue([
+      {
+        apiKeyId: "api-key-1",
+        userId: "user-1",
+        userName: "Ashley",
+        userEmail: "ashley@test.com",
+        userImage: null,
+        workspaceId: "workspace-1",
+        memberRole: "owner",
+      },
+    ]);
+    const { GET } = await import("@/app/api/workspaces/current/api/route");
+
+    const response = await GET();
+
+    expect(response.status).toBe(200);
+    expect(resolveActiveWorkspaceIdMock).not.toHaveBeenCalled();
+    expect(updateSetMock).toHaveBeenCalledWith({
+      lastUsedAt: expect.any(Date),
+    });
+    await expect(response.json()).resolves.toMatchObject({
+      api: {
+        viewerRole: "owner",
+        apiKeys: [
+          {
+            id: "key-1",
+            name: "CI",
+          },
+        ],
+      },
+    });
+  });
+
+  it("rejects malformed API key bearer tokens", async () => {
+    getSessionMock.mockResolvedValue(null);
+    requestHeaders = new Headers({
+      authorization: "Bearer not_linear",
+    });
+    const { GET } = await import("@/app/api/workspaces/current/api/route");
+
+    const response = await GET();
+
+    expect(response.status).toBe(401);
+    expect(apiKeyLimitMock).not.toHaveBeenCalled();
+    expect(updateSetMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects unknown API key bearer tokens without updating lastUsedAt", async () => {
+    getSessionMock.mockResolvedValue(null);
+    requestHeaders = new Headers({
+      authorization: "Bearer lin_api_unknown",
+    });
+    apiKeyLimitMock.mockResolvedValue([]);
+    const { GET } = await import("@/app/api/workspaces/current/api/route");
+
+    const response = await GET();
+
+    expect(response.status).toBe(401);
+    expect(apiKeyLimitMock).toHaveBeenCalledWith(1);
+    expect(updateSetMock).not.toHaveBeenCalled();
   });
 
   it("returns the workspace api payload", async () => {
