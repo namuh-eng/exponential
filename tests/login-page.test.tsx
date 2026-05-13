@@ -6,6 +6,7 @@ vi.mock("@/lib/auth-client", () => ({
     social: vi.fn(),
     magicLink: vi.fn(() => Promise.resolve()),
   },
+  signInWithPasskey: vi.fn(),
   signOut: vi.fn(),
   useSession: vi.fn(() => ({ data: null, isPending: false })),
   authClient: {},
@@ -23,7 +24,7 @@ vi.stubGlobal("location", mockLocation);
 
 import LoginPage from "@/app/(auth)/login/page";
 import SignupPage from "@/app/(auth)/signup/page";
-import { signIn } from "@/lib/auth-client";
+import { signIn, signInWithPasskey } from "@/lib/auth-client";
 
 describe("Login page", () => {
   afterEach(() => {
@@ -31,6 +32,10 @@ describe("Login page", () => {
     vi.clearAllMocks();
     assignMock.mockReset();
     mockLocation.search = "";
+    Object.defineProperty(window.navigator, "credentials", {
+      value: undefined,
+      configurable: true,
+    });
   });
 
   it("renders the login title", () => {
@@ -90,23 +95,62 @@ describe("Login page", () => {
     expect(screen.getByText("Back to login")).toBeDefined();
   });
 
-  it("matches Linear's passkey waiting state", () => {
+  it("matches Linear's passkey waiting state while WebAuthn is pending", () => {
+    vi.mocked(signInWithPasskey).mockReturnValueOnce(new Promise(() => {}));
     render(<LoginPage />);
 
     fireEvent.click(
       screen.getByRole("button", { name: /Log in with passkey/i }),
     );
 
+    expect(signInWithPasskey).toHaveBeenCalledWith({
+      callbackURL: "http://localhost:3015/",
+    });
     expect(
       screen
         .getByRole("button", { name: /Waiting for passkey/ })
         .hasAttribute("disabled"),
     ).toBe(true);
+  });
+
+  it("starts WebAuthn and recovers when passkey login is rejected", async () => {
+    const credentialsGet = vi.fn(() =>
+      Promise.reject(new DOMException("User canceled", "NotAllowedError")),
+    );
+    Object.defineProperty(window.navigator, "credentials", {
+      value: { get: credentialsGet },
+      configurable: true,
+    });
+    vi.mocked(signInWithPasskey).mockImplementationOnce(
+      async ({ callbackURL }) => {
+        await navigator.credentials.get({
+          publicKey: { challenge: new Uint8Array([1, 2, 3]) },
+        });
+        return { redirectTo: callbackURL };
+      },
+    );
+    render(<LoginPage />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Log in with passkey/i }),
+    );
+
+    await vi.waitFor(() => {
+      expect(credentialsGet).toHaveBeenCalledTimes(1);
+      expect(
+        screen.getByRole("button", { name: /Log in with passkey/i }),
+      ).toBeDefined();
+      expect(
+        screen.getByText(
+          "Passkey sign-in failed. Try again or use another method.",
+        ),
+      ).toBeDefined();
+    });
     expect(
-      screen.queryByText(
-        "Passkey login isn't configured for this workspace yet.",
-      ),
-    ).toBeNull();
+      screen
+        .getByRole("button", { name: /Log in with passkey/i })
+        .hasAttribute("disabled"),
+    ).toBe(false);
   });
 
   it("calls signIn.social with google provider on Google click", () => {

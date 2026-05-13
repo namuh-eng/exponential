@@ -44,4 +44,39 @@ describe("auth client origin", () => {
       plugins: [{ id: "magic-link" }],
     });
   });
+
+  it("starts WebAuthn for passkey sign-in and maps user cancellation", async () => {
+    const credentialsGet = vi.fn(
+      (_options: CredentialRequestOptions): Promise<Credential | null> =>
+        Promise.reject(
+          new DOMException("The operation was aborted", "NotAllowedError"),
+        ),
+    );
+    Object.defineProperty(globalThis, "PublicKeyCredential", {
+      value: function PublicKeyCredential() {},
+      configurable: true,
+    });
+    Object.defineProperty(window.navigator, "credentials", {
+      value: { get: credentialsGet },
+      configurable: true,
+    });
+
+    const { signInWithPasskey } = await import("@/lib/auth-client");
+
+    await expect(
+      signInWithPasskey({ callbackURL: "http://localhost:3015/team/ABC" }),
+    ).rejects.toMatchObject({
+      code: "CANCELED",
+      message: "Passkey sign-in was canceled. Try again.",
+    });
+    expect(credentialsGet).toHaveBeenCalledTimes(1);
+    const firstCallOptions = credentialsGet.mock.calls[0]?.[0];
+    expect(firstCallOptions).toMatchObject({
+      publicKey: {
+        timeout: 60_000,
+        userVerification: "preferred",
+      },
+    });
+    expect(firstCallOptions?.publicKey?.challenge).toBeInstanceOf(Uint8Array);
+  });
 });

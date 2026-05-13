@@ -1,6 +1,6 @@
 "use client";
 
-import { signIn } from "@/lib/auth-client";
+import { signIn, signInWithPasskey } from "@/lib/auth-client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -45,6 +45,26 @@ function getErrorCallbackUrl(callbackPath: string): string {
     errorCallbackUrl.searchParams.set("callbackUrl", callbackPath);
   }
   return errorCallbackUrl.toString();
+}
+
+function getSafeRedirectTarget(
+  redirectTo: string | undefined,
+  fallbackPath: string,
+): string {
+  if (!redirectTo) {
+    return fallbackPath;
+  }
+
+  try {
+    const redirectUrl = new URL(redirectTo, window.location.origin);
+    if (redirectUrl.origin === window.location.origin) {
+      return `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
+    }
+  } catch {
+    // Fall back to the already sanitized callback path below.
+  }
+
+  return fallbackPath;
 }
 
 function LinearLogo() {
@@ -203,9 +223,27 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     setError("SAML SSO isn't configured for this workspace yet.");
   }
 
-  function handlePasskeyLogin() {
+  async function handlePasskeyLogin() {
     setPasskeyPending(true);
     setError("");
+
+    try {
+      const callbackPath = getSafeCallbackPath();
+      const result = await signInWithPasskey({
+        callbackURL: getAbsoluteCallbackUrl(callbackPath),
+      });
+      window.location.assign(
+        getSafeRedirectTarget(result.redirectTo, callbackPath),
+      );
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Passkey sign-in failed. Try again or use another method.",
+      );
+    } finally {
+      setPasskeyPending(false);
+    }
   }
 
   const title =
