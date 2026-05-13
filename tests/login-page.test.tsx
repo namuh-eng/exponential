@@ -131,11 +131,16 @@ describe("Login page", () => {
     render(<LoginPage />);
     fireEvent.click(screen.getByText("Continue with email"));
 
-    expect(screen.getByText("What’s your email address?")).toBeDefined();
+    expect(
+      screen.getByRole("heading", { name: "What’s your email address?" }),
+    ).toBeDefined();
+    expect(
+      screen.queryByRole("heading", { name: "Log in to Linear" }),
+    ).toBeNull();
     expect(
       screen.getByPlaceholderText("Enter your email address…"),
     ).toBeDefined();
-    expect(screen.getByText("Back to login")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Back to login" })).toBeDefined();
     expect(screen.queryByText("Back to login options")).toBeNull();
   });
 
