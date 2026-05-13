@@ -63,7 +63,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
   }
 
-  const body = await request.json();
+  let body: { name?: unknown; description?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
   const name = `${body.name ?? ""}`.trim();
   const description =
     typeof body.description === "string" && body.description.trim()

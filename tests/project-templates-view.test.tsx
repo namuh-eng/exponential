@@ -43,6 +43,19 @@ describe("ProjectTemplatesPage component", () => {
     );
   });
 
+  it("shows a load error when templates cannot be fetched", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: "boom" }),
+    });
+
+    render(<ProjectTemplatesPage />);
+
+    expect(
+      await screen.findByText("Unable to load project templates."),
+    ).toBeInTheDocument();
+  });
+
   it("opens a creation dialog from the empty-state CTA", async () => {
     render(<ProjectTemplatesPage />);
 
@@ -99,5 +112,28 @@ describe("ProjectTemplatesPage component", () => {
       "/api/project-templates",
       expect.objectContaining({ method: "POST" }),
     );
+  });
+  it("keeps the dialog open and shows an error when saving fails", async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ templates: [] }),
+      })
+      .mockRejectedValueOnce(new Error("offline"));
+
+    render(<ProjectTemplatesPage />);
+
+    fireEvent.click(await screen.findByText("Create project template"));
+    fireEvent.change(screen.getByLabelText("Template name"), {
+      target: { value: "Launch plan" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save template" }));
+
+    expect(
+      await screen.findByText("Failed to create project template."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Create project template" }),
+    ).toBeInTheDocument();
   });
 });

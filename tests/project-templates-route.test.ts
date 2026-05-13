@@ -100,6 +100,20 @@ describe("project templates route", () => {
     });
   });
 
+  it("returns 400 for malformed JSON", async () => {
+    const { POST } = await import("@/app/api/project-templates/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/project-templates", {
+        method: "POST",
+        body: "{not-json",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid JSON" });
+  });
+
   it("creates a project template", async () => {
     const { POST } = await import("@/app/api/project-templates/route");
 

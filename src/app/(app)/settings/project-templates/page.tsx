@@ -17,6 +17,7 @@ export default function ProjectTemplatesPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -31,6 +32,10 @@ export default function ProjectTemplatesPage() {
         const payload = await response.json();
         if (!cancelled) {
           setTemplates(payload.templates ?? []);
+        }
+      } catch {
+        if (!cancelled) {
+          setLoadError("Unable to load project templates.");
         }
       } finally {
         if (!cancelled) {
@@ -63,7 +68,7 @@ export default function ProjectTemplatesPage() {
         body: JSON.stringify({ name: trimmedName, description }),
       });
 
-      const payload = await response.json();
+      const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         setError(payload.error ?? "Failed to create project template.");
         return;
@@ -73,6 +78,8 @@ export default function ProjectTemplatesPage() {
       setDialogOpen(false);
       setName("");
       setDescription("");
+    } catch {
+      setError("Failed to create project template.");
     } finally {
       setSaving(false);
     }
@@ -82,6 +89,10 @@ export default function ProjectTemplatesPage() {
     return (
       <div className="p-8 text-[var(--color-text-tertiary)]">Loading...</div>
     );
+  }
+
+  if (loadError) {
+    return <div className="p-8 text-[13px] text-red-400">{loadError}</div>;
   }
 
   return (
@@ -177,7 +188,12 @@ export default function ProjectTemplatesPage() {
               <button
                 className="rounded-md px-4 py-[8px] text-[13px] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-secondary)]"
                 type="button"
-                onClick={() => setDialogOpen(false)}
+                onClick={() => {
+                  setDialogOpen(false);
+                  setError("");
+                  setName("");
+                  setDescription("");
+                }}
               >
                 Cancel
               </button>
