@@ -593,6 +593,10 @@ describe("AppShell", () => {
     expect(
       screen.queryByLabelText("Create issue fullscreen for Eng"),
     ).not.toBeInTheDocument();
+    expect(screen.getByTestId("create-issue-composer")).toHaveAttribute(
+      "data-variant",
+      "modal",
+    );
   });
 
   it("opens the fullscreen create issue composer when the fullscreen command event fires", async () => {
@@ -641,5 +645,9 @@ describe("AppShell", () => {
       ).toBeInTheDocument();
     });
     expect(screen.getByText("Fullscreen composer")).toBeInTheDocument();
+    expect(screen.getByTestId("create-issue-composer")).toHaveAttribute(
+      "data-variant",
+      "fullscreen",
+    );
   });
 });
