@@ -1,7 +1,7 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issue, workflowState } from "@/lib/db/schema";
-import { getTeamIdByKey } from "@/lib/teams";
+import { findAccessibleTeam } from "@/lib/teams";
 import { and, asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -10,7 +10,7 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ key: string; issueId: string }> },
 ) {
-  const { response } = await requireApiSession();
+  const { response, session } = await requireApiSession();
   if (response) {
     return response;
   }
@@ -19,8 +19,10 @@ export async function PATCH(
   const body = await request.json();
   const action = body.action as "accept" | "decline";
 
-  const teamId = await getTeamIdByKey(key);
-  if (!teamId) {
+  const teamRecord = await findAccessibleTeam(key, session.user.id, {
+    request,
+  });
+  if (!teamRecord) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
@@ -31,7 +33,7 @@ export async function PATCH(
       .from(workflowState)
       .where(
         and(
-          eq(workflowState.teamId, teamId),
+          eq(workflowState.teamId, teamRecord.id),
           eq(workflowState.category, "backlog"),
         ),
       )
@@ -48,8 +50,12 @@ export async function PATCH(
     const updated = await db
       .update(issue)
       .set({ stateId: backlogStates[0].id, updatedAt: new Date() })
-      .where(eq(issue.id, issueId))
+      .where(and(eq(issue.id, issueId), eq(issue.teamId, teamRecord.id)))
       .returning();
+
+    if (updated.length === 0) {
+      return NextResponse.json({ error: "Issue not found" }, { status: 404 });
+    }
 
     return NextResponse.json(updated[0]);
   }
@@ -61,7 +67,7 @@ export async function PATCH(
       .from(workflowState)
       .where(
         and(
-          eq(workflowState.teamId, teamId),
+          eq(workflowState.teamId, teamRecord.id),
           eq(workflowState.category, "canceled"),
         ),
       )
@@ -82,8 +88,12 @@ export async function PATCH(
         canceledAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(issue.id, issueId))
+      .where(and(eq(issue.id, issueId), eq(issue.teamId, teamRecord.id)))
       .returning();
+
+    if (updated.length === 0) {
+      return NextResponse.json({ error: "Issue not found" }, { status: 404 });
+    }
 
     return NextResponse.json(updated[0]);
   }

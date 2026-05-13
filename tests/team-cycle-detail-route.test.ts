@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getSessionMock = vi.fn();
-const getTeamByKeyMock = vi.fn();
-const getTeamIdByKeyMock = vi.fn();
+const findAccessibleTeamMock = vi.fn();
 const cycleLimitMock = vi.fn();
 const statesOrderByMock = vi.fn();
 const issuesOrderByMock = vi.fn();
@@ -24,8 +23,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/teams", () => ({
-  getTeamByKey: getTeamByKeyMock,
-  getTeamIdByKey: getTeamIdByKeyMock,
+  findAccessibleTeam: findAccessibleTeamMock,
 }));
 
 vi.mock("@/lib/issue-labels", () => ({
@@ -75,20 +73,26 @@ vi.mock("@/lib/db", () => ({
         };
       }
 
+      const cycleRows = [
+        {
+          id: "cycle-1",
+          startDate: new Date("2026-04-01T00:00:00.000Z"),
+          endDate: new Date("2026-04-14T00:00:00.000Z"),
+        },
+        {
+          id: "cycle-2",
+          startDate: new Date("2026-04-20T00:00:00.000Z"),
+          endDate: new Date("2026-05-03T00:00:00.000Z"),
+        },
+      ];
+
       return {
         from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue([
-            {
-              id: "cycle-1",
-              startDate: new Date("2026-04-01T00:00:00.000Z"),
-              endDate: new Date("2026-04-14T00:00:00.000Z"),
-            },
-            {
-              id: "cycle-2",
-              startDate: new Date("2026-04-20T00:00:00.000Z"),
-              endDate: new Date("2026-05-03T00:00:00.000Z"),
-            },
-          ]),
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue([cycleRows[0]]),
+            // biome-ignore lint/suspicious/noThenProperty: mimic Drizzle thenable query builders in route tests
+            then: (resolve: (value: unknown) => void) => resolve(cycleRows),
+          }),
         }),
       };
     }),
@@ -151,12 +155,12 @@ describe("team cycle detail route", () => {
     getSessionMock.mockResolvedValue({
       user: { id: "user-1" },
     });
-    getTeamByKeyMock.mockResolvedValue({
+    findAccessibleTeamMock.mockResolvedValue({
       id: "team-1",
-      key: "ENG",
       name: "Engineering",
+      key: "ENG",
+      workspaceId: "workspace-1",
     });
-    getTeamIdByKeyMock.mockResolvedValue("team-1");
     cycleLimitMock.mockResolvedValue([
       {
         id: "cycle-1",
