@@ -47,6 +47,54 @@ describe("Login page", () => {
     expect(screen.getByText("Continue with email")).toBeDefined();
   });
 
+  it("matches Linear's login auth method surface", () => {
+    render(<LoginPage />);
+
+    expect(
+      screen.getByRole("button", { name: /Continue with Google/i }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: /Continue with email/i }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: /Log in with passkey/i }),
+    ).toBeDefined();
+  });
+
+  it("opens a SAML SSO workspace entry step from the login chooser", () => {
+    render(<LoginPage />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
+    );
+
+    expect(screen.getByText("Single sign-on")).toBeDefined();
+    expect(
+      screen.getByPlaceholderText("name@company.com or workspace URL"),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Continue with SSO" }),
+    ).toBeDefined();
+    expect(screen.getByText("Back to login options")).toBeDefined();
+  });
+
+  it("reports passkey login as an unavailable configured auth path without throwing", () => {
+    render(<LoginPage />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Log in with passkey/i }),
+    );
+
+    expect(
+      screen.getByText(
+        "Passkey login isn't configured for this workspace yet.",
+      ),
+    ).toBeDefined();
+  });
+
   it("calls signIn.social with google provider on Google click", () => {
     render(<LoginPage />);
     fireEvent.click(screen.getByText("Continue with Google"));

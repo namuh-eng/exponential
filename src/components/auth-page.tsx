@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type AuthMode = "login" | "signup";
-type LoginStep = "choose" | "email-input" | "email-code";
+type LoginStep = "choose" | "email-input" | "email-code" | "sso-input";
 
 const authErrorMessages: Record<string, string> = {
   INVALID_TOKEN:
@@ -142,6 +142,7 @@ function FooterLinks({ mode }: { mode: AuthMode }) {
 export function AuthPage({ mode }: { mode: AuthMode }) {
   const [step, setStep] = useState<LoginStep>("choose");
   const [email, setEmail] = useState("");
+  const [ssoIdentifier, setSsoIdentifier] = useState("");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -213,12 +214,25 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     window.location.assign(verifyUrl.toString());
   }
 
+  function handleSsoSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!ssoIdentifier.trim()) return;
+
+    setError("SAML SSO isn't configured for this workspace yet.");
+  }
+
+  function handlePasskeyLogin() {
+    setError("Passkey login isn't configured for this workspace yet.");
+  }
+
   const title =
-    mode === "signup" && step === "email-input"
-      ? "What’s your email address?"
-      : mode === "signup"
-        ? "Create your workspace"
-        : "Log in to Linear";
+    step === "sso-input"
+      ? "Single sign-on"
+      : mode === "signup" && step === "email-input"
+        ? "What’s your email address?"
+        : mode === "signup"
+          ? "Create your workspace"
+          : "Log in to Linear";
   const backLabel =
     mode === "signup" ? "Back to signup" : "Back to login options";
 
@@ -291,6 +305,63 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               Continue with email
             </button>
 
+            {mode === "login" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep("sso-input");
+                    setError("");
+                  }}
+                  disabled={loading}
+                  className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    role="img"
+                    aria-label="SAML"
+                  >
+                    <path d="M4 7h16" />
+                    <path d="M7 11h10" />
+                    <path d="M9 15h6" />
+                    <path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" />
+                  </svg>
+                  Continue with SAML SSO
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePasskeyLogin}
+                  disabled={loading}
+                  className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    role="img"
+                    aria-label="Passkey"
+                  >
+                    <path d="M10 13a5 5 0 1 1 3.54 1.46L12 16h-2v2H8v2H5v-3l4.54-4.54A5 5 0 0 1 10 13Z" />
+                    <path d="M15 9h.01" />
+                  </svg>
+                  Log in with passkey
+                </button>
+              </>
+            )}
+
             {error && (
               <p className="pt-1 text-center text-sm text-[var(--auth-error)]">
                 {error}
@@ -325,6 +396,49 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 setStep("choose");
                 setError("");
                 setCode("");
+              }}
+              className="w-full pt-1 text-center text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
+            >
+              {backLabel}
+            </button>
+            {error && (
+              <p className="text-center text-sm text-[var(--auth-error)]">
+                {error}
+              </p>
+            )}
+          </form>
+        )}
+
+        {step === "sso-input" && (
+          <form onSubmit={handleSsoSubmit} className="space-y-3">
+            <p className="text-center text-[14px] leading-6 text-[var(--auth-muted)]">
+              Enter your work email or workspace URL to continue with your
+              organization&apos;s SSO.
+            </p>
+            <input
+              type="text"
+              value={ssoIdentifier}
+              onChange={(e) => {
+                setSsoIdentifier(e.target.value);
+                setError("");
+              }}
+              placeholder="name@company.com or workspace URL"
+              required
+              className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none transition-colors"
+            />
+            <button
+              type="submit"
+              disabled={!ssoIdentifier.trim()}
+              className="auth-primary-button flex h-11 w-full items-center justify-center rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Continue with SSO
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStep("choose");
+                setSsoIdentifier("");
+                setError("");
               }}
               className="w-full pt-1 text-center text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
             >
