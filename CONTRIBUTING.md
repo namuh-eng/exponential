@@ -55,8 +55,11 @@ cp .env.example .env
 ```bash
 # Terminal 1: PostgreSQL + Redis
 make dev-services
+# If Docker/socket access is denied, start/use host Postgres and Redis,
+# set DATABASE_URL/REDIS_URL in .env.local, then run npm run db:push.
 
 # Terminal 2: Next.js dev server
+# Dev startup preflights Postgres and exits before binding on setup failure.
 npm run dev
 ```
 

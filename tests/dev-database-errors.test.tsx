@@ -1,8 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const getSessionMock = vi.fn();
+const dbSelectMock = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: {
@@ -13,7 +14,9 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/db", () => ({
-  db: {},
+  db: {
+    select: dbSelectMock,
+  },
 }));
 
 vi.mock("@/lib/approved-domain-auto-join", () => ({
@@ -42,6 +45,7 @@ vi.mock("@/app/(app)/app-shell", () => ({
 
 describe("dev database outage handling", () => {
   afterEach(() => {
+    cleanup();
     vi.clearAllMocks();
     vi.resetModules();
   });
@@ -64,6 +68,27 @@ describe("dev database outage handling", () => {
     expect(screen.getByText(/make dev-services/)).toBeInTheDocument();
     expect(screen.getByText(/npm run db:push/)).toBeInTheDocument();
     expect(screen.queryByText("settings page")).not.toBeInTheDocument();
+  });
+
+  it("renders the setup error when a cached session exists but workspace lookup cannot reach Postgres", async () => {
+    getSessionMock.mockResolvedValue({
+      user: { id: "user-1", email: "user@example.com" },
+    });
+    dbSelectMock.mockImplementation(() => {
+      throw Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:5432"), {
+        code: "ECONNREFUSED",
+      });
+    });
+
+    const { default: AppLayout } = await import("@/app/(app)/layout");
+    const ui = await AppLayout({ children: <div>settings page</div> });
+
+    render(ui);
+
+    expect(
+      screen.getByText("Local database is unavailable"),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("app-shell")).not.toBeInTheDocument();
   });
 
   it("classifies common Postgres connection failures as database bootstrap errors", async () => {

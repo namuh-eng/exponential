@@ -60,6 +60,9 @@ function redact(url) {
 }
 
 if (process.env.SKIP_DB_PREFLIGHT === "true") {
+  console.warn(
+    "SKIP_DB_PREFLIGHT=true: skipping the dev Postgres preflight. Protected routes and Playwright setup still require a working database and will show setup errors if Postgres is unavailable.",
+  );
   process.exit(0);
 }
 
@@ -83,7 +86,10 @@ try {
   console.error("  make dev-services");
   console.error("  npm run db:push");
   console.error(
-    "\nSet DATABASE_URL in .env.local for a custom Postgres, or set SKIP_DB_PREFLIGHT=true to bypass this check.",
+    "\nIf Docker is unavailable, start/use a host Postgres instead, set DATABASE_URL in .env.local, then run npm run db:push.",
+  );
+  console.error(
+    "Only set SKIP_DB_PREFLIGHT=true when intentionally debugging non-database routes; it can leave the authenticated app half-working.",
   );
   console.error(`\nPostgres error: ${error.message}\n`);
   process.exit(1);

@@ -51,6 +51,8 @@ npm install
 
 # Start infrastructure services (PostgreSQL + Redis)
 make dev-services
+# If Docker/socket access is unavailable, start a host Postgres instead,
+# set DATABASE_URL in .env.local, and continue with npm run db:push.
 
 # Configure environment
 cp .env.example .env
