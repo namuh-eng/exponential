@@ -1,11 +1,12 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { member, team, workspace } from "@/lib/db/schema";
-import { and, eq } from "drizzle-orm";
+import { team, workspace } from "@/lib/db/schema";
+import { findAccessibleTeam } from "@/lib/teams";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ key: string }> },
 ) {
   const { response: authResponse, session } = await requireApiSession();
@@ -15,30 +16,33 @@ export async function GET(
 
   const { key } = await params;
 
-  const [context] = await db
+  const teamRecord = await findAccessibleTeam(key, session.user.id, {
+    request,
+  });
+  if (!teamRecord) {
+    return NextResponse.json({ error: "Team not found" }, { status: 404 });
+  }
+
+  const [workspaceRecord] = await db
     .select({
       workspaceName: workspace.name,
       workspaceSlug: workspace.urlSlug,
       workspaceId: workspace.id,
-      teamId: team.id,
-      teamName: team.name,
-      teamKey: team.key,
     })
-    .from(team)
-    .innerJoin(workspace, eq(team.workspaceId, workspace.id))
-    .innerJoin(
-      member,
-      and(
-        eq(member.workspaceId, workspace.id),
-        eq(member.userId, session.user.id),
-      ),
-    )
-    .where(eq(team.key, key))
+    .from(workspace)
+    .where(eq(workspace.id, teamRecord.workspaceId))
     .limit(1);
 
-  if (!context) {
+  if (!workspaceRecord) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
+
+  const context = {
+    ...workspaceRecord,
+    teamId: teamRecord.id,
+    teamName: teamRecord.name,
+    teamKey: teamRecord.key,
+  };
 
   const teams = await db
     .select({ id: team.id, name: team.name, key: team.key })

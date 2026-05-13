@@ -2,12 +2,12 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { cycle, issue, project, user, workflowState } from "@/lib/db/schema";
 import { getLabelsForIssues } from "@/lib/issue-labels";
-import { getTeamByKey } from "@/lib/teams";
+import { findAccessibleTeam } from "@/lib/teams";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ key: string }> },
 ) {
   const { response: authResponse, session } = await requireApiSession();
@@ -17,7 +17,9 @@ export async function GET(
 
   const { key } = await params;
 
-  const teamRecord = await getTeamByKey(key);
+  const teamRecord = await findAccessibleTeam(key, session.user.id, {
+    request,
+  });
   if (!teamRecord) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }

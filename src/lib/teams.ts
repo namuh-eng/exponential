@@ -1,8 +1,13 @@
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { db } from "@/lib/db";
-import { member, team } from "@/lib/db/schema";
+import { member, team, workspace } from "@/lib/db/schema";
+import { getWorkspaceSlugFromPath } from "@/lib/workspace-paths";
 import { and, eq } from "drizzle-orm";
 
+/**
+ * @deprecated This resolves team keys globally. Do not use for authenticated
+ * team pages or APIs; use findAccessibleTeam instead.
+ */
 export async function getTeamByKey(
   key: string,
 ): Promise<{ id: string; name: string; key: string } | null> {
@@ -14,6 +19,10 @@ export async function getTeamByKey(
   return teams[0] ?? null;
 }
 
+/**
+ * @deprecated This resolves team keys globally. Do not use for authenticated
+ * team pages or APIs; use findAccessibleTeam instead.
+ */
 export async function getTeamIdByKey(key: string): Promise<string | null> {
   const t = await getTeamByKey(key);
   return t?.id ?? null;
@@ -31,8 +40,55 @@ export async function getWorkspaceMember(
   return row ?? null;
 }
 
-export async function findAccessibleTeam(key: string, userId: string) {
-  const workspaceId = await resolveActiveWorkspaceId(userId);
+function getRequestedWorkspaceSlug(request?: Request) {
+  const explicitSlug = request?.headers.get("x-workspace-slug");
+  if (explicitSlug) return explicitSlug;
+
+  const sourcePath = request?.headers.get("x-workspace-source-path");
+  const slugFromSourcePath = sourcePath
+    ? getWorkspaceSlugFromPath(sourcePath)
+    : null;
+  if (slugFromSourcePath) return slugFromSourcePath;
+
+  const referer = request?.headers.get("referer");
+  if (!referer) return null;
+
+  try {
+    return getWorkspaceSlugFromPath(new URL(referer).pathname);
+  } catch {
+    return null;
+  }
+}
+
+async function resolveAccessibleWorkspaceId(userId: string, request?: Request) {
+  const requestedWorkspaceSlug = getRequestedWorkspaceSlug(request);
+
+  if (requestedWorkspaceSlug) {
+    const [requestedWorkspace] = await db
+      .select({ workspaceId: workspace.id })
+      .from(workspace)
+      .innerJoin(
+        member,
+        and(eq(member.workspaceId, workspace.id), eq(member.userId, userId)),
+      )
+      .where(eq(workspace.urlSlug, requestedWorkspaceSlug))
+      .limit(1);
+
+    return requestedWorkspace?.workspaceId ?? null;
+  }
+
+  return resolveActiveWorkspaceId(userId);
+}
+
+export async function findAccessibleTeam(
+  key: string,
+  userId: string,
+  options: { request?: Request } = {},
+) {
+  const workspaceId = await resolveAccessibleWorkspaceId(
+    userId,
+    options.request,
+  );
   if (!workspaceId) return null;
 
   const wsMember = await getWorkspaceMember(workspaceId, userId);

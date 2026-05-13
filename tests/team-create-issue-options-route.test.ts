@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getSessionMock = vi.fn();
-const teamLimitMock = vi.fn();
+const findAccessibleTeamMock = vi.fn();
 const statusesWhereMock = vi.fn();
 const assigneesWhereMock = vi.fn();
 const labelsWhereMock = vi.fn();
@@ -15,20 +15,13 @@ vi.mock("@/lib/auth", () => ({
   },
 }));
 
+vi.mock("@/lib/teams", () => ({
+  findAccessibleTeam: findAccessibleTeamMock,
+}));
+
 vi.mock("@/lib/db", () => ({
   db: {
     select: vi.fn((selection: Record<string, unknown>) => {
-      // primary team lookup
-      if (selection && "workspaceId" in selection) {
-        const chain = {
-          from: vi.fn().mockReturnThis(),
-          innerJoin: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockResolvedValue(teamLimitMock()),
-        };
-        return chain;
-      }
-
       // options parallel list: statuses
       if (selection && "category" in selection) {
         const chain = {
@@ -104,14 +97,12 @@ describe("team create issue options route", () => {
     vi.resetModules();
     vi.clearAllMocks();
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
-    teamLimitMock.mockReturnValue([
-      {
-        id: "team-1",
-        name: "Engineering",
-        key: "ENG",
-        workspaceId: "workspace-1",
-      },
-    ]);
+    findAccessibleTeamMock.mockResolvedValue({
+      id: "team-1",
+      name: "Engineering",
+      key: "ENG",
+      workspaceId: "workspace-1",
+    });
     statusesWhereMock.mockReturnValue([{ id: "state-1", name: "Backlog" }]);
     assigneesWhereMock.mockReturnValue([
       { id: "user-1", name: "Ashley", image: null },
@@ -134,7 +125,7 @@ describe("team create issue options route", () => {
   });
 
   it("returns 404 when team is missing", async () => {
-    teamLimitMock.mockReturnValue([]);
+    findAccessibleTeamMock.mockResolvedValue(null);
     const { GET } = await import(
       "@/app/api/teams/[key]/create-issue-options/route"
     );

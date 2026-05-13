@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getSessionMock = vi.fn();
+const findAccessibleTeamMock = vi.fn();
 const contextLimitMock = vi.fn();
 const teamsWhereMock = vi.fn();
 
@@ -12,19 +13,19 @@ vi.mock("@/lib/auth", () => ({
   },
 }));
 
+vi.mock("@/lib/teams", () => ({
+  findAccessibleTeam: findAccessibleTeamMock,
+}));
+
 vi.mock("@/lib/db", () => ({
   db: {
     select: vi.fn((selection: Record<string, unknown>) => {
-      // Primary context lookup
+      // Workspace lookup
       if (selection && "workspaceName" in selection) {
         return {
           from: vi.fn().mockReturnValue({
-            innerJoin: vi.fn().mockReturnValue({
-              innerJoin: vi.fn().mockReturnValue({
-                where: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue(contextLimitMock()),
-                }),
-              }),
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue(contextLimitMock()),
             }),
           }),
         };
@@ -49,13 +50,17 @@ describe("team context route", () => {
     vi.resetModules();
     vi.clearAllMocks();
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
+    findAccessibleTeamMock.mockResolvedValue({
+      id: "team-1",
+      workspaceId: "workspace-1",
+      name: "Engineering",
+      key: "ENG",
+    });
     contextLimitMock.mockReturnValue([
       {
         workspaceName: "Namuh Labs",
+        workspaceSlug: "namuh-labs",
         workspaceId: "workspace-1",
-        teamId: "team-1",
-        teamName: "Engineering",
-        teamKey: "ENG",
       },
     ]);
     teamsWhereMock.mockReturnValue([
@@ -75,7 +80,7 @@ describe("team context route", () => {
   });
 
   it("returns 404 when team is not found", async () => {
-    contextLimitMock.mockReturnValue([]);
+    findAccessibleTeamMock.mockResolvedValue(null);
     const { GET } = await import("@/app/api/teams/[key]/context/route");
 
     const response = await GET(new Request("http://localhost"), {
