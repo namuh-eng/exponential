@@ -3,6 +3,7 @@
 import { CycleRow } from "@/components/cycle-row";
 import { CycleSection } from "@/components/cycle-section";
 import { EmptyState } from "@/components/empty-state";
+import { TeamRouteErrorState } from "@/components/team-route-error-state";
 import { categorizeCycles, getDateInputValue } from "@/lib/cycle-utils";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -79,18 +80,28 @@ export default function TeamCyclesPage() {
   const params = useParams<{ key: string }>();
   const [data, setData] = useState<CyclesResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadState, setLoadState] = useState<"ready" | "not-found" | "error">(
+    "ready",
+  );
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
   const fetchCycles = useCallback(async () => {
+    setLoading(true);
     try {
       const res = await fetch(`/api/teams/${params.key}/cycles`);
       if (res.ok) {
         const json = await res.json();
         setData(json);
-      } else {
-        setData(null);
+        setLoadState("ready");
+        return;
       }
+
+      setData(null);
+      setLoadState(res.status === 404 ? "not-found" : "error");
+    } catch {
+      setData(null);
+      setLoadState("error");
     } finally {
       setLoading(false);
     }
@@ -137,7 +148,27 @@ export default function TeamCyclesPage() {
     );
   }
 
-  if (!data || data.cycles.length === 0) {
+  if (loadState !== "ready") {
+    return (
+      <TeamRouteErrorState
+        teamKey={params.key}
+        variant={loadState}
+        onRetry={loadState === "error" ? fetchCycles : undefined}
+      />
+    );
+  }
+
+  if (!data) {
+    return (
+      <TeamRouteErrorState
+        teamKey={params.key}
+        variant="error"
+        onRetry={fetchCycles}
+      />
+    );
+  }
+
+  if (data.cycles.length === 0) {
     return (
       <div className="flex h-full flex-col">
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2">

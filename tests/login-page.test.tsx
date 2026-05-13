@@ -42,9 +42,57 @@ describe("Login page", () => {
     expect(screen.getByText("Continue with Google")).toBeDefined();
   });
 
-  it("shows Continue with Email button", () => {
+  it("shows Continue with email button", () => {
     render(<LoginPage />);
-    expect(screen.getByText("Continue with Email")).toBeDefined();
+    expect(screen.getByText("Continue with email")).toBeDefined();
+  });
+
+  it("matches Linear's login auth method surface", () => {
+    render(<LoginPage />);
+
+    expect(
+      screen.getByRole("button", { name: /Continue with Google/i }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: /Continue with email/i }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: /Log in with passkey/i }),
+    ).toBeDefined();
+  });
+
+  it("opens a SAML SSO workspace entry step from the login chooser", () => {
+    render(<LoginPage />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
+    );
+
+    expect(screen.getByText("Single sign-on")).toBeDefined();
+    expect(
+      screen.getByPlaceholderText("name@company.com or workspace URL"),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Continue with SSO" }),
+    ).toBeDefined();
+    expect(screen.getByText("Back to login options")).toBeDefined();
+  });
+
+  it("reports passkey login as an unavailable configured auth path without throwing", () => {
+    render(<LoginPage />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Log in with passkey/i }),
+    );
+
+    expect(
+      screen.getByText(
+        "Passkey login isn't configured for this workspace yet.",
+      ),
+    ).toBeDefined();
   });
 
   it("calls signIn.social with google provider on Google click", () => {
@@ -66,32 +114,32 @@ describe("Login page", () => {
     });
   });
 
-  it("shows email input after clicking Continue with Email", () => {
+  it("shows email input after clicking Continue with email", () => {
     render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with Email"));
+    fireEvent.click(screen.getByText("Continue with email"));
     expect(
-      screen.getByPlaceholderText("Enter your email address..."),
+      screen.getByPlaceholderText("Enter your email address…"),
     ).toBeDefined();
   });
 
   it("shows back button in email step", () => {
     render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with Email"));
+    fireEvent.click(screen.getByText("Continue with email"));
     expect(screen.getByText("Back to login options")).toBeDefined();
   });
 
   it("returns to choose step when clicking back", () => {
     render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with Email"));
+    fireEvent.click(screen.getByText("Continue with email"));
     fireEvent.click(screen.getByText("Back to login options"));
     expect(screen.getByText("Continue with Google")).toBeDefined();
   });
 
   it("shows email-sent step after submitting email", async () => {
     render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with Email"));
+    fireEvent.click(screen.getByText("Continue with email"));
 
-    const input = screen.getByPlaceholderText("Enter your email address...");
+    const input = screen.getByPlaceholderText("Enter your email address…");
     fireEvent.change(input, { target: { value: "test@example.com" } });
 
     const form = input.closest("form") as HTMLFormElement;
@@ -112,9 +160,9 @@ describe("Login page", () => {
   it("preserves callbackUrl when requesting a magic link", async () => {
     mockLocation.search = "?callbackUrl=%2Fteam%2FABC%2Fboard";
     render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with Email"));
+    fireEvent.click(screen.getByText("Continue with email"));
 
-    const input = screen.getByPlaceholderText("Enter your email address...");
+    const input = screen.getByPlaceholderText("Enter your email address…");
     fireEvent.change(input, { target: { value: "test@example.com" } });
     fireEvent.submit(input.closest("form") as HTMLFormElement);
 
@@ -132,9 +180,9 @@ describe("Login page", () => {
     mockLocation.search =
       "?callbackUrl=%2Faccept-invite%3Ftoken%3Dsigned-token";
     render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with Email"));
+    fireEvent.click(screen.getByText("Continue with email"));
 
-    const input = screen.getByPlaceholderText("Enter your email address...");
+    const input = screen.getByPlaceholderText("Enter your email address…");
     fireEvent.change(input, { target: { value: "invitee@example.com" } });
     fireEvent.submit(input.closest("form") as HTMLFormElement);
 
@@ -163,9 +211,9 @@ describe("Login page", () => {
   it("shows error when magic link fails", async () => {
     vi.mocked(signIn.magicLink).mockRejectedValueOnce(new Error("fail"));
     render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with Email"));
+    fireEvent.click(screen.getByText("Continue with email"));
 
-    const input = screen.getByPlaceholderText("Enter your email address...");
+    const input = screen.getByPlaceholderText("Enter your email address…");
     fireEvent.change(input, { target: { value: "bad@example.com" } });
     fireEvent.submit(input.closest("form") as HTMLFormElement);
 
@@ -178,9 +226,9 @@ describe("Login page", () => {
 
   it("allows returning from email-sent to choose step", async () => {
     render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with Email"));
+    fireEvent.click(screen.getByText("Continue with email"));
 
-    const input = screen.getByPlaceholderText("Enter your email address...");
+    const input = screen.getByPlaceholderText("Enter your email address…");
     fireEvent.change(input, { target: { value: "test@example.com" } });
     fireEvent.submit(input.closest("form") as HTMLFormElement);
 
@@ -194,9 +242,9 @@ describe("Login page", () => {
 
   it("displays the submitted email in confirmation", async () => {
     render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with Email"));
+    fireEvent.click(screen.getByText("Continue with email"));
 
-    const input = screen.getByPlaceholderText("Enter your email address...");
+    const input = screen.getByPlaceholderText("Enter your email address…");
     fireEvent.change(input, { target: { value: "hello@linear.app" } });
     fireEvent.submit(input.closest("form") as HTMLFormElement);
 
@@ -207,11 +255,9 @@ describe("Login page", () => {
 
   it("navigates to magic-link verification when a valid code is submitted", async () => {
     render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with Email"));
+    fireEvent.click(screen.getByText("Continue with email"));
 
-    const emailInput = screen.getByPlaceholderText(
-      "Enter your email address...",
-    );
+    const emailInput = screen.getByPlaceholderText("Enter your email address…");
     fireEvent.change(emailInput, { target: { value: "test@example.com" } });
     fireEvent.submit(emailInput.closest("form") as HTMLFormElement);
 
@@ -231,11 +277,9 @@ describe("Login page", () => {
   it("preserves callbackUrl when verifying a valid code", async () => {
     mockLocation.search = "?callbackUrl=%2Fteam%2FABC%2Fboard";
     render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with Email"));
+    fireEvent.click(screen.getByText("Continue with email"));
 
-    const emailInput = screen.getByPlaceholderText(
-      "Enter your email address...",
-    );
+    const emailInput = screen.getByPlaceholderText("Enter your email address…");
     fireEvent.change(emailInput, { target: { value: "test@example.com" } });
     fireEvent.submit(emailInput.closest("form") as HTMLFormElement);
 
@@ -256,11 +300,9 @@ describe("Login page", () => {
     mockLocation.search =
       "?callbackUrl=%2Faccept-invite%3Ftoken%3Dsigned-token";
     render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with Email"));
+    fireEvent.click(screen.getByText("Continue with email"));
 
-    const emailInput = screen.getByPlaceholderText(
-      "Enter your email address...",
-    );
+    const emailInput = screen.getByPlaceholderText("Enter your email address…");
     fireEvent.change(emailInput, { target: { value: "invitee@example.com" } });
     fireEvent.submit(emailInput.closest("form") as HTMLFormElement);
 
@@ -284,5 +326,25 @@ describe("Login page", () => {
     expect(screen.getByText("Log in")).toBeDefined();
     expect(screen.getByText("Terms of Service")).toBeDefined();
     expect(screen.getByText("Data Processing Agreement")).toBeDefined();
+  });
+
+  it("matches Linear's focused signup email step", () => {
+    const { container } = render(<SignupPage />);
+
+    fireEvent.click(screen.getByText("Continue with email"));
+
+    expect(screen.getByText("What’s your email address?")).toBeDefined();
+    expect(
+      screen.getByPlaceholderText("Enter your email address…"),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Continue with email" }),
+    ).toBeDefined();
+    expect(screen.getByText("Back to signup")).toBeDefined();
+    expect(screen.queryByText("Already have an account?")).toBeNull();
+    expect(screen.queryByText("Terms of Service")).toBeNull();
+    expect(
+      container.querySelector('input[name="cf-turnstile-response"]'),
+    ).toBeDefined();
   });
 });

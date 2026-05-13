@@ -130,4 +130,25 @@ describe("TeamIssuesPage UI", () => {
 
     expect(pushMock).toHaveBeenCalledWith("/team/ENG/board");
   });
+
+  it("shows team not found instead of the empty issue state for invalid team keys", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({ error: "Team not found" }),
+    } as Response);
+
+    render(<TeamIssuesPage />);
+
+    expect(await screen.findByText("Team not found")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The team ENG doesn't exist or you don't have access to it.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("No issues")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Create issue" }),
+    ).not.toBeInTheDocument();
+  });
 });
