@@ -1,31 +1,53 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type SecuritySession = {
   id: string;
   isCurrent: boolean;
   userAgent: string | null;
   ipAddress: string | null;
+  source: string;
+  location: string;
   createdAt: string;
   updatedAt: string;
   expiresAt: string;
 };
 
-type SignInProvider = {
+type PersonalApiKey = {
   id: string;
-  providerId: string;
-  accountId: string;
+  name: string;
+  keyPrefix: string;
+  workspaceName: string;
   createdAt: string;
-  updatedAt: string;
+  lastUsedAt: string | null;
+};
+
+type AuthorizedApplication = {
+  id: string;
+  name: string;
+  clientId: string;
+  scopes: string[];
+  createdAt: string;
 };
 
 type AccountSecurityState = {
   sessions: SecuritySession[];
-  providers: SignInProvider[];
+  passkeys: [];
+  apiKeys: PersonalApiKey[];
+  authorizedApplications: AuthorizedApplication[];
+  canCreateApiKeys: boolean;
+  activeWorkspace: { id: string; name: string } | null;
 };
 
-function formatDate(value: string) {
+type MutationResponse = AccountSecurityState & {
+  createdApiKey?: { label: string; token: string };
+};
+
+function formatDate(value: string | null) {
+  if (!value) {
+    return "Never";
+  }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return "Unknown";
@@ -37,210 +59,484 @@ function formatDate(value: string) {
   }).format(date);
 }
 
-function formatProviderName(providerId: string) {
-  if (providerId === "credential") {
-    return "Email and password";
-  }
-
-  if (providerId === "magic-link") {
-    return "Magic link";
-  }
-
-  return providerId
-    .split(/[-_]/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 function deviceLabel(session: SecuritySession) {
-  if (!session.userAgent) {
-    return "Unknown device";
-  }
-
-  if (/mobile|android|iphone|ipad/i.test(session.userAgent)) {
+  const userAgent = session.userAgent ?? "";
+  if (/mobile|android|iphone|ipad/i.test(userAgent)) {
     return "Mobile device";
   }
+  if (/macintosh|windows|linux|chrome|firefox|safari/i.test(userAgent)) {
+    return "Browser session";
+  }
+  return "Unknown device";
+}
 
-  return "Browser session";
+function Section({
+  title,
+  description,
+  action,
+  children,
+}: {
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-[15px] font-medium text-[var(--color-text-primary)]">
+            {title}
+          </h2>
+          <p className="mt-2 text-[13px] text-[var(--color-text-secondary)]">
+            {description}
+          </p>
+        </div>
+        {action}
+      </div>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
+function SmallButton({
+  children,
+  onClick,
+  disabled,
+  tone = "default",
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  tone?: "default" | "danger";
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50 ${
+        tone === "danger" ? "text-red-600" : "text-[var(--color-text-primary)]"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function EmptyState({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-dashed border-[var(--color-border)] p-4 text-[13px] text-[var(--color-text-tertiary)]">
+      {children}
+    </div>
+  );
 }
 
 export default function AccountSecurityPage() {
   const [securityState, setSecurityState] =
     useState<AccountSecurityState | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(
+    null,
+  );
+  const [apiKeyName, setApiKeyName] = useState("Personal automation");
+  const [revealedApiKey, setRevealedApiKey] = useState<{
+    label: string;
+    token: string;
+  } | null>(null);
+
+  const loadSecurityState = useCallback(async (signal?: AbortSignal) => {
+    const response = await fetch("/api/account/security", { signal });
+    const data = (await response.json().catch(() => null)) as
+      | (Partial<AccountSecurityState> & { error?: string })
+      | null;
+
+    if (!response.ok || !data) {
+      throw new Error(
+        data?.error ?? "Unable to load account security information.",
+      );
+    }
+
+    setSecurityState({
+      sessions: Array.isArray(data.sessions) ? data.sessions : [],
+      passkeys: [],
+      apiKeys: Array.isArray(data.apiKeys) ? data.apiKeys : [],
+      authorizedApplications: Array.isArray(data.authorizedApplications)
+        ? data.authorizedApplications
+        : [],
+      canCreateApiKeys: Boolean(data.canCreateApiKeys),
+      activeWorkspace: data.activeWorkspace ?? null,
+    });
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
 
-    async function loadSecurityState() {
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await fetch("/api/account/security", {
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error("Unable to load account security information.");
-        }
-
-        const data = (await response.json()) as AccountSecurityState;
-        setSecurityState({
-          sessions: Array.isArray(data.sessions) ? data.sessions : [],
-          providers: Array.isArray(data.providers) ? data.providers : [],
-        });
-      } catch (err) {
+    loadSecurityState(controller.signal)
+      .catch((err: Error) => {
         if (err instanceof DOMException && err.name === "AbortError") {
           return;
         }
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Unable to load account security information.",
-        );
-      } finally {
+        setError(err.message);
+      })
+      .finally(() => {
         if (!controller.signal.aborted) {
           setLoading(false);
         }
-      }
-    }
-
-    loadSecurityState();
+      });
 
     return () => controller.abort();
-  }, []);
+  }, [loadSecurityState]);
 
-  return (
-    <div className="max-w-[720px]">
-      <h1 className="text-[28px] font-semibold text-[var(--color-text-primary)]">
-        Account security
-      </h1>
-      <p className="mt-3 text-[14px] text-[var(--color-text-secondary)]">
-        Manage your password, two-factor authentication, and active sessions.
-      </p>
+  async function mutate(
+    action: Record<string, unknown>,
+    successMessage: string,
+  ) {
+    setSaving(true);
+    setError(null);
+    setStatus(null);
 
-      {loading ? (
+    try {
+      const response = await fetch("/api/account/security", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(action),
+      });
+      const data = (await response.json().catch(() => null)) as
+        | (MutationResponse & { error?: string })
+        | null;
+
+      if (!response.ok || !data) {
+        setError(data?.error ?? "Unable to update account security.");
+        return false;
+      }
+
+      setSecurityState({
+        sessions: data.sessions,
+        passkeys: [],
+        apiKeys: data.apiKeys,
+        authorizedApplications: data.authorizedApplications,
+        canCreateApiKeys: data.canCreateApiKeys,
+        activeWorkspace: data.activeWorkspace,
+      });
+      setRevealedApiKey(data.createdApiKey ?? null);
+      setStatus(successMessage);
+      return true;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createApiKey() {
+    const didCreate = await mutate(
+      { action: "createApiKey", name: apiKeyName },
+      "Personal API key created.",
+    );
+    if (didCreate) {
+      setApiKeyName("Personal automation");
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-[720px]">
+        <h1 className="text-[28px] font-semibold text-[var(--color-text-primary)]">
+          Security & access
+        </h1>
         <div className="mt-8 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-[14px] text-[var(--color-text-tertiary)]">
           Loading account security...
         </div>
-      ) : error ? (
+      </div>
+    );
+  }
+
+  if (!securityState) {
+    return (
+      <div className="max-w-[720px]">
+        <h1 className="text-[28px] font-semibold text-[var(--color-text-primary)]">
+          Security & access
+        </h1>
         <div
           className="mt-8 rounded-xl border border-red-500/30 bg-red-500/10 p-5 text-[14px] text-red-600"
           role="alert"
         >
+          {error ?? "Unable to load account security information."}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-[760px]">
+      <h1 className="text-[28px] font-semibold text-[var(--color-text-primary)]">
+        Security & access
+      </h1>
+      <p className="mt-3 text-[14px] text-[var(--color-text-secondary)]">
+        Manage sessions, passkeys, personal API keys, and application access for
+        your account.
+      </p>
+
+      {status ? (
+        <div className="mt-5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-[13px] text-[var(--color-text-primary)]">
+          {status}
+        </div>
+      ) : null}
+      {error ? (
+        <div
+          className="mt-5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[13px] text-red-600"
+          role="alert"
+        >
           {error}
         </div>
-      ) : (
-        <>
-          <div className="mt-8 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-[15px] font-medium text-[var(--color-text-primary)]">
-                  Two-factor authentication
-                </h2>
-                <p className="mt-2 text-[13px] text-[var(--color-text-secondary)]">
-                  Add an extra layer of security to your account by requiring
-                  more than just a sign-in link or provider session.
-                </p>
-              </div>
-              <span className="rounded-full bg-[var(--color-surface-hover)] px-2 py-1 text-[11px] text-[var(--color-text-tertiary)]">
-                Coming soon
-              </span>
-            </div>
-            <button
-              type="button"
-              disabled
-              className="mt-4 cursor-not-allowed rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-tertiary)] opacity-70"
-            >
-              Enable 2FA (coming soon)
-            </button>
+      ) : null}
+      {revealedApiKey ? (
+        <div className="mt-5 rounded-xl border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 px-4 py-3">
+          <div className="text-[13px] font-medium text-[var(--color-text-primary)]">
+            {revealedApiKey.label}
           </div>
+          <div className="mt-1 break-all font-mono text-[12px] text-[var(--color-text-secondary)]">
+            {revealedApiKey.token}
+          </div>
+          <div className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+            Save this token now. It will not be shown again.
+          </div>
+        </div>
+      ) : null}
 
-          <section className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-            <h2 className="text-[15px] font-medium text-[var(--color-text-primary)]">
-              Active sessions
-            </h2>
-            <p className="mt-2 text-[13px] text-[var(--color-text-secondary)]">
-              Devices currently signed in to your account.
-            </p>
-
-            {securityState?.sessions.length ? (
-              <div className="mt-4 divide-y divide-[var(--color-border)]">
-                {securityState.sessions.map((session) => (
-                  <div key={session.id} className="py-4 first:pt-0 last:pb-0">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-[14px] font-medium text-[var(--color-text-primary)]">
-                            {deviceLabel(session)}
-                          </h3>
-                          {session.isCurrent ? (
-                            <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] text-green-600">
-                              Current session
-                            </span>
-                          ) : null}
-                        </div>
-                        <p className="mt-1 break-all text-[12px] text-[var(--color-text-tertiary)]">
-                          {session.userAgent ?? "No user agent recorded"}
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right text-[12px] text-[var(--color-text-tertiary)]">
-                        <div>{session.ipAddress ?? "Unknown IP"}</div>
-                        <div>Expires {formatDate(session.expiresAt)}</div>
-                      </div>
+      <Section
+        title="Sessions"
+        description="Review devices currently or recently signed in to your account. Expand a session to inspect its source, IP address, and timestamps."
+        action={
+          <SmallButton
+            tone="danger"
+            disabled={saving || securityState.sessions.length <= 1}
+            onClick={() =>
+              mutate(
+                { action: "revokeAllOtherSessions" },
+                "Other sessions revoked.",
+              )
+            }
+          >
+            Revoke all except current
+          </SmallButton>
+        }
+      >
+        {securityState.sessions.length ? (
+          <div className="divide-y divide-[var(--color-border)]">
+            {securityState.sessions.map((session) => (
+              <div key={session.id} className="py-4 first:pt-0 last:pb-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-[14px] font-medium text-[var(--color-text-primary)]">
+                        {deviceLabel(session)}
+                      </h3>
+                      {session.isCurrent ? (
+                        <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] text-green-600">
+                          Current session
+                        </span>
+                      ) : null}
                     </div>
-                    <p className="mt-2 text-[12px] text-[var(--color-text-tertiary)]">
-                      Created {formatDate(session.createdAt)} · Last updated{" "}
-                      {formatDate(session.updatedAt)}
+                    <p className="mt-1 break-all text-[12px] text-[var(--color-text-tertiary)]">
+                      {session.location} · {session.ipAddress ?? "Unknown IP"}
                     </p>
+                    <button
+                      type="button"
+                      className="mt-2 text-[12px] text-[var(--color-accent)] hover:underline"
+                      onClick={() =>
+                        setExpandedSessionId((current) =>
+                          current === session.id ? null : session.id,
+                        )
+                      }
+                    >
+                      {expandedSessionId === session.id
+                        ? "Hide details"
+                        : "Show details"}
+                    </button>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-4 rounded-lg border border-dashed border-[var(--color-border)] p-4 text-[13px] text-[var(--color-text-tertiary)]">
-                No active sessions were found for this account.
-              </div>
-            )}
-          </section>
-
-          <section className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-            <h2 className="text-[15px] font-medium text-[var(--color-text-primary)]">
-              Sign-in methods
-            </h2>
-            <p className="mt-2 text-[13px] text-[var(--color-text-secondary)]">
-              Connected providers that can be used to access your account.
-            </p>
-
-            {securityState?.providers.length ? (
-              <div className="mt-4 divide-y divide-[var(--color-border)]">
-                {securityState.providers.map((provider) => (
-                  <div key={provider.id} className="py-4 first:pt-0 last:pb-0">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h3 className="text-[14px] font-medium text-[var(--color-text-primary)]">
-                          {formatProviderName(provider.providerId)}
-                        </h3>
-                        <p className="mt-1 break-all text-[12px] text-[var(--color-text-tertiary)]">
-                          Account ID: {provider.accountId}
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right text-[12px] text-[var(--color-text-tertiary)]">
-                        Connected {formatDate(provider.createdAt)}
-                      </div>
+                  <SmallButton
+                    tone="danger"
+                    disabled={saving || session.isCurrent}
+                    onClick={() =>
+                      mutate(
+                        { action: "revokeSession", sessionId: session.id },
+                        "Session revoked.",
+                      )
+                    }
+                  >
+                    Revoke
+                  </SmallButton>
+                </div>
+                {expandedSessionId === session.id ? (
+                  <dl className="mt-3 grid gap-2 rounded-lg bg-[var(--color-surface-hover)] p-3 text-[12px] text-[var(--color-text-secondary)] sm:grid-cols-2">
+                    <div>
+                      <dt className="text-[var(--color-text-tertiary)]">
+                        Source
+                      </dt>
+                      <dd className="break-all">{session.source}</dd>
                     </div>
-                  </div>
-                ))}
+                    <div>
+                      <dt className="text-[var(--color-text-tertiary)]">
+                        Original sign-in
+                      </dt>
+                      <dd>{formatDate(session.createdAt)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[var(--color-text-tertiary)]">
+                        Last seen
+                      </dt>
+                      <dd>{formatDate(session.updatedAt)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[var(--color-text-tertiary)]">
+                        Expires
+                      </dt>
+                      <dd>{formatDate(session.expiresAt)}</dd>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <dt className="text-[var(--color-text-tertiary)]">
+                        User agent
+                      </dt>
+                      <dd className="break-all">
+                        {session.userAgent ?? "No user agent recorded"}
+                      </dd>
+                    </div>
+                  </dl>
+                ) : null}
               </div>
-            ) : (
-              <div className="mt-4 rounded-lg border border-dashed border-[var(--color-border)] p-4 text-[13px] text-[var(--color-text-tertiary)]">
-                No connected sign-in methods were found.
+            ))}
+          </div>
+        ) : (
+          <EmptyState>
+            No active sessions were found for this account.
+          </EmptyState>
+        )}
+      </Section>
+
+      <Section
+        title="Passkeys"
+        description="Use passkeys to sign in with your device biometrics or security key."
+        action={<SmallButton disabled>Add passkey</SmallButton>}
+      >
+        <EmptyState>
+          Passkeys are not configured for this workspace yet. When WebAuthn is
+          enabled, your saved passkeys will appear here with manage and revoke
+          controls.
+        </EmptyState>
+      </Section>
+
+      <Section
+        title="Personal API keys"
+        description={`Create tokens for scripts and integrations that act as you${
+          securityState.activeWorkspace
+            ? ` in ${securityState.activeWorkspace.name}`
+            : ""
+        }.`}
+      >
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row">
+          <input
+            aria-label="API key name"
+            value={apiKeyName}
+            onChange={(event) => setApiKeyName(event.target.value)}
+            className="min-w-0 flex-1 rounded-md border border-[var(--color-border)] bg-transparent px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+          />
+          <SmallButton
+            disabled={saving || !securityState.canCreateApiKeys}
+            onClick={createApiKey}
+          >
+            Create API key
+          </SmallButton>
+        </div>
+        {securityState.apiKeys.length ? (
+          <div className="divide-y divide-[var(--color-border)]">
+            {securityState.apiKeys.map((key) => (
+              <div
+                key={key.id}
+                className="flex items-start justify-between gap-3 py-4 first:pt-0 last:pb-0"
+              >
+                <div className="min-w-0">
+                  <h3 className="text-[14px] font-medium text-[var(--color-text-primary)]">
+                    {key.name}
+                  </h3>
+                  <p className="mt-1 text-[12px] text-[var(--color-text-secondary)]">
+                    {key.keyPrefix} · {key.workspaceName}
+                  </p>
+                  <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+                    Created {formatDate(key.createdAt)} · Last used{" "}
+                    {formatDate(key.lastUsedAt)}
+                  </p>
+                </div>
+                <SmallButton
+                  tone="danger"
+                  disabled={saving}
+                  onClick={() =>
+                    mutate(
+                      { action: "revokeApiKey", apiKeyId: key.id },
+                      "Personal API key revoked.",
+                    )
+                  }
+                >
+                  Revoke
+                </SmallButton>
               </div>
-            )}
-          </section>
-        </>
-      )}
+            ))}
+          </div>
+        ) : (
+          <EmptyState>No personal API keys have been created.</EmptyState>
+        )}
+      </Section>
+
+      <Section
+        title="Authorized applications"
+        description="Third-party OAuth applications that can access your account."
+      >
+        {securityState.authorizedApplications.length ? (
+          <div className="divide-y divide-[var(--color-border)]">
+            {securityState.authorizedApplications.map((application) => (
+              <div
+                key={application.id}
+                className="flex items-start justify-between gap-3 py-4 first:pt-0 last:pb-0"
+              >
+                <div className="min-w-0">
+                  <h3 className="text-[14px] font-medium text-[var(--color-text-primary)]">
+                    {application.name}
+                  </h3>
+                  <p className="mt-1 break-all text-[12px] text-[var(--color-text-secondary)]">
+                    Client ID: {application.clientId}
+                  </p>
+                  <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+                    Permissions: {application.scopes.join(", ")} · Authorized{" "}
+                    {formatDate(application.createdAt)}
+                  </p>
+                </div>
+                <SmallButton
+                  tone="danger"
+                  disabled={saving}
+                  onClick={() =>
+                    mutate(
+                      {
+                        action: "revokeAuthorizedApplication",
+                        applicationId: application.id,
+                      },
+                      "Authorized application revoked.",
+                    )
+                  }
+                >
+                  Revoke
+                </SmallButton>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState>
+            No authorized applications. OAuth application grants will appear
+            here with their permissions and revoke controls.
+          </EmptyState>
+        )}
+      </Section>
     </div>
   );
 }
