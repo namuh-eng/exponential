@@ -126,6 +126,40 @@ describe("Inbox page", () => {
     });
   });
 
+  it("shows all-read notification history with a no unread footer", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          notifications: [
+            {
+              id: "n-history-1",
+              type: "assigned",
+              actorName: "Ashley Ha",
+              actorImage: null,
+              issueIdentifier: "ENG-136",
+              issueTitle: "Improve Forever Browsing agent inbox handoff",
+              issuePriority: "medium",
+              readAt: "2026-05-02T20:00:00.000Z",
+              createdAt: "2026-05-02T19:00:00.000Z",
+            },
+          ],
+          unreadCount: 0,
+        }),
+    }) as unknown as typeof fetch;
+
+    cleanup();
+    vi.resetModules();
+    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
+    render(<InboxPage />);
+
+    await vi.waitFor(() => {
+      expect(screen.queryByText("You're all caught up")).toBeNull();
+      expect(screen.getAllByText("ENG-136").length).toBeGreaterThan(0);
+      expect(screen.getByText("No unread notifications")).toBeDefined();
+    });
+  });
+
   it("renders notification list when notifications exist", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,

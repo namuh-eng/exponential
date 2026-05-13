@@ -267,6 +267,11 @@ export default function InboxPage() {
                   }}
                 />
               ))}
+              {unreadCount === 0 && (
+                <div className="px-3 py-4 text-center text-[12px] text-[#6b6f76]">
+                  No unread notifications
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex h-full items-center justify-center px-6 text-center text-[13px] text-[#6b6f76]">
