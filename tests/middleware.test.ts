@@ -70,6 +70,29 @@ describe("Auth proxy", () => {
     expect(mockNext).toHaveBeenCalled();
   });
 
+  it.each([
+    "/foreverbrowsing/settings/account/security",
+    "/foreverbrowsing/team/ENG/all",
+    "/foreverbrowsing/projects",
+  ])(
+    "rewrites unauthenticated workspace deep link %s to login without changing the browser URL",
+    async (path) => {
+      mockRedirect.mockClear();
+      mockRewrite.mockClear();
+      const { proxy } = await import("@/proxy");
+      const req = createMockRequest(`${path}?view=list`);
+      await proxy(req as never);
+
+      expect(mockRedirect).not.toHaveBeenCalled();
+      expect(mockRewrite).toHaveBeenCalled();
+      const rewriteUrl = mockRewrite.mock.calls[0][0] as URL;
+      expect(rewriteUrl.pathname).toBe("/login");
+      expect(rewriteUrl.searchParams.get("callbackUrl")).toBe(
+        `${path}?view=list`,
+      );
+    },
+  );
+
   it("redirects to /login when no session cookie", async () => {
     mockRedirect.mockClear();
     const { proxy } = await import("@/proxy");
