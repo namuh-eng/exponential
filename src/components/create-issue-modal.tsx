@@ -699,6 +699,8 @@ export function CreateIssueModal({
       <dialog
         open
         aria-modal="true"
+        data-testid="create-issue-composer"
+        data-variant={variant}
         aria-label={
           isFullscreen
             ? `Create issue fullscreen for ${teamName}`
