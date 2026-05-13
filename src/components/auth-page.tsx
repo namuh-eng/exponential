@@ -214,7 +214,13 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   }
 
   const title =
-    mode === "signup" ? "Create your workspace" : "Log in to Linear";
+    mode === "signup" && step === "email-input"
+      ? "What’s your email address?"
+      : mode === "signup"
+        ? "Create your workspace"
+        : "Log in to Linear";
+  const backLabel =
+    mode === "signup" ? "Back to signup" : "Back to login options";
 
   return (
     <div className="w-full max-w-[320px] px-6 py-8 sm:px-0">
@@ -282,7 +288,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 <rect width="20" height="16" x="2" y="4" rx="2" />
                 <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
               </svg>
-              Continue with Email
+              Continue with email
             </button>
 
             {error && (
@@ -299,16 +305,19 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email address..."
+              placeholder="Enter your email address…"
               required
               className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none transition-colors"
             />
+            {mode === "signup" && (
+              <input type="hidden" name="cf-turnstile-response" value="" />
+            )}
             <button
               type="submit"
               disabled={loading || !email.trim()}
               className="auth-primary-button flex h-11 w-full items-center justify-center rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? "Sending..." : "Continue with Email"}
+              {loading ? "Sending…" : "Continue with email"}
             </button>
             <button
               type="button"
@@ -319,7 +328,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               }}
               className="w-full pt-1 text-center text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
             >
-              Back to login options
+              {backLabel}
             </button>
             {error && (
               <p className="text-center text-sm text-[var(--auth-error)]">
@@ -400,7 +409,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
         )}
       </div>
 
-      <FooterLinks mode={mode} />
+      {step === "choose" && <FooterLinks mode={mode} />}
     </div>
   );
 }
