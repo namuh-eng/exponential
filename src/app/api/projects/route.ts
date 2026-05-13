@@ -1,4 +1,7 @@
-import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
+import {
+  resolveActiveWorkspaceId,
+  resolveRequestWorkspaceId,
+} from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issue, project, projectTeam, team, user } from "@/lib/db/schema";
@@ -15,13 +18,22 @@ function sanitizeProjectSlug(value: string) {
     .replace(/-+$/g, "");
 }
 
-export async function GET() {
+async function resolveProjectsWorkspaceId(userId: string, request?: Request) {
+  return request
+    ? resolveRequestWorkspaceId(userId, request)
+    : resolveActiveWorkspaceId(userId);
+}
+
+export async function GET(request?: Request) {
   const { response: authResponse, session } = await requireApiSession();
   if (authResponse) {
     return authResponse;
   }
 
-  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  const workspaceId = await resolveProjectsWorkspaceId(
+    session.user.id,
+    request,
+  );
   if (!workspaceId) {
     return NextResponse.json({ projects: [] });
   }
@@ -134,7 +146,7 @@ export async function POST(request: Request) {
     return authResponse;
   }
 
-  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  const workspaceId = await resolveRequestWorkspaceId(session.user.id, request);
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
   }

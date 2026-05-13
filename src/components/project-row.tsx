@@ -1,7 +1,9 @@
 "use client";
 
+import { useAppShellContext } from "@/app/(app)/app-shell";
 import { Avatar } from "@/components/avatar";
 import { PriorityIcon } from "@/components/icons/priority-icon";
+import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import Link from "next/link";
 
 type ProjectStatus =
@@ -105,9 +107,12 @@ export function ProjectRow({
   targetDate,
   progress,
 }: ProjectRowProps) {
+  const workspaceSlug = useAppShellContext()?.workspaceSlug;
+  const href = withWorkspaceSlug(`/project/${slug}/overview`, workspaceSlug);
+
   return (
     <Link
-      href={`/project/${slug}/overview`}
+      href={href}
       data-testid="project-row"
       className="group flex h-[44px] items-center border-b border-[var(--color-border)] px-4 text-[13px] transition-colors hover:bg-[var(--color-surface-hover)]"
     >

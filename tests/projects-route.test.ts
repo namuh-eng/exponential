@@ -20,6 +20,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/active-workspace", () => ({
   resolveActiveWorkspaceId: resolveActiveWorkspaceIdMock,
+  resolveRequestWorkspaceId: resolveActiveWorkspaceIdMock,
 }));
 
 vi.mock("@/lib/db", () => ({

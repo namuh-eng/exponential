@@ -56,6 +56,75 @@ test.describe("Workspace slug routes", () => {
     await expect(page).toHaveURL(new RegExp(`/${workspaceSlug}/inbox$`));
   });
 
+  test("renders workspace-prefixed project list and detail routes", async ({
+    page,
+  }) => {
+    const suffix = Date.now().toString(36);
+    const workspaceSlug = `project-routes-${suffix}`;
+    const projectName = `Workspace routed project ${suffix}`;
+    const projectSlug = `workspace-routed-project-${suffix}`;
+
+    const workspaceResponse = await page.request.post("/api/workspaces", {
+      data: {
+        name: `Project Routes ${suffix}`,
+        urlSlug: workspaceSlug,
+      },
+    });
+    expect(workspaceResponse.status()).toBe(201);
+
+    const projectResponse = await page.request.post("/api/projects", {
+      data: {
+        name: projectName,
+        slug: projectSlug,
+        description: "Project route smoke target",
+      },
+    });
+    expect(projectResponse.status()).toBe(201);
+
+    await page.goto(`/${workspaceSlug}/projects`);
+    await expect(page).toHaveURL(new RegExp(`/${workspaceSlug}/projects$`));
+    await expect(page.getByText(projectName)).toBeVisible();
+    await expect(
+      page.getByText("This page could not be found"),
+    ).not.toBeVisible();
+
+    await page.goto(`/${workspaceSlug}/projects/all`);
+    await expect(page).toHaveURL(new RegExp(`/${workspaceSlug}/projects/all$`));
+    const projectLink = page.getByRole("link", {
+      name: new RegExp(projectName),
+    });
+    await expect(projectLink).toHaveAttribute(
+      "href",
+      `/${workspaceSlug}/project/${projectSlug}/overview`,
+    );
+    await projectLink.click();
+    await expect(page).toHaveURL(
+      new RegExp(`/${workspaceSlug}/project/${projectSlug}/overview$`),
+    );
+    await expect(
+      page.getByRole("heading", { name: projectName }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("This page could not be found"),
+    ).not.toBeVisible();
+
+    await page.reload();
+    await expect(page).toHaveURL(
+      new RegExp(`/${workspaceSlug}/project/${projectSlug}/overview$`),
+    );
+    await expect(
+      page.getByRole("heading", { name: projectName }),
+    ).toBeVisible();
+
+    await page.goto(`/project/${projectSlug}/overview`);
+    await expect(page).toHaveURL(
+      new RegExp(`/${workspaceSlug}/project/${projectSlug}/overview$`),
+    );
+    await expect(
+      page.getByRole("heading", { name: projectName }),
+    ).toBeVisible();
+  });
+
   test("redirects root app routes to the active workspace slug", async ({
     page,
   }) => {

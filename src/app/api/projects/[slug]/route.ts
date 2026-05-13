@@ -1,3 +1,4 @@
+import { resolveWorkspaceIdBySlug } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
@@ -20,6 +21,7 @@ import {
   haveSameIds,
   readProjectSettings,
 } from "@/lib/project-detail";
+import { getWorkspaceSlugFromPath } from "@/lib/workspace-paths";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -64,7 +66,7 @@ function makeActivityEntry(
   };
 }
 
-async function findWorkspaceId(userId: string) {
+async function findDefaultWorkspaceId(userId: string) {
   const memberships = await db
     .select({ workspaceId: member.workspaceId })
     .from(member)
@@ -73,6 +75,25 @@ async function findWorkspaceId(userId: string) {
     .limit(1);
 
   return memberships[0]?.workspaceId ?? null;
+}
+
+async function resolveProjectWorkspaceId(userId: string, request: Request) {
+  const referer = request.headers.get("referer");
+  if (referer) {
+    try {
+      const slug = getWorkspaceSlugFromPath(new URL(referer).pathname);
+      if (slug) {
+        const workspaceId = await resolveWorkspaceIdBySlug(userId, slug);
+        if (workspaceId) {
+          return workspaceId;
+        }
+      }
+    } catch {
+      // Ignore malformed referers and preserve the existing default fallback.
+    }
+  }
+
+  return findDefaultWorkspaceId(userId);
 }
 
 async function findProjectInWorkspace(workspaceId: string, slug: string) {
@@ -85,8 +106,7 @@ async function findProjectInWorkspace(workspaceId: string, slug: string) {
   return projects[0] ?? null;
 }
 
-async function buildProjectResponse(userId: string, slug: string) {
-  const workspaceId = await findWorkspaceId(userId);
+async function buildProjectResponse(workspaceId: string | null, slug: string) {
   if (!workspaceId) {
     return { status: 404 as const, body: { error: "Not found" } };
   }
@@ -346,7 +366,7 @@ async function buildProjectResponse(userId: string, slug: string) {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { response: authResponse, session } = await requireApiSession();
@@ -355,7 +375,8 @@ export async function GET(
   }
 
   const { slug } = await params;
-  const result = await buildProjectResponse(session.user.id, slug);
+  const workspaceId = await resolveProjectWorkspaceId(session.user.id, request);
+  const result = await buildProjectResponse(workspaceId, slug);
   return NextResponse.json(result.body, { status: result.status });
 }
 
@@ -369,7 +390,7 @@ export async function PATCH(
   }
 
   const { slug } = await params;
-  const workspaceId = await findWorkspaceId(session.user.id);
+  const workspaceId = await resolveProjectWorkspaceId(session.user.id, request);
   if (!workspaceId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -640,7 +661,7 @@ export async function PATCH(
     nextSettings.resources.length !== currentSettings.resources.length;
 
   if (!shouldUpdateProject) {
-    const unchanged = await buildProjectResponse(session.user.id, slug);
+    const unchanged = await buildProjectResponse(workspaceId, slug);
     return NextResponse.json(unchanged.body, { status: unchanged.status });
   }
 
@@ -686,12 +707,12 @@ export async function PATCH(
       .where(eq(project.id, proj.id));
   });
 
-  const updated = await buildProjectResponse(session.user.id, slug);
+  const updated = await buildProjectResponse(workspaceId, slug);
   return NextResponse.json(updated.body, { status: updated.status });
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { response: authResponse, session } = await requireApiSession();
@@ -700,7 +721,7 @@ export async function DELETE(
   }
 
   const { slug } = await params;
-  const workspaceId = await findWorkspaceId(session.user.id);
+  const workspaceId = await resolveProjectWorkspaceId(session.user.id, request);
   if (!workspaceId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
