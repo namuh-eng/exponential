@@ -101,41 +101,22 @@ function FooterLinks({ mode }: { mode: AuthMode }) {
   }
 
   return (
-    <>
-      <p className="mt-8 text-center text-[12px] leading-5 text-[var(--auth-muted)]">
-        By continuing, you agree to our{" "}
-        <a
-          href="https://linear.app/terms"
-          className="text-[var(--auth-link)] transition-opacity hover:opacity-80"
-        >
-          Terms of Service
-        </a>{" "}
-        and{" "}
-        <a
-          href="https://linear.app/privacy"
-          className="text-[var(--auth-link)] transition-opacity hover:opacity-80"
-        >
-          Privacy Policy
-        </a>
-        .
-      </p>
-      <p className="mt-8 text-center text-[14px] text-[var(--auth-muted)]">
-        Don&apos;t have an account?{" "}
-        <Link
-          href="/signup"
-          className="font-medium text-[var(--auth-link)] transition-opacity hover:opacity-80"
-        >
-          Sign up
-        </Link>{" "}
-        or{" "}
-        <a
-          href="https://linear.app"
-          className="font-medium text-[var(--auth-link)] transition-opacity hover:opacity-80"
-        >
-          learn more
-        </a>
-      </p>
-    </>
+    <p className="mt-8 text-center text-[14px] text-[var(--auth-muted)]">
+      Don’t have an account?{" "}
+      <Link
+        href="/signup"
+        className="font-medium text-[var(--auth-link)] transition-opacity hover:opacity-80"
+      >
+        Sign up
+      </Link>{" "}
+      or{" "}
+      <a
+        href="https://linear.app"
+        className="font-medium text-[var(--auth-link)] transition-opacity hover:opacity-80"
+      >
+        learn more
+      </a>
+    </p>
   );
 }
 

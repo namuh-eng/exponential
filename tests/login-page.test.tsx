@@ -196,16 +196,16 @@ describe("Login page", () => {
     });
   });
 
-  it("shows footer with terms text", () => {
-    render(<LoginPage />);
-    expect(screen.getByText("Terms of Service")).toBeDefined();
-    expect(screen.getByText("Privacy Policy")).toBeDefined();
-  });
+  it("matches Linear's login footer copy", () => {
+    const { container } = render(<LoginPage />);
 
-  it("shows signup affordance on the login page", () => {
-    render(<LoginPage />);
+    expect(container.textContent).toContain(
+      "Don’t have an account? Sign up or learn more",
+    );
     expect(screen.getByText("Sign up")).toBeDefined();
     expect(screen.getByText("learn more")).toBeDefined();
+    expect(screen.queryByText("Terms of Service")).toBeNull();
+    expect(screen.queryByText("Privacy Policy")).toBeNull();
   });
 
   it("shows error when magic link fails", async () => {
