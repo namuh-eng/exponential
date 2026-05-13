@@ -168,16 +168,27 @@ describe("Auth proxy", () => {
     expect(mockNext).toHaveBeenCalled();
   });
 
-  it("rewrites workspace-prefixed members and teams routes", async () => {
-    mockRewrite.mockClear();
-    const { proxy } = await import("@/proxy");
-    const req = createMockRequest("/foreverbrowsing/members", {
-      "better-auth.session_token": "valid-session-token",
-    });
-    await proxy(req as never);
-    expect(mockRewrite).toHaveBeenCalled();
-    expect(mockRewrite.mock.calls[0]?.[0].pathname).toBe("/members");
-  });
+  it.each([
+    ["/foreverbrowsing/members", "/members"],
+    ["/foreverbrowsing/projects", "/projects"],
+    ["/foreverbrowsing/projects/all", "/projects/all"],
+    ["/foreverbrowsing/project/roadmap/overview", "/project/roadmap/overview"],
+  ])(
+    "rewrites authenticated workspace-prefixed app route %s without changing the browser URL",
+    async (sourcePath, rewrittenPath) => {
+      mockRewrite.mockClear();
+      mockRedirect.mockClear();
+      const { proxy } = await import("@/proxy");
+      const req = createMockRequest(`${sourcePath}?view=list`, {
+        "better-auth.session_token": "valid-session-token",
+      });
+      await proxy(req as never);
+      expect(mockRedirect).not.toHaveBeenCalled();
+      expect(mockRewrite).toHaveBeenCalled();
+      expect(mockRewrite.mock.calls[0]?.[0].pathname).toBe(rewrittenPath);
+      expect(mockRewrite.mock.calls[0]?.[0].search).toBe("?view=list");
+    },
+  );
 
   it.each(["/all", "/board"])(
     "rewrites authenticated workspace-prefixed team%s routes without changing the browser URL",
