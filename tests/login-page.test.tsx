@@ -331,6 +331,23 @@ describe("Login page", () => {
     expect(screen.getByText("Data Processing Agreement")).toBeDefined();
   });
 
+  it("matches Linear's signup auth method surface", () => {
+    render(<SignupPage />);
+
+    expect(
+      screen.getByRole("button", { name: /Continue with Google/i }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: /Continue with email/i }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
+    ).toBeDefined();
+    expect(
+      screen.queryByRole("button", { name: /Log in with passkey/i }),
+    ).toBeNull();
+  });
+
   it("matches Linear's focused signup email step", () => {
     const { container } = render(<SignupPage />);
 
@@ -349,5 +366,38 @@ describe("Login page", () => {
     expect(
       container.querySelector('input[name="cf-turnstile-response"]'),
     ).toBeDefined();
+  });
+
+  it("matches Linear's focused signup SAML step", () => {
+    render(<SignupPage />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
+    );
+
+    expect(screen.getByText("What’s your email address?")).toBeDefined();
+    expect(
+      screen.getByPlaceholderText("Enter your email address…"),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Continue with SAML" }),
+    ).toBeDefined();
+    expect(screen.getByText("Back to signup")).toBeDefined();
+    expect(screen.queryByText("Already have an account?")).toBeNull();
+    expect(screen.queryByText("Terms of Service")).toBeNull();
+
+    fireEvent.click(screen.getByText("Back to signup"));
+    expect(
+      screen.getByRole("button", { name: /Continue with Google/i }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: /Continue with email/i }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
+    ).toBeDefined();
+    expect(
+      screen.queryByRole("button", { name: /Log in with passkey/i }),
+    ).toBeNull();
   });
 });

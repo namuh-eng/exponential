@@ -288,64 +288,60 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               Continue with email
             </button>
 
-            {mode === "login" && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStep("sso-input");
-                    setPasskeyPending(false);
-                    setError("");
-                  }}
-                  disabled={loading}
-                  className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    role="img"
-                    aria-label="SAML"
-                  >
-                    <path d="M4 7h16" />
-                    <path d="M7 11h10" />
-                    <path d="M9 15h6" />
-                    <path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" />
-                  </svg>
-                  Continue with SAML SSO
-                </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStep("sso-input");
+                setPasskeyPending(false);
+                setError("");
+              }}
+              disabled={loading}
+              className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                role="img"
+                aria-label="SAML"
+              >
+                <path d="M4 7h16" />
+                <path d="M7 11h10" />
+                <path d="M9 15h6" />
+                <path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" />
+              </svg>
+              Continue with SAML SSO
+            </button>
 
-                <button
-                  type="button"
-                  onClick={handlePasskeyLogin}
-                  disabled={loading || passkeyPending}
-                  className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            {mode === "login" && (
+              <button
+                type="button"
+                onClick={handlePasskeyLogin}
+                disabled={loading || passkeyPending}
+                className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  role="img"
+                  aria-label="Passkey"
                 >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    role="img"
-                    aria-label="Passkey"
-                  >
-                    <path d="M10 13a5 5 0 1 1 3.54 1.46L12 16h-2v2H8v2H5v-3l4.54-4.54A5 5 0 0 1 10 13Z" />
-                    <path d="M15 9h.01" />
-                  </svg>
-                  {passkeyPending
-                    ? "Waiting for passkey"
-                    : "Log in with passkey"}
-                </button>
-              </>
+                  <path d="M10 13a5 5 0 1 1 3.54 1.46L12 16h-2v2H8v2H5v-3l4.54-4.54A5 5 0 0 1 10 13Z" />
+                  <path d="M15 9h.01" />
+                </svg>
+                {passkeyPending ? "Waiting for passkey" : "Log in with passkey"}
+              </button>
             )}
 
             {error && (
