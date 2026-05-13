@@ -77,4 +77,25 @@ describe("test create session route", () => {
     expect(payload.success).toBe(true);
     expect(payload.sessionToken).toBe("session-token.signature");
   });
+
+  it("returns 503 with setup instructions when Postgres is unavailable", async () => {
+    userLimitMock.mockImplementation(() => {
+      throw Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:5432"), {
+        code: "ECONNREFUSED",
+      });
+    });
+    const { POST } = await import("@/app/api/test/create-session/route");
+
+    const response = await POST(
+      new Request("http://localhost", {
+        method: "POST",
+        body: JSON.stringify({ email: "test@test.com" }),
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    const payload = await response.json();
+    expect(payload.error).toBe("Local database is unavailable");
+    expect(payload.setup).toContain("make dev-services");
+  });
 });

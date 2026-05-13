@@ -60,6 +60,8 @@ cp .env.example .env
 npm run db:push
 
 # Start the dev server (runs on http://localhost:3000)
+# This preflights Postgres first and prints setup steps instead of letting
+# protected routes crash later with a generic 500.
 npm run dev
 ```
 

@@ -2,11 +2,41 @@ import { autoJoinWorkspaceForApprovedDomain } from "@/lib/approved-domain-auto-j
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { member, team, workspace } from "@/lib/db/schema";
+import {
+  DATABASE_BOOTSTRAP_MESSAGE,
+  DATABASE_BOOTSTRAP_TITLE,
+  shouldRenderDatabaseBootstrapError,
+} from "@/lib/dev-database-error";
 import { isAppRoutePrefix, normalizeAppPath } from "@/lib/workspace-paths";
 import { desc, eq } from "drizzle-orm";
 import { cookies, headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { AppShell } from "./app-shell";
+
+function DatabaseBootstrapError() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#0f1117] px-6 text-[#f4f5f8]">
+      <section className="max-w-xl rounded-2xl border border-[#343847] bg-[#171a22] p-8 shadow-2xl">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[#8a90a2]">
+          Dev setup required
+        </p>
+        <h1 className="text-2xl font-semibold">{DATABASE_BOOTSTRAP_TITLE}</h1>
+        <p className="mt-3 text-sm leading-6 text-[#c4c8d4]">
+          {DATABASE_BOOTSTRAP_MESSAGE}
+        </p>
+        <div className="mt-6 rounded-xl bg-[#0d0f15] p-4 font-mono text-sm text-[#d7dae3]">
+          <div>make dev-services</div>
+          <div>npm run db:push</div>
+          <div>PLAYWRIGHT_TEST=true npm run dev -- -p 3015</div>
+        </div>
+        <p className="mt-5 text-sm text-[#9aa1b3]">
+          If you use a custom database, set DATABASE_URL in .env.local and make
+          sure Postgres accepts TCP connections before loading protected routes.
+        </p>
+      </section>
+    </main>
+  );
+}
 
 export default async function AppLayout({
   children,
@@ -14,7 +44,17 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const requestHeaders = await headers();
-  const session = await auth.api.getSession({ headers: requestHeaders });
+  let session: Awaited<ReturnType<typeof auth.api.getSession>>;
+
+  try {
+    session = await auth.api.getSession({ headers: requestHeaders });
+  } catch (error) {
+    if (shouldRenderDatabaseBootstrapError(error)) {
+      return <DatabaseBootstrapError />;
+    }
+
+    throw error;
+  }
 
   if (!session) {
     redirect("/login");

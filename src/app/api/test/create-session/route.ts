@@ -2,6 +2,11 @@ import { randomBytes } from "node:crypto";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { user } from "@/lib/db/schema";
+import {
+  DATABASE_BOOTSTRAP_MESSAGE,
+  DATABASE_BOOTSTRAP_TITLE,
+  shouldRenderDatabaseBootstrapError,
+} from "@/lib/dev-database-error";
 import { makeSignature } from "better-auth/crypto";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -41,6 +46,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Email is required" }, { status: 400 });
   }
 
+  try {
+    return await createTestSession(email, body?.name);
+  } catch (error) {
+    if (shouldRenderDatabaseBootstrapError(error)) {
+      return NextResponse.json(
+        {
+          error: DATABASE_BOOTSTRAP_TITLE,
+          message: DATABASE_BOOTSTRAP_MESSAGE,
+          setup: ["make dev-services", "npm run db:push"],
+        },
+        { status: 503 },
+      );
+    }
+
+    throw error;
+  }
+}
+
+async function createTestSession(email: string, name: string | undefined) {
   const existingUser = await db
     .select({
       id: user.id,
@@ -62,7 +86,7 @@ export async function POST(request: Request) {
           id: randomToken(24),
           email,
           name:
-            body?.name?.trim() ||
+            name?.trim() ||
             email.split("@")[0]?.replaceAll(/[._-]+/g, " ") ||
             "Playwright User",
           emailVerified: true,
