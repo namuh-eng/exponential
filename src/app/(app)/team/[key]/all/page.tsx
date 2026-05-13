@@ -16,7 +16,12 @@ import { IssuesGroupHeader } from "@/components/issues-group-header";
 import { TeamRouteErrorState } from "@/components/team-route-error-state";
 import { useDisplayOptions } from "@/hooks/use-display-options";
 import { useFilters } from "@/hooks/use-filters";
-import { useParams, useRouter } from "next/navigation";
+import {
+  useParams,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface IssueData {
@@ -78,15 +83,28 @@ type StatusCategory =
   | "completed"
   | "canceled";
 
+type IssueListTab = "all" | "active" | "backlog";
+
+function getIssueTabFromPath(pathname: string, teamKey: string): IssueListTab {
+  const escapedTeamKey = teamKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = pathname.match(
+    new RegExp(`/team/${escapedTeamKey}/(all|active|backlog)(?:/)?$`),
+  );
+
+  return (match?.[1] as IssueListTab | undefined) ?? "all";
+}
+
 export default function TeamIssuesPage() {
   const params = useParams<{ key: string }>();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const routeTab = getIssueTabFromPath(pathname, params.key);
   const [data, setData] = useState<IssuesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadState, setLoadState] = useState<"ready" | "not-found" | "error">(
     "ready",
   );
-  const [activeTab, setActiveTab] = useState("all");
   const [showDisplayOptions, setShowDisplayOptions] = useState(false);
   const [showCreateIssue, setShowCreateIssue] = useState(false);
   const [createIssueDefaults, setCreateIssueDefaults] = useState<{
@@ -167,23 +185,23 @@ export default function TeamIssuesPage() {
     0,
   );
 
-  // Filter groups based on active tab and active filters
+  // Filter groups based on URL-selected tab and active filters
   const filteredGroups = useMemo(() => {
     return (data?.groups ?? [])
       .filter((g) => {
-        if (activeTab === "all") return true;
-        if (activeTab === "active")
+        if (routeTab === "all") return true;
+        if (routeTab === "active")
           return (
             g.state.category === "started" || g.state.category === "unstarted"
           );
-        if (activeTab === "backlog") return g.state.category === "backlog";
+        if (routeTab === "backlog") return g.state.category === "backlog";
         return true;
       })
       .map((g) => ({
         ...g,
         issues: applyFilters(g.issues, filters),
       }));
-  }, [data?.groups, activeTab, filters]);
+  }, [data?.groups, routeTab, filters]);
 
   const tabs = [
     { id: "all", label: "All issues" },
@@ -282,9 +300,14 @@ export default function TeamIssuesPage() {
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                const query = searchParams.toString();
+                router.push(
+                  `/team/${params.key}/${tab.id}${query ? `?${query}` : ""}`,
+                );
+              }}
               className={`rounded-md px-2.5 py-1 text-[13px] transition-colors ${
-                activeTab === tab.id
+                routeTab === tab.id
                   ? "bg-[var(--color-surface-active)] text-[var(--color-text-primary)]"
                   : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
               }`}

@@ -263,6 +263,18 @@ describe("Sidebar", () => {
     expect(issuesLink?.getAttribute("href")).toBe("/team/ENG/all");
   });
 
+  it("keeps Issues highlighted on URL-addressable team issue list routes", () => {
+    for (const tab of ["all", "active", "backlog"]) {
+      cleanup();
+      mockPathname = `/team/ENG/${tab}`;
+      render(<Sidebar teamKey="ENG" />);
+
+      expect(screen.getByText("Issues").closest("a")?.className).toContain(
+        "bg-[var(--color-surface-active)]",
+      );
+    }
+  });
+
   it("keeps Issues highlighted on issue detail routes", () => {
     mockPathname = "/issue/abc-123";
 

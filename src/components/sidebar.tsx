@@ -41,6 +41,8 @@ function isWorkspaceViewsRoute(pathname: string) {
 function isTeamIssuesRoute(pathname: string, teamKey: string) {
   return (
     pathname === `/team/${teamKey}/all` ||
+    pathname === `/team/${teamKey}/active` ||
+    pathname === `/team/${teamKey}/backlog` ||
     pathname === `/team/${teamKey}/board` ||
     pathname.startsWith("/issue/") ||
     pathname.startsWith(`/team/${teamKey}/issue/`)

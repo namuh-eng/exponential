@@ -5,14 +5,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // Mock next/navigation
 const pushMock = vi.fn();
 const replaceMock = vi.fn();
+let mockPathname = "/team/ENG/all";
+let mockSearchParams = new URLSearchParams();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock, replace: replaceMock }),
   useParams: () => ({ key: "ENG" }),
-  usePathname: () => "/team/ENG/all",
-  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => mockPathname,
+  useSearchParams: () => mockSearchParams,
 }));
 
+import ActiveTeamIssuesPage from "@/app/(app)/team/[key]/active/page";
 import TeamIssuesPage from "@/app/(app)/team/[key]/all/page";
+import BacklogTeamIssuesPage from "@/app/(app)/team/[key]/backlog/page";
 
 const mockIssuesData = {
   team: { id: "team-1", name: "Engineering", key: "ENG" },
@@ -70,6 +74,8 @@ describe("TeamIssuesPage UI", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    mockPathname = "/team/ENG/all";
+    mockSearchParams = new URLSearchParams();
   });
 
   it("renders loading state then issue list", async () => {
@@ -90,7 +96,42 @@ describe("TeamIssuesPage UI", () => {
     expect(countElements.length).toBeGreaterThan(0);
   });
 
-  it("switches tabs to filter issues", async () => {
+  it("renders the active route with the Active tab selected and active issues filtered", async () => {
+    mockPathname = "/team/ENG/active";
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => mockIssuesData,
+    } as Response);
+
+    render(<ActiveTeamIssuesPage />);
+    await screen.findByText("Engineering");
+
+    expect(screen.getByRole("button", { name: "Active" }).className).toContain(
+      "bg-[var(--color-surface-active)]",
+    );
+    expect(screen.getByText("Working on it")).toBeInTheDocument();
+    expect(screen.queryByText("Fix bug")).not.toBeInTheDocument();
+  });
+
+  it("renders the backlog route with the Backlog tab selected and backlog issues filtered", async () => {
+    mockPathname = "/team/ENG/backlog";
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => mockIssuesData,
+    } as Response);
+
+    render(<BacklogTeamIssuesPage />);
+    await screen.findByText("Engineering");
+
+    expect(screen.getByRole("button", { name: "Backlog" }).className).toContain(
+      "bg-[var(--color-surface-active)]",
+    );
+    expect(screen.getByText("Fix bug")).toBeInTheDocument();
+    expect(screen.queryByText("Working on it")).not.toBeInTheDocument();
+  });
+
+  it("changes tab clicks into URL navigation while preserving filters", async () => {
+    mockSearchParams = new URLSearchParams("f=priority%3Ais%3Ahigh");
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
       json: async () => mockIssuesData,
@@ -99,19 +140,15 @@ describe("TeamIssuesPage UI", () => {
     render(<TeamIssuesPage />);
     await screen.findByText("Engineering");
 
-    // All issues tab
-    expect(screen.getByText("Fix bug")).toBeInTheDocument();
-    expect(screen.getByText("Working on it")).toBeInTheDocument();
-
-    // Active tab (should only show "Working on it")
     fireEvent.click(screen.getByRole("button", { name: "Active" }));
-    expect(screen.getByText("Working on it")).toBeInTheDocument();
-    expect(screen.queryByText("Fix bug")).not.toBeInTheDocument();
+    expect(pushMock).toHaveBeenCalledWith(
+      "/team/ENG/active?f=priority%3Ais%3Ahigh",
+    );
 
-    // Backlog tab (should only show "Fix bug")
     fireEvent.click(screen.getByRole("button", { name: "Backlog" }));
-    expect(screen.getByText("Fix bug")).toBeInTheDocument();
-    expect(screen.queryByText("Working on it")).not.toBeInTheDocument();
+    expect(pushMock).toHaveBeenCalledWith(
+      "/team/ENG/backlog?f=priority%3Ais%3Ahigh",
+    );
   });
 
   it("switches to board layout", async () => {
