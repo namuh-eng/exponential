@@ -147,7 +147,7 @@ describe("Members Admin Page", () => {
     expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/members");
   });
 
-  it("shows active and pending counts", async () => {
+  it("labels the pending invitation summary count as invited, not application", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => membersResponse(),
@@ -156,10 +156,13 @@ describe("Members Admin Page", () => {
     render(<MembersPage />);
     await waitForLoaded();
 
-    expect(screen.getByText("2")).toBeInTheDocument();
-    expect(screen.getByText("1")).toBeInTheDocument();
-    expect(screen.getByText("Application")).toBeInTheDocument();
-    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => element?.textContent === "Active 2"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => element?.textContent === "Invited 1"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Application")).not.toBeInTheDocument();
   });
 
   it("opens the invite modal and submits invitations through the API", async () => {
