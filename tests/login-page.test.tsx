@@ -64,21 +64,21 @@ describe("Login page", () => {
     ).toBeDefined();
   });
 
-  it("opens a SAML SSO workspace entry step from the login chooser", () => {
+  it("matches Linear's focused SAML email step from the login chooser", () => {
     render(<LoginPage />);
 
     fireEvent.click(
       screen.getByRole("button", { name: /Continue with SAML SSO/i }),
     );
 
-    expect(screen.getByText("Single sign-on")).toBeDefined();
+    expect(screen.getByText("What’s your email address?")).toBeDefined();
     expect(
-      screen.getByPlaceholderText("name@company.com or workspace URL"),
+      screen.getByPlaceholderText("Enter your email address…"),
     ).toBeDefined();
     expect(
-      screen.getByRole("button", { name: "Continue with SSO" }),
+      screen.getByRole("button", { name: "Continue with SAML" }),
     ).toBeDefined();
-    expect(screen.getByText("Back to login options")).toBeDefined();
+    expect(screen.getByText("Back to login")).toBeDefined();
   });
 
   it("reports passkey login as an unavailable configured auth path without throwing", () => {
@@ -114,24 +114,22 @@ describe("Login page", () => {
     });
   });
 
-  it("shows email input after clicking Continue with email", () => {
+  it("matches Linear's focused login email step", () => {
     render(<LoginPage />);
     fireEvent.click(screen.getByText("Continue with email"));
+
+    expect(screen.getByText("What’s your email address?")).toBeDefined();
     expect(
       screen.getByPlaceholderText("Enter your email address…"),
     ).toBeDefined();
-  });
-
-  it("shows back button in email step", () => {
-    render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-    expect(screen.getByText("Back to login options")).toBeDefined();
+    expect(screen.getByText("Back to login")).toBeDefined();
+    expect(screen.queryByText("Back to login options")).toBeNull();
   });
 
   it("returns to choose step when clicking back", () => {
     render(<LoginPage />);
     fireEvent.click(screen.getByText("Continue with email"));
-    fireEvent.click(screen.getByText("Back to login options"));
+    fireEvent.click(screen.getByText("Back to login"));
     expect(screen.getByText("Continue with Google")).toBeDefined();
   });
 

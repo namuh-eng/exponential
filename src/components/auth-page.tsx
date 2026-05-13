@@ -207,15 +207,12 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   }
 
   const title =
-    step === "sso-input"
-      ? "Single sign-on"
-      : mode === "signup" && step === "email-input"
-        ? "What’s your email address?"
-        : mode === "signup"
-          ? "Create your workspace"
-          : "Log in to Linear";
-  const backLabel =
-    mode === "signup" ? "Back to signup" : "Back to login options";
+    step === "email-input" || step === "sso-input"
+      ? "What’s your email address?"
+      : mode === "signup"
+        ? "Create your workspace"
+        : "Log in to Linear";
+  const backLabel = mode === "signup" ? "Back to signup" : "Back to login";
 
   return (
     <div className="w-full max-w-[320px] px-6 py-8 sm:px-0">
@@ -392,10 +389,6 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
         {step === "sso-input" && (
           <form onSubmit={handleSsoSubmit} className="space-y-3">
-            <p className="text-center text-[14px] leading-6 text-[var(--auth-muted)]">
-              Enter your work email or workspace URL to continue with your
-              organization&apos;s SSO.
-            </p>
             <input
               type="text"
               value={ssoIdentifier}
@@ -403,7 +396,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 setSsoIdentifier(e.target.value);
                 setError("");
               }}
-              placeholder="name@company.com or workspace URL"
+              placeholder="Enter your email address…"
               required
               className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none transition-colors"
             />
@@ -412,7 +405,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               disabled={!ssoIdentifier.trim()}
               className="auth-primary-button flex h-11 w-full items-center justify-center rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Continue with SSO
+              Continue with SAML
             </button>
             <button
               type="button"
