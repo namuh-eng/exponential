@@ -81,7 +81,7 @@ describe("Login page", () => {
     expect(screen.getByText("Back to login")).toBeDefined();
   });
 
-  it("reports passkey login as an unavailable configured auth path without throwing", () => {
+  it("matches Linear's passkey waiting state", () => {
     render(<LoginPage />);
 
     fireEvent.click(
@@ -89,10 +89,15 @@ describe("Login page", () => {
     );
 
     expect(
-      screen.getByText(
+      screen
+        .getByRole("button", { name: /Waiting for passkey/ })
+        .hasAttribute("disabled"),
+    ).toBe(true);
+    expect(
+      screen.queryByText(
         "Passkey login isn't configured for this workspace yet.",
       ),
-    ).toBeDefined();
+    ).toBeNull();
   });
 
   it("calls signIn.social with google provider on Google click", () => {

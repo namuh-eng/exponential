@@ -126,6 +126,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const [ssoIdentifier, setSsoIdentifier] = useState("");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [passkeyPending, setPasskeyPending] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -203,7 +204,8 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   }
 
   function handlePasskeyLogin() {
-    setError("Passkey login isn't configured for this workspace yet.");
+    setPasskeyPending(true);
+    setError("");
   }
 
   const title =
@@ -261,7 +263,10 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
             <button
               type="button"
-              onClick={() => setStep("email-input")}
+              onClick={() => {
+                setPasskeyPending(false);
+                setStep("email-input");
+              }}
               disabled={loading}
               className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -289,6 +294,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                   type="button"
                   onClick={() => {
                     setStep("sso-input");
+                    setPasskeyPending(false);
                     setError("");
                   }}
                   disabled={loading}
@@ -317,7 +323,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 <button
                   type="button"
                   onClick={handlePasskeyLogin}
-                  disabled={loading}
+                  disabled={loading || passkeyPending}
                   className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <svg
@@ -335,7 +341,9 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                     <path d="M10 13a5 5 0 1 1 3.54 1.46L12 16h-2v2H8v2H5v-3l4.54-4.54A5 5 0 0 1 10 13Z" />
                     <path d="M15 9h.01" />
                   </svg>
-                  Log in with passkey
+                  {passkeyPending
+                    ? "Waiting for passkey"
+                    : "Log in with passkey"}
                 </button>
               </>
             )}
