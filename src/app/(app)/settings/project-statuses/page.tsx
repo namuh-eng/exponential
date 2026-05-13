@@ -16,6 +16,19 @@ type ProjectStatusesResponse = {
   customStatusesSupported: boolean;
 };
 
+async function readProjectStatusesError(response: Response) {
+  try {
+    const payload = (await response.json()) as { error?: unknown };
+    if (typeof payload.error === "string" && payload.error.trim()) {
+      return payload.error;
+    }
+  } catch {
+    // Keep the generic fallback when the server does not return JSON.
+  }
+
+  return "Unable to load project statuses.";
+}
+
 const statusTone: Record<ProjectStatus["value"], string> = {
   planned: "bg-[rgba(107,111,118,0.12)] text-[var(--color-text-secondary)]",
   in_progress: "bg-[rgba(240,192,0,0.16)] text-[#b58900]",
@@ -39,7 +52,7 @@ export default function ProjectStatusesPage() {
       try {
         const response = await fetch("/api/project-statuses");
         if (!response.ok) {
-          throw new Error("Unable to load project statuses.");
+          throw new Error(await readProjectStatusesError(response));
         }
 
         const payload = (await response.json()) as ProjectStatusesResponse;

@@ -116,7 +116,27 @@ describe("ProjectStatusesPage component", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: false,
-        json: async () => ({ error: "boom" }),
+        json: async () => ({ error: "Unauthorized" }),
+      }),
+    );
+
+    render(<ProjectStatusesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Unauthorized");
+    });
+
+    expect(screen.queryByText("Planned")).not.toBeInTheDocument();
+  });
+
+  it("falls back to a generic API error when the server body is unreadable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => {
+          throw new Error("not json");
+        },
       }),
     );
 
@@ -127,7 +147,5 @@ describe("ProjectStatusesPage component", () => {
         "Unable to load project statuses.",
       );
     });
-
-    expect(screen.queryByText("Planned")).not.toBeInTheDocument();
   });
 });
