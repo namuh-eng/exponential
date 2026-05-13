@@ -7,6 +7,7 @@ import {
   type FilterCondition,
   applyFilters,
 } from "@/components/filter-bar";
+import { TeamRouteErrorState } from "@/components/team-route-error-state";
 import { TriageHeader } from "@/components/triage-header";
 import { TriageRow } from "@/components/triage-row";
 import { useParams } from "next/navigation";
@@ -50,6 +51,9 @@ export default function TeamTriagePage() {
   const params = useParams<{ key: string }>();
   const [data, setData] = useState<TriageResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadState, setLoadState] = useState<"ready" | "not-found" | "error">(
+    "ready",
+  );
   const [showCreateIssue, setShowCreateIssue] = useState(false);
   const [filters, setFilters] = useState<FilterCondition[]>([]);
   const [sortOrder, setSortOrder] = useState<"created-desc" | "created-asc">(
@@ -57,12 +61,21 @@ export default function TeamTriagePage() {
   );
 
   const fetchTriage = useCallback(async () => {
+    setLoading(true);
     try {
       const res = await fetch(`/api/teams/${params.key}/triage`);
       if (res.ok) {
         const json = await res.json();
         setData(json);
+        setLoadState("ready");
+        return;
       }
+
+      setData(null);
+      setLoadState(res.status === 404 ? "not-found" : "error");
+    } catch {
+      setData(null);
+      setLoadState("error");
     } finally {
       setLoading(false);
     }
@@ -204,7 +217,27 @@ export default function TeamTriagePage() {
     );
   }
 
-  if (!data || data.issues.length === 0) {
+  if (loadState !== "ready") {
+    return (
+      <TeamRouteErrorState
+        teamKey={params.key}
+        variant={loadState}
+        onRetry={loadState === "error" ? fetchTriage : undefined}
+      />
+    );
+  }
+
+  if (!data) {
+    return (
+      <TeamRouteErrorState
+        teamKey={params.key}
+        variant="error"
+        onRetry={fetchTriage}
+      />
+    );
+  }
+
+  if (data.issues.length === 0) {
     return (
       <>
         <div className="flex h-full flex-col">

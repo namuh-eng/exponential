@@ -14,6 +14,7 @@ import {
 } from "@/components/filter-bar";
 import { IssueCard } from "@/components/issue-card";
 import { priorityMap } from "@/components/issue-row";
+import { TeamRouteErrorState } from "@/components/team-route-error-state";
 import { useDisplayOptions } from "@/hooks/use-display-options";
 import { useFilters } from "@/hooks/use-filters";
 import { useParams, useRouter } from "next/navigation";
@@ -117,6 +118,9 @@ export default function TeamBoardPage() {
   const router = useRouter();
   const [data, setData] = useState<IssuesResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadState, setLoadState] = useState<"ready" | "not-found" | "error">(
+    "ready",
+  );
   const [showDisplayOptions, setShowDisplayOptions] = useState(false);
   const [showCreateIssue, setShowCreateIssue] = useState(false);
   const [draggedIssue, setDraggedIssue] = useState<{
@@ -134,12 +138,21 @@ export default function TeamBoardPage() {
   const { filters, updateFilters } = useFilters(`team:${params.key}`);
 
   const fetchIssues = useCallback(async () => {
+    setLoading(true);
     try {
       const res = await fetch(`/api/teams/${params.key}/issues`);
       if (res.ok) {
         const json = await res.json();
         setData(json);
+        setLoadState("ready");
+        return;
       }
+
+      setData(null);
+      setLoadState(res.status === 404 ? "not-found" : "error");
+    } catch {
+      setData(null);
+      setLoadState("error");
     } finally {
       setLoading(false);
     }
@@ -308,7 +321,27 @@ export default function TeamBoardPage() {
     );
   }
 
-  if (!data || totalIssues === 0) {
+  if (loadState !== "ready") {
+    return (
+      <TeamRouteErrorState
+        teamKey={params.key}
+        variant={loadState}
+        onRetry={loadState === "error" ? fetchIssues : undefined}
+      />
+    );
+  }
+
+  if (!data) {
+    return (
+      <TeamRouteErrorState
+        teamKey={params.key}
+        variant="error"
+        onRetry={fetchIssues}
+      />
+    );
+  }
+
+  if (totalIssues === 0) {
     return (
       <>
         <EmptyState
