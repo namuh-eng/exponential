@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import ConnectedAccountsPage from "@/app/(app)/settings/account/connected/page";
+import ConnectedAccountsPage from "@/app/(app)/settings/account/connections/page";
 import { afterEach, describe, expect, it } from "vitest";
 
 describe("ConnectedAccountsPage component", () => {

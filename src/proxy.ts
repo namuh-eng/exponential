@@ -27,6 +27,30 @@ function isStaticPath(pathname: string): boolean {
   );
 }
 
+function getCanonicalSettingsPath(pathname: string) {
+  const segments = getPathSegments(pathname);
+  const settingsStart =
+    segments[0] === "settings"
+      ? 0
+      : !isAppRoutePrefix(segments[0]) &&
+          !isPublicRoutePrefix(segments[0]) &&
+          segments[1] === "settings"
+        ? 1
+        : null;
+
+  if (
+    settingsStart !== null &&
+    segments[settingsStart + 1] === "account" &&
+    segments[settingsStart + 2] === "connected"
+  ) {
+    const canonicalSegments = [...segments];
+    canonicalSegments[settingsStart + 2] = "connections";
+    return `/${canonicalSegments.join("/")}`;
+  }
+
+  return null;
+}
+
 function getSlugRewrite(pathname: string) {
   const segments = getPathSegments(pathname);
 
@@ -47,6 +71,13 @@ function getSlugRewrite(pathname: string) {
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+
+  const canonicalSettingsPath = getCanonicalSettingsPath(pathname);
+  if (canonicalSettingsPath) {
+    const canonicalUrl = request.nextUrl.clone();
+    canonicalUrl.pathname = canonicalSettingsPath;
+    return NextResponse.redirect(canonicalUrl);
+  }
 
   // Allow public paths
   if (isPublicPath(pathname)) {

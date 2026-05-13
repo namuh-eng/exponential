@@ -100,6 +100,19 @@ describe("Settings Layout Shell", () => {
     expect(notifLinks.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("links Connected accounts to Linear-compatible connections route", () => {
+    render(
+      <SettingsLayout>
+        <div>Content</div>
+      </SettingsLayout>,
+    );
+
+    expect(screen.getByText("Connected accounts").closest("a")).toHaveAttribute(
+      "href",
+      "/namuh/settings/account/connections",
+    );
+  });
+
   it("renders Administration section links", () => {
     render(
       <SettingsLayout>

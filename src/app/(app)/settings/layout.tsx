@@ -23,7 +23,7 @@ const sections: NavSection[] = [
       { label: "Profile", href: "/settings/account/profile" },
       { label: "Notifications", href: "/settings/account/notifications" },
       { label: "Security & access", href: "/settings/account/security" },
-      { label: "Connected accounts", href: "/settings/account/connected" },
+      { label: "Connected accounts", href: "/settings/account/connections" },
       { label: "Agent personalization", href: "/settings/account/agents" },
     ],
   },

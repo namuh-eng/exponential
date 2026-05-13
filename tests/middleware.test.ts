@@ -105,6 +105,36 @@ describe("Auth proxy", () => {
     );
   });
 
+  it("redirects legacy connected accounts path to canonical connections path", async () => {
+    mockRedirect.mockClear();
+    const { proxy } = await import("@/proxy");
+    const req = createMockRequest("/settings/account/connected?tab=auth", {
+      "better-auth.session_token": "valid-session-token",
+    });
+    await proxy(req as never);
+    expect(mockRedirect).toHaveBeenCalled();
+    const redirectUrl = mockRedirect.mock.calls[0][0] as URL;
+    expect(redirectUrl.pathname).toBe("/settings/account/connections");
+    expect(redirectUrl.search).toBe("?tab=auth");
+  });
+
+  it("redirects workspace-prefixed legacy connected accounts path", async () => {
+    mockRedirect.mockClear();
+    const { proxy } = await import("@/proxy");
+    const req = createMockRequest(
+      "/foreverbrowsing/settings/account/connected",
+      {
+        "better-auth.session_token": "valid-session-token",
+      },
+    );
+    await proxy(req as never);
+    expect(mockRedirect).toHaveBeenCalled();
+    const redirectUrl = mockRedirect.mock.calls[0][0] as URL;
+    expect(redirectUrl.pathname).toBe(
+      "/foreverbrowsing/settings/account/connections",
+    );
+  });
+
   it("allows authenticated requests with session cookie", async () => {
     mockNext.mockClear();
     const { proxy } = await import("@/proxy");
