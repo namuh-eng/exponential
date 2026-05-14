@@ -32,6 +32,28 @@ interface CommandItem {
   action: () => void;
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  const tagName = target.tagName.toLowerCase();
+  return (
+    target.isContentEditable ||
+    target.closest('[contenteditable=""], [contenteditable="true"]') !== null ||
+    tagName === "input" ||
+    tagName === "textarea" ||
+    tagName === "select"
+  );
+}
+
+function isCommandPaletteShortcut(event: KeyboardEvent): boolean {
+  return (
+    (event.metaKey || event.ctrlKey) &&
+    (event.key.toLowerCase() === "k" || event.code === "KeyK")
+  );
+}
+
 export function CommandPalette({
   teamKey,
   workspaceId,
@@ -322,16 +344,18 @@ export function CommandPalette({
     };
   }, [open, query, workspaceId]);
 
-  // Global Cmd+K listener
+  // Global Cmd/Ctrl+K listener
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        if (!open) {
-          lastFocusedElementRef.current = document.activeElement as HTMLElement;
-        }
-        setOpen((prev) => !prev);
+      if (!isCommandPaletteShortcut(e) || isEditableTarget(e.target)) {
+        return;
       }
+
+      e.preventDefault();
+      if (!open) {
+        lastFocusedElementRef.current = document.activeElement as HTMLElement;
+      }
+      setOpen((prev) => !prev);
     }
 
     function handleOpenPalette() {

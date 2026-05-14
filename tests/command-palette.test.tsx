@@ -65,6 +65,58 @@ describe("CommandPalette", () => {
     expect(screen.getByRole("dialog")).toBeDefined();
   });
 
+  it("opens on uppercase Cmd+K keyboard shortcut", () => {
+    render(<CommandPalette teamKey="ENG" />);
+
+    fireEvent.keyDown(document, { key: "K", metaKey: true });
+
+    expect(screen.getByRole("dialog")).toBeDefined();
+  });
+
+  it("opens on physical KeyK shortcut when key casing varies", () => {
+    render(<CommandPalette teamKey="ENG" />);
+
+    fireEvent.keyDown(document, { key: "Dead", code: "KeyK", ctrlKey: true });
+
+    expect(screen.getByRole("dialog")).toBeDefined();
+  });
+
+  it("does not open from Cmd/Ctrl+K while typing in editable fields", () => {
+    render(
+      <>
+        <input aria-label="Name input" />
+        <textarea aria-label="Description textarea" />
+        <select aria-label="Status select">
+          <option>Open</option>
+        </select>
+        <div contentEditable aria-label="Rich editor">
+          Rich editor content
+          <span data-testid="rich-editor-child">child</span>
+        </div>
+        <CommandPalette teamKey="ENG" />
+      </>,
+    );
+
+    fireEvent.keyDown(screen.getByLabelText("Name input"), {
+      key: "k",
+      ctrlKey: true,
+    });
+    fireEvent.keyDown(screen.getByLabelText("Description textarea"), {
+      key: "k",
+      metaKey: true,
+    });
+    fireEvent.keyDown(screen.getByLabelText("Status select"), {
+      key: "K",
+      ctrlKey: true,
+    });
+    fireEvent.keyDown(screen.getByTestId("rich-editor-child"), {
+      key: "k",
+      metaKey: true,
+    });
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("closes on Escape key", () => {
     render(<CommandPalette teamKey="ENG" />);
 
