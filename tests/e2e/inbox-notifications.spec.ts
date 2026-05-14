@@ -58,4 +58,33 @@ test.describe("Canonical inbox notifications", () => {
     ).toBeVisible();
     await expect(page.getByText("No unread notifications")).toBeVisible();
   });
+
+  test("Open issue CTA navigates from workspace inbox to selected issue detail", async ({
+    page,
+  }) => {
+    await page.goto("/foreverbrowsing/inbox");
+
+    await expect(page.getByText("ENG-179").first()).toBeVisible();
+    await expect(
+      page.getByText("Issue added to FOREVER-AGENT").first(),
+    ).toBeVisible();
+
+    const openIssueLink = page.getByRole("link", { name: "Open issue" });
+    await expect(openIssueLink).toHaveAttribute(
+      "href",
+      "/foreverbrowsing/issue/ENG-179",
+    );
+
+    await openIssueLink.click();
+
+    await expect(page).toHaveURL(/\/foreverbrowsing\/issue\/ENG-179$/);
+    await expect(page.getByText("ENG-179").first()).toBeVisible();
+    await expect(
+      page.getByText("Issue added to FOREVER-AGENT").first(),
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Inbox" })).toHaveCount(0);
+    await expect(
+      page.getByText("This page could not be found"),
+    ).not.toBeVisible();
+  });
 });

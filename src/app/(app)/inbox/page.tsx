@@ -1,7 +1,9 @@
 "use client";
 
+import { useAppShellContext } from "@/app/(app)/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { NotificationRow } from "@/components/notification-row";
+import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -41,6 +43,7 @@ export default function InboxPage() {
   const [loading, setLoading] = useState(true);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [sortMode, setSortMode] = useState<"latest" | "priority">("latest");
+  const workspaceSlug = useAppShellContext()?.workspaceSlug;
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -305,7 +308,10 @@ export default function InboxPage() {
               </p>
               {selected.issueIdentifier && (
                 <Link
-                  href={`/issue/${selected.issueIdentifier}`}
+                  href={withWorkspaceSlug(
+                    `/issue/${selected.issueIdentifier}`,
+                    workspaceSlug,
+                  )}
                   className="mt-4 inline-flex text-[12px] font-medium text-[#5E6AD2] hover:text-[#7a84dd]"
                 >
                   Open issue
