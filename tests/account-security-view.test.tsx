@@ -72,6 +72,12 @@ describe("AccountSecurityPage component", () => {
       screen.getByRole("heading", { name: "Passkeys" }),
     ).toBeInTheDocument();
     expect(
+      screen.getByRole("heading", { name: "API keys" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open workspace API settings" }),
+    ).toHaveAttribute("href", "/settings/api");
+    expect(
       screen.queryByRole("heading", { name: "Personal API keys" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText("API key name")).not.toBeInTheDocument();
@@ -214,6 +220,56 @@ describe("AccountSecurityPage component", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders and revokes authorized applications", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            securityPayload({
+              authorizedApplications: [
+                {
+                  id: "grant-1",
+                  appId: "app-importer",
+                  name: "Linear Importer",
+                  clientId: "lin_client_123",
+                  imageUrl: null,
+                  scopes: ["read", "write"],
+                  webhooksEnabled: true,
+                  createdAt: "2026-04-01T10:00:00.000Z",
+                  updatedAt: "2026-04-02T10:00:00.000Z",
+                },
+              ],
+            }),
+          ),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(securityPayload({ authorizedApplications: [] })),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AccountSecurityPage />);
+
+    expect(await screen.findByText("Linear Importer")).toBeInTheDocument();
+    expect(screen.getByText(/App ID: app-importer/)).toBeInTheDocument();
+    expect(screen.getByText(/read, write/)).toBeInTheDocument();
+    expect(screen.getByText(/Webhooks enabled/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+
+    await screen.findByText("Authorized application revoked.");
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toMatchObject({
+      action: "revokeAuthorizedApplication",
+      applicationId: "grant-1",
+    });
+    expect(screen.getByText(/No authorized applications/i)).toBeInTheDocument();
+  });
+
   it("does not render personal API key controls from account security", async () => {
     const fetchMock = mockSecurityFetch(
       securityPayload({
@@ -235,6 +291,12 @@ describe("AccountSecurityPage component", () => {
     await screen.findByRole("heading", { name: "Security & access" });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("heading", { name: "API keys" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open workspace API settings" }),
+    ).toHaveAttribute("href", "/settings/api");
     expect(
       screen.queryByRole("heading", { name: "Personal API keys" }),
     ).not.toBeInTheDocument();

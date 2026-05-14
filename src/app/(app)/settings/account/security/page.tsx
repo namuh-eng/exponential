@@ -17,10 +17,14 @@ type SecuritySession = {
 
 type AuthorizedApplication = {
   id: string;
+  appId: string;
   name: string;
   clientId: string;
+  imageUrl: string | null;
   scopes: string[];
+  webhooksEnabled: boolean;
   createdAt: string;
+  updatedAt: string;
 };
 
 type Passkey = {
@@ -81,7 +85,10 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <section
+      aria-label={title}
+      className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
+    >
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-[15px] font-medium text-[var(--color-text-primary)]">
@@ -496,6 +503,25 @@ export default function AccountSecurityPage() {
       </Section>
 
       <Section
+        title="API keys"
+        description="Workspace API keys are managed from the active workspace, not from account security."
+        action={
+          <a
+            href="/settings/api"
+            className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+          >
+            Open workspace API settings
+          </a>
+        }
+      >
+        <EmptyState>
+          Personal account API keys are not available here. Create, audit, and
+          revoke workspace-scoped API keys from workspace API settings to avoid
+          duplicate token paths.
+        </EmptyState>
+      </Section>
+
+      <Section
         title="Authorized applications"
         description="Third-party OAuth applications that can access your account."
       >
@@ -506,17 +532,37 @@ export default function AccountSecurityPage() {
                 key={application.id}
                 className="flex items-start justify-between gap-3 py-4 first:pt-0 last:pb-0"
               >
-                <div className="min-w-0">
-                  <h3 className="text-[14px] font-medium text-[var(--color-text-primary)]">
-                    {application.name}
-                  </h3>
-                  <p className="mt-1 break-all text-[12px] text-[var(--color-text-secondary)]">
-                    Client ID: {application.clientId}
-                  </p>
-                  <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
-                    Permissions: {application.scopes.join(", ")} · Authorized{" "}
-                    {formatDate(application.createdAt)}
-                  </p>
+                <div className="flex min-w-0 gap-3">
+                  {application.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={application.imageUrl}
+                      alt=""
+                      className="h-9 w-9 rounded-lg border border-[var(--color-border)] object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-hover)] text-[13px] font-medium text-[var(--color-text-secondary)]">
+                      {application.name.slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <h3 className="text-[14px] font-medium text-[var(--color-text-primary)]">
+                      {application.name}
+                    </h3>
+                    <p className="mt-1 break-all text-[12px] text-[var(--color-text-secondary)]">
+                      App ID: {application.appId} · Client ID:{" "}
+                      {application.clientId}
+                    </p>
+                    <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+                      Permissions:{" "}
+                      {application.scopes.length
+                        ? application.scopes.join(", ")
+                        : "No scopes recorded"}
+                      {application.webhooksEnabled ? " · Webhooks enabled" : ""}
+                      {" · Authorized "}
+                      {formatDate(application.createdAt)}
+                    </p>
+                  </div>
                 </div>
                 <SmallButton
                   tone="danger"

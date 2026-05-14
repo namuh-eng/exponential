@@ -142,6 +142,31 @@ export const account = pgTable("account", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const authorizedApplicationGrant = pgTable(
+  "authorized_application_grant",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    appId: text("app_id").notNull(),
+    clientId: text("client_id").notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    imageUrl: text("image_url"),
+    scopes: jsonb("scopes").notNull().default([]),
+    webhooksEnabled: boolean("webhooks_enabled").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("authorized_application_grant_user_idx").on(t.userId),
+    uniqueIndex("authorized_application_grant_user_app_idx").on(
+      t.userId,
+      t.appId,
+    ),
+  ],
+);
+
 export const verification = pgTable("verification", {
   id: text("id").primaryKey(),
   identifier: text("identifier").notNull(),
@@ -792,6 +817,7 @@ export const webhook = pgTable(
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
+  authorizedApplicationGrants: many(authorizedApplicationGrant),
   memberships: many(member),
   workspaceInvitations: many(workspaceInvitation),
   teamMemberships: many(teamMember),
@@ -801,6 +827,16 @@ export const userRelations = relations(user, ({ many }) => ({
   comments: many(comment),
   notifications: many(notification, { relationName: "recipient" }),
 }));
+
+export const authorizedApplicationGrantRelations = relations(
+  authorizedApplicationGrant,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [authorizedApplicationGrant.userId],
+      references: [user.id],
+    }),
+  }),
+);
 
 export const workspaceRelations = relations(workspace, ({ many }) => ({
   members: many(member),
