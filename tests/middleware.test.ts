@@ -228,6 +228,23 @@ describe("Auth proxy", () => {
     },
   );
 
+  it("lets the explicit workspace-prefixed team projects route render canonically", async () => {
+    mockRewrite.mockClear();
+    mockRedirect.mockClear();
+    mockNext.mockClear();
+    const { proxy } = await import("@/proxy");
+    const req = createMockRequest(
+      "/foreverbrowsing/team/ENG/projects?view=list",
+      {
+        "better-auth.session_token": "valid-session-token",
+      },
+    );
+    await proxy(req as never);
+    expect(mockRedirect).not.toHaveBeenCalled();
+    expect(mockRewrite).not.toHaveBeenCalled();
+    expect(mockNext).toHaveBeenCalled();
+  });
+
   it("does not rewrite settings teams routes as workspace-prefixed directory routes", async () => {
     mockRewrite.mockClear();
     mockNext.mockClear();
@@ -253,7 +270,7 @@ describe("Auth proxy", () => {
     expect(redirectUrl.search).toBe("?focusedComment=c-1");
   });
 
-  it.each(["/all", "/board"])(
+  it.each(["/all", "/board", "/projects"])(
     "redirects legacy canonical ENG team%s routes to workspace-scoped routes",
     async (teamRoute) => {
       mockRedirect.mockClear();

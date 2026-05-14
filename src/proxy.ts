@@ -85,6 +85,21 @@ function getSlugRewrite(pathname: string) {
   return null;
 }
 
+function getWorkspacePrefixedTeamProjectsRoute(pathname: string) {
+  const segments = getPathSegments(pathname);
+
+  if (
+    segments.length === 4 &&
+    isWorkspaceSlugSegment(segments[0]) &&
+    segments[1] === "team" &&
+    segments[3] === "projects"
+  ) {
+    return { slug: decodeURIComponent(segments[0]) };
+  }
+
+  return null;
+}
+
 function getCanonicalTeamRedirect(pathname: string) {
   const segments = getPathSegments(pathname);
 
@@ -186,6 +201,16 @@ export async function proxy(request: NextRequest) {
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-workspace-source-path", pathname);
+
+  const workspacePrefixedTeamProjectsRoute =
+    getWorkspacePrefixedTeamProjectsRoute(pathname);
+  if (workspacePrefixedTeamProjectsRoute) {
+    requestHeaders.set(
+      "x-workspace-slug",
+      workspacePrefixedTeamProjectsRoute.slug,
+    );
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
 
   const slugRewrite = getSlugRewrite(pathname);
   if (slugRewrite) {

@@ -139,6 +139,27 @@ test.describe("Canonical Forever Browsing routes", () => {
       page.getByText("This page could not be found"),
     ).not.toBeVisible();
 
+    await page.goto("/foreverbrowsing/team/ENG/projects");
+    await expect(page).toHaveURL(/\/foreverbrowsing\/team\/ENG\/projects$/);
+    await expect(
+      page.getByRole("heading", { name: /Engineering Projects|No projects/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("This page could not be found"),
+    ).not.toBeVisible();
+    await expect(
+      page.locator('a[href="/foreverbrowsing/team/ENG/projects"]').first(),
+    ).toHaveAttribute("href", "/foreverbrowsing/team/ENG/projects");
+
+    await page.goto("/team/ENG/projects");
+    await expect(page).toHaveURL(/\/foreverbrowsing\/team\/ENG\/projects$/);
+    await expect(
+      page.getByRole("heading", { name: /Engineering Projects|No projects/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("This page could not be found"),
+    ).not.toBeVisible();
+
     await page.goto("/foreverbrowsing/inbox");
     await page
       .getByRole("link", { name: /Issues icon Issues/ })
