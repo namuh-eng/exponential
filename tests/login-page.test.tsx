@@ -7,6 +7,8 @@ vi.mock("@/lib/auth-client", () => ({
     magicLink: vi.fn(() => Promise.resolve()),
   },
   signInWithPasskey: vi.fn(),
+  browserSupportsPasskeys: vi.fn(() => true),
+  enrollPasskey: vi.fn(),
   signOut: vi.fn(),
   useSession: vi.fn(() => ({ data: null, isPending: false })),
   authClient: {},
@@ -32,7 +34,7 @@ describe("Login page", () => {
   beforeEach(() => {
     fetchMock.mockResolvedValue({
       ok: true,
-      json: async () => ({ providers: { google: true } }),
+      json: async () => ({ providers: { google: true, passkey: true } }),
     });
   });
 
@@ -108,12 +110,12 @@ describe("Login page", () => {
     expect(screen.getByText("Back to login")).toBeDefined();
   });
 
-  it("matches Linear's passkey waiting state while WebAuthn is pending", () => {
+  it("matches Linear's passkey waiting state while WebAuthn is pending", async () => {
     vi.mocked(signInWithPasskey).mockReturnValueOnce(new Promise(() => {}));
     render(<LoginPage />);
 
     fireEvent.click(
-      screen.getByRole("button", { name: /Log in with passkey/i }),
+      await screen.findByRole("button", { name: /Log in with passkey/i }),
     );
 
     expect(signInWithPasskey).toHaveBeenCalledWith({
@@ -145,7 +147,7 @@ describe("Login page", () => {
     render(<LoginPage />);
 
     fireEvent.click(
-      screen.getByRole("button", { name: /Log in with passkey/i }),
+      await screen.findByRole("button", { name: /Log in with passkey/i }),
     );
 
     await vi.waitFor(() => {

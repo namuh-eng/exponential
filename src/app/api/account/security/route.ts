@@ -11,10 +11,12 @@ import {
   account,
   apiKey,
   member,
+  passkey,
   session as sessionTable,
   user,
   workspace,
 } from "@/lib/db/schema";
+import { isPasskeyAuthEnabled } from "@/lib/passkeys";
 import { and, desc, eq, ne } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -26,6 +28,7 @@ type AuthSession = {
 
 type AccountSecurityAction =
   | { action?: "createApiKey"; name?: unknown }
+  | { action?: "revokePasskey"; passkeyId?: unknown }
   | { action?: "revokeSession"; sessionId?: unknown }
   | { action?: "revokeAllOtherSessions" }
   | { action?: "revokeApiKey"; apiKeyId?: unknown }
@@ -98,45 +101,59 @@ async function buildSecurityPayload(authSession: AuthSession) {
   const currentSessionId = getCurrentSessionId(authSession);
   const workspaceAccess = await getWorkspaceAccess(authSession);
 
-  const [sessions, providers, personalApiKeys] = await Promise.all([
-    db
-      .select({
-        id: sessionTable.id,
-        userAgent: sessionTable.userAgent,
-        ipAddress: sessionTable.ipAddress,
-        createdAt: sessionTable.createdAt,
-        updatedAt: sessionTable.updatedAt,
-        expiresAt: sessionTable.expiresAt,
-      })
-      .from(sessionTable)
-      .where(eq(sessionTable.userId, authSession.user.id))
-      .orderBy(desc(sessionTable.updatedAt)),
-    db
-      .select({
-        id: account.id,
-        providerId: account.providerId,
-        accountId: account.accountId,
-        createdAt: account.createdAt,
-        updatedAt: account.updatedAt,
-      })
-      .from(account)
-      .where(eq(account.userId, authSession.user.id))
-      .orderBy(desc(account.updatedAt)),
-    db
-      .select({
-        id: apiKey.id,
-        name: apiKey.name,
-        keyPrefix: apiKey.keyPrefix,
-        createdAt: apiKey.createdAt,
-        lastUsedAt: apiKey.lastUsedAt,
-        workspaceId: apiKey.workspaceId,
-        workspaceName: workspace.name,
-      })
-      .from(apiKey)
-      .innerJoin(workspace, eq(apiKey.workspaceId, workspace.id))
-      .where(eq(apiKey.userId, authSession.user.id))
-      .orderBy(desc(apiKey.createdAt)),
-  ]);
+  const [sessions, providers, userPasskeys, personalApiKeys] =
+    await Promise.all([
+      db
+        .select({
+          id: sessionTable.id,
+          userAgent: sessionTable.userAgent,
+          ipAddress: sessionTable.ipAddress,
+          createdAt: sessionTable.createdAt,
+          updatedAt: sessionTable.updatedAt,
+          expiresAt: sessionTable.expiresAt,
+        })
+        .from(sessionTable)
+        .where(eq(sessionTable.userId, authSession.user.id))
+        .orderBy(desc(sessionTable.updatedAt)),
+      db
+        .select({
+          id: account.id,
+          providerId: account.providerId,
+          accountId: account.accountId,
+          createdAt: account.createdAt,
+          updatedAt: account.updatedAt,
+        })
+        .from(account)
+        .where(eq(account.userId, authSession.user.id))
+        .orderBy(desc(account.updatedAt)),
+      db
+        .select({
+          id: passkey.id,
+          name: passkey.name,
+          credentialID: passkey.credentialID,
+          deviceType: passkey.deviceType,
+          backedUp: passkey.backedUp,
+          transports: passkey.transports,
+          createdAt: passkey.createdAt,
+        })
+        .from(passkey)
+        .where(eq(passkey.userId, authSession.user.id))
+        .orderBy(desc(passkey.createdAt)),
+      db
+        .select({
+          id: apiKey.id,
+          name: apiKey.name,
+          keyPrefix: apiKey.keyPrefix,
+          createdAt: apiKey.createdAt,
+          lastUsedAt: apiKey.lastUsedAt,
+          workspaceId: apiKey.workspaceId,
+          workspaceName: workspace.name,
+        })
+        .from(apiKey)
+        .innerJoin(workspace, eq(apiKey.workspaceId, workspace.id))
+        .where(eq(apiKey.userId, authSession.user.id))
+        .orderBy(desc(apiKey.createdAt)),
+    ]);
 
   const permissionLevel = readPermissionLevel(
     asRecord(asRecord(asRecord(workspaceAccess?.settings).security).permissions)
@@ -162,7 +179,17 @@ async function buildSecurityPayload(authSession: AuthSession) {
       updatedAt: serializeDate(deviceSession.updatedAt),
       expiresAt: serializeDate(deviceSession.expiresAt),
     })),
-    passkeys: [],
+    passkeys: userPasskeys.map((item) => ({
+      id: item.id,
+      name: item.name ?? "Unnamed passkey",
+      credentialId: item.credentialID,
+      deviceType: item.deviceType,
+      backedUp: item.backedUp,
+      transports: item.transports
+        ? item.transports.split(",").filter(Boolean)
+        : [],
+      createdAt: serializeDate(item.createdAt),
+    })),
     apiKeys: personalApiKeys.map((item) => ({
       id: item.id,
       name: item.name,
@@ -174,6 +201,7 @@ async function buildSecurityPayload(authSession: AuthSession) {
     })),
     authorizedApplications: [],
     providers,
+    passkeyEnabled: isPasskeyAuthEnabled(),
     canCreateApiKeys,
     activeWorkspace: workspaceAccess
       ? { id: workspaceAccess.workspaceId, name: workspaceAccess.workspaceName }
@@ -264,6 +292,24 @@ export async function POST(request: Request) {
           eq(sessionTable.userId, authSession.user.id),
           ne(sessionTable.id, currentSessionId),
         ),
+      );
+
+    return NextResponse.json(await buildSecurityPayload(authSession));
+  }
+
+  if (body.action === "revokePasskey") {
+    const passkeyId = typeof body.passkeyId === "string" ? body.passkeyId : "";
+    if (!passkeyId) {
+      return NextResponse.json(
+        { error: "Passkey id is required." },
+        { status: 400 },
+      );
+    }
+
+    await db
+      .delete(passkey)
+      .where(
+        and(eq(passkey.id, passkeyId), eq(passkey.userId, authSession.user.id)),
       );
 
     return NextResponse.json(await buildSecurityPayload(authSession));

@@ -1,5 +1,6 @@
 "use client";
 
+import { browserSupportsPasskeys, enrollPasskey } from "@/lib/auth-client";
 import { useCallback, useEffect, useState } from "react";
 
 type SecuritySession = {
@@ -31,11 +32,22 @@ type AuthorizedApplication = {
   createdAt: string;
 };
 
+type Passkey = {
+  id: string;
+  name: string;
+  credentialId: string;
+  deviceType: string;
+  backedUp: boolean;
+  transports: string[];
+  createdAt: string;
+};
+
 type AccountSecurityState = {
   sessions: SecuritySession[];
-  passkeys: [];
+  passkeys: Passkey[];
   apiKeys: PersonalApiKey[];
   authorizedApplications: AuthorizedApplication[];
+  passkeyEnabled: boolean;
   canCreateApiKeys: boolean;
   activeWorkspace: { id: string; name: string } | null;
 };
@@ -147,6 +159,7 @@ export default function AccountSecurityPage() {
     label: string;
     token: string;
   } | null>(null);
+  const [passkeySupported, setPasskeySupported] = useState(false);
 
   const loadSecurityState = useCallback(async (signal?: AbortSignal) => {
     const response = await fetch("/api/account/security", { signal });
@@ -162,14 +175,19 @@ export default function AccountSecurityPage() {
 
     setSecurityState({
       sessions: Array.isArray(data.sessions) ? data.sessions : [],
-      passkeys: [],
+      passkeys: Array.isArray(data.passkeys) ? data.passkeys : [],
       apiKeys: Array.isArray(data.apiKeys) ? data.apiKeys : [],
       authorizedApplications: Array.isArray(data.authorizedApplications)
         ? data.authorizedApplications
         : [],
+      passkeyEnabled: data.passkeyEnabled !== false,
       canCreateApiKeys: Boolean(data.canCreateApiKeys),
       activeWorkspace: data.activeWorkspace ?? null,
     });
+  }, []);
+
+  useEffect(() => {
+    setPasskeySupported(browserSupportsPasskeys());
   }, []);
 
   useEffect(() => {
@@ -216,15 +234,52 @@ export default function AccountSecurityPage() {
 
       setSecurityState({
         sessions: data.sessions,
-        passkeys: [],
+        passkeys: data.passkeys,
         apiKeys: data.apiKeys,
         authorizedApplications: data.authorizedApplications,
+        passkeyEnabled: data.passkeyEnabled,
         canCreateApiKeys: data.canCreateApiKeys,
         activeWorkspace: data.activeWorkspace,
       });
       setRevealedApiKey(data.createdApiKey ?? null);
       setStatus(successMessage);
       return true;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createPasskey() {
+    if (!securityState?.passkeyEnabled) {
+      setError("Passkey enrollment is not configured for this environment.");
+      return;
+    }
+    if (!passkeySupported) {
+      setError(
+        "This browser doesn't support passkey enrollment. Use a browser with WebAuthn support.",
+      );
+      return;
+    }
+
+    const defaultName = `Passkey ${securityState?.passkeys.length ? securityState.passkeys.length + 1 : 1}`;
+    const name = window.prompt("Name this passkey", defaultName)?.trim();
+    if (!name) {
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setStatus(null);
+    try {
+      await enrollPasskey(name);
+      await loadSecurityState();
+      setStatus("Passkey added.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Passkey enrollment failed. Try again or use another browser.",
+      );
     } finally {
       setSaving(false);
     }
@@ -419,13 +474,71 @@ export default function AccountSecurityPage() {
       <Section
         title="Passkeys"
         description="Use passkeys to sign in with your device biometrics or security key."
-        action={<SmallButton disabled>Add passkey</SmallButton>}
+        action={
+          <SmallButton
+            disabled={
+              saving || !securityState.passkeyEnabled || !passkeySupported
+            }
+            onClick={createPasskey}
+          >
+            Add passkey
+          </SmallButton>
+        }
       >
-        <EmptyState>
-          Passkeys are not configured for this workspace yet. When WebAuthn is
-          enabled, your saved passkeys will appear here with manage and revoke
-          controls.
-        </EmptyState>
+        {!securityState.passkeyEnabled ? (
+          <EmptyState>
+            Passkey sign-in is not configured for this environment. Use email or
+            Google authentication instead.
+          </EmptyState>
+        ) : !passkeySupported ? (
+          <EmptyState>
+            This browser or test context does not support WebAuthn passkeys. Use
+            a browser with platform authenticator or security key support to add
+            a passkey.
+          </EmptyState>
+        ) : securityState.passkeys.length ? (
+          <div className="divide-y divide-[var(--color-border)]">
+            {securityState.passkeys.map((passkey) => (
+              <div
+                key={passkey.id}
+                className="flex items-start justify-between gap-3 py-4 first:pt-0 last:pb-0"
+              >
+                <div className="min-w-0">
+                  <h3 className="text-[14px] font-medium text-[var(--color-text-primary)]">
+                    {passkey.name}
+                  </h3>
+                  <p className="mt-1 break-all text-[12px] text-[var(--color-text-secondary)]">
+                    {passkey.deviceType} ·{" "}
+                    {passkey.backedUp ? "Synced" : "Device-bound"}
+                    {passkey.transports.length
+                      ? ` · ${passkey.transports.join(", ")}`
+                      : ""}
+                  </p>
+                  <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+                    Added {formatDate(passkey.createdAt)}
+                  </p>
+                </div>
+                <SmallButton
+                  tone="danger"
+                  disabled={saving}
+                  onClick={() =>
+                    mutate(
+                      { action: "revokePasskey", passkeyId: passkey.id },
+                      "Passkey revoked.",
+                    )
+                  }
+                >
+                  Revoke
+                </SmallButton>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState>
+            No passkeys have been added yet. Add a passkey to enable passkey
+            sign-in for this account.
+          </EmptyState>
+        )}
       </Section>
 
       <Section

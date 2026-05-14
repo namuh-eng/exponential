@@ -20,6 +20,9 @@ vi.mock("@/lib/auth-client", () => ({
     social: vi.fn(),
     magicLink: vi.fn(() => Promise.resolve()),
   },
+  signInWithPasskey: vi.fn(),
+  browserSupportsPasskeys: vi.fn(() => true),
+  enrollPasskey: vi.fn(),
   signOut: vi.fn(),
   useSession: vi.fn(() => ({ data: null, isPending: false })),
   authClient: {},
@@ -29,7 +32,7 @@ describe("public auth pages without a database", () => {
   beforeEach(() => {
     fetchMock.mockResolvedValue({
       ok: true,
-      json: async () => ({ providers: { google: true } }),
+      json: async () => ({ providers: { google: true, passkey: true } }),
     });
   });
 

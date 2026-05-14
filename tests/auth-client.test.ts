@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createAuthClientMock = vi.hoisted(() => vi.fn());
+const signInPasskeyMock = vi.hoisted(() => vi.fn());
 const magicLinkClientMock = vi.hoisted(() =>
   vi.fn(() => ({ id: "magic-link" })),
 );
+const passkeyClientMock = vi.hoisted(() => vi.fn(() => ({ id: "passkey" })));
 
 vi.mock("better-auth/react", () => ({
   createAuthClient: createAuthClientMock,
@@ -13,24 +15,34 @@ vi.mock("better-auth/client/plugins", () => ({
   magicLinkClient: magicLinkClientMock,
 }));
 
+vi.mock("@better-auth/passkey/client", () => ({
+  passkeyClient: passkeyClientMock,
+}));
+
 describe("auth client origin", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.unstubAllEnvs();
     createAuthClientMock.mockReset();
     createAuthClientMock.mockReturnValue({
-      signIn: { social: vi.fn(), magicLink: vi.fn() },
+      signIn: {
+        social: vi.fn(),
+        magicLink: vi.fn(),
+        passkey: signInPasskeyMock,
+      },
+      passkey: { addPasskey: vi.fn() },
       signOut: vi.fn(),
       useSession: vi.fn(),
     });
     magicLinkClientMock.mockClear();
+    signInPasskeyMock.mockReset();
   });
 
   it("uses same-origin auth requests when NEXT_PUBLIC_APP_URL is unset", async () => {
     await import("@/lib/auth-client");
 
     expect(createAuthClientMock).toHaveBeenCalledWith({
-      plugins: [{ id: "magic-link" }],
+      plugins: [{ id: "magic-link" }, { id: "passkey" }],
     });
   });
 
@@ -41,24 +53,22 @@ describe("auth client origin", () => {
 
     expect(createAuthClientMock).toHaveBeenCalledWith({
       baseURL: "https://whetline.example",
-      plugins: [{ id: "magic-link" }],
+      plugins: [{ id: "magic-link" }, { id: "passkey" }],
     });
   });
 
-  it("starts WebAuthn for passkey sign-in and maps user cancellation", async () => {
-    const credentialsGet = vi.fn(
-      (_options: CredentialRequestOptions): Promise<Credential | null> =>
-        Promise.reject(
-          new DOMException("The operation was aborted", "NotAllowedError"),
-        ),
-    );
+  it("starts Better Auth passkey sign-in and maps user cancellation", async () => {
     Object.defineProperty(globalThis, "PublicKeyCredential", {
       value: function PublicKeyCredential() {},
       configurable: true,
     });
     Object.defineProperty(window.navigator, "credentials", {
-      value: { get: credentialsGet },
+      value: { get: vi.fn(), create: vi.fn() },
       configurable: true,
+    });
+    signInPasskeyMock.mockResolvedValueOnce({
+      data: null,
+      error: { code: "AUTH_CANCELLED" },
     });
 
     const { signInWithPasskey } = await import("@/lib/auth-client");
@@ -69,14 +79,6 @@ describe("auth client origin", () => {
       code: "CANCELED",
       message: "Passkey sign-in was canceled. Try again.",
     });
-    expect(credentialsGet).toHaveBeenCalledTimes(1);
-    const firstCallOptions = credentialsGet.mock.calls[0]?.[0];
-    expect(firstCallOptions).toMatchObject({
-      publicKey: {
-        timeout: 60_000,
-        userVerification: "preferred",
-      },
-    });
-    expect(firstCallOptions?.publicKey?.challenge).toBeInstanceOf(Uint8Array);
+    expect(signInPasskeyMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -3,6 +3,12 @@ import { getConfiguredAppUrl } from "@/lib/app-url";
 import { isGoogleOAuthConfigured } from "@/lib/auth-providers";
 import { db } from "@/lib/db";
 import { sendMagicLinkEmail } from "@/lib/email";
+import {
+  getPasskeyOrigin,
+  getPasskeyRpID,
+  isPasskeyAuthEnabled,
+} from "@/lib/passkeys";
+import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins";
@@ -59,6 +65,15 @@ export const auth = betterAuth({
       },
       expiresIn: 600, // 10 minutes
     }),
+    ...(isPasskeyAuthEnabled()
+      ? [
+          passkey({
+            rpID: getPasskeyRpID(),
+            rpName: "Whetline",
+            origin: getPasskeyOrigin(),
+          }),
+        ]
+      : []),
   ],
   session: {
     cookieCache: {

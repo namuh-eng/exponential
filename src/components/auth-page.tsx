@@ -1,6 +1,10 @@
 "use client";
 
-import { signIn, signInWithPasskey } from "@/lib/auth-client";
+import {
+  browserSupportsPasskeys,
+  signIn,
+  signInWithPasskey,
+} from "@/lib/auth-client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -9,6 +13,7 @@ type LoginStep = "choose" | "email-input" | "email-code" | "sso-input";
 type ProviderCapabilities = {
   providers?: {
     google?: boolean;
+    passkey?: boolean;
   };
 };
 type SocialSignInResult = {
@@ -199,7 +204,15 @@ export function AuthPage({
   const [googleConfigured, setGoogleConfigured] = useState<boolean | null>(
     initialGoogleConfigured,
   );
+  const [passkeyConfigured, setPasskeyConfigured] = useState<boolean | null>(
+    null,
+  );
+  const [passkeySupported, setPasskeySupported] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setPasskeySupported(browserSupportsPasskeys());
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -223,11 +236,13 @@ export function AuthPage({
         }
         const data = (await response.json()) as ProviderCapabilities;
         setGoogleConfigured(data.providers?.google === true);
+        setPasskeyConfigured(data.providers?.passkey === true);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
         }
         setGoogleConfigured(false);
+        setPasskeyConfigured(false);
         setError(
           "Google sign-in is unavailable right now. Use email or SAML SSO instead.",
         );
@@ -336,6 +351,19 @@ export function AuthPage({
   }
 
   async function handlePasskeyLogin() {
+    if (passkeyConfigured !== true) {
+      setError(
+        "Passkey sign-in is not configured. Use email or Google to log in.",
+      );
+      return;
+    }
+    if (!passkeySupported) {
+      setError(
+        "This browser doesn't support passkeys. Use email or Google to log in.",
+      );
+      return;
+    }
+
     setPasskeyPending(true);
     setError("");
 
@@ -475,30 +503,47 @@ export function AuthPage({
               Continue with SAML SSO
             </button>
 
-            {mode === "login" && (
-              <button
-                type="button"
-                onClick={handlePasskeyLogin}
-                disabled={loading || passkeyPending}
-                className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  role="img"
-                  aria-label="Passkey"
+            {mode === "login" && passkeyConfigured !== false && (
+              <>
+                <button
+                  type="button"
+                  onClick={handlePasskeyLogin}
+                  disabled={
+                    loading ||
+                    passkeyPending ||
+                    passkeyConfigured !== true ||
+                    !passkeySupported
+                  }
+                  className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <path d="M10 13a5 5 0 1 1 3.54 1.46L12 16h-2v2H8v2H5v-3l4.54-4.54A5 5 0 0 1 10 13Z" />
-                  <path d="M15 9h.01" />
-                </svg>
-                {passkeyPending ? "Waiting for passkey" : "Log in with passkey"}
-              </button>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    role="img"
+                    aria-label="Passkey"
+                  >
+                    <path d="M10 13a5 5 0 1 1 3.54 1.46L12 16h-2v2H8v2H5v-3l4.54-4.54A5 5 0 0 1 10 13Z" />
+                    <path d="M15 9h.01" />
+                  </svg>
+                  {passkeyPending
+                    ? "Waiting for passkey"
+                    : passkeyConfigured === null
+                      ? "Checking passkey sign-in"
+                      : "Log in with passkey"}
+                </button>
+                {passkeyConfigured === true && !passkeySupported ? (
+                  <p className="pt-1 text-center text-sm text-[var(--auth-error)]">
+                    This browser doesn&apos;t support passkeys. Use email or
+                    Google instead.
+                  </p>
+                ) : null}
+              </>
             )}
 
             {error && (

@@ -50,6 +50,7 @@ const mocks = vi.hoisted(() => ({
       updatedAt: new Date("2026-01-06T10:00:00.000Z"),
     },
   ],
+  passkeyRows: [],
   apiKeyRows: [
     {
       id: "api-key-1",
@@ -112,6 +113,9 @@ function setupDbMock() {
     if (keys.includes("memberRole")) {
       return queryBuilder(mocks.accessRows, "limit");
     }
+    if (keys.includes("credentialID")) {
+      return queryBuilder(mocks.passkeyRows, "orderBy");
+    }
     if (keys.includes("keyPrefix")) {
       return queryBuilder(mocks.apiKeyRows, "orderBy");
     }
@@ -147,6 +151,7 @@ describe("Account Security API Route", () => {
     vi.resetModules();
     vi.clearAllMocks();
     mocks.currentUserRows = [{ id: currentUserId }];
+    mocks.passkeyRows = [];
     mocks.resolveActiveWorkspaceId.mockResolvedValue("workspace-1");
     setupDbMock();
   });
