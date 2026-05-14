@@ -6,6 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
+import IssueLabelsPage from "@/app/(app)/settings/issue-labels/page";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mockLabels = [
@@ -165,6 +166,129 @@ describe("IssueLabelsPage component", () => {
 
     expect(screen.getByText("Cool stuff")).toBeInTheDocument();
   });
-});
+  it("renders child labels nested under their parent group", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          labels: [
+            {
+              ...mockLabels[1],
+              id: "group-backend",
+              name: "Backend",
+              parentLabelId: null,
+            },
+            {
+              ...mockLabels[0],
+              id: "label-api",
+              name: "API",
+              parentLabelId: "group-backend",
+            },
+          ],
+        }),
+      }),
+    );
 
-import IssueLabelsPage from "@/app/(app)/settings/issue-labels/page";
+    render(<IssueLabelsPage />);
+    await waitFor(() => screen.getByText("Backend"));
+
+    const group = screen.getByTestId("label-group-Backend");
+    expect(group).toHaveTextContent("Backend");
+    expect(group).toHaveTextContent("API");
+    expect(screen.getByTestId("nested-label-row")).toHaveTextContent("API");
+  });
+
+  it("creates a label under a selected group", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ labels: mockLabels }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({}),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ labels: mockLabels }),
+        }),
+    );
+
+    render(<IssueLabelsPage />);
+    await waitFor(() => screen.getByText("Bug"));
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add label under Bug" }),
+    );
+    expect(screen.getByText(/Creating under/)).toBeInTheDocument();
+    expect(screen.getAllByText("Bug").length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByPlaceholderText("Label name"), {
+      target: { value: "API" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create label" }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/labels",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"parentLabelId":"l-1"'),
+        }),
+      );
+    });
+  });
+
+  it("moves a label into and out of a group while editing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ labels: mockLabels }),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: async () => ({}),
+        }),
+    );
+
+    render(<IssueLabelsPage />);
+    await waitFor(() => screen.getByText("Feature"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Feature" }));
+    fireEvent.change(screen.getByLabelText("Group"), {
+      target: { value: "l-1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/labels/l-2",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining('"parentLabelId":"l-1"'),
+        }),
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Feature" }));
+    fireEvent.change(screen.getByLabelText("Group"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/labels/l-2",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining('"parentLabelId":null'),
+        }),
+      );
+    });
+  });
+});

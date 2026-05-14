@@ -2,6 +2,7 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issueLabel, label } from "@/lib/db/schema";
+import { validateWorkspaceParentLabel } from "@/lib/label-parent-validation";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -68,6 +69,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
   }
 
+  const parentValidation = await validateWorkspaceParentLabel({
+    workspaceId,
+    parentLabelId,
+  });
+  if (!parentValidation.ok) {
+    return NextResponse.json(
+      { error: parentValidation.error },
+      { status: parentValidation.status },
+    );
+  }
+
   const [newLabel] = await db
     .insert(label)
     .values({
@@ -75,7 +87,7 @@ export async function POST(request: Request) {
       color: color || "#6b6f76",
       description: description || null,
       workspaceId,
-      parentLabelId: parentLabelId || null,
+      parentLabelId: parentValidation.parentLabelId,
     })
     .returning();
 

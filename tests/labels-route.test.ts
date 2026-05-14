@@ -4,6 +4,8 @@ const getSessionMock = vi.fn();
 const resolveActiveWorkspaceIdMock = vi.fn();
 const labelsOrderByMock = vi.fn();
 const insertReturningMock = vi.fn();
+const selectRowsMock = vi.fn();
+const insertValuesMock = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: {
@@ -34,12 +36,17 @@ vi.mock("@/lib/db", () => ({
       return {
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([]),
+        limit: vi
+          .fn()
+          .mockImplementation(() => Promise.resolve(selectRowsMock())),
       };
     }),
     insert: vi.fn(() => ({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue(insertReturningMock()),
+      values: vi.fn((values) => {
+        insertValuesMock(values);
+        return {
+          returning: vi.fn().mockResolvedValue(insertReturningMock()),
+        };
       }),
     })),
   },
@@ -59,6 +66,8 @@ describe("labels collection route", () => {
     vi.clearAllMocks();
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
     resolveActiveWorkspaceIdMock.mockResolvedValue("workspace-1");
+    selectRowsMock.mockReturnValue([]);
+    insertValuesMock.mockReturnValue(undefined);
     labelsOrderByMock.mockReturnValue([
       {
         id: "label-1",
@@ -106,5 +115,38 @@ describe("labels collection route", () => {
     expect(response.status).toBe(201);
     const payload = await response.json();
     expect(payload.label.id).toBe("label-2");
+  });
+  it("creates a label under a workspace parent", async () => {
+    selectRowsMock.mockReturnValue([{ id: "group-1", parentLabelId: null }]);
+    insertReturningMock.mockReturnValue([
+      { id: "label-3", name: "Backend", parentLabelId: "group-1" },
+    ]);
+    const { POST } = await import("@/app/api/labels/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/labels", {
+        method: "POST",
+        body: JSON.stringify({ name: "Backend", parentLabelId: "group-1" }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(insertValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ parentLabelId: "group-1" }),
+    );
+  });
+
+  it("rejects an invalid parent label", async () => {
+    selectRowsMock.mockReturnValue([]);
+    const { POST } = await import("@/app/api/labels/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/labels", {
+        method: "POST",
+        body: JSON.stringify({ name: "Backend", parentLabelId: "other" }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
   });
 });

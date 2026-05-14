@@ -56,6 +56,44 @@ test.describe("Issue label settings", () => {
     await expect(page.getByText(editedName)).toBeVisible();
     await expect(page.getByText("Edited issue label")).toBeVisible();
 
+    const groupName = `Area ${suffix}`;
+    await page.getByRole("button", { name: "New group" }).click();
+    await page
+      .getByRole("textbox", { name: "Name", exact: true })
+      .fill(groupName);
+    await page.getByRole("button", { name: "Create group" }).click();
+    await expect(page.getByText(groupName)).toBeVisible();
+
+    const childName = `API ${suffix}`;
+    await page
+      .getByRole("button", { name: `Add label under ${groupName}` })
+      .click();
+    await expect(page.getByText("Creating under")).toBeVisible();
+    await page
+      .getByRole("textbox", { name: "Name", exact: true })
+      .fill(childName);
+    await page.getByRole("button", { name: "Create label" }).click();
+    const group = page.getByTestId(`label-group-${groupName}`);
+    await expect(group).toContainText(childName);
+
+    await page.getByRole("button", { name: `Edit ${editedName}` }).click();
+    await page.getByLabel("Group").selectOption({ label: groupName });
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(group).toContainText(editedName);
+
+    await page.reload();
+    const reloadedGroup = page.getByTestId(`label-group-${groupName}`);
+    await expect(reloadedGroup).toContainText(childName);
+    await expect(reloadedGroup).toContainText(editedName);
+
+    await page.getByRole("button", { name: `Edit ${editedName}` }).click();
+    await page.getByLabel("Group").selectOption({ label: "No group" });
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(reloadedGroup).not.toContainText(editedName);
+    await expect(
+      page.getByTestId("label-row").filter({ hasText: editedName }),
+    ).toBeVisible();
+
     await page.reload();
     await expect(page.getByText(editedName)).toBeVisible();
     await expect(page.getByText("Edited issue label")).toBeVisible();
