@@ -400,7 +400,7 @@ describe("Account Security API Route", () => {
     const createData = await create.json();
 
     expect(create.status).toBe(404);
-    expect(createData.error).toMatch(/workspace API settings/i);
+    expect(createData.error).toMatch(/not supported on account security/i);
     expect(mocks.dbInsert).not.toHaveBeenCalled();
     expect(mocks.insertValues).not.toHaveBeenCalled();
 
@@ -413,7 +413,7 @@ describe("Account Security API Route", () => {
     const revokeData = await revoke.json();
 
     expect(revoke.status).toBe(404);
-    expect(revokeData.error).toMatch(/workspace API settings/i);
+    expect(revokeData.error).toMatch(/not supported on account security/i);
     expect(mocks.dbDelete).not.toHaveBeenCalled();
   });
 });

@@ -72,11 +72,11 @@ describe("AccountSecurityPage component", () => {
       screen.getByRole("heading", { name: "Passkeys" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "API keys" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("heading", { name: "API keys" }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Open workspace API settings" }),
-    ).toHaveAttribute("href", "/settings/api");
+      screen.queryByRole("link", { name: "Open workspace API settings" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Personal API keys" }),
     ).not.toBeInTheDocument();
@@ -270,7 +270,7 @@ describe("AccountSecurityPage component", () => {
     expect(screen.getByText(/No authorized applications/i)).toBeInTheDocument();
   });
 
-  it("does not render personal API key controls from account security", async () => {
+  it("does not render API key controls or workspace API settings CTA from account security", async () => {
     const fetchMock = mockSecurityFetch(
       securityPayload({
         apiKeys: [
@@ -292,11 +292,11 @@ describe("AccountSecurityPage component", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(
-      screen.getByRole("heading", { name: "API keys" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("heading", { name: "API keys" }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Open workspace API settings" }),
-    ).toHaveAttribute("href", "/settings/api");
+      screen.queryByRole("link", { name: "Open workspace API settings" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Personal API keys" }),
     ).not.toBeInTheDocument();

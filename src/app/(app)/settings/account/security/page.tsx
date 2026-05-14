@@ -503,25 +503,6 @@ export default function AccountSecurityPage() {
       </Section>
 
       <Section
-        title="API keys"
-        description="Workspace API keys are managed from the active workspace, not from account security."
-        action={
-          <a
-            href="/settings/api"
-            className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
-          >
-            Open workspace API settings
-          </a>
-        }
-      >
-        <EmptyState>
-          Personal account API keys are not available here. Create, audit, and
-          revoke workspace-scoped API keys from workspace API settings to avoid
-          duplicate token paths.
-        </EmptyState>
-      </Section>
-
-      <Section
         title="Authorized applications"
         description="Third-party OAuth applications that can access your account."
       >

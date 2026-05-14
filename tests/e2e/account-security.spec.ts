@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Account security and access", () => {
-  test("shows Linear-style sections and renders sessions/passkeys without account API key controls", async ({
+  test("shows Linear-style sections and does not render account API key controls or CTA", async ({
     page,
   }) => {
     const suffix = Date.now().toString(36);
@@ -45,10 +45,12 @@ test.describe("Account security and access", () => {
     await expect(
       page.getByText(/No passkeys have been added yet/i),
     ).toBeVisible();
-    await expect(page.getByRole("heading", { name: "API keys" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "API keys" })).toHaveCount(
+      0,
+    );
     await expect(
       page.getByRole("link", { name: "Open workspace API settings" }),
-    ).toHaveAttribute("href", "/settings/api");
+    ).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: "Personal API keys" }),
     ).toHaveCount(0);
@@ -138,7 +140,7 @@ test.describe("Account security and access", () => {
     expect(response.status()).toBe(404);
     await expect(response.json()).resolves.toEqual(
       expect.objectContaining({
-        error: expect.stringMatching(/workspace API settings/i),
+        error: expect.stringMatching(/not supported on account security/i),
       }),
     );
   });

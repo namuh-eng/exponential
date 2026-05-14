@@ -430,10 +430,7 @@ export async function POST(request: Request) {
 
   if (body.action === "createApiKey" || body.action === "revokeApiKey") {
     return NextResponse.json(
-      {
-        error:
-          "API key management is available from workspace API settings, not account security.",
-      },
+      { error: "API key actions are not supported on account security." },
       { status: 404 },
     );
   }
