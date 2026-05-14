@@ -134,6 +134,17 @@ function LinearLogo() {
   );
 }
 
+function TurnstileField() {
+  return <input type="hidden" name="cf-turnstile-response" defaultValue="" />;
+}
+
+function getTurnstileResponse(form: HTMLFormElement): string | undefined {
+  const response = new FormData(form).get("cf-turnstile-response");
+  return typeof response === "string" && response.trim()
+    ? response.trim()
+    : undefined;
+}
+
 function FooterLinks({ mode }: { mode: AuthMode }) {
   if (mode === "signup") {
     return (
@@ -291,7 +302,7 @@ export function AuthPage({
     }
   }
 
-  async function handleEmailSubmit(e: React.FormEvent) {
+  async function handleEmailSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!email.trim()) return;
 
@@ -300,10 +311,18 @@ export function AuthPage({
 
     try {
       const callbackPath = getSafeCallbackPath();
+      const turnstileResponse = getTurnstileResponse(e.currentTarget);
       await signIn.magicLink({
         email,
         callbackURL: getAbsoluteCallbackUrl(callbackPath),
         errorCallbackURL: getErrorCallbackUrl(callbackPath),
+        ...(turnstileResponse
+          ? {
+              fetchOptions: {
+                headers: { "x-captcha-response": turnstileResponse },
+              },
+            }
+          : {}),
       });
       setCode("");
       setStep("email-code");
@@ -548,9 +567,7 @@ export function AuthPage({
               required
               className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none transition-colors"
             />
-            {mode === "signup" && (
-              <input type="hidden" name="cf-turnstile-response" value="" />
-            )}
+            <TurnstileField />
             <button
               type="submit"
               disabled={loading || !email.trim()}

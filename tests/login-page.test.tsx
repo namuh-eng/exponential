@@ -367,7 +367,7 @@ describe("Login page", () => {
   });
 
   it("matches Linear's focused login email step", () => {
-    render(<LoginPage />);
+    const { container } = render(<LoginPage />);
     fireEvent.click(screen.getByText("Continue with email"));
 
     expect(
@@ -378,6 +378,9 @@ describe("Login page", () => {
     ).toBeNull();
     expect(
       screen.getByPlaceholderText("Enter your email address…"),
+    ).toBeDefined();
+    expect(
+      container.querySelector('input[name="cf-turnstile-response"]'),
     ).toBeDefined();
     expect(screen.getByRole("button", { name: "Back to login" })).toBeDefined();
     expect(screen.queryByText("Back to login options")).toBeNull();
@@ -411,6 +414,31 @@ describe("Login page", () => {
       email: "test@example.com",
       callbackURL: "http://localhost:3015/",
       errorCallbackURL: "http://localhost:3015/login",
+    });
+  });
+
+  it("passes the Turnstile response header when requesting a login magic link", async () => {
+    const { container } = render(<LoginPage />);
+    fireEvent.click(screen.getByText("Continue with email"));
+
+    const input = screen.getByPlaceholderText("Enter your email address…");
+    fireEvent.change(input, { target: { value: "test@example.com" } });
+    const turnstileInput = container.querySelector(
+      'input[name="cf-turnstile-response"]',
+    ) as HTMLInputElement;
+    turnstileInput.value = "turnstile-token";
+
+    fireEvent.submit(input.closest("form") as HTMLFormElement);
+
+    await vi.waitFor(() => {
+      expect(signIn.magicLink).toHaveBeenCalledWith({
+        email: "test@example.com",
+        callbackURL: "http://localhost:3015/",
+        errorCallbackURL: "http://localhost:3015/login",
+        fetchOptions: {
+          headers: { "x-captcha-response": "turnstile-token" },
+        },
+      });
     });
   });
 
