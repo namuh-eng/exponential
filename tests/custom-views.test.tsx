@@ -130,6 +130,24 @@ describe("ViewsPage", () => {
     expect(push).toHaveBeenCalledWith("/views/projects");
   });
 
+  it("keeps /views canonical when switching tabs on the landing route", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => buildViewsResponse(),
+    });
+
+    render(<ViewsPage initialTab="issues" keepCanonicalTabRoute />);
+    await waitForLoaded();
+
+    fireEvent.click(screen.getByRole("button", { name: "Projects" }));
+
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.getByText("Project progress")).toBeInTheDocument();
+    expect(
+      screen.queryByText("High priority onboarding"),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows the empty state when the active tab has no views", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,

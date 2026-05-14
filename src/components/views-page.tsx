@@ -540,10 +540,12 @@ export function ViewsPage({
   initialTab,
   initialTeamKey,
   initialTeamKeyFromRoute = false,
+  keepCanonicalTabRoute = false,
 }: {
   initialTab: ViewEntityType;
   initialTeamKey?: string;
   initialTeamKeyFromRoute?: boolean;
+  keepCanonicalTabRoute?: boolean;
 }) {
   const router = useRouter();
   const params = useParams<{ key?: string }>();
@@ -603,6 +605,10 @@ export function ViewsPage({
 
   const handleTabChange = (tab: ViewEntityType) => {
     setActiveTab(tab);
+    if (keepCanonicalTabRoute && !initialTeamKey && !routeTeamKey) {
+      return;
+    }
+
     if (initialTeamKey || routeTeamKey) {
       router.push(`/team/${encodeURIComponent(activeTeamKey ?? "")}/views`);
       return;
