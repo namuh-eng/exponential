@@ -18,6 +18,7 @@ describe("Database schema", () => {
     { table: schema.label, name: "label" },
     { table: schema.project, name: "project" },
     { table: schema.projectTemplate, name: "project_template" },
+    { table: schema.issueTemplate, name: "issue_template" },
     { table: schema.projectTeam, name: "project_team" },
     { table: schema.projectMember, name: "project_member" },
     { table: schema.projectMilestone, name: "project_milestone" },
@@ -230,7 +231,7 @@ describe("Database schema", () => {
 
   // ── Total table count ────────────────────────────────────────────
 
-  it("has exactly 30 tables covering all data models", () => {
-    expect(expectedTables).toHaveLength(30);
+  it("has exactly 31 tables covering all data models", () => {
+    expect(expectedTables).toHaveLength(31);
   });
 });

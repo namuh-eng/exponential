@@ -408,6 +408,27 @@ export const projectTemplate = pgTable(
   (t) => [index("project_template_workspace_idx").on(t.workspaceId)],
 );
 
+// ─── Issue Template ─────────────────────────────────────────────────
+
+export const issueTemplate = pgTable(
+  "issue_template",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description").notNull(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    createdById: text("created_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    settings: jsonb("settings").default({}),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("issue_template_workspace_idx").on(t.workspaceId)],
+);
+
 // ─── Project Team (many-to-many) ─────────────────────────────────────
 
 export const projectTeam = pgTable(
