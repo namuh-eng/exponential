@@ -69,6 +69,7 @@ describe("workspace security route", () => {
             improveAi: false,
             webSearch: false,
             hipaa: true,
+            ipRestrictions: [],
           },
         },
         inviteLinkEnabled: true,
@@ -111,6 +112,7 @@ describe("workspace security route", () => {
         improveAi: false,
         webSearch: false,
         hipaa: true,
+        ipRestrictions: [],
       },
     });
   });
@@ -178,6 +180,7 @@ describe("workspace security route", () => {
             improveAi: false,
             webSearch: false,
             hipaa: true,
+            ipRestrictions: [],
           },
         },
       }),
@@ -203,6 +206,7 @@ describe("workspace security route", () => {
         improveAi: false,
         webSearch: false,
         hipaa: true,
+        ipRestrictions: [],
       },
     });
   });

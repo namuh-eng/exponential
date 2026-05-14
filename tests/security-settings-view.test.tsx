@@ -45,6 +45,14 @@ describe("SecurityPage component", () => {
       improveAi: true,
       webSearch: true,
       hipaa: false,
+      ipRestrictions: [
+        {
+          range: "203.0.113.0/24",
+          description: "Office network",
+          enabled: true,
+          type: "allow",
+        },
+      ],
     },
   };
 
@@ -63,6 +71,8 @@ describe("SecurityPage component", () => {
     });
 
     expect(screen.getByText("example.com")).toBeDefined();
+    expect(screen.getByText("IP restrictions")).toBeDefined();
+    expect(screen.getByText("203.0.113.0/24")).toBeDefined();
     expect(
       screen.getByLabelText("Enable invite links").getAttribute("aria-checked"),
     ).toBe("true");
@@ -171,5 +181,51 @@ describe("SecurityPage component", () => {
     await waitFor(() => {
       expect(screen.getByText("Copied!")).toBeDefined();
     });
+  });
+
+  it("adds, toggles, and removes IP restrictions", async () => {
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => mockSecurityData,
+    });
+
+    render(<SecurityPage />);
+    await waitFor(() => screen.getByText("203.0.113.0/24"));
+
+    await userEvent.click(screen.getByLabelText("Add IP restriction"));
+    await userEvent.type(
+      screen.getByPlaceholderText("203.0.113.0/24"),
+      "198.51.100.10/32",
+    );
+    await userEvent.type(screen.getByPlaceholderText("Office network"), "VPN");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Add restriction" }),
+    );
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/workspaces/current/security",
+      expect.objectContaining({
+        method: "PATCH",
+        body: expect.stringContaining('"range":"198.51.100.10/32"'),
+      }),
+    );
+
+    await userEvent.click(screen.getByLabelText("Enable 203.0.113.0/24"));
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/workspaces/current/security",
+      expect.objectContaining({
+        method: "PATCH",
+        body: expect.stringContaining('"enabled":false'),
+      }),
+    );
+
+    await userEvent.click(screen.getByLabelText("Remove 203.0.113.0/24"));
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/workspaces/current/security",
+      expect.objectContaining({
+        method: "PATCH",
+        body: expect.stringContaining('"ipRestrictions":[]'),
+      }),
+    );
   });
 });

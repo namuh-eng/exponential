@@ -4,6 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 type PermissionLevel = "admins" | "members" | "anyone";
 
+type IpRestriction = {
+  range: string;
+  description: string;
+  enabled: boolean;
+  type: "allow";
+};
+
 type SecuritySettings = {
   inviteLinkEnabled: boolean;
   inviteUrl: string;
@@ -24,6 +31,7 @@ type SecuritySettings = {
   improveAi: boolean;
   webSearch: boolean;
   hipaa: boolean;
+  ipRestrictions: IpRestriction[];
 };
 
 const INVITE_DOCS_URL = "https://linear.app/docs/invite-members";
@@ -125,6 +133,41 @@ function normalizeDomain(value: string) {
   return value.trim().toLowerCase().replace(/^@+/, "");
 }
 
+function normalizeIpRange(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function isValidIpRange(value: string) {
+  const trimmed = normalizeIpRange(value);
+  const ipv4Octet = "(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)";
+  const ipv4 = new RegExp(
+    `^${ipv4Octet}\\.${ipv4Octet}\\.${ipv4Octet}\\.${ipv4Octet}(?:/(?:[0-9]|[12]\\d|3[0-2]))?$`,
+  );
+  const ipv6 = /^[0-9a-f:]+(?:\/[0-9]{1,3})?$/i;
+
+  if (ipv4.test(trimmed)) {
+    return true;
+  }
+
+  if (!trimmed.includes(":")) {
+    return false;
+  }
+
+  const [address, prefix, extra] = trimmed.split("/");
+  if (!address.includes(":") || extra !== undefined || !ipv6.test(trimmed)) {
+    return false;
+  }
+
+  if (prefix === undefined) {
+    return true;
+  }
+
+  const prefixNumber = Number(prefix);
+  return (
+    Number.isInteger(prefixNumber) && prefixNumber >= 0 && prefixNumber <= 128
+  );
+}
+
 async function copyText(text: string) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -152,6 +195,7 @@ function buildPayload(security: SecuritySettings) {
     improveAi: security.improveAi,
     webSearch: security.webSearch,
     hipaa: security.hipaa,
+    ipRestrictions: security.ipRestrictions,
   };
 }
 
@@ -176,6 +220,9 @@ export default function SecurityPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [domainDialogOpen, setDomainDialogOpen] = useState(false);
   const [domainDraft, setDomainDraft] = useState("");
+  const [ipDialogOpen, setIpDialogOpen] = useState(false);
+  const [ipRangeDraft, setIpRangeDraft] = useState("");
+  const [ipDescriptionDraft, setIpDescriptionDraft] = useState("");
 
   useEffect(() => {
     fetch("/api/workspaces/current/security")
@@ -189,7 +236,10 @@ export default function SecurityPage() {
           throw new Error(data?.error ?? "Unable to load security settings.");
         }
 
-        setSecurity(data.security);
+        setSecurity({
+          ...data.security,
+          ipRestrictions: data.security.ipRestrictions ?? [],
+        });
       })
       .catch((error: Error) => {
         setErrorMessage(error.message);
@@ -232,7 +282,10 @@ export default function SecurityPage() {
           return false;
         }
 
-        setSecurity(data.security);
+        setSecurity({
+          ...data.security,
+          ipRestrictions: data.security.ipRestrictions ?? [],
+        });
         setStatusMessage(
           options?.successMessage ?? "Security settings updated.",
         );
@@ -444,6 +497,110 @@ export default function SecurityPage() {
                 <path d="M12 5v14M5 12h14" />
               </svg>
               Add domain
+            </button>
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <div className="mb-1 text-[13px] font-medium text-[var(--color-text-primary)]">
+            IP restrictions
+          </div>
+          <p className="mb-3 text-[12px] text-[var(--color-text-tertiary)]">
+            Restrict direct web, desktop, mobile, and API access to configured
+            IP addresses or CIDR ranges. Available on Enterprise plans.
+          </p>
+          <div className="rounded-lg border border-[var(--color-border)] px-4 py-3">
+            {security.ipRestrictions.length > 0 ? (
+              <div className="mb-3 space-y-2">
+                {security.ipRestrictions.map((restriction) => (
+                  <div
+                    key={restriction.range}
+                    className="flex flex-col gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-medium text-[var(--color-text-primary)]">
+                        {restriction.range}
+                      </div>
+                      <div className="text-[12px] text-[var(--color-text-tertiary)]">
+                        {restriction.description || "Allowed IP range"}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Toggle
+                        enabled={restriction.enabled}
+                        disabled={saving}
+                        onChange={(value) =>
+                          void persistSecurity(
+                            {
+                              ...security,
+                              ipRestrictions: security.ipRestrictions.map(
+                                (entry) =>
+                                  entry.range === restriction.range
+                                    ? { ...entry, enabled: value }
+                                    : entry,
+                              ),
+                            },
+                            {
+                              successMessage: value
+                                ? "IP restriction enabled."
+                                : "IP restriction disabled.",
+                            },
+                          )
+                        }
+                        label={`Enable ${restriction.range}`}
+                      />
+                      <button
+                        type="button"
+                        aria-label={`Remove ${restriction.range}`}
+                        disabled={saving}
+                        onClick={() =>
+                          void persistSecurity(
+                            {
+                              ...security,
+                              ipRestrictions: security.ipRestrictions.filter(
+                                (entry) => entry.range !== restriction.range,
+                              ),
+                            },
+                            { successMessage: "IP restriction removed." },
+                          )
+                        }
+                        className="text-[12px] text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mb-3 text-[13px] text-[var(--color-text-tertiary)]">
+                No IP restrictions
+              </div>
+            )}
+
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => {
+                setIpRangeDraft("");
+                setIpDescriptionDraft("");
+                setIpDialogOpen(true);
+                setErrorMessage(null);
+              }}
+              className="flex items-center gap-1.5 text-[12px] text-[var(--color-accent)] hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label="Add IP restriction"
+            >
+              <svg
+                className="h-3 w-3"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                aria-hidden="true"
+              >
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Add IP restriction
             </button>
           </div>
         </div>
@@ -705,6 +862,106 @@ export default function SecurityPage() {
                   className="rounded-md bg-[var(--color-accent)] px-3 py-2 text-[12px] font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Add domain
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {ipDialogOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-[420px] rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] p-5 shadow-2xl">
+            <h2 className="text-[16px] font-semibold text-[var(--color-text-primary)]">
+              Add IP restriction
+            </h2>
+            <p className="mt-2 text-[12px] text-[var(--color-text-tertiary)]">
+              Allow access from a single IP address or a CIDR range, such as
+              203.0.113.0/24.
+            </p>
+
+            <form
+              className="mt-4 space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const range = normalizeIpRange(ipRangeDraft);
+
+                if (!isValidIpRange(range)) {
+                  setErrorMessage("Enter a valid IP address or CIDR range.");
+                  return;
+                }
+
+                if (
+                  security.ipRestrictions.some((entry) => entry.range === range)
+                ) {
+                  setErrorMessage("That IP restriction already exists.");
+                  return;
+                }
+
+                void persistSecurity(
+                  {
+                    ...security,
+                    ipRestrictions: [
+                      ...security.ipRestrictions,
+                      {
+                        range,
+                        description: ipDescriptionDraft.trim(),
+                        enabled: true,
+                        type: "allow",
+                      },
+                    ],
+                  },
+                  { successMessage: "IP restriction added." },
+                ).then((didSave) => {
+                  if (didSave) {
+                    setIpDialogOpen(false);
+                    setIpRangeDraft("");
+                    setIpDescriptionDraft("");
+                  }
+                });
+              }}
+            >
+              <label className="block text-[12px] text-[var(--color-text-secondary)]">
+                IP address or CIDR range
+                <input
+                  value={ipRangeDraft}
+                  onChange={(event) => setIpRangeDraft(event.target.value)}
+                  placeholder="203.0.113.0/24"
+                  className="mt-1.5 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+                />
+              </label>
+
+              <label className="block text-[12px] text-[var(--color-text-secondary)]">
+                Description (optional)
+                <input
+                  value={ipDescriptionDraft}
+                  onChange={(event) =>
+                    setIpDescriptionDraft(event.target.value)
+                  }
+                  placeholder="Office network"
+                  className="mt-1.5 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+                />
+              </label>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIpDialogOpen(false);
+                    setIpRangeDraft("");
+                    setIpDescriptionDraft("");
+                    setErrorMessage(null);
+                  }}
+                  className="rounded-md border border-[var(--color-border)] px-3 py-2 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-md bg-[var(--color-accent)] px-3 py-2 text-[12px] font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Add restriction
                 </button>
               </div>
             </form>
