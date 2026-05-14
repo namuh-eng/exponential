@@ -27,6 +27,10 @@ type SocialSignInResult = {
     status?: number;
   } | null;
 };
+type SamlDiscoveryResponse = {
+  url?: string;
+  error?: string;
+};
 
 const authErrorMessages: Record<string, string> = {
   INVALID_TOKEN:
@@ -359,11 +363,38 @@ export function AuthPage({
     window.location.assign(verifyUrl.toString());
   }
 
-  function handleSsoSubmit(e: React.FormEvent) {
+  async function handleSsoSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!ssoIdentifier.trim()) return;
 
-    setError("SAML SSO isn't configured for this workspace yet.");
+    setLoading(true);
+    setError("");
+
+    try {
+      const callbackPath = getSafeCallbackPath();
+      const response = await fetch("/api/auth/saml/discovery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: ssoIdentifier,
+          isDesktop: false,
+          type: "login",
+          callbackURL: getAbsoluteCallbackUrl(callbackPath),
+        }),
+      });
+      const data = (await response.json()) as SamlDiscoveryResponse;
+
+      if (!response.ok || !data.url) {
+        setError(data.error ?? "No SAML SSO enabled workspace could be found.");
+        setLoading(false);
+        return;
+      }
+
+      window.location.assign(data.url);
+    } catch {
+      setError("Failed to look up SAML SSO. Please try again.");
+      setLoading(false);
+    }
   }
 
   async function handlePasskeyLogin() {
@@ -595,7 +626,7 @@ export function AuthPage({
         )}
 
         {step === "sso-input" && (
-          <form onSubmit={handleSsoSubmit} className="space-y-3">
+          <form onSubmit={handleSsoSubmit} noValidate className="space-y-3">
             <input
               type="email"
               value={ssoIdentifier}
@@ -609,10 +640,10 @@ export function AuthPage({
             />
             <button
               type="submit"
-              disabled={!ssoIdentifier.trim()}
+              disabled={loading || !ssoIdentifier.trim()}
               className="auth-primary-button flex h-11 w-full items-center justify-center rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Continue with SAML
+              {loading ? "Checking SAML…" : "Continue with SAML"}
             </button>
             <button
               type="button"
@@ -621,6 +652,7 @@ export function AuthPage({
                 setSsoIdentifier("");
                 setError("");
               }}
+              disabled={loading}
               className="w-full pt-1 text-center text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
             >
               {backLabel}

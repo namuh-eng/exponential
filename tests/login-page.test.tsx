@@ -136,6 +136,128 @@ describe("Login page", () => {
     expect(screen.getByText("Back to login")).toBeDefined();
   });
 
+  it("submits SAML email lookup to the API with callback intent and shows pending state", async () => {
+    let resolveSamlLookup:
+      | ((value: {
+          ok: boolean;
+          json: () => Promise<{ error: string }>;
+        }) => void)
+      | undefined;
+    fetchMock.mockImplementation((url: string) => {
+      if (url === "/api/auth/provider-capabilities") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ providers: { google: true, passkey: true } }),
+        });
+      }
+
+      return new Promise((resolve) => {
+        resolveSamlLookup = resolve;
+      });
+    });
+    mockLocation.search = "?callbackUrl=%2Fworkspace%2Fissues";
+    render(<LoginPage />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
+    );
+    fireEvent.change(screen.getByPlaceholderText("Enter your email address…"), {
+      target: { value: "person@missing.example" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue with SAML" }));
+
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/auth/saml/discovery",
+        expect.objectContaining({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: "person@missing.example",
+            isDesktop: false,
+            type: "login",
+            callbackURL: "http://localhost:3015/workspace/issues",
+          }),
+        }),
+      );
+    });
+    const pendingButton = screen.getByRole("button", {
+      name: "Checking SAML…",
+    });
+    expect(pendingButton.hasAttribute("disabled")).toBe(true);
+
+    resolveSamlLookup?.({
+      ok: false,
+      json: async () => ({
+        error: "No SAML SSO enabled workspace could be found.",
+      }),
+    });
+
+    expect(
+      await screen.findByText("No SAML SSO enabled workspace could be found."),
+    ).toBeDefined();
+  });
+
+  it("shows server-backed SAML validation errors", async () => {
+    fetchMock.mockImplementation((url: string) => {
+      if (url === "/api/auth/provider-capabilities") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ providers: { google: true, passkey: true } }),
+        });
+      }
+
+      return Promise.resolve({
+        ok: false,
+        json: async () => ({ error: "Enter a valid email address." }),
+      });
+    });
+    render(<LoginPage />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
+    );
+    fireEvent.change(screen.getByPlaceholderText("Enter your email address…"), {
+      target: { value: "invalid" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue with SAML" }));
+
+    expect(
+      await screen.findByText("Enter a valid email address."),
+    ).toBeDefined();
+  });
+
+  it("redirects to the discovered SAML IdP URL", async () => {
+    fetchMock.mockImplementation((url: string) => {
+      if (url === "/api/auth/provider-capabilities") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ providers: { google: true, passkey: true } }),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ url: "https://idp.example.com/saml/start" }),
+      });
+    });
+    render(<LoginPage />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
+    );
+    fireEvent.change(screen.getByPlaceholderText("Enter your email address…"), {
+      target: { value: "person@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue with SAML" }));
+
+    await vi.waitFor(() => {
+      expect(assignMock).toHaveBeenCalledWith(
+        "https://idp.example.com/saml/start",
+      );
+    });
+  });
+
   it("matches Linear's passkey waiting state while WebAuthn is pending", async () => {
     vi.mocked(signInWithPasskey).mockReturnValueOnce(new Promise(() => {}));
     render(<LoginPage />);
