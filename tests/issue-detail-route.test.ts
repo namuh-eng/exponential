@@ -10,6 +10,11 @@ const projectWhereMock = vi.fn();
 const labelsWhereMock = vi.fn();
 const commentsOrderByMock = vi.fn();
 const subIssuesOrderByMock = vi.fn();
+const parentIssueWhereMock = vi.fn();
+const cycleWhereMock = vi.fn();
+const sourceRelationsWhereMock = vi.fn();
+const targetRelationsWhereMock = vi.fn();
+const relatedIssuesWhereMock = vi.fn();
 const reactionsWhereMock = vi.fn();
 const attachmentsOrderByMock = vi.fn();
 const stateLookupLimitMock = vi.fn();
@@ -141,6 +146,45 @@ vi.mock("@/lib/db", () => ({
         };
       }
 
+      if (
+        selection &&
+        "identifier" in selection &&
+        "title" in selection &&
+        !("number" in selection)
+      ) {
+        const mock =
+          selectCallCount > 10 ? relatedIssuesWhereMock : parentIssueWhereMock;
+        return {
+          from: vi.fn().mockReturnValue({
+            where: mock,
+          }),
+        };
+      }
+
+      if (selection && "number" in selection && !("identifier" in selection)) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: cycleWhereMock,
+          }),
+        };
+      }
+
+      if (selection && "relatedIssueId" in selection) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: sourceRelationsWhereMock,
+          }),
+        };
+      }
+
+      if (selection && "issueId" in selection && "type" in selection) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: targetRelationsWhereMock,
+          }),
+        };
+      }
+
       if (selection && "emoji" in selection && "commentId" in selection) {
         return {
           from: vi.fn().mockReturnValue({
@@ -229,6 +273,8 @@ describe("issue detail route", () => {
         assigneeId: "user-2",
         creatorId: "user-3",
         projectId: "project-1",
+        parentIssueId: "issue-parent",
+        cycleId: "cycle-1",
         dueDate: new Date("2026-04-30T00:00:00.000Z"),
         estimate: 3,
         sortOrder: 2,
@@ -236,6 +282,7 @@ describe("issue detail route", () => {
         updatedAt: new Date("2026-04-23T10:00:00.000Z"),
         teamId: "team-1",
         workspaceId: "workspace-1",
+        archivedAt: null,
         canceledAt: null,
         completedAt: null,
       },
@@ -280,6 +327,22 @@ describe("issue detail route", () => {
         stateColor: "#00f",
       },
     ]);
+    parentIssueWhereMock.mockResolvedValue([
+      { id: "issue-parent", identifier: "ENG-0", title: "Parent issue" },
+    ]);
+    cycleWhereMock.mockResolvedValue([
+      { id: "cycle-1", name: "Cycle 42", number: 42 },
+    ]);
+    sourceRelationsWhereMock.mockResolvedValue([
+      { id: "rel-1", type: "blocks", relatedIssueId: "issue-3" },
+    ]);
+    targetRelationsWhereMock.mockResolvedValue([
+      { id: "rel-2", type: "blocks", issueId: "issue-4" },
+    ]);
+    relatedIssuesWhereMock.mockResolvedValue([
+      { id: "issue-3", identifier: "ENG-3", title: "Blocked issue" },
+      { id: "issue-4", identifier: "ENG-4", title: "Blocking issue" },
+    ]);
     reactionsWhereMock.mockResolvedValue([
       { commentId: "comment-1", emoji: "🔥", userId: "user-1" },
       { commentId: "comment-1", emoji: "🔥", userId: "user-5" },
@@ -307,6 +370,7 @@ describe("issue detail route", () => {
         updatedAt: new Date("2026-04-23T12:00:00.000Z"),
         stateId: "state-2",
         sortOrder: 8,
+        archivedAt: null,
       },
     ]);
     getDownloadUrlMock.mockResolvedValue("https://files.test/spec.pdf");
@@ -361,6 +425,28 @@ describe("issue detail route", () => {
       },
       team: { id: "team-1", name: "Engineering", key: "ENG" },
       project: { id: "project-1", name: "Ever", icon: "rocket" },
+      cycle: { id: "cycle-1", name: "Cycle 42", number: 42 },
+      parentIssue: {
+        id: "issue-parent",
+        identifier: "ENG-0",
+        title: "Parent issue",
+      },
+      relations: [
+        {
+          id: "rel-1",
+          type: "blocks",
+          issue: { id: "issue-3", identifier: "ENG-3", title: "Blocked issue" },
+        },
+        {
+          id: "rel-2",
+          type: "blocked_by",
+          issue: {
+            id: "issue-4",
+            identifier: "ENG-4",
+            title: "Blocking issue",
+          },
+        },
+      ],
       labels: [{ name: "Bug", color: "#f00" }],
       comments: [
         {
@@ -484,6 +570,7 @@ describe("issue detail route", () => {
       updatedAt: "2026-04-23T12:00:00.000Z",
       stateId: "state-2",
       sortOrder: 8,
+      archivedAt: null,
     });
   });
 

@@ -32,6 +32,17 @@ const mockIssueDetail = {
   creator: { name: "Jaeyun", image: null },
   team: { id: "team-1", name: "Engineering", key: "ENG" },
   project: { id: "p1", name: "Agent Speed", icon: "⚡" },
+  dueDate: "2026-04-30T00:00:00.000Z",
+  estimate: 3,
+  cycle: { id: "cycle-1", name: "Cycle 42", number: 42 },
+  parentIssue: { id: "iss-0", identifier: "ENG-0", title: "Parent task" },
+  relations: [
+    {
+      id: "rel-1",
+      type: "blocks",
+      issue: { id: "iss-2", identifier: "ENG-2", title: "Blocked task" },
+    },
+  ],
   labels: [{ name: "bug", color: "#f00" }],
   comments: [
     {
@@ -76,6 +87,42 @@ describe("IssueDetailView UI", () => {
     expect(screen.getAllByText(/In Progress/i).length).toBeGreaterThan(0);
 
     expect(screen.getByText("First comment")).toBeInTheDocument();
+  });
+
+  it("renders Linear-like planning fields, relations, issue reactions, and actions", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => mockIssueDetail,
+    } as Response);
+
+    render(<IssueDetailView issueId="iss-1" />);
+    await screen.findByText("A bug to fix");
+
+    expect(screen.getByText("Due date")).toBeInTheDocument();
+    expect(screen.getByText("Apr 30, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Estimate")).toBeInTheDocument();
+    expect(screen.getByText("3 points")).toBeInTheDocument();
+    expect(screen.getByText("Cycle")).toBeInTheDocument();
+    expect(screen.getByText("Cycle 42")).toBeInTheDocument();
+    expect(screen.getByText("Parent issue")).toBeInTheDocument();
+    expect(screen.getByText("ENG-0 · Parent task")).toBeInTheDocument();
+    expect(screen.getByText("Relations")).toBeInTheDocument();
+    expect(screen.getByText("Blocks")).toBeInTheDocument();
+    expect(screen.getByText("ENG-2 · Blocked task")).toBeInTheDocument();
+    expect(screen.getByText("Blocked by")).toBeInTheDocument();
+    expect(screen.getByText("Duplicate")).toBeInTheDocument();
+    expect(screen.getByText("Related")).toBeInTheDocument();
+    expect(screen.getByText("Issue reactions")).toBeInTheDocument();
+    expect(screen.getByLabelText("Issue-level reactions")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    expect(screen.getByRole("menuitem", { name: "Edit" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Archive" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Delete" }),
+    ).toBeInTheDocument();
   });
 
   it("updates issue title on blur", async () => {

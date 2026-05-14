@@ -4,9 +4,11 @@ import { db } from "@/lib/db";
 import {
   comment,
   commentAttachment,
+  cycle,
   issue,
   issueHistory,
   issueLabel,
+  issueRelation,
   label,
   project,
   reaction,
@@ -42,6 +44,8 @@ async function findIssueRecord(id: string, workspaceId: string) {
       assigneeId: issue.assigneeId,
       creatorId: issue.creatorId,
       projectId: issue.projectId,
+      parentIssueId: issue.parentIssueId,
+      cycleId: issue.cycleId,
       dueDate: issue.dueDate,
       estimate: issue.estimate,
       sortOrder: issue.sortOrder,
@@ -49,6 +53,7 @@ async function findIssueRecord(id: string, workspaceId: string) {
       updatedAt: issue.updatedAt,
       teamId: issue.teamId,
       workspaceId: team.workspaceId,
+      archivedAt: issue.archivedAt,
       canceledAt: issue.canceledAt,
       completedAt: issue.completedAt,
     })
@@ -77,6 +82,8 @@ async function findIssueRecord(id: string, workspaceId: string) {
       assigneeId: issue.assigneeId,
       creatorId: issue.creatorId,
       projectId: issue.projectId,
+      parentIssueId: issue.parentIssueId,
+      cycleId: issue.cycleId,
       dueDate: issue.dueDate,
       estimate: issue.estimate,
       sortOrder: issue.sortOrder,
@@ -84,6 +91,7 @@ async function findIssueRecord(id: string, workspaceId: string) {
       updatedAt: issue.updatedAt,
       teamId: issue.teamId,
       workspaceId: team.workspaceId,
+      archivedAt: issue.archivedAt,
       canceledAt: issue.canceledAt,
       completedAt: issue.completedAt,
     })
@@ -128,6 +136,10 @@ export async function GET(
     labelRows,
     commentRows,
     subIssueRows,
+    parentIssueRows,
+    cycleRows,
+    sourceRelationRows,
+    targetRelationRows,
   ] = await Promise.all([
     db.select().from(workflowState).where(eq(workflowState.id, iss.stateId)),
     iss.assigneeId
@@ -183,7 +195,60 @@ export async function GET(
       .leftJoin(workflowState, eq(issue.stateId, workflowState.id))
       .where(eq(issue.parentIssueId, iss.id))
       .orderBy(asc(issue.createdAt)),
+    iss.parentIssueId
+      ? db
+          .select({
+            id: issue.id,
+            identifier: issue.identifier,
+            title: issue.title,
+          })
+          .from(issue)
+          .where(eq(issue.id, iss.parentIssueId))
+      : Promise.resolve([]),
+    iss.cycleId
+      ? db
+          .select({ id: cycle.id, name: cycle.name, number: cycle.number })
+          .from(cycle)
+          .where(eq(cycle.id, iss.cycleId))
+      : Promise.resolve([]),
+    db
+      .select({
+        id: issueRelation.id,
+        type: issueRelation.type,
+        relatedIssueId: issueRelation.relatedIssueId,
+      })
+      .from(issueRelation)
+      .where(eq(issueRelation.issueId, iss.id)),
+    db
+      .select({
+        id: issueRelation.id,
+        type: issueRelation.type,
+        issueId: issueRelation.issueId,
+      })
+      .from(issueRelation)
+      .where(eq(issueRelation.relatedIssueId, iss.id)),
   ]);
+
+  const relatedIssueIds = [
+    ...new Set([
+      ...sourceRelationRows.map((relationRow) => relationRow.relatedIssueId),
+      ...targetRelationRows.map((relationRow) => relationRow.issueId),
+    ]),
+  ];
+  const relatedIssueRows =
+    relatedIssueIds.length > 0
+      ? await db
+          .select({
+            id: issue.id,
+            identifier: issue.identifier,
+            title: issue.title,
+          })
+          .from(issue)
+          .where(inArray(issue.id, relatedIssueIds))
+      : [];
+  const relatedIssueById = new Map(
+    relatedIssueRows.map((relatedIssue) => [relatedIssue.id, relatedIssue]),
+  );
 
   const commentIds = commentRows.map((currentComment) => currentComment.id);
   const reactionRows =
@@ -273,6 +338,40 @@ export async function GET(
   const creator = creatorRows[0] ?? null;
   const teamData = teamRows[0];
   const projectData = projectRows[0] ?? null;
+  const parentIssueData = parentIssueRows[0] ?? null;
+  const cycleData = cycleRows[0] ?? null;
+  const inverseRelationType = {
+    blocks: "blocked_by",
+    blocked_by: "blocks",
+    duplicate: "duplicate",
+    related: "related",
+  } as const;
+  const relationData = [
+    ...sourceRelationRows.flatMap((relationRow) => {
+      const relatedIssue = relatedIssueById.get(relationRow.relatedIssueId);
+      return relatedIssue
+        ? [
+            {
+              id: relationRow.id,
+              type: relationRow.type,
+              issue: relatedIssue,
+            },
+          ]
+        : [];
+    }),
+    ...targetRelationRows.flatMap((relationRow) => {
+      const relatedIssue = relatedIssueById.get(relationRow.issueId);
+      return relatedIssue
+        ? [
+            {
+              id: relationRow.id,
+              type: inverseRelationType[relationRow.type],
+              issue: relatedIssue,
+            },
+          ]
+        : [];
+    }),
+  ];
 
   return NextResponse.json({
     id: iss.id,
@@ -297,6 +396,9 @@ export async function GET(
     creator,
     team: teamData,
     project: projectData,
+    cycle: cycleData,
+    parentIssue: parentIssueData,
+    relations: relationData,
     labels: labelRows.map((l) => ({ name: l.labelName, color: l.labelColor })),
     comments: commentRows.map((c) => ({
       id: c.id,
@@ -349,6 +451,7 @@ export async function PATCH(
     description?: string | null;
     stateId?: string;
     sortOrder?: number;
+    archive?: boolean;
   };
 
   const existingIssue = await findIssueRecord(id, workspaceId);
@@ -427,6 +530,13 @@ export async function PATCH(
     }
   }
 
+  if (body.archive !== undefined) {
+    updateData.archivedAt = body.archive ? new Date() : null;
+    if (Boolean(existingIssue.archivedAt) !== body.archive) {
+      changedFields.push("archivedAt");
+    }
+  }
+
   if (body.sortOrder !== undefined) {
     updateData.sortOrder = body.sortOrder;
     if (body.sortOrder !== existingIssue.sortOrder) {
@@ -445,6 +555,7 @@ export async function PATCH(
       updatedAt: issue.updatedAt,
       stateId: issue.stateId,
       sortOrder: issue.sortOrder,
+      archivedAt: issue.archivedAt,
     });
 
   if (updated[0] && changedFields.length > 0) {

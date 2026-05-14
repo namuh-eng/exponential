@@ -78,6 +78,15 @@ interface IssueDetail {
   creator: { name: string; image: string | null } | null;
   team: { id: string; name: string; key: string };
   project: { id: string; name: string; icon: string } | null;
+  dueDate: string | null;
+  estimate: number | null;
+  cycle: { id: string; name: string | null; number: number } | null;
+  parentIssue: { id: string; identifier: string; title: string } | null;
+  relations: {
+    id: string;
+    type: "blocks" | "blocked_by" | "duplicate" | "related";
+    issue: { id: string; identifier: string; title: string };
+  }[];
   labels: { name: string; color: string }[];
   comments: IssueComment[];
   subIssues: IssueSubIssue[];
@@ -337,6 +346,11 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
   const [descriptionFocused, setDescriptionFocused] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
     "idle",
+  );
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [actionStatus, setActionStatus] = useState<string | null>(null);
+  const [issueReactionNotice, setIssueReactionNotice] = useState<string | null>(
+    null,
   );
   const titleRef = useRef<HTMLHeadingElement>(null);
   const descriptionRef = useRef<HTMLDivElement>(null);
@@ -645,6 +659,69 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
     setDescriptionDraft(nextDraft);
   }
 
+  async function handleArchiveIssue() {
+    if (!issue) {
+      return;
+    }
+
+    if (!window.confirm(`Archive ${issue.identifier}?`)) {
+      return;
+    }
+
+    setActionStatus("Archiving issue...");
+    setActionsOpen(false);
+    try {
+      const res = await fetch(`/api/issues/${issue.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archive: true }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Archive failed");
+      }
+
+      setActionStatus("Issue archived");
+    } catch {
+      setActionStatus("Archive unavailable");
+    }
+  }
+
+  async function handleDeleteIssue() {
+    if (!issue) {
+      return;
+    }
+
+    if (!window.confirm(`Delete ${issue.identifier}? This cannot be undone.`)) {
+      return;
+    }
+
+    setActionStatus("Deleting issue...");
+    setActionsOpen(false);
+    try {
+      const res = await fetch(`/api/issues/${issue.id}`, { method: "DELETE" });
+
+      if (!res.ok) {
+        throw new Error("Delete failed");
+      }
+
+      setIssue(null);
+    } catch {
+      setActionStatus("Delete unavailable");
+    }
+  }
+
+  function handleEditIssue() {
+    setActionsOpen(false);
+    titleRef.current?.focus();
+  }
+
+  function handleIssueReactionClick(emoji: string) {
+    setIssueReactionNotice(
+      `Issue-level ${emoji} reactions need durable API support before saving.`,
+    );
+  }
+
   async function handleCopyLink(detailHref: string) {
     try {
       await navigator.clipboard.writeText(
@@ -726,6 +803,7 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
                     : `Updated ${formatFullDate(issue.updatedAt)}`}
                 </span>
                 <span>Created by {issue.creator?.name ?? "Unknown"}</span>
+                {actionStatus && <span>{actionStatus}</span>}
               </div>
             </div>
 
@@ -754,6 +832,49 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
               >
                 Open in tab
               </Link>
+              <div className="relative">
+                <button
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={actionsOpen}
+                  onClick={() => setActionsOpen((current) => !current)}
+                  className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                >
+                  Actions
+                </button>
+                {actionsOpen && (
+                  <div
+                    role="menu"
+                    aria-label="Issue actions"
+                    className="absolute right-0 z-10 mt-2 w-40 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-content-bg)] p-1 shadow-lg"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={handleEditIssue}
+                      className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => void handleArchiveIssue()}
+                      className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                    >
+                      Archive
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => void handleDeleteIssue()}
+                      className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-red-500 hover:bg-[var(--color-surface-hover)]"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1069,8 +1190,39 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
                   color: label.color,
                 }))}
                 project={issue.project}
+                dueDate={issue.dueDate}
+                estimate={issue.estimate}
+                cycle={issue.cycle}
+                parentIssue={issue.parentIssue}
+                relations={issue.relations}
               />
             )}
+          </div>
+
+          <div className="mt-4 rounded-[20px] border border-[var(--color-border)] bg-[var(--color-content-bg)] p-4">
+            <div className="mb-3 text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+              Issue reactions
+            </div>
+            <div
+              className="flex flex-wrap gap-2"
+              aria-label="Issue-level reactions"
+            >
+              {QUICK_REACTIONS.map((emoji) => (
+                <button
+                  key={`issue-reaction-${emoji}`}
+                  type="button"
+                  onClick={() => handleIssueReactionClick(emoji)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-border)] text-[14px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+                  aria-label={`Issue reaction ${emoji}`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <p className="mt-3 text-[12px] text-[var(--color-text-secondary)]">
+              {issueReactionNotice ??
+                "Issue-level reactions are shown separately from comment reactions; saving awaits durable API support."}
+            </p>
           </div>
 
           <div className="mt-4 rounded-[20px] border border-[var(--color-border)] bg-[var(--color-content-bg)] p-4">
