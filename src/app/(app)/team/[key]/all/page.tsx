@@ -1,5 +1,6 @@
 "use client";
 
+import { useAppShellContext } from "@/app/(app)/app-shell";
 import { CreateIssueModal } from "@/components/create-issue-modal";
 import {
   DisplayOptionsPanel,
@@ -16,6 +17,7 @@ import { IssuesGroupHeader } from "@/components/issues-group-header";
 import { TeamRouteErrorState } from "@/components/team-route-error-state";
 import { useDisplayOptions } from "@/hooks/use-display-options";
 import { useFilters } from "@/hooks/use-filters";
+import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import {
   useParams,
   usePathname,
@@ -100,6 +102,12 @@ export default function TeamIssuesPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const routeTab = getIssueTabFromPath(pathname, params.key);
+  const workspaceSlug = useAppShellContext()?.workspaceSlug;
+  const teamPath = useCallback(
+    (suffix: string) =>
+      withWorkspaceSlug(`/team/${params.key}/${suffix}`, workspaceSlug),
+    [params.key, workspaceSlug],
+  );
   const [data, setData] = useState<IssuesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadState, setLoadState] = useState<"ready" | "not-found" | "error">(
@@ -161,11 +169,11 @@ export default function TeamIssuesPage() {
   const handleLayoutChange = useCallback(
     (layout: "list" | "board") => {
       if (layout === "board") {
-        router.push(`/team/${params.key}/board`);
+        router.push(teamPath("board"));
       }
       updateOptions({ layout });
     },
-    [router, params.key, updateOptions],
+    [router, teamPath, updateOptions],
   );
 
   const handlePropertyToggle = useCallback(
@@ -307,9 +315,7 @@ export default function TeamIssuesPage() {
               type="button"
               onClick={() => {
                 const query = searchParams.toString();
-                router.push(
-                  `/team/${params.key}/${tab.id}${query ? `?${query}` : ""}`,
-                );
+                router.push(`${teamPath(tab.id)}${query ? `?${query}` : ""}`);
               }}
               className={`rounded-md px-2.5 py-1 text-[13px] transition-colors ${
                 routeTab === tab.id
@@ -433,7 +439,10 @@ export default function TeamIssuesPage() {
                 projectName={iss.projectName ?? undefined}
                 dueDate={iss.dueDate}
                 createdAt={iss.createdAt}
-                href={`/team/${data.team.key}/issue/${iss.id}`}
+                href={withWorkspaceSlug(
+                  `/team/${data.team.key}/issue/${iss.id}`,
+                  workspaceSlug,
+                )}
                 displayProperties={options.displayProperties}
               />
             ))}

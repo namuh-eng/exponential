@@ -1,5 +1,6 @@
 "use client";
 
+import { useAppShellContext } from "@/app/(app)/app-shell";
 import { BoardColumn } from "@/components/board-column";
 import { CreateIssueModal } from "@/components/create-issue-modal";
 import {
@@ -17,6 +18,7 @@ import { priorityMap } from "@/components/issue-row";
 import { TeamRouteErrorState } from "@/components/team-route-error-state";
 import { useDisplayOptions } from "@/hooks/use-display-options";
 import { useFilters } from "@/hooks/use-filters";
+import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -116,6 +118,7 @@ function moveIssueBetweenGroups(
 export default function TeamBoardPage() {
   const params = useParams<{ key: string }>();
   const router = useRouter();
+  const workspaceSlug = useAppShellContext()?.workspaceSlug;
   const [data, setData] = useState<IssuesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadState, setLoadState] = useState<"ready" | "not-found" | "error">(
@@ -180,11 +183,13 @@ export default function TeamBoardPage() {
   const handleLayoutChange = useCallback(
     (layout: "list" | "board") => {
       if (layout === "list") {
-        router.push(`/team/${params.key}/all`);
+        router.push(
+          withWorkspaceSlug(`/team/${params.key}/all`, workspaceSlug),
+        );
       }
       updateOptions({ layout });
     },
-    [router, params.key, updateOptions],
+    [router, params.key, workspaceSlug, updateOptions],
   );
 
   const handlePropertyToggle = useCallback(

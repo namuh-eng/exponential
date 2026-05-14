@@ -14,6 +14,10 @@ vi.mock("next/navigation", () => ({
   useParams: () => ({ key: "ENG", id: "iss-1" }),
 }));
 
+vi.mock("@/app/(app)/app-shell", () => ({
+  useAppShellContext: () => ({ workspaceSlug: undefined }),
+}));
+
 import { IssueDetailView } from "@/components/issue-detail-view";
 
 const mockIssueDetail = {

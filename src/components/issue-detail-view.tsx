@@ -1,11 +1,13 @@
 "use client";
 
+import { useAppShellContext } from "@/app/(app)/app-shell";
 import { IssueProperties } from "@/components/issue-properties";
 import { LAST_ISSUE_STORAGE_KEY } from "@/lib/command-palette";
 import {
   normalizeIssueDescriptionHtml,
   richTextHtmlToPlainText,
 } from "@/lib/issue-description";
+import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import Link from "next/link";
 import {
   type ChangeEvent,
@@ -351,6 +353,7 @@ function CommentReactions({
 }
 
 export function IssueDetailView({ issueId }: { issueId: string }) {
+  const workspaceSlug = useAppShellContext()?.workspaceSlug;
   const [issue, setIssue] = useState<IssueDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [historyEvents, setHistoryEvents] = useState<IssueHistoryEvent[]>([]);
@@ -823,7 +826,14 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
     );
   }
 
-  const detailHref = `/team/${issue.team.key}/issue/${issue.id}`;
+  const teamIssuesHref = withWorkspaceSlug(
+    `/team/${issue.team.key}/all`,
+    workspaceSlug,
+  );
+  const detailHref = withWorkspaceSlug(
+    `/team/${issue.team.key}/issue/${issue.id}`,
+    workspaceSlug,
+  );
   const descriptionIsEmpty =
     richTextHtmlToPlainText(descriptionDraft).trim().length === 0;
 
@@ -835,7 +845,7 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2 text-[12px] uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                 <Link
-                  href={`/team/${issue.team.key}/all`}
+                  href={teamIssuesHref}
                   className="transition-colors hover:text-[var(--color-text-primary)]"
                 >
                   {issue.team.name}
@@ -879,7 +889,7 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
 
             <div className="flex flex-wrap items-center gap-2">
               <Link
-                href={`/team/${issue.team.key}/all`}
+                href={teamIssuesHref}
                 className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
               >
                 Back to issues
