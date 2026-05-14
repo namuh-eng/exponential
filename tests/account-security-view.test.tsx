@@ -1,3 +1,11 @@
+const enrollPasskeyMock = vi.hoisted(() => vi.fn());
+const browserSupportsPasskeysMock = vi.hoisted(() => vi.fn(() => true));
+
+vi.mock("@/lib/auth-client", () => ({
+  browserSupportsPasskeys: browserSupportsPasskeysMock,
+  enrollPasskey: enrollPasskeyMock,
+}));
+
 import AccountSecurityPage from "@/app/(app)/settings/account/security/page";
 import {
   cleanup,
@@ -28,6 +36,7 @@ function securityPayload(overrides: Record<string, unknown> = {}) {
     passkeys: [],
     apiKeys: [],
     authorizedApplications: [],
+    passkeyEnabled: true,
     canCreateApiKeys: true,
     activeWorkspace: { id: "workspace-1", name: "Linear QA" },
     ...overrides,
@@ -38,6 +47,8 @@ describe("AccountSecurityPage component", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+    vi.clearAllMocks();
+    browserSupportsPasskeysMock.mockReturnValue(true);
   });
 
   it("renders Linear-parity empty sections and no disabled 2FA placeholder", async () => {
@@ -123,6 +134,86 @@ describe("AccountSecurityPage component", () => {
     expect(
       screen.getAllByRole("button", { name: "Revoke" })[1],
     ).not.toBeDisabled();
+  });
+
+  it("adds and revokes passkeys instead of rendering a permanent disabled stub", async () => {
+    const promptMock = vi.fn(() => "Work laptop");
+    vi.stubGlobal("prompt", promptMock);
+    enrollPasskeyMock.mockResolvedValueOnce({ id: "passkey-1" });
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(securityPayload()), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            securityPayload({
+              passkeys: [
+                {
+                  id: "passkey-1",
+                  name: "Work laptop",
+                  credentialId: "credential-1",
+                  deviceType: "singleDevice",
+                  backedUp: false,
+                  transports: ["internal"],
+                  createdAt: "2026-05-14T10:00:00.000Z",
+                },
+              ],
+            }),
+          ),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(securityPayload({ passkeys: [] })), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AccountSecurityPage />);
+
+    const addPasskey = await screen.findByRole("button", {
+      name: "Add passkey",
+    });
+    expect(addPasskey).not.toBeDisabled();
+    expect(
+      screen.queryByText(/Passkeys are not configured/i),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(addPasskey);
+
+    await screen.findByText("Passkey added.");
+    expect(enrollPasskeyMock).toHaveBeenCalledWith("Work laptop");
+    expect(screen.getByText("Work laptop")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toMatchObject({
+      action: "revokePasskey",
+      passkeyId: "passkey-1",
+    });
+  });
+
+  it("explains unavailable WebAuthn instead of showing an enabled passkey action", async () => {
+    browserSupportsPasskeysMock.mockReturnValueOnce(false);
+    mockSecurityFetch(securityPayload());
+
+    render(<AccountSecurityPage />);
+
+    const addPasskey = await screen.findByRole("button", {
+      name: "Add passkey",
+    });
+    expect(addPasskey).toBeDisabled();
+    expect(
+      screen.getByText(/does not support WebAuthn passkeys/i),
+    ).toBeInTheDocument();
   });
 
   it("creates and revokes personal API keys with one-time token reveal", async () => {

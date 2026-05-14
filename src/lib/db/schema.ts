@@ -151,6 +151,29 @@ export const verification = pgTable("verification", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const passkey = pgTable(
+  "passkey",
+  {
+    id: text("id").primaryKey(),
+    name: text("name"),
+    publicKey: text("public_key").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    credentialID: text("credential_id").notNull(),
+    counter: integer("counter").notNull(),
+    deviceType: text("device_type").notNull(),
+    backedUp: boolean("backed_up").notNull(),
+    transports: text("transports"),
+    aaguid: text("aaguid"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("passkey_user_id_idx").on(t.userId),
+    uniqueIndex("passkey_credential_id_idx").on(t.credentialID),
+  ],
+);
+
 // ─── Workspace ───────────────────────────────────────────────────────
 
 export const workspace = pgTable(

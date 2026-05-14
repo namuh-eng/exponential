@@ -32,6 +32,15 @@ test.describe("Account security and access", () => {
     await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Passkeys" })).toBeVisible();
     await expect(
+      page.getByText(/Passkeys are not configured for this workspace yet/i),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Add passkey" }),
+    ).toBeEnabled();
+    await expect(
+      page.getByText(/No passkeys have been added yet/i),
+    ).toBeVisible();
+    await expect(
       page.getByRole("heading", { name: "Personal API keys" }),
     ).toBeVisible();
     await expect(
