@@ -6,6 +6,8 @@ import {
   waitFor,
 } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
+import { ACCOUNT_PREFERENCES_CHANGE_EVENT } from "@/lib/account-preferences";
+import { useEffect, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Mock next/navigation
@@ -39,10 +41,74 @@ const mockPreferencesData = {
   },
 };
 
+function preferencesResponse(
+  accountPreferences = mockPreferencesData.accountPreferences,
+) {
+  return {
+    ok: true,
+    json: async () => ({ accountPreferences }),
+  } as Response;
+}
+
+function mockPreferencesFetch() {
+  return vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async (_url, init) => {
+      if ((init as RequestInit | undefined)?.method === "PATCH") {
+        const body = JSON.parse(String((init as RequestInit).body));
+        return preferencesResponse(body.accountPreferences);
+      }
+
+      return preferencesResponse();
+    });
+}
+
+function PreferenceChangeListener() {
+  const [changeCount, setChangeCount] = useState(0);
+
+  useEffect(() => {
+    const onPreferencesChange = () => setChangeCount((current) => current + 1);
+
+    window.addEventListener(
+      ACCOUNT_PREFERENCES_CHANGE_EVENT,
+      onPreferencesChange,
+    );
+
+    return () => {
+      window.removeEventListener(
+        ACCOUNT_PREFERENCES_CHANGE_EVENT,
+        onPreferencesChange,
+      );
+    };
+  }, []);
+
+  return <div data-testid="preference-change-count">{changeCount}</div>;
+}
+
+function renderPreferencesWithShellListener() {
+  return render(
+    <>
+      <PreferenceChangeListener />
+      <PreferencesPage />
+    </>,
+  );
+}
+
+function renderPhaseWarningCalls(errorSpy: { mock: { calls: unknown[][] } }) {
+  return errorSpy.mock.calls.filter((call) =>
+    call.some(
+      (argument) =>
+        typeof argument === "string" &&
+        argument.includes("Cannot update a component") &&
+        argument.includes("while rendering a different component"),
+    ),
+  );
+}
+
 describe("PreferencesPage UI", () => {
   afterEach(() => {
     cleanup();
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("renders preferences and updates a toggle", async () => {
@@ -153,6 +219,78 @@ describe("PreferencesPage UI", () => {
           method: "PATCH",
           body: expect.stringContaining('"theme":"light"'),
         }),
+      );
+    });
+  });
+
+  it("does not emit render-phase update warnings when preference changes notify the app shell", async () => {
+    mockPreferencesFetch();
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    renderPreferencesWithShellListener();
+    await screen.findByText("Preferences");
+
+    fireEvent.click(screen.getByRole("button", { name: /Dark/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Light/ }));
+    fireEvent.click(screen.getByRole("button", { name: /System preference/ }));
+    fireEvent.change(screen.getByLabelText("Font size"), {
+      target: { value: "large" },
+    });
+    fireEvent.click(screen.getByLabelText("Use pointer cursors"));
+    fireEvent.click(screen.getByLabelText("Customize sidebar"));
+    fireEvent.change(screen.getByLabelText("Inbox visibility"), {
+      target: { value: "hide" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Saved")).toBeInTheDocument();
+    });
+    expect(
+      Number(screen.getByTestId("preference-change-count").textContent),
+    ).toBeGreaterThan(0);
+    expect(renderPhaseWarningCalls(consoleErrorSpy)).toHaveLength(0);
+  });
+
+  it("keeps the latest rapid preference change when older PATCH responses finish later", async () => {
+    let releaseFirstPatch: (() => void) | undefined;
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      if ((init as RequestInit | undefined)?.method !== "PATCH") {
+        return preferencesResponse({
+          ...mockPreferencesData.accountPreferences,
+          theme: "system",
+        });
+      }
+
+      const body = JSON.parse(String((init as RequestInit).body));
+      const preferences = body.accountPreferences;
+
+      if (preferences.theme === "dark") {
+        await new Promise<void>((resolve) => {
+          releaseFirstPatch = resolve;
+        });
+      }
+
+      return preferencesResponse(preferences);
+    });
+
+    render(<PreferencesPage />);
+    await screen.findByText("Preferences");
+
+    fireEvent.click(screen.getByRole("button", { name: /Dark/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Light/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Saved")).toBeInTheDocument();
+    });
+
+    releaseFirstPatch?.();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Light/ })).toHaveClass(
+        "border-[var(--color-accent)]",
       );
     });
   });
