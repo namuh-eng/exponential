@@ -51,6 +51,7 @@ const mocks = vi.hoisted(() => ({
     },
   ],
   passkeyRows: [],
+  authorizedApplicationRows: [] as unknown[],
 }));
 
 vi.mock("node:crypto", async (importOriginal) => {
@@ -111,6 +112,9 @@ function setupDbMock() {
     if (keys.includes("credentialID")) {
       return queryBuilder(mocks.passkeyRows, "orderBy");
     }
+    if (keys.includes("appId")) {
+      return queryBuilder(mocks.authorizedApplicationRows, "orderBy");
+    }
     if (keys.includes("providerId")) {
       return queryBuilder(mocks.providerRows, "orderBy");
     }
@@ -144,6 +148,7 @@ describe("Account Security API Route", () => {
     vi.clearAllMocks();
     mocks.currentUserRows = [{ id: currentUserId }];
     mocks.passkeyRows = [];
+    mocks.authorizedApplicationRows = [];
     mocks.resolveActiveWorkspaceId.mockResolvedValue("workspace-1");
     setupDbMock();
   });
@@ -288,6 +293,98 @@ describe("Account Security API Route", () => {
     expect(revokeOne.status).toBe(200);
     expect(revokeAll.status).toBe(200);
     expect(mocks.dbDelete).toHaveBeenCalledTimes(2);
+  });
+
+  it("lists authorized OAuth applications for the authenticated user without exposing tokens", async () => {
+    authenticate();
+    mocks.authorizedApplicationRows = [
+      {
+        id: "grant-1",
+        appId: "app-linear-importer",
+        clientId: "lin_client_123",
+        name: "Linear Importer",
+        imageUrl: "https://example.com/importer.png",
+        scopes: ["read", "write"],
+        webhooksEnabled: true,
+        createdAt: new Date("2026-04-01T10:00:00.000Z"),
+        updatedAt: new Date("2026-04-02T10:00:00.000Z"),
+      },
+    ];
+
+    const { GET } = await import("@/app/api/account/security/route");
+    const res = await GET();
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.authorizedApplications).toEqual([
+      {
+        id: "grant-1",
+        appId: "app-linear-importer",
+        clientId: "lin_client_123",
+        name: "Linear Importer",
+        imageUrl: "https://example.com/importer.png",
+        scopes: ["read", "write"],
+        webhooksEnabled: true,
+        createdAt: "2026-04-01T10:00:00.000Z",
+        updatedAt: "2026-04-02T10:00:00.000Z",
+      },
+    ]);
+    expect(JSON.stringify(data)).not.toMatch(
+      /accessToken|refreshToken|clientSecret/i,
+    );
+  });
+
+  it("revokes an authorized application grant and refreshes the list", async () => {
+    authenticate();
+    mocks.authorizedApplicationRows = [
+      {
+        id: "grant-1",
+        appId: "app-linear-importer",
+        clientId: "lin_client_123",
+        name: "Linear Importer",
+        imageUrl: null,
+        scopes: "read,write",
+        webhooksEnabled: false,
+        createdAt: new Date("2026-04-01T10:00:00.000Z"),
+        updatedAt: new Date("2026-04-02T10:00:00.000Z"),
+      },
+    ];
+    mocks.deleteWhere.mockImplementationOnce(async () => {
+      mocks.authorizedApplicationRows = [];
+    });
+
+    const { POST } = await import("@/app/api/account/security/route");
+    const res = await POST(
+      new Request("http://localhost/api/account/security", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "revokeAuthorizedApplication",
+          applicationId: "grant-1",
+        }),
+      }),
+    );
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(mocks.dbDelete).toHaveBeenCalledTimes(1);
+    expect(data.authorizedApplications).toEqual([]);
+  });
+
+  it("requires an authorized application id before revoking", async () => {
+    authenticate();
+
+    const { POST } = await import("@/app/api/account/security/route");
+    const res = await POST(
+      new Request("http://localhost/api/account/security", {
+        method: "POST",
+        body: JSON.stringify({ action: "revokeAuthorizedApplication" }),
+      }),
+    );
+    const data = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(data.error).toMatch(/application id is required/i);
+    expect(mocks.dbDelete).not.toHaveBeenCalled();
   });
 
   it("rejects account-security API key creation and revocation", async () => {

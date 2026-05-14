@@ -2,6 +2,7 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
   account,
+  authorizedApplicationGrant,
   passkey,
   session as sessionTable,
   user,
@@ -36,6 +37,18 @@ type RawSecuritySession = {
   expiresAt: Date | string | null;
 };
 
+type RawAuthorizedApplication = {
+  id: string;
+  appId: string;
+  clientId: string;
+  name: string;
+  imageUrl: string | null;
+  scopes: unknown;
+  webhooksEnabled: boolean;
+  createdAt: Date | string | null;
+  updatedAt: Date | string | null;
+};
+
 function getCurrentSessionId(authSession: AuthSession) {
   return typeof authSession.session?.id === "string"
     ? authSession.session.id
@@ -50,6 +63,38 @@ function serializeDate(value: Date | string | null) {
   return value instanceof Date
     ? value.toISOString()
     : new Date(value).toISOString();
+}
+
+function normalizeScopes(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.filter(
+      (scope): scope is string =>
+        typeof scope === "string" && scope.trim() !== "",
+    );
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(/[\s,]+/)
+      .map((scope) => scope.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function serializeAuthorizedApplication(application: RawAuthorizedApplication) {
+  return {
+    id: application.id,
+    appId: application.appId,
+    clientId: application.clientId,
+    name: application.name,
+    imageUrl: application.imageUrl,
+    scopes: normalizeScopes(application.scopes),
+    webhooksEnabled: application.webhooksEnabled,
+    createdAt: serializeDate(application.createdAt),
+    updatedAt: serializeDate(application.updatedAt),
+  };
 }
 
 function normalizeSessionMetadata(value: string | null | undefined) {
@@ -194,33 +239,49 @@ async function loadVisibleSessionCandidates(
 
 async function buildSecurityPayload(authSession: AuthSession) {
   const currentSessionId = getCurrentSessionId(authSession);
-  const [sessions, providers, userPasskeys] = await Promise.all([
-    loadVisibleSessionCandidates(authSession.user.id, currentSessionId),
-    db
-      .select({
-        id: account.id,
-        providerId: account.providerId,
-        accountId: account.accountId,
-        createdAt: account.createdAt,
-        updatedAt: account.updatedAt,
-      })
-      .from(account)
-      .where(eq(account.userId, authSession.user.id))
-      .orderBy(desc(account.updatedAt)),
-    db
-      .select({
-        id: passkey.id,
-        name: passkey.name,
-        credentialID: passkey.credentialID,
-        deviceType: passkey.deviceType,
-        backedUp: passkey.backedUp,
-        transports: passkey.transports,
-        createdAt: passkey.createdAt,
-      })
-      .from(passkey)
-      .where(eq(passkey.userId, authSession.user.id))
-      .orderBy(desc(passkey.createdAt)),
-  ]);
+  const [sessions, providers, userPasskeys, authorizedApplications] =
+    await Promise.all([
+      loadVisibleSessionCandidates(authSession.user.id, currentSessionId),
+      db
+        .select({
+          id: account.id,
+          providerId: account.providerId,
+          accountId: account.accountId,
+          createdAt: account.createdAt,
+          updatedAt: account.updatedAt,
+        })
+        .from(account)
+        .where(eq(account.userId, authSession.user.id))
+        .orderBy(desc(account.updatedAt)),
+      db
+        .select({
+          id: passkey.id,
+          name: passkey.name,
+          credentialID: passkey.credentialID,
+          deviceType: passkey.deviceType,
+          backedUp: passkey.backedUp,
+          transports: passkey.transports,
+          createdAt: passkey.createdAt,
+        })
+        .from(passkey)
+        .where(eq(passkey.userId, authSession.user.id))
+        .orderBy(desc(passkey.createdAt)),
+      db
+        .select({
+          id: authorizedApplicationGrant.id,
+          appId: authorizedApplicationGrant.appId,
+          clientId: authorizedApplicationGrant.clientId,
+          name: authorizedApplicationGrant.name,
+          imageUrl: authorizedApplicationGrant.imageUrl,
+          scopes: authorizedApplicationGrant.scopes,
+          webhooksEnabled: authorizedApplicationGrant.webhooksEnabled,
+          createdAt: authorizedApplicationGrant.createdAt,
+          updatedAt: authorizedApplicationGrant.updatedAt,
+        })
+        .from(authorizedApplicationGrant)
+        .where(eq(authorizedApplicationGrant.userId, authSession.user.id))
+        .orderBy(desc(authorizedApplicationGrant.updatedAt)),
+    ]);
 
   return {
     sessions: prepareVisibleSessions(sessions, currentSessionId).map(
@@ -253,7 +314,9 @@ async function buildSecurityPayload(authSession: AuthSession) {
         : [],
       createdAt: serializeDate(item.createdAt),
     })),
-    authorizedApplications: [],
+    authorizedApplications: authorizedApplications.map(
+      serializeAuthorizedApplication,
+    ),
     providers,
     passkeyEnabled: isPasskeyAuthEnabled(),
   };
@@ -376,13 +439,25 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "revokeAuthorizedApplication") {
-    return NextResponse.json(
-      {
-        error:
-          "OAuth application grants are not configured for this workspace.",
-      },
-      { status: 404 },
-    );
+    const applicationId =
+      typeof body.applicationId === "string" ? body.applicationId : "";
+    if (!applicationId) {
+      return NextResponse.json(
+        { error: "Authorized application id is required." },
+        { status: 400 },
+      );
+    }
+
+    await db
+      .delete(authorizedApplicationGrant)
+      .where(
+        and(
+          eq(authorizedApplicationGrant.id, applicationId),
+          eq(authorizedApplicationGrant.userId, authSession.user.id),
+        ),
+      );
+
+    return NextResponse.json(await buildSecurityPayload(authSession));
   }
 
   return NextResponse.json({ error: "Unsupported action." }, { status: 400 });
