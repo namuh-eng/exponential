@@ -11,6 +11,32 @@ export const authClient = createAuthClient({
 
 export const { signIn, signOut, useSession } = authClient;
 
+type SocialLinkProvider = "google";
+
+type LinkSocialAccountOptions = {
+  provider: SocialLinkProvider;
+  callbackURL: string;
+  errorCallbackURL?: string;
+};
+
+type LinkSocialAccountResult = {
+  url?: string;
+  data?: { url?: string; redirect?: boolean };
+  error?: { code?: string; status?: number; message?: string };
+};
+
+type AuthClientWithLinkSocial = typeof authClient & {
+  linkSocial: (
+    options: LinkSocialAccountOptions,
+  ) => Promise<LinkSocialAccountResult>;
+};
+
+export async function linkSocialAccount(
+  options: LinkSocialAccountOptions,
+): Promise<LinkSocialAccountResult> {
+  return (authClient as AuthClientWithLinkSocial).linkSocial(options);
+}
+
 type PasskeySignInOptions = {
   callbackURL: string;
 };
