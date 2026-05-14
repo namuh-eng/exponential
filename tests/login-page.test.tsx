@@ -517,6 +517,48 @@ describe("Login page", () => {
     ).toBeDefined();
   });
 
+  it("keeps login email submit enabled and shows Linear empty validation on click", () => {
+    render(<LoginPage />);
+    fireEvent.click(screen.getByText("Continue with email"));
+
+    const submitButton = screen.getByRole("button", {
+      name: "Continue with email",
+    });
+    expect(submitButton.hasAttribute("disabled")).toBe(false);
+
+    fireEvent.click(submitButton);
+
+    expect(
+      screen.getByText("Please enter an email address for login."),
+    ).toBeDefined();
+    expect(signIn.magicLink).not.toHaveBeenCalled();
+  });
+
+  it("shows Linear empty validation when the login email form is submitted with Enter", () => {
+    render(<LoginPage />);
+    fireEvent.click(screen.getByText("Continue with email"));
+
+    const input = screen.getByPlaceholderText("Enter your email address…");
+    fireEvent.submit(input.closest("form") as HTMLFormElement);
+
+    expect(
+      screen.getByText("Please enter an email address for login."),
+    ).toBeDefined();
+    expect(signIn.magicLink).not.toHaveBeenCalled();
+  });
+
+  it("shows inline validation for a non-empty invalid login email", () => {
+    render(<LoginPage />);
+    fireEvent.click(screen.getByText("Continue with email"));
+
+    const input = screen.getByPlaceholderText("Enter your email address…");
+    fireEvent.change(input, { target: { value: "invalid" } });
+    fireEvent.submit(input.closest("form") as HTMLFormElement);
+
+    expect(screen.getByText("Enter a valid email address.")).toBeDefined();
+    expect(signIn.magicLink).not.toHaveBeenCalled();
+  });
+
   it("shows email-sent step after submitting email", async () => {
     render(<LoginPage />);
     fireEvent.click(screen.getByText("Continue with email"));

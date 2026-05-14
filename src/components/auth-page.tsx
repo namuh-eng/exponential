@@ -32,6 +32,13 @@ type SamlDiscoveryResponse = {
   error?: string;
 };
 
+const emptyEmailLoginError = "Please enter an email address for login.";
+const invalidEmailError = "Enter a valid email address.";
+
+function isValidEmailAddress(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 const authErrorMessages: Record<string, string> = {
   INVALID_TOKEN:
     "That sign-in code is invalid. Request a new email and try again.",
@@ -308,7 +315,17 @@ export function AuthPage({
 
   async function handleEmailSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!email.trim()) return;
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail) {
+      setError(emptyEmailLoginError);
+      return;
+    }
+
+    if (!isValidEmailAddress(normalizedEmail)) {
+      setError(invalidEmailError);
+      return;
+    }
 
     setLoading(true);
     setError("");
@@ -317,7 +334,7 @@ export function AuthPage({
       const callbackPath = getSafeCallbackPath();
       const turnstileResponse = getTurnstileResponse(e.currentTarget);
       await signIn.magicLink({
-        email,
+        email: normalizedEmail,
         callbackURL: getAbsoluteCallbackUrl(callbackPath),
         errorCallbackURL: getErrorCallbackUrl(callbackPath),
         ...(turnstileResponse
@@ -589,11 +606,14 @@ export function AuthPage({
         )}
 
         {step === "email-input" && (
-          <form onSubmit={handleEmailSubmit} className="space-y-3">
+          <form onSubmit={handleEmailSubmit} noValidate className="space-y-3">
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setError("");
+              }}
               placeholder="Enter your email address…"
               required
               className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none transition-colors"
@@ -601,7 +621,7 @@ export function AuthPage({
             <TurnstileField />
             <button
               type="submit"
-              disabled={loading || !email.trim()}
+              disabled={loading}
               className="auth-primary-button flex h-11 w-full items-center justify-center rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "Sending…" : "Continue with email"}

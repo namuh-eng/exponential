@@ -92,4 +92,39 @@ test.describe("Unauthenticated workspace deep links", () => {
       page.getByRole("heading", { name: "Create your workspace" }),
     ).toBeVisible();
   });
+
+  test("login email empty submit shows Linear inline validation for click and Enter", async ({
+    page,
+  }) => {
+    const consoleErrors: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") {
+        consoleErrors.push(message.text());
+      }
+    });
+
+    await page.goto("/login");
+    await page.getByRole("button", { name: "Continue with email" }).click();
+
+    const emailInput = page.getByPlaceholder("Enter your email address…");
+    const submitButton = page.getByRole("button", {
+      name: "Continue with email",
+    });
+    await expect(submitButton).toBeEnabled();
+
+    await submitButton.click();
+    await expect(
+      page.getByText("Please enter an email address for login."),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "What’s your email address?" }),
+    ).toBeVisible();
+
+    await emailInput.focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByText("Please enter an email address for login."),
+    ).toBeVisible();
+    expect(consoleErrors).toEqual([]);
+  });
 });
