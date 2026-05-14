@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    return await createTestSession(email, body?.name, request.url);
+    return await createTestSession(email, body?.name, request);
   } catch (error) {
     if (shouldRenderDatabaseBootstrapError(error)) {
       return NextResponse.json(
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
 async function createTestSession(
   email: string,
   name: string | undefined,
-  requestUrl: string,
+  request: Request,
 ) {
   const existingUser = await db
     .select({
@@ -113,6 +113,16 @@ async function createTestSession(
   const authContext = await auth.$context;
   const createdSession = await authContext.internalAdapter.createSession(
     resolvedUser.id,
+    false,
+    {
+      userAgent:
+        request.headers.get("user-agent")?.trim() ||
+        "Playwright test browser session",
+      ipAddress:
+        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+        request.headers.get("x-real-ip")?.trim() ||
+        "",
+    },
   );
   const signedToken = `${createdSession.token}.${await makeSignature(
     createdSession.token,
@@ -120,7 +130,7 @@ async function createTestSession(
   )}`;
   const sessionCookie = authContext.authCookies.sessionToken;
   const shouldSecureActiveWorkspaceCookie =
-    new URL(requestUrl).protocol === "https:";
+    new URL(request.url).protocol === "https:";
 
   const response = NextResponse.json({
     success: true,

@@ -17,7 +17,7 @@ import {
   workspace,
 } from "@/lib/db/schema";
 import { isPasskeyAuthEnabled } from "@/lib/passkeys";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, gt, ne } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 type AuthSession = {
@@ -36,6 +36,17 @@ type AccountSecurityAction =
   | null;
 
 const API_KEY_PREFIX = "lin_api";
+const SESSION_QUERY_LIMIT = 50;
+const SESSION_VISIBLE_LIMIT = 10;
+
+type RawSecuritySession = {
+  id: string;
+  userAgent: string | null;
+  ipAddress: string | null;
+  createdAt: Date | string | null;
+  updatedAt: Date | string | null;
+  expiresAt: Date | string | null;
+};
 
 function getCurrentSessionId(authSession: AuthSession) {
   return typeof authSession.session?.id === "string"
@@ -57,6 +68,82 @@ function serializeDate(value: Date | string | null) {
     : new Date(value).toISOString();
 }
 
+function normalizeSessionMetadata(value: string | null | undefined) {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
+function sessionTimestamp(value: Date | string | null) {
+  if (!value) {
+    return 0;
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  const time = date.getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function isUnknownDeviceSession(session: RawSecuritySession) {
+  return (
+    !normalizeSessionMetadata(session.userAgent) &&
+    !normalizeSessionMetadata(session.ipAddress)
+  );
+}
+
+function sessionDedupeKey(session: RawSecuritySession) {
+  return isUnknownDeviceSession(session) ? "unknown-device" : session.id;
+}
+
+function summarizeSessionSource(
+  session: RawSecuritySession,
+  isCurrent: boolean,
+) {
+  const userAgent = normalizeSessionMetadata(session.userAgent);
+  if (userAgent) {
+    return "Browser";
+  }
+
+  return isCurrent ? "Current browser session" : "Browser session";
+}
+
+function summarizeSessionLocation(session: RawSecuritySession) {
+  return normalizeSessionMetadata(session.ipAddress)
+    ? "Approximate location unavailable"
+    : "Unknown location";
+}
+
+function prepareVisibleSessions(
+  rows: RawSecuritySession[],
+  currentSessionId: string | null,
+) {
+  const sorted = [...rows].sort((a, b) => {
+    if (currentSessionId) {
+      if (a.id === currentSessionId) return -1;
+      if (b.id === currentSessionId) return 1;
+    }
+
+    return sessionTimestamp(b.updatedAt) - sessionTimestamp(a.updatedAt);
+  });
+  const seen = new Set<string>();
+  const visible: RawSecuritySession[] = [];
+
+  for (const row of sorted) {
+    const key = sessionDedupeKey(row);
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    visible.push(row);
+
+    if (visible.length >= SESSION_VISIBLE_LIMIT) {
+      break;
+    }
+  }
+
+  return visible;
+}
+
 async function currentUserExists(userId: string) {
   const [currentUser] = await db
     .select({ id: user.id })
@@ -65,6 +152,60 @@ async function currentUserExists(userId: string) {
     .limit(1);
 
   return Boolean(currentUser);
+}
+
+async function loadVisibleSessionCandidates(
+  userId: string,
+  currentSessionId: string | null,
+) {
+  const recentSessions = await db
+    .select({
+      id: sessionTable.id,
+      userAgent: sessionTable.userAgent,
+      ipAddress: sessionTable.ipAddress,
+      createdAt: sessionTable.createdAt,
+      updatedAt: sessionTable.updatedAt,
+      expiresAt: sessionTable.expiresAt,
+    })
+    .from(sessionTable)
+    .where(
+      and(
+        eq(sessionTable.userId, userId),
+        gt(sessionTable.expiresAt, new Date()),
+      ),
+    )
+    .orderBy(desc(sessionTable.updatedAt))
+    .limit(SESSION_QUERY_LIMIT);
+
+  if (
+    !currentSessionId ||
+    recentSessions.some(
+      (deviceSession) => deviceSession.id === currentSessionId,
+    )
+  ) {
+    return recentSessions;
+  }
+
+  const [currentSession] = await db
+    .select({
+      id: sessionTable.id,
+      userAgent: sessionTable.userAgent,
+      ipAddress: sessionTable.ipAddress,
+      createdAt: sessionTable.createdAt,
+      updatedAt: sessionTable.updatedAt,
+      expiresAt: sessionTable.expiresAt,
+    })
+    .from(sessionTable)
+    .where(
+      and(
+        eq(sessionTable.userId, userId),
+        eq(sessionTable.id, currentSessionId),
+        gt(sessionTable.expiresAt, new Date()),
+      ),
+    )
+    .limit(1);
+
+  return currentSession ? [currentSession, ...recentSessions] : recentSessions;
 }
 
 async function getWorkspaceAccess(authSession: AuthSession) {
@@ -103,18 +244,7 @@ async function buildSecurityPayload(authSession: AuthSession) {
 
   const [sessions, providers, userPasskeys, personalApiKeys] =
     await Promise.all([
-      db
-        .select({
-          id: sessionTable.id,
-          userAgent: sessionTable.userAgent,
-          ipAddress: sessionTable.ipAddress,
-          createdAt: sessionTable.createdAt,
-          updatedAt: sessionTable.updatedAt,
-          expiresAt: sessionTable.expiresAt,
-        })
-        .from(sessionTable)
-        .where(eq(sessionTable.userId, authSession.user.id))
-        .orderBy(desc(sessionTable.updatedAt)),
+      loadVisibleSessionCandidates(authSession.user.id, currentSessionId),
       db
         .select({
           id: account.id,
@@ -164,21 +294,25 @@ async function buildSecurityPayload(authSession: AuthSession) {
     ? canMemberCreateApiKeys(workspaceAccess.memberRole, permissionLevel)
     : false;
   return {
-    sessions: sessions.map((deviceSession) => ({
-      id: deviceSession.id,
-      isCurrent: currentSessionId
-        ? deviceSession.id === currentSessionId
-        : false,
-      userAgent: deviceSession.userAgent,
-      ipAddress: deviceSession.ipAddress,
-      source: deviceSession.userAgent ? "Browser" : "Unknown source",
-      location: deviceSession.ipAddress
-        ? "Approximate location unavailable"
-        : "Unknown location",
-      createdAt: serializeDate(deviceSession.createdAt),
-      updatedAt: serializeDate(deviceSession.updatedAt),
-      expiresAt: serializeDate(deviceSession.expiresAt),
-    })),
+    sessions: prepareVisibleSessions(sessions, currentSessionId).map(
+      (deviceSession) => {
+        const isCurrent = currentSessionId
+          ? deviceSession.id === currentSessionId
+          : false;
+
+        return {
+          id: deviceSession.id,
+          isCurrent,
+          userAgent: normalizeSessionMetadata(deviceSession.userAgent),
+          ipAddress: normalizeSessionMetadata(deviceSession.ipAddress),
+          source: summarizeSessionSource(deviceSession, isCurrent),
+          location: summarizeSessionLocation(deviceSession),
+          createdAt: serializeDate(deviceSession.createdAt),
+          updatedAt: serializeDate(deviceSession.updatedAt),
+          expiresAt: serializeDate(deviceSession.expiresAt),
+        };
+      },
+    ),
     passkeys: userPasskeys.map((item) => ({
       id: item.id,
       name: item.name ?? "Unnamed passkey",

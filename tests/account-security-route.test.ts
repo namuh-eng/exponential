@@ -95,15 +95,21 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-function queryBuilder(rows: unknown[], mode: "limit" | "orderBy") {
-  return {
-    from: vi.fn().mockReturnThis(),
-    innerJoin: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
+function queryBuilder(
+  rows: unknown[],
+  mode: "limit" | "orderBy" | "orderByThenLimit",
+) {
+  const builder = {
+    from: vi.fn(() => builder),
+    innerJoin: vi.fn(() => builder),
+    where: vi.fn(() => builder),
     limit: vi.fn().mockResolvedValue(rows),
-    orderBy: vi.fn().mockResolvedValue(rows),
-    [mode]: vi.fn().mockResolvedValue(rows),
+    orderBy: vi.fn(() =>
+      mode === "orderBy" ? Promise.resolve(rows) : builder,
+    ),
   };
+
+  return builder;
 }
 
 function setupDbMock() {
@@ -123,7 +129,7 @@ function setupDbMock() {
       return queryBuilder(mocks.providerRows, "orderBy");
     }
     if (keys.includes("userAgent")) {
-      return queryBuilder(mocks.sessionRows, "orderBy");
+      return queryBuilder(mocks.sessionRows, "orderByThenLimit");
     }
 
     return queryBuilder(mocks.currentUserRows, "limit");
@@ -206,6 +212,60 @@ describe("Account Security API Route", () => {
     expect(serialized).not.toMatch(
       /accessToken|refreshToken|idToken|password|keyHash/i,
     );
+  });
+
+  it("deduplicates blank unknown sessions while preserving current and real sessions", async () => {
+    authenticate();
+    mocks.sessionRows = [
+      ...Array.from({ length: 20 }, (_, index) => ({
+        id: index === 7 ? currentSessionId : `unknown-session-${index}`,
+        userAgent: index % 2 === 0 ? "" : "   ",
+        ipAddress: "",
+        createdAt: new Date(
+          `2026-01-${String(index + 1).padStart(2, "0")}T10:00:00.000Z`,
+        ),
+        updatedAt: new Date(
+          `2026-01-${String(index + 1).padStart(2, "0")}T11:00:00.000Z`,
+        ),
+        expiresAt: new Date("2026-12-01T10:00:00.000Z"),
+      })),
+      {
+        id: "real-browser-session",
+        userAgent: "Mozilla/5.0 Firefox",
+        ipAddress: "203.0.113.44",
+        createdAt: new Date("2026-01-30T10:00:00.000Z"),
+        updatedAt: new Date("2026-01-30T11:00:00.000Z"),
+        expiresAt: new Date("2026-12-01T10:00:00.000Z"),
+      },
+    ];
+
+    const { GET } = await import("@/app/api/account/security/route");
+    const res = await GET();
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.sessions).toHaveLength(2);
+    expect(data.sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: currentSessionId,
+          isCurrent: true,
+          userAgent: null,
+          ipAddress: null,
+          source: "Current browser session",
+        }),
+        expect.objectContaining({
+          id: "real-browser-session",
+          isCurrent: false,
+          source: "Browser",
+        }),
+      ]),
+    );
+    expect(
+      data.sessions.filter((session: { source: string }) =>
+        /browser session/i.test(session.source),
+      ),
+    ).toHaveLength(1);
   });
 
   it("blocks self-revoking the current session", async () => {
