@@ -357,6 +357,7 @@ describe("IssueLabelsPage", () => {
           name: "defect",
           color: "#3b82f6",
           description: "User-visible defect",
+          parentLabelId: null,
         }),
       });
     });

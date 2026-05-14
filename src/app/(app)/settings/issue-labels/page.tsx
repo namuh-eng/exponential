@@ -14,6 +14,10 @@ interface LabelData {
 }
 
 type CreateMode = "group" | "label";
+interface CreateState {
+  mode: CreateMode;
+  parentLabelId: string | null;
+}
 type SortDirection = "asc" | "desc";
 
 const LABEL_COLORS = [
@@ -134,15 +138,20 @@ function InlineDescription({
 
 function CreateLabelModal({
   mode,
+  parentLabelId = null,
+  parentLabelName,
   onClose,
   onCreate,
 }: {
   mode: CreateMode;
   onClose: () => void;
+  parentLabelId?: string | null;
+  parentLabelName?: string | null;
   onCreate: (payload: {
     name: string;
     color: string;
     description: string;
+    parentLabelId: string | null;
   }) => void;
 }) {
   const [name, setName] = useState("");
@@ -161,6 +170,7 @@ function CreateLabelModal({
       name: name.trim(),
       color: mode === "group" ? "#6b6f76" : color,
       description: description.trim(),
+      parentLabelId: mode === "label" ? parentLabelId : null,
     });
   };
 
@@ -204,6 +214,14 @@ function CreateLabelModal({
               placeholder="Add label description..."
             />
           </div>
+          {mode === "label" && parentLabelName ? (
+            <p className="mb-4 rounded-md border border-[var(--color-border)] px-3 py-2 text-[12px] text-[var(--color-text-secondary)]">
+              Creating under{" "}
+              <span className="font-medium text-[var(--color-text-primary)]">
+                {parentLabelName}
+              </span>
+            </p>
+          ) : null}
           {mode === "label" ? (
             <div className="mb-6">
               <label
@@ -255,20 +273,24 @@ function CreateLabelModal({
 function EditLabelModal({
   label,
   onClose,
+  labels,
   onSave,
 }: {
   label: LabelData;
+  labels: LabelData[];
   onClose: () => void;
   onSave: (payload: {
     id: string;
     name: string;
     color: string;
     description: string;
+    parentLabelId: string | null;
   }) => void;
 }) {
   const [name, setName] = useState(label.name);
   const [description, setDescription] = useState(label.description || "");
   const [color, setColor] = useState(label.color);
+  const [parentLabelId, setParentLabelId] = useState(label.parentLabelId || "");
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -284,6 +306,7 @@ function EditLabelModal({
       name: name.trim(),
       color,
       description: description.trim(),
+      parentLabelId: parentLabelId || null,
     });
   };
 
@@ -326,6 +349,32 @@ function EditLabelModal({
               className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
               placeholder="Add label description..."
             />
+          </div>
+          <div className="mb-4">
+            <label
+              htmlFor="edit-label-group"
+              className="mb-1 block text-[12px] text-[var(--color-text-secondary)]"
+            >
+              Group
+            </label>
+            <select
+              id="edit-label-group"
+              value={parentLabelId}
+              onChange={(e) => setParentLabelId(e.target.value)}
+              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+            >
+              <option value="">No group</option>
+              {labels
+                .filter(
+                  (candidate) =>
+                    candidate.id !== label.id && !candidate.parentLabelId,
+                )
+                .map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.name}
+                  </option>
+                ))}
+            </select>
           </div>
           <div className="mb-6">
             <label
@@ -373,12 +422,102 @@ function EditLabelModal({
   );
 }
 
+function LabelRow({
+  labelItem,
+  isChild,
+  onAddChild,
+  onEdit,
+  onDelete,
+  onUpdateDescription,
+}: {
+  labelItem: LabelData;
+  isChild: boolean;
+  onAddChild?: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onUpdateDescription: (id: string, desc: string) => void;
+}) {
+  return (
+    <div
+      className="group flex h-[44px] items-center border-b border-[var(--color-border)] text-[13px] transition-colors hover:bg-[var(--color-surface-hover)]"
+      data-testid={isChild ? "nested-label-row" : "label-row"}
+    >
+      <div
+        className={`flex min-w-0 flex-1 items-center gap-2 px-4 ${isChild ? "pl-10" : ""}`}
+      >
+        {isChild ? (
+          <span
+            className="text-[var(--color-text-tertiary)]"
+            aria-hidden="true"
+          >
+            ↳
+          </span>
+        ) : null}
+        <ColorDot color={labelItem.color} />
+        <span
+          data-testid="label-name"
+          className="truncate text-[var(--color-text-primary)]"
+        >
+          {labelItem.name}
+        </span>
+        {onAddChild ? (
+          <button
+            type="button"
+            onClick={onAddChild}
+            className="ml-auto rounded px-2 py-1 text-[11px] text-[var(--color-text-tertiary)] opacity-0 transition group-hover:opacity-100 hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)] focus:opacity-100"
+            aria-label={`Add label under ${labelItem.name}`}
+          >
+            Add label
+          </button>
+        ) : (
+          <span className="ml-auto" />
+        )}
+        <button
+          type="button"
+          onClick={onEdit}
+          className="rounded px-2 py-1 text-[11px] text-[var(--color-text-tertiary)] opacity-0 transition group-hover:opacity-100 hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)] focus:opacity-100"
+          aria-label={`Edit ${labelItem.name}`}
+        >
+          Edit
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="rounded px-2 py-1 text-[11px] text-[var(--color-text-tertiary)] opacity-0 transition group-hover:opacity-100 hover:bg-[var(--color-surface-hover)] hover:text-[#f87171] focus:opacity-100"
+          aria-label={`Delete ${labelItem.name}`}
+        >
+          Delete
+        </button>
+      </div>
+      <div className="w-[200px] shrink-0 px-2">
+        <InlineDescription
+          value={labelItem.description}
+          labelId={labelItem.id}
+          onSave={onUpdateDescription}
+        />
+      </div>
+      <div className="w-[60px] shrink-0 px-2 text-center text-[12px] text-[var(--color-text-tertiary)]">
+        —
+      </div>
+      <div className="w-[60px] shrink-0 px-2 text-center text-[12px] text-[var(--color-text-secondary)]">
+        {labelItem.issueCount}
+      </div>
+      <div className="w-[100px] shrink-0 px-2 text-[12px] text-[var(--color-text-tertiary)]">
+        {formatRelativeTime(labelItem.lastApplied)}
+      </div>
+      <div className="w-[90px] shrink-0 px-2 text-[12px] text-[var(--color-text-tertiary)]">
+        {formatCreatedDate(labelItem.createdAt)}
+      </div>
+    </div>
+  );
+}
+
 export default function IssueLabelsPage() {
   const [labels, setLabels] = useState<LabelData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
-  const [createMode, setCreateMode] = useState<CreateMode | null>(null);
+  const [createState, setCreateState] = useState<CreateState | null>(null);
   const [editingLabel, setEditingLabel] = useState<LabelData | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
@@ -424,18 +563,20 @@ export default function IssueLabelsPage() {
     name,
     color,
     description,
+    parentLabelId,
   }: {
     name: string;
     color: string;
     description: string;
+    parentLabelId: string | null;
   }) => {
     const res = await fetch("/api/labels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, color, description }),
+      body: JSON.stringify({ name, color, description, parentLabelId }),
     });
     if (res.ok) {
-      setCreateMode(null);
+      setCreateState(null);
       fetchLabels();
       return;
     }
@@ -447,16 +588,18 @@ export default function IssueLabelsPage() {
     name,
     color,
     description,
+    parentLabelId,
   }: {
     id: string;
     name: string;
     color: string;
     description: string;
+    parentLabelId: string | null;
   }) => {
     const res = await fetch(`/api/labels/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, color, description }),
+      body: JSON.stringify({ name, color, description, parentLabelId }),
     });
     if (!res.ok) {
       setError("Could not save that label.");
@@ -466,7 +609,13 @@ export default function IssueLabelsPage() {
     setLabels((prev) =>
       prev.map((l) =>
         l.id === id
-          ? { ...l, name, color, description: description || null }
+          ? {
+              ...l,
+              name,
+              color,
+              description: description || null,
+              parentLabelId,
+            }
           : l,
       ),
     );
@@ -487,14 +636,57 @@ export default function IssueLabelsPage() {
     setLabels((prev) => prev.filter((l) => l.id !== id));
   };
 
-  const filteredLabels = [...labels]
-    .filter((l) => l.name.toLowerCase().includes(filter.toLowerCase()))
-    .sort((a, b) => {
+  const sortLabels = (items: LabelData[]) =>
+    [...items].sort((a, b) => {
       const result = a.name.localeCompare(b.name, undefined, {
         sensitivity: "base",
       });
       return sortDirection === "asc" ? result : result * -1;
     });
+
+  const childrenByParent = labels.reduce<Record<string, LabelData[]>>(
+    (acc, item) => {
+      if (item.parentLabelId) {
+        acc[item.parentLabelId] = [...(acc[item.parentLabelId] || []), item];
+      }
+      return acc;
+    },
+    {},
+  );
+  const labelMatchesFilter = (item: LabelData) =>
+    item.name.toLowerCase().includes(filter.toLowerCase());
+  const topLevelLabels = sortLabels(
+    labels.filter((item) => !item.parentLabelId),
+  );
+  const visibleGroups = topLevelLabels
+    .map((group) => {
+      const children = sortLabels(childrenByParent[group.id] || []).filter(
+        labelMatchesFilter,
+      );
+      const groupMatches = labelMatchesFilter(group);
+      return groupMatches || children.length > 0
+        ? {
+            group,
+            children: groupMatches
+              ? sortLabels(childrenByParent[group.id] || [])
+              : children,
+          }
+        : null;
+    })
+    .filter((item): item is { group: LabelData; children: LabelData[] } =>
+      Boolean(item),
+    );
+  const orphanedChildren = sortLabels(
+    labels.filter(
+      (item) =>
+        item.parentLabelId &&
+        !labels.some((candidate) => candidate.id === item.parentLabelId) &&
+        labelMatchesFilter(item),
+    ),
+  );
+  const visibleCount =
+    visibleGroups.reduce((count, item) => count + 1 + item.children.length, 0) +
+    orphanedChildren.length;
 
   if (loading) {
     return (
@@ -513,14 +705,18 @@ export default function IssueLabelsPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setCreateMode("group")}
+            onClick={() =>
+              setCreateState({ mode: "group", parentLabelId: null })
+            }
             className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
           >
             New group
           </button>
           <button
             type="button"
-            onClick={() => setCreateMode("label")}
+            onClick={() =>
+              setCreateState({ mode: "label", parentLabelId: null })
+            }
             className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:opacity-90"
           >
             New label
@@ -600,7 +796,7 @@ export default function IssueLabelsPage() {
       </div>
 
       {/* Label rows */}
-      {filteredLabels.length === 0 ? (
+      {visibleCount === 0 ? (
         <div className="py-12 text-center text-[13px] text-[var(--color-text-tertiary)]">
           {labels.length === 0
             ? "No labels yet. Create labels to categorize issues."
@@ -608,71 +804,60 @@ export default function IssueLabelsPage() {
         </div>
       ) : (
         <div>
-          {filteredLabels.map((labelItem) => (
-            <div
-              key={labelItem.id}
-              className="group flex h-[44px] items-center border-b border-[var(--color-border)] text-[13px] transition-colors hover:bg-[var(--color-surface-hover)]"
-            >
-              <div className="flex min-w-0 flex-1 items-center gap-2 px-4">
-                <ColorDot color={labelItem.color} />
-                <span
-                  data-testid="label-name"
-                  className="truncate text-[var(--color-text-primary)]"
-                >
-                  {labelItem.name}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setEditingLabel(labelItem)}
-                  className="ml-auto rounded px-2 py-1 text-[11px] text-[var(--color-text-tertiary)] opacity-0 transition group-hover:opacity-100 hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)] focus:opacity-100"
-                  aria-label={`Edit ${labelItem.name}`}
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(labelItem.id, labelItem.name)}
-                  className="rounded px-2 py-1 text-[11px] text-[var(--color-text-tertiary)] opacity-0 transition group-hover:opacity-100 hover:bg-[var(--color-surface-hover)] hover:text-[#f87171] focus:opacity-100"
-                  aria-label={`Delete ${labelItem.name}`}
-                >
-                  Delete
-                </button>
-              </div>
-              <div className="w-[200px] shrink-0 px-2">
-                <InlineDescription
-                  value={labelItem.description}
-                  labelId={labelItem.id}
-                  onSave={handleUpdateDescription}
+          {visibleGroups.map(({ group, children }) => (
+            <div key={group.id} data-testid={`label-group-${group.name}`}>
+              <LabelRow
+                labelItem={group}
+                isChild={false}
+                onAddChild={() =>
+                  setCreateState({ mode: "label", parentLabelId: group.id })
+                }
+                onEdit={() => setEditingLabel(group)}
+                onDelete={() => handleDelete(group.id, group.name)}
+                onUpdateDescription={handleUpdateDescription}
+              />
+              {children.map((child) => (
+                <LabelRow
+                  key={child.id}
+                  labelItem={child}
+                  isChild
+                  onEdit={() => setEditingLabel(child)}
+                  onDelete={() => handleDelete(child.id, child.name)}
+                  onUpdateDescription={handleUpdateDescription}
                 />
-              </div>
-              <div className="w-[60px] shrink-0 px-2 text-center text-[12px] text-[var(--color-text-tertiary)]">
-                —
-              </div>
-              <div className="w-[60px] shrink-0 px-2 text-center text-[12px] text-[var(--color-text-secondary)]">
-                {labelItem.issueCount}
-              </div>
-              <div className="w-[100px] shrink-0 px-2 text-[12px] text-[var(--color-text-tertiary)]">
-                {formatRelativeTime(labelItem.lastApplied)}
-              </div>
-              <div className="w-[90px] shrink-0 px-2 text-[12px] text-[var(--color-text-tertiary)]">
-                {formatCreatedDate(labelItem.createdAt)}
-              </div>
+              ))}
             </div>
+          ))}
+          {orphanedChildren.map((labelItem) => (
+            <LabelRow
+              key={labelItem.id}
+              labelItem={labelItem}
+              isChild={false}
+              onEdit={() => setEditingLabel(labelItem)}
+              onDelete={() => handleDelete(labelItem.id, labelItem.name)}
+              onUpdateDescription={handleUpdateDescription}
+            />
           ))}
         </div>
       )}
 
       {/* Create label modal */}
-      {createMode && (
+      {createState && (
         <CreateLabelModal
-          mode={createMode}
-          onClose={() => setCreateMode(null)}
+          mode={createState.mode}
+          parentLabelId={createState.parentLabelId}
+          parentLabelName={
+            labels.find((item) => item.id === createState.parentLabelId)
+              ?.name ?? null
+          }
+          onClose={() => setCreateState(null)}
           onCreate={handleCreate}
         />
       )}
       {editingLabel && (
         <EditLabelModal
           label={editingLabel}
+          labels={labels}
           onClose={() => setEditingLabel(null)}
           onSave={handleEdit}
         />
