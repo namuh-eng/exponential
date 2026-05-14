@@ -93,6 +93,32 @@ describe("Login page", () => {
     ).toBeDefined();
   });
 
+  it("does not leave passkey login stuck checking when capabilities are slow", () => {
+    fetchMock.mockReturnValueOnce(new Promise(() => {}));
+
+    render(<LoginPage />);
+
+    const passkeyButton = screen.getByRole("button", {
+      name: /Log in with passkey/i,
+    });
+    expect(passkeyButton).toBeDefined();
+    expect(passkeyButton.hasAttribute("disabled")).toBe(false);
+    expect(screen.queryByText("Checking passkey sign-in")).toBeNull();
+  });
+
+  it("keeps passkey login available when provider capabilities fail to load", async () => {
+    fetchMock.mockRejectedValueOnce(new Error("network failed"));
+
+    render(<LoginPage />);
+
+    await vi.waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /Log in with passkey/i }),
+      ).toBeDefined();
+    });
+    expect(screen.queryByText("Checking passkey sign-in")).toBeNull();
+  });
+
   it("matches Linear's focused SAML email step from the login chooser", () => {
     render(<LoginPage />);
 
@@ -166,6 +192,24 @@ describe("Login page", () => {
         .getByRole("button", { name: /Log in with passkey/i })
         .hasAttribute("disabled"),
     ).toBe(false);
+  });
+
+  it("hides passkey login when provider capabilities disable passkeys", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ providers: { google: true, passkey: false } }),
+    });
+
+    render(<LoginPage />);
+
+    expect(
+      screen.getByRole("button", { name: /Log in with passkey/i }),
+    ).toBeDefined();
+    await vi.waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: /Log in with passkey/i }),
+      ).toBeNull();
+    });
   });
 
   it("calls signIn.social with google provider on Google click", async () => {

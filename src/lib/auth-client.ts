@@ -106,6 +106,13 @@ function mapPasskeyErrorCode(code: string | undefined) {
   return "FAILED" as const;
 }
 
+function isCanceledPasskeyException(error: unknown) {
+  return (
+    error instanceof DOMException &&
+    (error.name === "AbortError" || error.name === "NotAllowedError")
+  );
+}
+
 function passkeySignInMessage(code: PasskeySignInError["code"]) {
   if (code === "BROWSER_UNSUPPORTED") {
     return "This browser doesn't support passkeys. Use email or Google to log in.";
@@ -142,9 +149,22 @@ export async function signInWithPasskey({
     );
   }
 
-  const result = (await authClient.signIn.passkey()) as PasskeyOperationResult<{
+  let result: PasskeyOperationResult<{
     session: unknown;
   }>;
+  try {
+    result = (await authClient.signIn.passkey()) as PasskeyOperationResult<{
+      session: unknown;
+    }>;
+  } catch (error) {
+    if (isCanceledPasskeyException(error)) {
+      throw new PasskeySignInError(
+        passkeySignInMessage("CANCELED"),
+        "CANCELED",
+      );
+    }
+    throw new PasskeySignInError(passkeySignInMessage("FAILED"), "FAILED");
+  }
 
   if (result.error) {
     const code = mapPasskeyErrorCode(result.error.code);

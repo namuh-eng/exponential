@@ -81,4 +81,28 @@ describe("auth client origin", () => {
     });
     expect(signInPasskeyMock).toHaveBeenCalledTimes(1);
   });
+
+  it("maps thrown WebAuthn AbortError to a retryable cancellation", async () => {
+    Object.defineProperty(globalThis, "PublicKeyCredential", {
+      value: function PublicKeyCredential() {},
+      configurable: true,
+    });
+    Object.defineProperty(window.navigator, "credentials", {
+      value: { get: vi.fn(), create: vi.fn() },
+      configurable: true,
+    });
+    signInPasskeyMock.mockRejectedValueOnce(
+      new DOMException("The operation was aborted.", "AbortError"),
+    );
+
+    const { signInWithPasskey } = await import("@/lib/auth-client");
+
+    await expect(
+      signInWithPasskey({ callbackURL: "http://localhost:3015/" }),
+    ).rejects.toMatchObject({
+      code: "CANCELED",
+      message: "Passkey sign-in was canceled. Try again.",
+    });
+    expect(signInPasskeyMock).toHaveBeenCalledTimes(1);
+  });
 });

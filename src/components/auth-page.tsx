@@ -205,7 +205,7 @@ export function AuthPage({
     initialGoogleConfigured,
   );
   const [passkeyConfigured, setPasskeyConfigured] = useState<boolean | null>(
-    null,
+    true,
   );
   const [passkeySupported, setPasskeySupported] = useState(false);
   const [error, setError] = useState("");
@@ -242,7 +242,7 @@ export function AuthPage({
           return;
         }
         setGoogleConfigured(false);
-        setPasskeyConfigured(false);
+        setPasskeyConfigured(true);
       }
     }
 
@@ -348,7 +348,7 @@ export function AuthPage({
   }
 
   async function handlePasskeyLogin() {
-    if (passkeyConfigured !== true) {
+    if (passkeyConfigured === false) {
       setError(
         "Passkey sign-in is not configured. Use email or Google to log in.",
       );
@@ -499,12 +499,7 @@ export function AuthPage({
                 <button
                   type="button"
                   onClick={handlePasskeyLogin}
-                  disabled={
-                    loading ||
-                    passkeyPending ||
-                    passkeyConfigured !== true ||
-                    !passkeySupported
-                  }
+                  disabled={loading || passkeyPending || !passkeySupported}
                   className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <svg
@@ -524,9 +519,7 @@ export function AuthPage({
                   </svg>
                   {passkeyPending
                     ? "Waiting for passkey"
-                    : passkeyConfigured === null
-                      ? "Checking passkey sign-in"
-                      : "Log in with passkey"}
+                    : "Log in with passkey"}
                 </button>
                 {passkeyConfigured === true && !passkeySupported ? (
                   <p className="pt-1 text-center text-sm text-[var(--auth-error)]">
