@@ -1,10 +1,13 @@
 "use client";
 
+import { useAppShellContext } from "@/app/(app)/app-shell";
 import { EmptyState } from "@/components/empty-state";
+import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import { useEffect, useState } from "react";
 
 export default function ApplicationsSettingsPage() {
   const [loading, setLoading] = useState(true);
+  const workspaceSlug = useAppShellContext()?.workspaceSlug;
 
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 500);
@@ -33,7 +36,7 @@ export default function ApplicationsSettingsPage() {
           description="You haven't authorized any third-party applications yet."
           action={{
             label: "Explore integrations",
-            onClick: () => console.log("Explore"),
+            href: withWorkspaceSlug("/settings/integrations", workspaceSlug),
           }}
         />
       </div>

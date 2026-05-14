@@ -32,7 +32,9 @@ export default function ImportExportPage() {
           description="Import data from GitHub, Jira, or CSV. You can also export all issues and projects."
           action={{
             label: "Start import",
-            onClick: () => console.log("Import"),
+            disabled: true,
+            disabledReason:
+              "Import and export tools are not available in this workspace yet.",
           }}
         />
       </div>

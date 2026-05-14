@@ -8,7 +8,7 @@ describe("AsksSettingsPage component", () => {
     cleanup();
   });
 
-  it("renders the asks settings page with empty state", async () => {
+  it("renders the asks settings page with an explanatory unavailable CTA", async () => {
     render(<AsksSettingsPage />);
 
     expect(screen.getByText("Loading...")).toBeInTheDocument();
@@ -23,5 +23,11 @@ describe("AsksSettingsPage component", () => {
       },
       { timeout: 2000 },
     );
+
+    const enableButton = screen.getByRole("button", { name: "Enable Asks" });
+    expect(enableButton).toBeDisabled();
+    expect(
+      screen.getByText("Asks setup is not available in this workspace yet."),
+    ).toBeInTheDocument();
   });
 });

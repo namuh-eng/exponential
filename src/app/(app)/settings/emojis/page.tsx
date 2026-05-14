@@ -32,7 +32,9 @@ export default function EmojisSettingsPage() {
           description="Upload your first emoji to start using it in comments and reactions."
           action={{
             label: "Upload emoji",
-            onClick: () => console.log("Upload"),
+            disabled: true,
+            disabledReason:
+              "Custom emoji uploads are not available in this workspace yet.",
           }}
         />
       </div>

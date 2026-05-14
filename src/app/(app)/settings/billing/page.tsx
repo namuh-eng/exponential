@@ -72,7 +72,9 @@ export default function BillingSettingsPage() {
           description={planDescription[billing?.plan ?? "free"]}
           action={{
             label: "View plans and upgrade",
-            onClick: () => console.log("View plans"),
+            disabled: true,
+            disabledReason:
+              "Plan changes are managed outside this workspace clone.",
           }}
         />
       </div>

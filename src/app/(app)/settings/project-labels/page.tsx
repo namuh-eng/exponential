@@ -69,7 +69,9 @@ export default function ProjectLabelsPage() {
             description="Create your first project label to start categorizing your roadmap."
             action={{
               label: "Create project label",
-              onClick: () => console.log("Create project label"),
+              disabled: true,
+              disabledReason:
+                "Project label creation is not available in this workspace yet.",
             }}
           />
         ) : (
