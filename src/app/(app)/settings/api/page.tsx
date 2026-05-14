@@ -216,10 +216,12 @@ function OAuthApplicationsList({
   items,
   canManage,
   onCreate,
+  onDelete,
 }: {
   items: OAuthApplicationRecord[];
   canManage: boolean;
   onCreate: () => void;
+  onDelete: (item: OAuthApplicationRecord) => void;
 }) {
   if (items.length === 0) {
     return (
@@ -255,8 +257,13 @@ function OAuthApplicationsList({
                 Redirect URL: {item.redirectUrl}
               </div>
             </div>
-            <div className="shrink-0 text-right text-[12px] text-[var(--color-text-tertiary)]">
-              Created {formatDate(item.createdAt)}
+            <div className="flex shrink-0 flex-col items-end gap-2 text-right text-[12px] text-[var(--color-text-tertiary)]">
+              <div>Created {formatDate(item.createdAt)}</div>
+              <ActionButton
+                label="Delete OAuth application"
+                onClick={() => onDelete(item)}
+                disabled={!canManage}
+              />
             </div>
           </div>
         </SurfaceRow>
@@ -269,10 +276,14 @@ function WebhooksList({
   items,
   canManage,
   onCreate,
+  onToggle,
+  onDelete,
 }: {
   items: WorkspaceWebhookRecord[];
   canManage: boolean;
   onCreate: () => void;
+  onToggle: (item: WorkspaceWebhookRecord) => void;
+  onDelete: (item: WorkspaceWebhookRecord) => void;
 }) {
   if (items.length === 0) {
     return (
@@ -308,9 +319,21 @@ function WebhooksList({
                 Events: {item.events.join(", ")}
               </div>
             </div>
-            <div className="shrink-0 text-right text-[12px] text-[var(--color-text-tertiary)]">
+            <div className="flex shrink-0 flex-col items-end gap-2 text-right text-[12px] text-[var(--color-text-tertiary)]">
               <div>{item.enabled ? "Enabled" : "Disabled"}</div>
-              <div className="mt-1">Created {formatDate(item.createdAt)}</div>
+              <div>Created {formatDate(item.createdAt)}</div>
+              <div className="flex gap-2">
+                <ActionButton
+                  label={item.enabled ? "Disable webhook" : "Enable webhook"}
+                  onClick={() => onToggle(item)}
+                  disabled={!canManage}
+                />
+                <ActionButton
+                  label="Delete webhook"
+                  onClick={() => onDelete(item)}
+                  disabled={!canManage}
+                />
+              </div>
             </div>
           </div>
         </SurfaceRow>
@@ -323,10 +346,12 @@ function ApiKeysList({
   items,
   canCreate,
   onCreate,
+  onDelete,
 }: {
   items: WorkspaceApiKeyRecord[];
   canCreate: boolean;
   onCreate: () => void;
+  onDelete: (item: WorkspaceApiKeyRecord) => void;
 }) {
   if (items.length === 0) {
     return (
@@ -370,6 +395,10 @@ function ApiKeysList({
                 <div>Created {formatDate(item.createdAt)}</div>
                 <div>Last used {formatDate(item.lastUsedAt)}</div>
               </div>
+              <ActionButton
+                label="Revoke API key"
+                onClick={() => onDelete(item)}
+              />
             </div>
           </div>
         </SurfaceRow>
@@ -573,6 +602,78 @@ export default function ApiSettingsPage() {
     }
   }
 
+  async function deleteOAuthApplication(item: OAuthApplicationRecord) {
+    if (!window.confirm(`Delete OAuth application "${item.name}"?`)) {
+      return;
+    }
+
+    await mutate(
+      "/api/workspaces/current/api",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "deleteOAuthApplication",
+          id: item.id,
+        }),
+      },
+      "OAuth application deleted.",
+    );
+  }
+
+  async function toggleWebhook(item: WorkspaceWebhookRecord) {
+    const nextEnabled = !item.enabled;
+    await mutate(
+      "/api/workspaces/current/api",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "updateWebhook",
+          id: item.id,
+          enabled: nextEnabled,
+        }),
+      },
+      nextEnabled ? "Webhook enabled." : "Webhook disabled.",
+    );
+  }
+
+  async function deleteWebhook(item: WorkspaceWebhookRecord) {
+    if (
+      !window.confirm(`Delete webhook "${item.label?.trim() || item.url}"?`)
+    ) {
+      return;
+    }
+
+    await mutate(
+      "/api/workspaces/current/api",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "deleteWebhook",
+          id: item.id,
+        }),
+      },
+      "Webhook deleted.",
+    );
+  }
+
+  async function deleteApiKey(item: WorkspaceApiKeyRecord) {
+    if (!window.confirm(`Revoke API key "${item.name}"?`)) {
+      return;
+    }
+
+    await mutate(
+      "/api/workspaces/current/api",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "deleteApiKey",
+          id: item.id,
+        }),
+      },
+      "API key revoked.",
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center text-[13px] text-[var(--color-text-secondary)]">
@@ -647,6 +748,7 @@ export default function ApiSettingsPage() {
           items={data.oauthApplications}
           canManage={data.canManageWorkspaceApi}
           onCreate={() => setOauthModalOpen(true)}
+          onDelete={deleteOAuthApplication}
         />
 
         <SectionHeader>Webhooks</SectionHeader>
@@ -661,6 +763,8 @@ export default function ApiSettingsPage() {
           items={data.webhooks}
           canManage={data.canManageWorkspaceApi}
           onCreate={() => setWebhookModalOpen(true)}
+          onToggle={toggleWebhook}
+          onDelete={deleteWebhook}
         />
 
         <SectionHeader>Member API keys</SectionHeader>
@@ -704,6 +808,7 @@ export default function ApiSettingsPage() {
           items={data.apiKeys}
           canCreate={data.canCreateApiKeys}
           onCreate={() => setApiKeyModalOpen(true)}
+          onDelete={deleteApiKey}
         />
       </div>
 

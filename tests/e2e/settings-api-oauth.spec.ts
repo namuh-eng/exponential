@@ -62,4 +62,90 @@ test.describe("Settings API OAuth applications", () => {
     await expect(page.getByText(appName, { exact: true })).toBeVisible();
     await expect(page.getByText(`Redirect URL: ${callbackUrl}`)).toBeVisible();
   });
+
+  test("manages OAuth, webhook, and API key lifecycle controls", async ({
+    page,
+  }) => {
+    const suffix = Date.now().toString(36);
+    const workspaceSlug = `api-lifecycle-${suffix}`;
+    const workspaceResponse = await page.request.post("/api/workspaces", {
+      data: {
+        name: `API Lifecycle ${suffix}`,
+        urlSlug: workspaceSlug,
+      },
+    });
+    expect(workspaceResponse.status()).toBe(201);
+
+    const oauthName = `Lifecycle OAuth ${suffix}`;
+    const webhookName = `Lifecycle webhook ${suffix}`;
+    const apiKeyName = `Lifecycle key ${suffix}`;
+
+    const createOAuthResponse = await page.request.post(
+      "/api/workspaces/current/api",
+      {
+        data: {
+          action: "createOAuthApplication",
+          name: oauthName,
+          redirectUrl: `https://app-${suffix}.example.com/oauth/callback`,
+        },
+      },
+    );
+    expect(createOAuthResponse.status()).toBe(200);
+
+    const createWebhookResponse = await page.request.post(
+      "/api/workspaces/current/api",
+      {
+        data: {
+          action: "createWebhook",
+          label: webhookName,
+          url: `https://hooks-${suffix}.example.com/linear`,
+          events: ["created"],
+        },
+      },
+    );
+    expect(createWebhookResponse.status()).toBe(200);
+
+    const createApiKeyResponse = await page.request.post(
+      "/api/workspaces/current/api",
+      {
+        data: {
+          action: "createApiKey",
+          name: apiKeyName,
+        },
+      },
+    );
+    expect(createApiKeyResponse.status()).toBe(200);
+
+    await page.goto(`/${workspaceSlug}/settings/api`);
+    await expect(page.getByText(oauthName, { exact: true })).toBeVisible();
+    await expect(page.getByText(webhookName, { exact: true })).toBeVisible();
+    await expect(page.getByText(apiKeyName, { exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Disable webhook" }).click();
+    await expect(page.getByText("Webhook disabled.")).toBeVisible();
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "Enable webhook" }),
+    ).toBeVisible();
+
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Delete webhook" }).click();
+    await expect(page.getByText("Webhook deleted.")).toBeVisible();
+    await page.reload();
+    await expect(page.getByText(webhookName, { exact: true })).toHaveCount(0);
+
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Revoke API key" }).click();
+    await expect(page.getByText("API key revoked.")).toBeVisible();
+    await page.reload();
+    await expect(page.getByText(apiKeyName, { exact: true })).toHaveCount(0);
+
+    page.once("dialog", (dialog) => dialog.accept());
+    await page
+      .getByRole("button", { name: "Delete OAuth application" })
+      .click();
+    await expect(page.getByText("OAuth application deleted.")).toBeVisible();
+    await page.reload();
+    await expect(page.getByText(oauthName, { exact: true })).toHaveCount(0);
+  });
 });

@@ -332,4 +332,170 @@ describe("API settings page", () => {
     expect(screen.getByText("Workspace automation")).toBeInTheDocument();
     expect(screen.getByText("lin_api_secret")).toBeInTheDocument();
   });
+
+  it("exposes lifecycle controls for OAuth apps, webhooks, and API keys", async () => {
+    mockApiLoad({
+      oauthApplications: [
+        {
+          id: "oauth_1",
+          name: "Partner portal",
+          clientId: "lin_123",
+          clientSecretPreview: "linsec_123…",
+          redirectUrl: "https://example.com/oauth/callback",
+          createdAt: "2026-04-08T10:00:00.000Z",
+        },
+      ],
+      webhooks: [
+        {
+          id: "wh_1",
+          label: "Issue sync",
+          url: "https://example.com/hooks/linear",
+          events: ["created"],
+          enabled: true,
+          createdAt: "2026-04-08T10:00:00.000Z",
+          updatedAt: "2026-04-08T10:00:00.000Z",
+        },
+      ],
+      apiKeys: [
+        {
+          id: "key_1",
+          name: "Workspace automation",
+          keyPrefix: "lin_api_123…",
+          accessLevel: "Member",
+          createdAt: "2026-04-08T10:00:00.000Z",
+          lastUsedAt: null,
+          creator: { name: "QA User", email: "qa@example.com", image: null },
+        },
+      ],
+    });
+
+    render(<ApiSettingsPage />);
+    await waitForLoaded();
+
+    expect(
+      screen.getByRole("button", { name: "Delete OAuth application" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Disable webhook" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete webhook" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Revoke API key" }),
+    ).toBeInTheDocument();
+  });
+
+  it("confirms and deletes an OAuth application", async () => {
+    vi.spyOn(window, "confirm").mockReturnValueOnce(true);
+    mockApiLoad({
+      oauthApplications: [
+        {
+          id: "oauth_1",
+          name: "Partner portal",
+          clientId: "lin_123",
+          clientSecretPreview: "linsec_123…",
+          redirectUrl: "https://example.com/oauth/callback",
+          createdAt: "2026-04-08T10:00:00.000Z",
+        },
+      ],
+    });
+    mockMutationResponse({ oauthApplications: [] });
+
+    render(<ApiSettingsPage />);
+    await waitForLoaded();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Delete OAuth application" }),
+    );
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String(mockFetch.mock.calls[1][1]?.body))).toMatchObject({
+      action: "deleteOAuthApplication",
+      id: "oauth_1",
+    });
+    expect(screen.getByText("OAuth application deleted.")).toBeInTheDocument();
+    expect(screen.queryByText("Partner portal")).not.toBeInTheDocument();
+  });
+
+  it("toggles and deletes webhooks", async () => {
+    vi.spyOn(window, "confirm").mockReturnValueOnce(true);
+    mockApiLoad({
+      webhooks: [
+        {
+          id: "wh_1",
+          label: "Issue sync",
+          url: "https://example.com/hooks/linear",
+          events: ["created"],
+          enabled: true,
+          createdAt: "2026-04-08T10:00:00.000Z",
+          updatedAt: "2026-04-08T10:00:00.000Z",
+        },
+      ],
+    });
+    mockMutationResponse({
+      webhooks: [
+        {
+          id: "wh_1",
+          label: "Issue sync",
+          url: "https://example.com/hooks/linear",
+          events: ["created"],
+          enabled: false,
+          createdAt: "2026-04-08T10:00:00.000Z",
+          updatedAt: "2026-04-08T10:00:00.000Z",
+        },
+      ],
+    });
+    mockMutationResponse({ webhooks: [] });
+
+    render(<ApiSettingsPage />);
+    await waitForLoaded();
+    fireEvent.click(screen.getByRole("button", { name: "Disable webhook" }));
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String(mockFetch.mock.calls[1][1]?.body))).toMatchObject({
+      action: "updateWebhook",
+      id: "wh_1",
+      enabled: false,
+    });
+    expect(screen.getByText("Webhook disabled.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete webhook" }));
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(3));
+    expect(JSON.parse(String(mockFetch.mock.calls[2][1]?.body))).toMatchObject({
+      action: "deleteWebhook",
+      id: "wh_1",
+    });
+    expect(screen.getByText("Webhook deleted.")).toBeInTheDocument();
+  });
+
+  it("confirms and revokes an API key", async () => {
+    vi.spyOn(window, "confirm").mockReturnValueOnce(true);
+    mockApiLoad({
+      apiKeys: [
+        {
+          id: "key_1",
+          name: "Workspace automation",
+          keyPrefix: "lin_api_123…",
+          accessLevel: "Member",
+          createdAt: "2026-04-08T10:00:00.000Z",
+          lastUsedAt: null,
+          creator: { name: "QA User", email: "qa@example.com", image: null },
+        },
+      ],
+    });
+    mockMutationResponse({ apiKeys: [] });
+
+    render(<ApiSettingsPage />);
+    await waitForLoaded();
+    fireEvent.click(screen.getByRole("button", { name: "Revoke API key" }));
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String(mockFetch.mock.calls[1][1]?.body))).toMatchObject({
+      action: "deleteApiKey",
+      id: "key_1",
+    });
+    expect(screen.getByText("API key revoked.")).toBeInTheDocument();
+    expect(screen.queryByText("Workspace automation")).not.toBeInTheDocument();
+  });
 });

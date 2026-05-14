@@ -285,14 +285,31 @@ export async function POST(request: Request) {
         redirectUrl?: unknown;
       }
     | {
+        action?: "deleteOAuthApplication";
+        id?: unknown;
+      }
+    | {
         action?: "createWebhook";
         label?: unknown;
         url?: unknown;
         events?: unknown;
       }
     | {
+        action?: "updateWebhook";
+        id?: unknown;
+        enabled?: unknown;
+      }
+    | {
+        action?: "deleteWebhook";
+        id?: unknown;
+      }
+    | {
         action?: "createApiKey";
         name?: unknown;
+      }
+    | {
+        action?: "deleteApiKey";
+        id?: unknown;
       }
     | null;
 
@@ -367,6 +384,55 @@ export async function POST(request: Request) {
     });
   }
 
+  if (body.action === "deleteOAuthApplication") {
+    if (!canManageWorkspaceApi(access.memberRole)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const id = typeof body.id === "string" ? body.id : "";
+    if (!id) {
+      return NextResponse.json(
+        { error: "OAuth application id is required." },
+        { status: 400 },
+      );
+    }
+
+    const currentSettings = asRecord(access.settings);
+    const currentApiSettings = readWorkspaceApiSettings(currentSettings);
+    const nextOauthApplications = currentApiSettings.oauthApplications.filter(
+      (application) => application.id !== id,
+    );
+
+    if (
+      nextOauthApplications.length ===
+      currentApiSettings.oauthApplications.length
+    ) {
+      return NextResponse.json(
+        { error: "OAuth application not found." },
+        { status: 404 },
+      );
+    }
+
+    const nextSettings = {
+      ...currentSettings,
+      api: serializeWorkspaceApiSettings({
+        oauthApplications: nextOauthApplications,
+      }),
+    };
+
+    await db
+      .update(workspace)
+      .set({
+        settings: nextSettings,
+        updatedAt: new Date(),
+      })
+      .where(eq(workspace.id, access.workspaceId));
+
+    return NextResponse.json({
+      api: await buildApiPayload({ ...access, settings: nextSettings }),
+    });
+  }
+
   if (body.action === "createWebhook") {
     if (!canManageWorkspaceApi(access.memberRole)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -395,6 +461,104 @@ export async function POST(request: Request) {
     return NextResponse.json({
       api: await buildApiPayload(access),
     });
+  }
+
+  if (body.action === "updateWebhook") {
+    if (!canManageWorkspaceApi(access.memberRole)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const id = typeof body.id === "string" ? body.id : "";
+    if (!id || typeof body.enabled !== "boolean") {
+      return NextResponse.json(
+        { error: "Webhook id and enabled state are required." },
+        { status: 400 },
+      );
+    }
+
+    const updated = await db
+      .update(webhook)
+      .set({ enabled: body.enabled, updatedAt: new Date() })
+      .where(
+        and(eq(webhook.id, id), eq(webhook.workspaceId, access.workspaceId)),
+      )
+      .returning({ id: webhook.id });
+
+    if (updated.length === 0) {
+      return NextResponse.json(
+        { error: "Webhook not found." },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({ api: await buildApiPayload(access) });
+  }
+
+  if (body.action === "deleteWebhook") {
+    if (!canManageWorkspaceApi(access.memberRole)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const id = typeof body.id === "string" ? body.id : "";
+    if (!id) {
+      return NextResponse.json(
+        { error: "Webhook id is required." },
+        { status: 400 },
+      );
+    }
+
+    const deleted = await db
+      .delete(webhook)
+      .where(
+        and(eq(webhook.id, id), eq(webhook.workspaceId, access.workspaceId)),
+      )
+      .returning({ id: webhook.id });
+
+    if (deleted.length === 0) {
+      return NextResponse.json(
+        { error: "Webhook not found." },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({ api: await buildApiPayload(access) });
+  }
+
+  if (body.action === "deleteApiKey") {
+    const id = typeof body.id === "string" ? body.id : "";
+    if (!id) {
+      return NextResponse.json(
+        { error: "API key id is required." },
+        { status: 400 },
+      );
+    }
+
+    const canDeleteAnyKey = canManageWorkspaceApi(access.memberRole);
+    if (!canDeleteAnyKey && access.memberRole === "guest") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const deleted = await db
+      .delete(apiKey)
+      .where(
+        canDeleteAnyKey
+          ? and(eq(apiKey.id, id), eq(apiKey.workspaceId, access.workspaceId))
+          : and(
+              eq(apiKey.id, id),
+              eq(apiKey.workspaceId, access.workspaceId),
+              eq(apiKey.userId, access.userId),
+            ),
+      )
+      .returning({ id: apiKey.id });
+
+    if (deleted.length === 0) {
+      return NextResponse.json(
+        { error: "API key not found." },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({ api: await buildApiPayload(access) });
   }
 
   if (body.action !== "createApiKey") {
