@@ -382,7 +382,12 @@ export function AuthPage({
 
   async function handleSsoSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!ssoIdentifier.trim()) return;
+    const normalizedSsoIdentifier = ssoIdentifier.trim();
+
+    if (!normalizedSsoIdentifier) {
+      setError(emptyEmailLoginError);
+      return;
+    }
 
     setLoading(true);
     setError("");
@@ -393,7 +398,7 @@ export function AuthPage({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: ssoIdentifier,
+          email: normalizedSsoIdentifier,
           isDesktop: false,
           type: "login",
           callbackURL: getAbsoluteCallbackUrl(callbackPath),
@@ -660,7 +665,7 @@ export function AuthPage({
             />
             <button
               type="submit"
-              disabled={loading || !ssoIdentifier.trim()}
+              disabled={loading}
               className="auth-primary-button flex h-11 w-full items-center justify-center rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "Checking SAML…" : "Continue with SAML"}

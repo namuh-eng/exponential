@@ -136,6 +136,48 @@ describe("Login page", () => {
     expect(screen.getByText("Back to login")).toBeDefined();
   });
 
+  it("keeps SAML submit enabled and shows Linear empty validation on click", () => {
+    render(<LoginPage />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
+    );
+
+    const submitButton = screen.getByRole("button", {
+      name: "Continue with SAML",
+    });
+    expect(submitButton.hasAttribute("disabled")).toBe(false);
+
+    fireEvent.click(submitButton);
+
+    expect(
+      screen.getByText("Please enter an email address for login."),
+    ).toBeDefined();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/auth/saml/discovery",
+      expect.anything(),
+    );
+  });
+
+  it("shows Linear empty validation when the SAML form is submitted with Enter", () => {
+    render(<LoginPage />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
+    );
+
+    const input = screen.getByPlaceholderText("Enter your email address…");
+    fireEvent.submit(input.closest("form") as HTMLFormElement);
+
+    expect(
+      screen.getByText("Please enter an email address for login."),
+    ).toBeDefined();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/auth/saml/discovery",
+      expect.anything(),
+    );
+  });
+
   it("submits SAML email lookup to the API with callback intent and shows pending state", async () => {
     let resolveSamlLookup:
       | ((value: {
