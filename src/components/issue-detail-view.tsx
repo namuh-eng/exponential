@@ -9,6 +9,7 @@ import {
 } from "@/lib/issue-description";
 import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   type ChangeEvent,
   useCallback,
@@ -353,6 +354,7 @@ function CommentReactions({
 }
 
 export function IssueDetailView({ issueId }: { issueId: string }) {
+  const router = useRouter();
   const workspaceSlug = useAppShellContext()?.workspaceSlug;
   const [issue, setIssue] = useState<IssueDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -381,6 +383,9 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
   );
   const [actionsOpen, setActionsOpen] = useState(false);
   const [actionStatus, setActionStatus] = useState<string | null>(null);
+  const [runningAction, setRunningAction] = useState<
+    "archive" | "delete" | null
+  >(null);
   const [issueReactionNotice, setIssueReactionNotice] = useState<string | null>(
     null,
   );
@@ -692,7 +697,7 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
   }
 
   async function handleArchiveIssue() {
-    if (!issue) {
+    if (!issue || runningAction) {
       return;
     }
 
@@ -701,6 +706,7 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
     }
 
     setActionStatus("Archiving issue...");
+    setRunningAction("archive");
     setActionsOpen(false);
     try {
       const res = await fetch(`/api/issues/${issue.id}`, {
@@ -713,14 +719,16 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
         throw new Error("Archive failed");
       }
 
-      setActionStatus("Issue archived");
+      setActionStatus("Issue archived and hidden from active lists.");
     } catch {
       setActionStatus("Archive unavailable");
+    } finally {
+      setRunningAction(null);
     }
   }
 
   async function handleDeleteIssue() {
-    if (!issue) {
+    if (!issue || runningAction) {
       return;
     }
 
@@ -729,6 +737,7 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
     }
 
     setActionStatus("Deleting issue...");
+    setRunningAction("delete");
     setActionsOpen(false);
     try {
       const res = await fetch(`/api/issues/${issue.id}`, { method: "DELETE" });
@@ -737,9 +746,12 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
         throw new Error("Delete failed");
       }
 
+      setActionStatus("Issue deleted. Redirecting...");
       setIssue(null);
+      router.push(teamIssuesHref);
     } catch {
       setActionStatus("Delete unavailable");
+      setRunningAction(null);
     }
   }
 
@@ -940,17 +952,19 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
                       type="button"
                       role="menuitem"
                       onClick={() => void handleArchiveIssue()}
+                      disabled={runningAction !== null}
                       className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
                     >
-                      Archive
+                      {runningAction === "archive" ? "Archiving..." : "Archive"}
                     </button>
                     <button
                       type="button"
                       role="menuitem"
                       onClick={() => void handleDeleteIssue()}
+                      disabled={runningAction !== null}
                       className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-red-500 hover:bg-[var(--color-surface-hover)]"
                     >
-                      Delete
+                      {runningAction === "delete" ? "Deleting..." : "Delete"}
                     </button>
                   </div>
                 )}

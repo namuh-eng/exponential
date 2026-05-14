@@ -10,7 +10,7 @@ import {
   workflowState,
 } from "@/lib/db/schema";
 import { getLabelsForIssues } from "@/lib/issue-labels";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
@@ -288,7 +288,13 @@ async function fetchIssuesByAssignee(
     .from(issue)
     .leftJoin(user, eq(issue.assigneeId, user.id))
     .leftJoin(project, eq(issue.projectId, project.id))
-    .where(and(inArray(issue.teamId, teamIds), eq(issue.assigneeId, userId)))
+    .where(
+      and(
+        inArray(issue.teamId, teamIds),
+        eq(issue.assigneeId, userId),
+        isNull(issue.archivedAt),
+      ),
+    )
     .orderBy(asc(issue.sortOrder), desc(issue.createdAt));
 }
 
@@ -318,7 +324,13 @@ async function fetchIssuesByCreator(
     .from(issue)
     .leftJoin(user, eq(issue.assigneeId, user.id))
     .leftJoin(project, eq(issue.projectId, project.id))
-    .where(and(inArray(issue.teamId, teamIds), eq(issue.creatorId, userId)))
+    .where(
+      and(
+        inArray(issue.teamId, teamIds),
+        eq(issue.creatorId, userId),
+        isNull(issue.archivedAt),
+      ),
+    )
     .orderBy(desc(issue.createdAt));
 }
 
@@ -349,7 +361,13 @@ async function fetchIssuesByCommenter(
     .innerJoin(issue, eq(comment.issueId, issue.id))
     .leftJoin(user, eq(issue.assigneeId, user.id))
     .leftJoin(project, eq(issue.projectId, project.id))
-    .where(and(eq(comment.userId, userId), inArray(issue.teamId, teamIds)))
+    .where(
+      and(
+        eq(comment.userId, userId),
+        inArray(issue.teamId, teamIds),
+        isNull(issue.archivedAt),
+      ),
+    )
     .orderBy(desc(issue.updatedAt));
 }
 

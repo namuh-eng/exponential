@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { cycle, issue, project, user, workflowState } from "@/lib/db/schema";
 import { getLabelsForIssues } from "@/lib/issue-labels";
 import { findAccessibleTeam } from "@/lib/teams";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -55,7 +55,7 @@ export async function GET(
     .from(issue)
     .leftJoin(user, eq(issue.assigneeId, user.id))
     .leftJoin(project, eq(issue.projectId, project.id))
-    .where(eq(issue.teamId, teamRecord.id))
+    .where(and(eq(issue.teamId, teamRecord.id), isNull(issue.archivedAt)))
     .orderBy(asc(issue.sortOrder), desc(issue.createdAt));
 
   // Get labels for all issues

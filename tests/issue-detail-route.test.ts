@@ -592,6 +592,54 @@ describe("issue detail route", () => {
     });
   });
 
+  it("archives an issue with workspace-scoped patch mutation", async () => {
+    updateReturningMock.mockResolvedValue([
+      {
+        id: "issue-1",
+        title: "Broken route",
+        description: "<p>Hello</p>",
+        updatedAt: new Date("2026-04-23T12:00:00.000Z"),
+        stateId: "state-1",
+        sortOrder: 2,
+        archivedAt: new Date("2026-04-23T12:00:00.000Z"),
+      },
+    ]);
+    const { PATCH } = await import("@/app/api/issues/[id]/route");
+
+    const response = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({ archive: true }),
+        headers: { "content-type": "application/json" },
+      }),
+      { params: Promise.resolve({ id: "ENG-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(resolveRequestWorkspaceIdMock).toHaveBeenCalled();
+    expect(updateSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        archivedAt: expect.any(Date),
+        updatedAt: expect.any(Date),
+      }),
+    );
+    expect(insertHistoryValuesMock).toHaveBeenCalledWith({
+      issueId: "issue-1",
+      actorId: "user-1",
+      actorName: "Ashley",
+      actorEmail: "ashley@example.com",
+      eventType: "updated",
+      metadata: {
+        changedFields: ["archivedAt"],
+        identifier: "ENG-1",
+      },
+    });
+    await expect(response.json()).resolves.toMatchObject({
+      id: "issue-1",
+      archivedAt: "2026-04-23T12:00:00.000Z",
+    });
+  });
+
   it("deletes an issue", async () => {
     const { DELETE } = await import("@/app/api/issues/[id]/route");
 

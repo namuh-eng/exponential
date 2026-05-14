@@ -10,6 +10,7 @@ import { IssueDetailView } from "@/components/issue-detail-view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
   useParams: vi.fn(),
 }));
 

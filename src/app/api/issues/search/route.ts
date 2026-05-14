@@ -1,7 +1,7 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issue, member, team } from "@/lib/db/schema";
-import { and, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, eq, ilike, inArray, isNull, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
@@ -60,6 +60,7 @@ export async function GET(request: Request) {
     .where(
       and(
         inArray(issue.teamId, teamIds),
+        isNull(issue.archivedAt),
         or(
           ilike(issue.title, `%${query}%`),
           ilike(issue.identifier, `%${query}%`),

@@ -8,9 +8,11 @@ import {
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+const pushMock = vi.fn();
+
 // Mock next/navigation
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: pushMock }),
   useParams: () => ({ key: "ENG", id: "iss-1" }),
 }));
 
@@ -68,6 +70,7 @@ describe("IssueDetailView UI", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("renders loading state then issue details", async () => {
@@ -327,6 +330,113 @@ describe("IssueDetailView UI", () => {
           body: expect.stringContaining('"title":"Child task"'),
         }),
       );
+    });
+  });
+
+  it("archives from the actions menu with confirmation and visible feedback", async () => {
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => true),
+    );
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      if (url.toString().includes("/api/issues/iss-1/history")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ history: [] }),
+        } as Response);
+      }
+      if (url.toString() === "/api/issues/iss-1") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockIssueDetail,
+        } as Response);
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ ...mockIssueDetail, archivedAt: new Date() }),
+      } as Response);
+    });
+
+    render(<IssueDetailView issueId="iss-1" />);
+    await screen.findByText("A bug to fix");
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/issues/iss-1",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ archive: true }),
+        }),
+      );
+    });
+    expect(
+      await screen.findByText("Issue archived and hidden from active lists."),
+    ).toBeInTheDocument();
+  });
+
+  it("does not archive when confirmation is cancelled", async () => {
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => false),
+    );
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => mockIssueDetail,
+    } as Response);
+
+    render(<IssueDetailView issueId="iss-1" />);
+    await screen.findByText("A bug to fix");
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).not.toHaveBeenCalledWith(
+        "/api/issues/iss-1",
+        expect.objectContaining({ method: "PATCH" }),
+      );
+    });
+  });
+
+  it("requires delete confirmation before mutation and navigates after success", async () => {
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => true),
+    );
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      if (url.toString().includes("/api/issues/iss-1/history")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ history: [] }),
+        } as Response);
+      }
+      if (url.toString() === "/api/issues/iss-1") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockIssueDetail,
+        } as Response);
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ success: true }),
+      } as Response);
+    });
+
+    render(<IssueDetailView issueId="iss-1" />);
+    await screen.findByText("A bug to fix");
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/issues/iss-1",
+        expect.objectContaining({ method: "DELETE" }),
+      );
+      expect(pushMock).toHaveBeenCalledWith("/team/ENG/all");
     });
   });
 });
