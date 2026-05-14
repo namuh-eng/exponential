@@ -19,7 +19,9 @@ test.describe("Workspace Views canonical route", () => {
 
     await page.goto("/views");
     await expect(page).toHaveURL(/\/foreverbrowsing\/views$/);
-    await expect(page.getByRole("heading", { name: "Views" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Views", exact: true }),
+    ).toBeVisible();
     await expect(page.getByRole("button", { name: "Issues" })).toHaveAttribute(
       "data-active",
       "true",
@@ -28,7 +30,9 @@ test.describe("Workspace Views canonical route", () => {
     await page.goto("/foreverbrowsing/inbox");
     await page.locator('a[href="/foreverbrowsing/views"]').first().click();
     await expect(page).toHaveURL(/\/foreverbrowsing\/views$/);
-    await expect(page.getByRole("heading", { name: "Views" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Views", exact: true }),
+    ).toBeVisible();
 
     await page.getByLabel("Create view").first().click();
     await page.getByPlaceholder("View name").fill(issueViewName);
@@ -50,7 +54,9 @@ test.describe("Workspace Views canonical route", () => {
 
     await page.goto("/views/issues");
     await expect(page).toHaveURL(/\/foreverbrowsing\/views\/issues$/);
-    await expect(page.getByRole("heading", { name: "Views" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Views", exact: true }),
+    ).toBeVisible();
     await expect(page.getByRole("button", { name: "Issues" })).toHaveAttribute(
       "data-active",
       "true",
@@ -58,12 +64,67 @@ test.describe("Workspace Views canonical route", () => {
 
     await page.goto("/views/projects");
     await expect(page).toHaveURL(/\/foreverbrowsing\/views\/projects$/);
-    await expect(page.getByRole("heading", { name: "Views" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Views", exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Projects" }),
     ).toHaveAttribute("data-active", "true");
 
     expect(pageErrors).toEqual([]);
     expect(consoleErrors).toEqual([]);
+  });
+});
+
+test.describe("Team Views tab routes", () => {
+  test("direct slug-prefixed and legacy team views tab routes render the team Views shell", async ({
+    page,
+  }) => {
+    for (const tab of ["issues", "projects"] as const) {
+      await page.goto(`/foreverbrowsing/team/ENG/views/${tab}`);
+      await expect(page).toHaveURL(
+        new RegExp(`/foreverbrowsing/team/ENG/views/${tab}$`),
+      );
+      await expect(
+        page.getByRole("heading", { name: "Views", exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Engineering", exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", {
+          name: tab === "issues" ? "Issues" : "Projects",
+        }),
+      ).toHaveAttribute("data-active", "true");
+      await expect(
+        page.getByText("This page could not be found"),
+      ).not.toBeVisible();
+    }
+
+    await page.goto("/team/ENG/views/projects");
+    await expect(page).toHaveURL(
+      /\/foreverbrowsing\/team\/ENG\/views\/projects$/,
+    );
+    await expect(
+      page.getByRole("heading", { name: "Views", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Projects" }),
+    ).toHaveAttribute("data-active", "true");
+    await expect(
+      page.getByText("This page could not be found"),
+    ).not.toBeVisible();
+
+    await page.getByRole("button", { name: "Issues" }).click();
+    await expect(page).toHaveURL(
+      /\/foreverbrowsing\/team\/ENG\/views\/issues$/,
+    );
+    await expect(page.getByRole("button", { name: "Issues" })).toHaveAttribute(
+      "data-active",
+      "true",
+    );
+    await expect(
+      page.getByText("This page could not be found"),
+    ).not.toBeVisible();
   });
 });
