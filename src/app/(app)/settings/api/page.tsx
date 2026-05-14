@@ -9,6 +9,7 @@ import type {
   WorkspaceApiKeyRecord,
   WorkspaceWebhookRecord,
 } from "@/lib/api-settings";
+import { validateOAuthRedirectUrl } from "@/lib/api-settings";
 import { useEffect, useState } from "react";
 
 type CreateResponse = {
@@ -145,7 +146,11 @@ function Modal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div className="w-full max-w-[480px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)] p-5 shadow-2xl">
+      <dialog
+        open
+        aria-label={title}
+        className="m-0 w-full max-w-[480px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)] p-5 text-[var(--color-text-primary)] shadow-2xl"
+      >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <h3 className="text-[16px] font-semibold text-[var(--color-text-primary)]">
@@ -164,7 +169,7 @@ function Modal({
           </button>
         </div>
         {children}
-      </div>
+      </dialog>
     </div>
   );
 }
@@ -376,7 +381,7 @@ function ApiKeysList({
 function buildDefaultOauthForm(): OAuthFormState {
   return {
     name: "",
-    redirectUrl: "http://localhost:3015/oauth/callback",
+    redirectUrl: "",
   };
 }
 
@@ -491,14 +496,32 @@ export default function ApiSettingsPage() {
   }
 
   async function submitOAuthApplication() {
+    const name = oauthForm.name.trim();
+    if (!name) {
+      setStatusMessage(null);
+      setRevealedCredential(null);
+      setErrorMessage("Application name is required.");
+      return;
+    }
+
+    const redirectUrlValidation = validateOAuthRedirectUrl(
+      oauthForm.redirectUrl,
+    );
+    if (!redirectUrlValidation.ok) {
+      setStatusMessage(null);
+      setRevealedCredential(null);
+      setErrorMessage(redirectUrlValidation.error);
+      return;
+    }
+
     const didPersist = await mutate(
       "/api/workspaces/current/api",
       {
         method: "POST",
         body: JSON.stringify({
           action: "createOAuthApplication",
-          name: oauthForm.name,
-          redirectUrl: oauthForm.redirectUrl,
+          name,
+          redirectUrl: redirectUrlValidation.url,
         }),
       },
       "OAuth application created.",
@@ -717,6 +740,10 @@ export default function ApiSettingsPage() {
                 }
                 placeholder="https://example.com/oauth/callback"
               />
+              <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+                Use a public HTTPS callback URL. Localhost, private network
+                URLs, and URL fragments are not accepted.
+              </p>
             </Field>
 
             <div className="flex justify-end gap-3">

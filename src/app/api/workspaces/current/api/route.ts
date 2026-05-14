@@ -15,6 +15,7 @@ import {
   readPermissionLevel,
   readWorkspaceApiSettings,
   serializeWorkspaceApiSettings,
+  validateOAuthRedirectUrl,
 } from "@/lib/api-settings";
 import { db } from "@/lib/db";
 import { apiKey, member, user, webhook, workspace } from "@/lib/db/schema";
@@ -311,14 +312,21 @@ export async function POST(request: Request) {
     }
 
     const name = typeof body.name === "string" ? body.name.trim() : "";
-    const redirectUrl = normalizeAbsoluteUrl(body.redirectUrl);
-
-    if (!name || !redirectUrl) {
+    if (!name) {
       return NextResponse.json(
-        { error: "Application name and redirect URL are required." },
+        { error: "Application name is required." },
         { status: 400 },
       );
     }
+
+    const redirectUrlValidation = validateOAuthRedirectUrl(body.redirectUrl);
+    if (!redirectUrlValidation.ok) {
+      return NextResponse.json(
+        { error: redirectUrlValidation.error },
+        { status: 400 },
+      );
+    }
+    const redirectUrl = redirectUrlValidation.url;
 
     const clientId = createOAuthClientId();
     const clientSecret = createSecret("linsec");

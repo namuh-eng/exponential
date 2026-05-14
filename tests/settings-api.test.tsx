@@ -128,6 +128,72 @@ describe("API settings page", () => {
     });
   });
 
+  it("opens the OAuth modal with an empty redirect URL and placeholder example only", async () => {
+    mockApiLoad();
+
+    render(<ApiSettingsPage />);
+    await waitForLoaded();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "New OAuth application" }),
+    );
+
+    const redirectInput = screen.getByLabelText("Redirect URL");
+    expect(redirectInput).toHaveValue("");
+    expect(redirectInput).toHaveAttribute(
+      "placeholder",
+      "https://example.com/oauth/callback",
+    );
+  });
+
+  it("does not submit OAuth creation when only application name is filled", async () => {
+    mockApiLoad();
+
+    render(<ApiSettingsPage />);
+    await waitForLoaded();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "New OAuth application" }),
+    );
+    fireEvent.change(screen.getByLabelText("Application name"), {
+      target: { value: "Partner portal" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create OAuth application" }),
+    );
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Redirect URL is required.")).toBeInTheDocument();
+    expect(
+      screen.queryByText("OAuth application created."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("blocks unsafe OAuth redirect URLs before sending the modal request", async () => {
+    mockApiLoad();
+
+    render(<ApiSettingsPage />);
+    await waitForLoaded();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "New OAuth application" }),
+    );
+    fireEvent.change(screen.getByLabelText("Application name"), {
+      target: { value: "Partner portal" },
+    });
+    fireEvent.change(screen.getByLabelText("Redirect URL"), {
+      target: { value: "http://localhost:3015/oauth/callback" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create OAuth application" }),
+    );
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByText("Redirect URL must use HTTPS."),
+    ).toBeInTheDocument();
+  });
+
   it("creates an OAuth application from the modal flow", async () => {
     mockApiLoad();
     mockFetch.mockResolvedValueOnce({

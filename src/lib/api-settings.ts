@@ -112,6 +112,103 @@ export function normalizeWebhookEvents(value: unknown): WebhookEventType[] {
   );
 }
 
+export type OAuthRedirectValidationResult =
+  | { ok: true; url: string }
+  | { ok: false; error: string };
+
+function parseIpv4Address(hostname: string): number[] | null {
+  const parts = hostname.split(".");
+  if (parts.length !== 4) {
+    return null;
+  }
+
+  const octets = parts.map((part) => {
+    if (!/^\d+$/.test(part)) {
+      return Number.NaN;
+    }
+
+    const value = Number(part);
+    return value >= 0 && value <= 255 ? value : Number.NaN;
+  });
+
+  return octets.every((octet) => Number.isInteger(octet)) ? octets : null;
+}
+
+function isUnsafeIpv4Address(hostname: string) {
+  const octets = parseIpv4Address(hostname);
+  if (!octets) {
+    return false;
+  }
+
+  const [first, second] = octets;
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
+  );
+}
+
+function isUnsafeIpv6Address(hostname: string) {
+  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  return (
+    normalized === "::1" ||
+    normalized === "0:0:0:0:0:0:0:1" ||
+    normalized.startsWith("fc") ||
+    normalized.startsWith("fd") ||
+    normalized.startsWith("fe8") ||
+    normalized.startsWith("fe9") ||
+    normalized.startsWith("fea") ||
+    normalized.startsWith("feb")
+  );
+}
+
+function isUnsafeRedirectHostname(hostname: string) {
+  const normalized = hostname.toLowerCase().replace(/\.$/, "");
+
+  return (
+    normalized === "localhost" ||
+    normalized.endsWith(".localhost") ||
+    isUnsafeIpv4Address(normalized) ||
+    isUnsafeIpv6Address(normalized)
+  );
+}
+
+export function validateOAuthRedirectUrl(
+  value: unknown,
+): OAuthRedirectValidationResult {
+  if (typeof value !== "string" || !value.trim()) {
+    return { ok: false, error: "Redirect URL is required." };
+  }
+
+  let url: URL;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    return { ok: false, error: "Redirect URL must be a valid absolute URL." };
+  }
+
+  if (url.protocol !== "https:") {
+    return { ok: false, error: "Redirect URL must use HTTPS." };
+  }
+
+  if (url.hash) {
+    return { ok: false, error: "Redirect URL must not include a fragment." };
+  }
+
+  if (isUnsafeRedirectHostname(url.hostname)) {
+    return {
+      ok: false,
+      error:
+        "Redirect URL must not use localhost, loopback, private, or link-local hosts.",
+    };
+  }
+
+  return { ok: true, url: url.toString() };
+}
+
 function isIsoDate(value: unknown): value is string {
   return typeof value === "string" && !Number.isNaN(new Date(value).getTime());
 }

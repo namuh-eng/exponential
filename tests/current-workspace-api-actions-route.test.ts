@@ -67,6 +67,45 @@ vi.mock("@/lib/api-settings", () => ({
   ),
   readWorkspaceApiSettings: vi.fn(() => ({ oauthApplications: [] })),
   serializeWorkspaceApiSettings: vi.fn((value: unknown) => value),
+  validateOAuthRedirectUrl: vi.fn((value: unknown) => {
+    if (typeof value !== "string" || !value.trim()) {
+      return { ok: false, error: "Redirect URL is required." };
+    }
+
+    let url: URL;
+    try {
+      url = new URL(value.trim());
+    } catch {
+      return { ok: false, error: "Redirect URL must be a valid absolute URL." };
+    }
+
+    if (url.protocol !== "https:") {
+      return { ok: false, error: "Redirect URL must use HTTPS." };
+    }
+
+    if (url.hash) {
+      return { ok: false, error: "Redirect URL must not include a fragment." };
+    }
+
+    const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    const privateHost =
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "::1" ||
+      host.startsWith("10.") ||
+      host.startsWith("192.168.") ||
+      host.startsWith("169.254.");
+
+    if (privateHost) {
+      return {
+        ok: false,
+        error:
+          "Redirect URL must not use localhost, loopback, private, or link-local hosts.",
+      };
+    }
+
+    return { ok: true, url: url.toString() };
+  }),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -159,6 +198,92 @@ describe("current workspace api actions route", () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
       error: "Action is required.",
+    });
+  });
+
+  it.each([
+    ["empty redirect URL", "", "Redirect URL is required."],
+    [
+      "invalid protocol",
+      "ftp://example.com/callback",
+      "Redirect URL must use HTTPS.",
+    ],
+    [
+      "non-HTTPS callback",
+      "http://example.com/callback",
+      "Redirect URL must use HTTPS.",
+    ],
+    [
+      "localhost callback",
+      "https://localhost:3015/oauth/callback",
+      "Redirect URL must not use localhost, loopback, private, or link-local hosts.",
+    ],
+    [
+      "loopback IPv4 callback",
+      "https://127.0.0.1/oauth/callback",
+      "Redirect URL must not use localhost, loopback, private, or link-local hosts.",
+    ],
+    [
+      "loopback IPv6 callback",
+      "https://[::1]/oauth/callback",
+      "Redirect URL must not use localhost, loopback, private, or link-local hosts.",
+    ],
+    [
+      "private callback",
+      "https://192.168.1.10/oauth/callback",
+      "Redirect URL must not use localhost, loopback, private, or link-local hosts.",
+    ],
+    [
+      "link-local callback",
+      "https://169.254.10.20/oauth/callback",
+      "Redirect URL must not use localhost, loopback, private, or link-local hosts.",
+    ],
+    [
+      "fragment callback",
+      "https://ever.test/callback#token",
+      "Redirect URL must not include a fragment.",
+    ],
+  ])(
+    "rejects unsafe OAuth redirect URL: %s",
+    async (_caseName, redirectUrl, error) => {
+      const { POST } = await import("@/app/api/workspaces/current/api/route");
+
+      const response = await POST(
+        new Request("http://localhost/api/workspaces/current/api", {
+          method: "POST",
+          body: JSON.stringify({
+            action: "createOAuthApplication",
+            name: "Ever",
+            redirectUrl,
+          }),
+          headers: { "content-type": "application/json" },
+        }),
+      );
+
+      expect(response.status).toBe(400);
+      expect(updateSetMock).not.toHaveBeenCalled();
+      await expect(response.json()).resolves.toEqual({ error });
+    },
+  );
+
+  it("rejects OAuth application creation without a name", async () => {
+    const { POST } = await import("@/app/api/workspaces/current/api/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/workspaces/current/api", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "createOAuthApplication",
+          redirectUrl: "https://ever.test/callback",
+        }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(updateSetMock).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual({
+      error: "Application name is required.",
     });
   });
 
