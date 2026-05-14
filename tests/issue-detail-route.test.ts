@@ -15,6 +15,7 @@ const cycleWhereMock = vi.fn();
 const sourceRelationsWhereMock = vi.fn();
 const targetRelationsWhereMock = vi.fn();
 const relatedIssuesWhereMock = vi.fn();
+const issueReactionsWhereMock = vi.fn();
 const reactionsWhereMock = vi.fn();
 const attachmentsOrderByMock = vi.fn();
 const stateLookupLimitMock = vi.fn();
@@ -185,6 +186,14 @@ vi.mock("@/lib/db", () => ({
         };
       }
 
+      if (selection && "emoji" in selection && !("commentId" in selection)) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: issueReactionsWhereMock,
+          }),
+        };
+      }
+
       if (selection && "emoji" in selection && "commentId" in selection) {
         return {
           from: vi.fn().mockReturnValue({
@@ -343,6 +352,11 @@ describe("issue detail route", () => {
       { id: "issue-3", identifier: "ENG-3", title: "Blocked issue" },
       { id: "issue-4", identifier: "ENG-4", title: "Blocking issue" },
     ]);
+    issueReactionsWhereMock.mockResolvedValue([
+      { emoji: "👍", userId: "user-1" },
+      { emoji: "👍", userId: "user-5" },
+      { emoji: "🚀", userId: "user-5" },
+    ]);
     reactionsWhereMock.mockResolvedValue([
       { commentId: "comment-1", emoji: "🔥", userId: "user-1" },
       { commentId: "comment-1", emoji: "🔥", userId: "user-5" },
@@ -448,6 +462,10 @@ describe("issue detail route", () => {
         },
       ],
       labels: [{ name: "Bug", color: "#f00" }],
+      reactions: [
+        { emoji: "👍", count: 2, reactedByMe: true },
+        { emoji: "🚀", count: 1, reactedByMe: false },
+      ],
       comments: [
         {
           id: "comment-1",

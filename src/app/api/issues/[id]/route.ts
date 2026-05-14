@@ -8,6 +8,7 @@ import {
   issue,
   issueHistory,
   issueLabel,
+  issueReaction,
   issueRelation,
   label,
   project,
@@ -140,6 +141,7 @@ export async function GET(
     cycleRows,
     sourceRelationRows,
     targetRelationRows,
+    issueReactionRows,
   ] = await Promise.all([
     db.select().from(workflowState).where(eq(workflowState.id, iss.stateId)),
     iss.assigneeId
@@ -227,6 +229,13 @@ export async function GET(
       })
       .from(issueRelation)
       .where(eq(issueRelation.relatedIssueId, iss.id)),
+    db
+      .select({
+        emoji: issueReaction.emoji,
+        userId: issueReaction.userId,
+      })
+      .from(issueReaction)
+      .where(eq(issueReaction.issueId, iss.id)),
   ]);
 
   const relatedIssueIds = [
@@ -279,6 +288,10 @@ export async function GET(
           .orderBy(asc(commentAttachment.createdAt))
       : [];
 
+  const issueReactionsByEmoji = new Map<
+    string,
+    { count: number; reactedByMe: boolean }
+  >();
   const reactionsByComment = new Map<
     string,
     Map<string, { count: number; reacted: boolean }>
@@ -293,6 +306,19 @@ export async function GET(
       downloadUrl: string | null;
     }[]
   >();
+
+  for (const currentReaction of issueReactionRows) {
+    const existing = issueReactionsByEmoji.get(currentReaction.emoji) ?? {
+      count: 0,
+      reactedByMe: false,
+    };
+
+    issueReactionsByEmoji.set(currentReaction.emoji, {
+      count: existing.count + 1,
+      reactedByMe:
+        existing.reactedByMe || currentReaction.userId === session.user.id,
+    });
+  }
 
   for (const currentReaction of reactionRows) {
     const byEmoji =
@@ -400,6 +426,13 @@ export async function GET(
     parentIssue: parentIssueData,
     relations: relationData,
     labels: labelRows.map((l) => ({ name: l.labelName, color: l.labelColor })),
+    reactions: Array.from(issueReactionsByEmoji.entries()).map(
+      ([emoji, data]) => ({
+        emoji,
+        count: data.count,
+        reactedByMe: data.reactedByMe,
+      }),
+    ),
     comments: commentRows.map((c) => ({
       id: c.id,
       body: c.body,

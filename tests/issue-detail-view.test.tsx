@@ -44,6 +44,7 @@ const mockIssueDetail = {
     },
   ],
   labels: [{ name: "bug", color: "#f00" }],
+  reactions: [],
   comments: [
     {
       id: "c1",

@@ -12,6 +12,7 @@ const issueDetail = {
   team: { id: "t-1", name: "Engineering", key: "ENG" },
   project: null,
   labels: [],
+  reactions: [],
   comments: [
     {
       id: "c-1",

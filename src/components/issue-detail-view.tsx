@@ -19,6 +19,7 @@ interface IssueReaction {
   emoji: string;
   count: number;
   reacted: boolean;
+  reactedByMe?: boolean;
 }
 
 interface IssueCommentAttachment {
@@ -88,6 +89,7 @@ interface IssueDetail {
     issue: { id: string; identifier: string; title: string };
   }[];
   labels: { name: string; color: string }[];
+  reactions: IssueReaction[];
   comments: IssueComment[];
   subIssues: IssueSubIssue[];
   createdAt: string;
@@ -115,6 +117,30 @@ const DESCRIPTION_ACTIONS: ReadonlyArray<{
   { label: "Bullet list", command: "insertUnorderedList" },
   { label: "Quote", command: "formatBlock", value: "blockquote" },
 ];
+
+function applyIssueReactionToggle(reactions: IssueReaction[], emoji: string) {
+  const existing = reactions.find((reaction) => reaction.emoji === emoji);
+
+  if (!existing) {
+    return [
+      ...reactions,
+      { emoji, count: 1, reacted: false, reactedByMe: true },
+    ];
+  }
+
+  const reactedByMe = existing.reactedByMe ?? false;
+  const nextCount = Math.max(0, existing.count + (reactedByMe ? -1 : 1));
+
+  if (nextCount === 0) {
+    return reactions.filter((reaction) => reaction.emoji !== emoji);
+  }
+
+  return reactions.map((reaction) =>
+    reaction.emoji === emoji
+      ? { ...reaction, count: nextCount, reactedByMe: !reactedByMe }
+      : reaction,
+  );
+}
 
 function formatFullDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -340,6 +366,9 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
   const [submittingComment, setSubmittingComment] = useState(false);
   const [submittingSubIssue, setSubmittingSubIssue] = useState(false);
   const [reactingCommentId, setReactingCommentId] = useState<string | null>(
+    null,
+  );
+  const [reactingIssueEmoji, setReactingIssueEmoji] = useState<string | null>(
     null,
   );
   const [descriptionDraft, setDescriptionDraft] = useState("");
@@ -716,10 +745,51 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
     titleRef.current?.focus();
   }
 
-  function handleIssueReactionClick(emoji: string) {
-    setIssueReactionNotice(
-      `Issue-level ${emoji} reactions need durable API support before saving.`,
+  async function handleIssueReactionClick(emoji: string) {
+    if (!issue || reactingIssueEmoji) {
+      return;
+    }
+
+    const previousReactions = issue.reactions;
+    const currentReaction = previousReactions.find(
+      (reaction) => reaction.emoji === emoji,
     );
+    const wasReacted = currentReaction?.reactedByMe ?? false;
+    const optimisticReactions = applyIssueReactionToggle(
+      previousReactions,
+      emoji,
+    );
+
+    setReactingIssueEmoji(emoji);
+    setIssueReactionNotice(null);
+    setIssue({ ...issue, reactions: optimisticReactions });
+
+    try {
+      const res = await fetch(`/api/issues/${issue.id}/reactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to update issue reaction");
+      }
+
+      const nextReactions = (await res.json()) as IssueReaction[];
+      setIssue((current) =>
+        current ? { ...current, reactions: nextReactions } : current,
+      );
+      setIssueReactionNotice(
+        wasReacted ? `${emoji} reaction removed.` : `${emoji} reaction saved.`,
+      );
+    } catch {
+      setIssue((current) =>
+        current ? { ...current, reactions: previousReactions } : current,
+      );
+      setIssueReactionNotice("Couldn’t save reaction. Try again.");
+    } finally {
+      setReactingIssueEmoji(null);
+    }
   }
 
   async function handleCopyLink(detailHref: string) {
@@ -1207,22 +1277,40 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
               className="flex flex-wrap gap-2"
               aria-label="Issue-level reactions"
             >
-              {QUICK_REACTIONS.map((emoji) => (
-                <button
-                  key={`issue-reaction-${emoji}`}
-                  type="button"
-                  onClick={() => handleIssueReactionClick(emoji)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-border)] text-[14px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)]"
-                  aria-label={`Issue reaction ${emoji}`}
-                >
-                  {emoji}
-                </button>
-              ))}
+              {QUICK_REACTIONS.map((emoji) => {
+                const reaction = issue.reactions.find(
+                  (currentReaction) => currentReaction.emoji === emoji,
+                );
+                const count = reaction?.count ?? 0;
+                const reactedByMe = reaction?.reactedByMe ?? false;
+
+                return (
+                  <button
+                    key={`issue-reaction-${emoji}`}
+                    type="button"
+                    onClick={() => handleIssueReactionClick(emoji)}
+                    disabled={reactingIssueEmoji !== null}
+                    className={`inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-full border px-2 text-[14px] transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60 ${
+                      reactedByMe
+                        ? "border-[var(--color-accent)] bg-[var(--color-accent-muted)] text-[var(--color-text-primary)]"
+                        : "border-[var(--color-border)] text-[var(--color-text-secondary)]"
+                    }`}
+                    aria-label={`Issue reaction ${emoji}${
+                      reactedByMe ? " selected" : ""
+                    }`}
+                    aria-pressed={reactedByMe}
+                  >
+                    <span>{emoji}</span>
+                    {count > 0 ? <span>{count}</span> : null}
+                  </button>
+                );
+              })}
             </div>
-            <p className="mt-3 text-[12px] text-[var(--color-text-secondary)]">
-              {issueReactionNotice ??
-                "Issue-level reactions are shown separately from comment reactions; saving awaits durable API support."}
-            </p>
+            {issueReactionNotice ? (
+              <p className="mt-3 text-[12px] text-[var(--color-text-secondary)]">
+                {issueReactionNotice}
+              </p>
+            ) : null}
           </div>
 
           <div className="mt-4 rounded-[20px] border border-[var(--color-border)] bg-[var(--color-content-bg)] p-4">
