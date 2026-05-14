@@ -610,7 +610,9 @@ export function ViewsPage({
     }
 
     if (initialTeamKey || routeTeamKey) {
-      router.push(`/team/${encodeURIComponent(activeTeamKey ?? "")}/views`);
+      router.push(
+        `/team/${encodeURIComponent(activeTeamKey ?? "")}/views/${tab}`,
+      );
       return;
     }
 
