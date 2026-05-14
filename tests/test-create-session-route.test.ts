@@ -15,7 +15,7 @@ vi.mock("@/lib/auth", () => ({
   auth: {
     $context: Promise.resolve({
       internalAdapter: {
-        createSession: (userId: string) => createSessionMock(userId),
+        createSession: (...args: unknown[]) => createSessionMock(...args),
       },
       secret: "test-secret",
       authCookies: {
@@ -84,6 +84,10 @@ describe("test create session route", () => {
     const response = await POST(
       new Request("http://localhost", {
         method: "POST",
+        headers: {
+          "user-agent": "Regression Browser",
+          "x-forwarded-for": "203.0.113.8, 10.0.0.1",
+        },
         body: JSON.stringify({ email: "test@test.com" }),
       }),
     );
@@ -95,6 +99,10 @@ describe("test create session route", () => {
     expect(payload.workspace.urlSlug).toBe("foreverbrowsing");
     expect(payload.team.key).toBe("ENG");
     expect(ensureCanonicalWorkspaceForUserMock).toHaveBeenCalledWith("user-1");
+    expect(createSessionMock).toHaveBeenCalledWith("user-1", false, {
+      userAgent: "Regression Browser",
+      ipAddress: "203.0.113.8",
+    });
     expect(response.headers.get("set-cookie")).toContain(
       "activeWorkspaceId=workspace-foreverbrowsing",
     );

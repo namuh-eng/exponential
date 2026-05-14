@@ -79,7 +79,8 @@ function deviceLabel(session: SecuritySession) {
   if (/macintosh|windows|linux|chrome|firefox|safari/i.test(userAgent)) {
     return "Browser session";
   }
-  return "Unknown device";
+
+  return session.source || "Browser session";
 }
 
 function Section({
@@ -397,6 +398,9 @@ export default function AccountSecurityPage() {
                     </div>
                     <p className="mt-1 break-all text-[12px] text-[var(--color-text-tertiary)]">
                       {session.location} · {session.ipAddress ?? "Unknown IP"}
+                    </p>
+                    <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+                      Seen {formatDate(session.updatedAt)}
                     </p>
                     <button
                       type="button"
