@@ -34,6 +34,7 @@ export async function GET(
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
+  const hierarchyTeamIds = teamRecord.hierarchyTeamIds ?? [teamRecord.id];
   const query = normalizeAnalyticsQuery(new URL(request.url).searchParams);
 
   const rows = await db
@@ -57,7 +58,7 @@ export async function GET(
     .leftJoin(workflowState, eq(issue.stateId, workflowState.id))
     .leftJoin(project, eq(issue.projectId, project.id))
     .leftJoin(cycle, eq(issue.cycleId, cycle.id))
-    .where(eq(issue.teamId, teamRecord.id))
+    .where(inArray(issue.teamId, hierarchyTeamIds))
     .orderBy(desc(issue.updatedAt));
 
   const issueIds = rows.map((row) => row.id);
@@ -90,7 +91,7 @@ export async function GET(
       endDate: cycle.endDate,
     })
     .from(cycle)
-    .where(eq(cycle.teamId, teamRecord.id))
+    .where(inArray(cycle.teamId, hierarchyTeamIds))
     .orderBy(desc(cycle.endDate))
     .limit(5);
 

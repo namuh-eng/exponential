@@ -3,7 +3,7 @@ import { cycleRangesOverlap, parseCycleDateInput } from "@/lib/cycle-utils";
 import { db } from "@/lib/db";
 import { cycle, issue, workflowState } from "@/lib/db/schema";
 import { findAccessibleTeam } from "@/lib/teams";
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -24,11 +24,13 @@ export async function GET(
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
-  // Get all cycles for this team
+  const hierarchyTeamIds = teamRecord.hierarchyTeamIds ?? [teamRecord.id];
+
+  // Get all cycles for this team hierarchy
   const cycles = await db
     .select()
     .from(cycle)
-    .where(eq(cycle.teamId, teamRecord.id))
+    .where(inArray(cycle.teamId, hierarchyTeamIds))
     .orderBy(desc(cycle.startDate));
 
   // Get issue counts per cycle (total and completed)
@@ -37,7 +39,7 @@ export async function GET(
     .from(workflowState)
     .where(
       and(
-        eq(workflowState.teamId, teamRecord.id),
+        inArray(workflowState.teamId, hierarchyTeamIds),
         eq(workflowState.category, "completed"),
       ),
     );
@@ -48,7 +50,9 @@ export async function GET(
       const totalResult = await db
         .select({ value: count() })
         .from(issue)
-        .where(and(eq(issue.cycleId, c.id), eq(issue.teamId, teamRecord.id)));
+        .where(
+          and(eq(issue.cycleId, c.id), inArray(issue.teamId, hierarchyTeamIds)),
+        );
       const issueCount = totalResult[0]?.value ?? 0;
 
       let completedIssueCount = 0;
@@ -59,7 +63,7 @@ export async function GET(
           .where(
             and(
               eq(issue.cycleId, c.id),
-              eq(issue.teamId, teamRecord.id),
+              inArray(issue.teamId, hierarchyTeamIds),
               sql`${issue.stateId} IN (${sql.join(
                 completedStateIds.map((id) => sql`${id}`),
                 sql`, `,

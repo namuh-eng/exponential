@@ -70,7 +70,12 @@ export default async function AppLayout({
           workspaceName: string;
           workspaceSlug: string;
         };
-        teams: { id: string; name: string; key: string }[];
+        teams: {
+          id: string;
+          name: string;
+          key: string;
+          parentTeamId?: string | null;
+        }[];
       }
     | undefined;
 
@@ -179,7 +184,12 @@ export default async function AppLayout({
 
     // Get first team
     const teams = await db
-      .select({ id: team.id, name: team.name, key: team.key })
+      .select({
+        id: team.id,
+        name: team.name,
+        key: team.key,
+        parentTeamId: team.parentTeamId,
+      })
       .from(team)
       .where(eq(team.workspaceId, ws.workspaceId))
       .orderBy(desc(team.createdAt))

@@ -103,6 +103,7 @@ describe("team triage route", () => {
         estimate: 2,
         createdAt: new Date("2026-04-26T00:00:00.000Z"),
         updatedAt: new Date("2026-04-27T00:00:00.000Z"),
+        teamId: "team-1",
       },
     ]);
     getLabelsForIssuesMock.mockResolvedValue({ "issue-1": [] });
@@ -146,6 +147,50 @@ describe("team triage route", () => {
       projectId: "project-1",
       projectName: "Inbox cleanup",
       estimate: 2,
+    });
+  });
+
+  it("returns triage issues from a parent hierarchy child team", async () => {
+    findAccessibleTeamMock.mockResolvedValue({
+      id: "team-1",
+      name: "Engineering",
+      key: "ENG",
+      triageEnabled: true,
+      hierarchyTeamIds: ["team-1", "team-child"],
+      childTeamIds: ["team-child"],
+    });
+    issuesOrderByMock.mockReturnValue([
+      {
+        id: "issue-child",
+        identifier: "PLAT-1",
+        title: "Child triage",
+        priority: "high",
+        stateId: "state-triage",
+        stateName: "Triage",
+        stateColor: "#f00",
+        creatorId: "user-2",
+        creatorName: "Bob",
+        assigneeId: null,
+        projectId: null,
+        projectName: null,
+        dueDate: null,
+        estimate: null,
+        createdAt: new Date("2026-04-26T00:00:00.000Z"),
+        updatedAt: new Date("2026-04-27T00:00:00.000Z"),
+        teamId: "team-child",
+      },
+    ]);
+    const { GET } = await import("@/app/api/teams/[key]/triage/route");
+
+    const response = await GET(new Request("http://localhost"), {
+      params: Promise.resolve({ key: "ENG" }),
+    });
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.issues[0]).toMatchObject({
+      identifier: "PLAT-1",
+      teamId: "team-child",
     });
   });
 

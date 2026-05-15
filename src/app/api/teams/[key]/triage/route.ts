@@ -24,6 +24,8 @@ export async function GET(
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
+  const hierarchyTeamIds = teamRecord.hierarchyTeamIds ?? [teamRecord.id];
+
   if (teamRecord.triageEnabled === false) {
     return NextResponse.json({
       team: teamRecord,
@@ -45,7 +47,7 @@ export async function GET(
     .from(workflowState)
     .where(
       and(
-        eq(workflowState.teamId, teamRecord.id),
+        inArray(workflowState.teamId, hierarchyTeamIds),
         eq(workflowState.category, "triage"),
       ),
     );
@@ -85,6 +87,7 @@ export async function GET(
       estimate: issue.estimate,
       createdAt: issue.createdAt,
       updatedAt: issue.updatedAt,
+      teamId: issue.teamId,
     })
     .from(issue)
     .innerJoin(workflowState, eq(issue.stateId, workflowState.id))
@@ -92,7 +95,7 @@ export async function GET(
     .leftJoin(project, eq(issue.projectId, project.id))
     .where(
       and(
-        eq(issue.teamId, teamRecord.id),
+        inArray(issue.teamId, hierarchyTeamIds),
         inArray(issue.stateId, triageStateIds),
       ),
     )
@@ -123,6 +126,7 @@ export async function GET(
     projectName: i.projectName,
     dueDate: i.dueDate,
     estimate: i.estimate,
+    teamId: i.teamId,
   }));
 
   return NextResponse.json({

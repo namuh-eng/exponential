@@ -45,7 +45,12 @@ export async function GET(
   };
 
   const teams = await db
-    .select({ id: team.id, name: team.name, key: team.key })
+    .select({
+      id: team.id,
+      name: team.name,
+      key: team.key,
+      parentTeamId: team.parentTeamId,
+    })
     .from(team)
     .where(eq(team.workspaceId, context.workspaceId));
 

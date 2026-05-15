@@ -17,6 +17,7 @@ export interface SidebarTeam {
   id?: string;
   name: string;
   key: string;
+  parentTeamId?: string | null;
 }
 
 interface SidebarProps {
@@ -299,6 +300,47 @@ function SidebarCustomizeModal({
   );
 }
 
+function buildTeamHierarchyList(teams: SidebarTeam[]) {
+  const byParent = new Map<string, SidebarTeam[]>();
+  const byId = new Map<string, SidebarTeam>();
+
+  for (const currentTeam of teams) {
+    if (currentTeam.id) {
+      byId.set(currentTeam.id, currentTeam);
+    }
+  }
+
+  for (const currentTeam of teams) {
+    const parentId = currentTeam.parentTeamId;
+    const parentKey = parentId && byId.has(parentId) ? parentId : "__root__";
+    byParent.set(parentKey, [...(byParent.get(parentKey) ?? []), currentTeam]);
+  }
+
+  const ordered: Array<SidebarTeam & { depth: number }> = [];
+  const seen = new Set<string>();
+
+  function visit(currentTeam: SidebarTeam, depth: number) {
+    const identity = currentTeam.id ?? currentTeam.key;
+    if (seen.has(identity)) return;
+    seen.add(identity);
+    ordered.push({ ...currentTeam, depth });
+
+    for (const child of byParent.get(currentTeam.id ?? "") ?? []) {
+      visit(child, depth + 1);
+    }
+  }
+
+  for (const root of byParent.get("__root__") ?? []) {
+    visit(root, 0);
+  }
+
+  for (const currentTeam of teams) {
+    visit(currentTeam, 0);
+  }
+
+  return ordered;
+}
+
 function SectionHeader({
   label,
   collapsible,
@@ -350,6 +392,7 @@ export function Sidebar({
   const pathname = stripWorkspaceSlug(usePathname(), workspaceSlug);
   const resolvedTeams =
     teams && teams.length > 0 ? teams : [{ name: teamName, key: teamKey }];
+  const orderedTeams = buildTeamHierarchyList(resolvedTeams);
   const activeTeamKey = getPathTeamKey(pathname);
   const [teamExpanded, setTeamExpanded] = useState(true);
   const [expandedTeams, setExpandedTeams] = useState<Record<string, boolean>>(
@@ -399,7 +442,10 @@ export function Sidebar({
 
     setExpandedTeams((current) => {
       const next = Object.fromEntries(
-        nextTeams.map((team) => [team.key, current[team.key] ?? true]),
+        buildTeamHierarchyList(nextTeams).map((team) => [
+          team.key,
+          current[team.key] ?? true,
+        ]),
       );
 
       if (activeTeamKey) {
@@ -811,7 +857,7 @@ export function Sidebar({
             onToggle={() => setTeamExpanded(!teamExpanded)}
           />
           {teamExpanded &&
-            resolvedTeams.map((team) => {
+            orderedTeams.map((team) => {
               const teamSectionActive =
                 pathname === `/team/${team.key}/triage` ||
                 isTeamIssuesRoute(pathname, team.key) ||
@@ -834,7 +880,11 @@ export function Sidebar({
                         ? "text-[var(--color-text-primary)]"
                         : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
                     }`}
+                    style={{ paddingLeft: `${8 + team.depth * 16}px` }}
                   >
+                    {team.depth > 0 ? (
+                      <span className="h-px w-3 shrink-0 bg-[var(--color-border)]" />
+                    ) : null}
                     <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-[var(--color-accent)] text-[8px] font-bold text-white">
                       {team.key.charAt(0)}
                     </span>

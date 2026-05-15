@@ -43,6 +43,7 @@ interface TriageIssue {
   dueDate?: string | null;
   estimate?: number | null;
   updatedAt?: string;
+  teamId?: string | null;
 }
 
 interface TriageResponse {
@@ -182,6 +183,7 @@ export default function TeamTriagePage() {
       { id: string; name: string; color: string }
     >();
     const creators = new Map<string, { id: string; name: string }>();
+    const teams = new Map<string, { id: string; name: string }>();
 
     for (const currentIssue of data?.issues ?? []) {
       statuses.set(currentIssue.stateId, {
@@ -198,6 +200,13 @@ export default function TeamTriagePage() {
         });
       }
 
+      if (currentIssue.teamId) {
+        teams.set(currentIssue.teamId, {
+          id: currentIssue.teamId,
+          name: currentIssue.identifier.split("-")[0] ?? currentIssue.teamId,
+        });
+      }
+
       for (const currentLabel of currentIssue.labels) {
         labels.set(currentLabel.id, currentLabel);
       }
@@ -207,6 +216,7 @@ export default function TeamTriagePage() {
       statuses: [...statuses.values()],
       labels: [...labels.values()],
       creators: [...creators.values()],
+      teams: [...teams.values()],
     };
   }, [data?.issues]);
 
@@ -363,6 +373,7 @@ export default function TeamTriagePage() {
             availableAssignees={[]}
             availablePriorities={[...PRIORITY_OPTIONS]}
             availableCreators={filterOptions.creators}
+            availableTeams={filterOptions.teams}
           />
           {sortControl}
           {createIssueButton}

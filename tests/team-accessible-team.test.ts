@@ -17,6 +17,9 @@ vi.mock("@/lib/db", () => ({
         innerJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue(selectResults.shift() ?? []),
+        // biome-ignore lint/suspicious/noThenProperty: mock Drizzle query awaitable
+        then: (resolve: (val: unknown[]) => void) =>
+          resolve(selectResults.shift() ?? []),
       };
     }),
   },
@@ -71,6 +74,7 @@ describe("findAccessibleTeam", () => {
           settings: {},
         },
       ],
+      [],
     );
     const { findAccessibleTeam } = await import("@/lib/teams");
 
@@ -170,5 +174,37 @@ describe("findAccessibleTeam", () => {
     const teamAsAdmin = await findAccessibleTeamAsAdmin("SEC", "user-1");
 
     expect(teamAsAdmin?.id).toBe("team-b-sec");
+  });
+
+  it("returns hierarchy scope ids for child teams", async () => {
+    resolveActiveWorkspaceIdMock.mockResolvedValue("workspace-b");
+    selectResults.push(
+      [{ id: "member-b" }],
+      [
+        {
+          id: "team-parent",
+          workspaceId: "workspace-b",
+          name: "Engineering",
+          key: "ENG",
+          icon: null,
+          timezone: null,
+          estimateType: "not_in_use",
+          triageEnabled: true,
+          cyclesEnabled: false,
+          cycleStartDay: null,
+          cycleDurationWeeks: null,
+          parentTeamId: null,
+          settings: {},
+        },
+      ],
+      [{ id: "team-child" }],
+      [{ id: "team-child" }],
+    );
+    const { findAccessibleTeam } = await import("@/lib/teams");
+
+    const team = await findAccessibleTeam("ENG", "user-1");
+
+    expect(team?.hierarchyTeamIds).toEqual(["team-parent", "team-child"]);
+    expect(team?.childTeamIds).toEqual(["team-child"]);
   });
 });

@@ -27,8 +27,16 @@ async function getTeamMembership(teamId: string, userId: string) {
   return membership ?? null;
 }
 
+type TeamSettingsRecord = Omit<
+  NonNullable<Awaited<ReturnType<typeof findAccessibleTeam>>>,
+  "childTeamIds" | "hierarchyTeamIds"
+> & {
+  childTeamIds?: string[];
+  hierarchyTeamIds?: string[];
+};
+
 async function buildTeamResponse(
-  teamRecord: NonNullable<Awaited<ReturnType<typeof findAccessibleTeam>>>,
+  teamRecord: TeamSettingsRecord,
   userId: string,
 ) {
   const [
