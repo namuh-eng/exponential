@@ -328,7 +328,7 @@ export function NotificationsOverviewPage() {
       <section className="mb-12">
         <SectionTitle
           title="Notification channels"
-          description="Choose which optional channels can deliver workspace activity. This clone creates a notification when at least one channel for that event is enabled; connected-provider delivery is gated by these same event preferences."
+          description="Choose which channels can deliver workspace activity. Notification delivery follows the event preferences configured for each channel."
         />
 
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
@@ -507,9 +507,9 @@ export function NotificationChannelPage({
             {describeNotificationChannelPreferences(settings.channels[channel])}
           </p>
           <p className="mt-2 max-w-[620px] text-[12px] text-[var(--color-text-tertiary)]">
-            Turning off an event here prevents this channel from contributing to
-            notification delivery. If every channel disables the event, the
-            clone suppresses that notification entirely.
+            Turning off an event prevents this channel from sending
+            notifications for that activity. If all channels are disabled for an
+            event, you won't receive notifications for it.
           </p>
         </div>
         <SaveIndicator saveState={saveState} />

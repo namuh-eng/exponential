@@ -57,6 +57,12 @@ describe("ProjectLabelsPage component", () => {
     expect(screen.getByText("Internal")).toBeDefined();
     expect(screen.getByText("0 projects")).toBeDefined();
     expect(screen.getAllByText("Edit")).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: "Delete Roadmap" }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Delete Internal" }),
+    ).toBeDefined();
   });
 
   it("shows empty state when no labels exist", async () => {
@@ -192,6 +198,87 @@ describe("ProjectLabelsPage component", () => {
     });
     expect(screen.getByText("Roadmap updated")).toBeInTheDocument();
     expect(screen.getByText("Updated description")).toBeInTheDocument();
+  });
+
+  it("cancels project label deletion without changing the row", async () => {
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockLabelsData,
+    });
+
+    render(<ProjectLabelsPage />);
+    await waitFor(() => screen.getByText("Roadmap"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Roadmap" }));
+
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(
+      'Delete the project label "Roadmap"?',
+    );
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(
+      "remove it from all projects",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(screen.getByText("Roadmap")).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("deletes a project label after confirmation without reloading", async () => {
+    (fetch as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockLabelsData,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true }),
+      });
+
+    render(<ProjectLabelsPage />);
+    await waitFor(() => screen.getByText("Roadmap"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Roadmap" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete label" }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith("/api/project-labels/l1", {
+        method: "DELETE",
+      });
+    });
+    expect(screen.queryByText("Roadmap")).not.toBeInTheDocument();
+    expect(screen.getByText("Internal")).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the project label visible and shows an error when deletion fails", async () => {
+    (fetch as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockLabelsData,
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: "Project label not found" }),
+      });
+
+    render(<ProjectLabelsPage />);
+    await waitFor(() => screen.getByText("Roadmap"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Roadmap" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete label" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "Unable to delete project label. Project label not found",
+        ),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByText("Roadmap")).toBeInTheDocument();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 
   it("shows error message when fetch fails", async () => {

@@ -212,5 +212,10 @@ describe("project labels routes", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(txUpdateValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        settings: { labelIds: ["other-label"] },
+      }),
+    );
   });
 });

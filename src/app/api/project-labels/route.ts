@@ -43,7 +43,7 @@ export async function GET() {
       project,
       and(
         eq(project.workspaceId, workspaceId),
-        sql`(${project.settings}->'labelIds') ? ${projectLabel.id}`,
+        sql`(${project.settings}->'labelIds') ? ${projectLabel.id}::text`,
       ),
     )
     .where(eq(projectLabel.workspaceId, workspaceId))

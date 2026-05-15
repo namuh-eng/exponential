@@ -149,12 +149,71 @@ function ProjectLabelModal({
   );
 }
 
+function DeleteProjectLabelDialog({
+  label,
+  onCancel,
+  onConfirm,
+}: {
+  label: ProjectLabel;
+  onCancel: () => void;
+  onConfirm: (label: ProjectLabel) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div
+        className="w-full max-w-[420px] rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] p-6 shadow-2xl"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-project-label-title"
+        aria-describedby="delete-project-label-description"
+      >
+        <h2
+          id="delete-project-label-title"
+          className="text-[16px] font-semibold text-[var(--color-text-primary)]"
+        >
+          Delete project label?
+        </h2>
+        <p
+          id="delete-project-label-description"
+          className="mt-3 text-[13px] leading-5 text-[var(--color-text-secondary)]"
+        >
+          Delete the project label "{label.name}"? This will remove it from all
+          projects currently using it and from project filters and selectors.
+        </p>
+        {label.projectCount > 0 && (
+          <p className="mt-3 text-[13px] text-[var(--color-text-tertiary)]">
+            Currently used by {label.projectCount}{" "}
+            {label.projectCount === 1 ? "project" : "projects"}.
+          </p>
+        )}
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(label)}
+            className="rounded-md bg-red-600 px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
+          >
+            Delete label
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProjectLabelsPage() {
   const [loading, setLoading] = useState(true);
   const [labels, setLabels] = useState<ProjectLabel[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingLabel, setEditingLabel] = useState<ProjectLabel | null>(null);
+  const [deletingLabel, setDeletingLabel] = useState<ProjectLabel | null>(null);
 
   const fetchLabels = useCallback(() => {
     setErrorMessage(null);
@@ -240,6 +299,33 @@ export default function ProjectLabelsPage() {
     setEditingLabel(null);
   };
 
+  const handleDelete = async (label: ProjectLabel) => {
+    setErrorMessage(null);
+    const res = await fetch(`/api/project-labels/${label.id}`, {
+      method: "DELETE",
+    });
+
+    if (!res.ok) {
+      let detail = "";
+      try {
+        const payload = await res.json();
+        detail = typeof payload.error === "string" ? ` ${payload.error}` : "";
+      } catch {
+        // Keep the generic error if the API did not return JSON.
+      }
+      setErrorMessage(`Unable to delete project label.${detail}`);
+      return;
+    }
+
+    setLabels((currentLabels) =>
+      currentLabels.filter((currentLabel) => currentLabel.id !== label.id),
+    );
+    setDeletingLabel(null);
+    if (editingLabel?.id === label.id) {
+      setEditingLabel(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-8 text-[var(--color-text-tertiary)]">Loading...</div>
@@ -309,6 +395,14 @@ export default function ProjectLabelsPage() {
                   </span>
                   <button
                     type="button"
+                    onClick={() => setDeletingLabel(label)}
+                    className="text-[13px] text-red-400 hover:text-red-300"
+                    aria-label={`Delete ${label.name}`}
+                  >
+                    Delete
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setEditingLabel(label)}
                     className="text-[13px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                     aria-label={`Edit ${label.name}`}
@@ -333,6 +427,13 @@ export default function ProjectLabelsPage() {
           label={editingLabel}
           onClose={() => setEditingLabel(null)}
           onSubmit={handleEdit}
+        />
+      )}
+      {deletingLabel && (
+        <DeleteProjectLabelDialog
+          label={deletingLabel}
+          onCancel={() => setDeletingLabel(null)}
+          onConfirm={handleDelete}
         />
       )}
     </div>

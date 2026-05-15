@@ -24,6 +24,12 @@ test.describe("account notification settings", () => {
 
     await page.goto("/settings/account/notifications");
     await expect(
+      page.getByText(
+        "Choose which channels can deliver workspace activity. Notification delivery follows the event preferences configured for each channel.",
+      ),
+    ).toBeVisible();
+    await expect(page.getByText(/\b(clone|demo)\b/i)).toHaveCount(0);
+    await expect(
       page.getByRole("link", { name: /Desktop notification settings/ }),
     ).toContainText("10 others");
     await expect(
@@ -32,6 +38,12 @@ test.describe("account notification settings", () => {
 
     await page.goto("/settings/account/notifications/desktop");
     await expect(page.getByRole("heading", { name: "Desktop" })).toBeVisible();
+    await expect(
+      page.getByText(
+        "Turning off an event prevents this channel from sending notifications for that activity. If all channels are disabled for an event, you won't receive notifications for it.",
+      ),
+    ).toBeVisible();
+    await expect(page.getByText(/\b(clone|demo)\b/i)).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Issues" })).toBeVisible();
     await expect(
       page.getByRole("heading", {
