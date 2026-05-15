@@ -1,11 +1,24 @@
+import { randomBytes } from "node:crypto";
+import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
+import { createApiKeyHash } from "@/lib/api-auth";
+import {
+  type PermissionLevel,
+  type WorkspaceMemberRole,
+  asRecord,
+  canMemberCreateApiKeys,
+  readPermissionLevel,
+} from "@/lib/api-settings";
 import { db } from "@/lib/db";
 import {
   account,
+  apiKey,
   authorizedApplicationGrant,
+  member,
   passkey,
   session as sessionTable,
   user,
+  workspace,
 } from "@/lib/db/schema";
 import { isPasskeyAuthEnabled } from "@/lib/passkeys";
 import { and, desc, eq, gt, ne } from "drizzle-orm";
@@ -27,6 +40,7 @@ type AccountSecurityAction = {
 
 const SESSION_QUERY_LIMIT = 50;
 const SESSION_VISIBLE_LIMIT = 10;
+const PERSONAL_API_KEY_NAME_MAX_LENGTH = 255;
 
 type RawSecuritySession = {
   id: string;
@@ -48,6 +62,46 @@ type RawAuthorizedApplication = {
   createdAt: Date | string | null;
   updatedAt: Date | string | null;
 };
+
+type WorkspaceAccess = {
+  workspaceId: string;
+  workspaceName: string;
+  settings: unknown;
+  memberRole: WorkspaceMemberRole;
+};
+
+type RawPersonalApiKey = {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  workspaceName: string;
+  createdAt: Date | string | null;
+  lastUsedAt: Date | string | null;
+};
+
+function createPersonalApiKeySecret() {
+  return `lin_api_${randomBytes(24).toString("hex")}`;
+}
+
+function serializePersonalApiKey(item: RawPersonalApiKey) {
+  return {
+    id: item.id,
+    name: item.name,
+    keyPrefix: item.keyPrefix,
+    workspaceName: item.workspaceName,
+    accessLevel: "Member" as const,
+    createdAt: serializeDate(item.createdAt),
+    lastUsedAt: serializeDate(item.lastUsedAt),
+  };
+}
+
+function getApiKeyCreationPermission(settings: unknown): PermissionLevel {
+  const securitySettings = asRecord(asRecord(settings).security);
+  return readPermissionLevel(
+    asRecord(securitySettings.permissions).apiKeyCreationRole,
+    "admins",
+  );
+}
 
 function getCurrentSessionId(authSession: AuthSession) {
   return typeof authSession.session?.id === "string"
@@ -183,6 +237,63 @@ async function currentUserExists(userId: string) {
   return Boolean(currentUser);
 }
 
+async function getWorkspaceAccess(
+  userId: string,
+): Promise<WorkspaceAccess | null> {
+  const workspaceId = await resolveActiveWorkspaceId(userId);
+  if (!workspaceId) {
+    return null;
+  }
+
+  const [access] = await db
+    .select({
+      workspaceId: workspace.id,
+      workspaceName: workspace.name,
+      settings: workspace.settings,
+      memberRole: member.role,
+    })
+    .from(workspace)
+    .innerJoin(
+      member,
+      and(
+        eq(member.workspaceId, workspace.id),
+        eq(member.workspaceId, workspaceId),
+        eq(member.userId, userId),
+      ),
+    )
+    .limit(1);
+
+  return access
+    ? {
+        workspaceId: access.workspaceId,
+        workspaceName: access.workspaceName,
+        settings: access.settings,
+        memberRole: access.memberRole,
+      }
+    : null;
+}
+
+async function loadPersonalApiKeys(userId: string) {
+  const workspaceId = await resolveActiveWorkspaceId(userId);
+  if (!workspaceId) {
+    return [];
+  }
+
+  return db
+    .select({
+      id: apiKey.id,
+      name: apiKey.name,
+      keyPrefix: apiKey.keyPrefix,
+      workspaceName: workspace.name,
+      createdAt: apiKey.createdAt,
+      lastUsedAt: apiKey.lastUsedAt,
+    })
+    .from(apiKey)
+    .innerJoin(workspace, eq(workspace.id, apiKey.workspaceId))
+    .where(and(eq(apiKey.userId, userId), eq(apiKey.workspaceId, workspaceId)))
+    .orderBy(desc(apiKey.createdAt));
+}
+
 async function loadVisibleSessionCandidates(
   userId: string,
   currentSessionId: string | null,
@@ -239,49 +350,61 @@ async function loadVisibleSessionCandidates(
 
 async function buildSecurityPayload(authSession: AuthSession) {
   const currentSessionId = getCurrentSessionId(authSession);
-  const [sessions, providers, userPasskeys, authorizedApplications] =
-    await Promise.all([
-      loadVisibleSessionCandidates(authSession.user.id, currentSessionId),
-      db
-        .select({
-          id: account.id,
-          providerId: account.providerId,
-          accountId: account.accountId,
-          createdAt: account.createdAt,
-          updatedAt: account.updatedAt,
-        })
-        .from(account)
-        .where(eq(account.userId, authSession.user.id))
-        .orderBy(desc(account.updatedAt)),
-      db
-        .select({
-          id: passkey.id,
-          name: passkey.name,
-          credentialID: passkey.credentialID,
-          deviceType: passkey.deviceType,
-          backedUp: passkey.backedUp,
-          transports: passkey.transports,
-          createdAt: passkey.createdAt,
-        })
-        .from(passkey)
-        .where(eq(passkey.userId, authSession.user.id))
-        .orderBy(desc(passkey.createdAt)),
-      db
-        .select({
-          id: authorizedApplicationGrant.id,
-          appId: authorizedApplicationGrant.appId,
-          clientId: authorizedApplicationGrant.clientId,
-          name: authorizedApplicationGrant.name,
-          imageUrl: authorizedApplicationGrant.imageUrl,
-          scopes: authorizedApplicationGrant.scopes,
-          webhooksEnabled: authorizedApplicationGrant.webhooksEnabled,
-          createdAt: authorizedApplicationGrant.createdAt,
-          updatedAt: authorizedApplicationGrant.updatedAt,
-        })
-        .from(authorizedApplicationGrant)
-        .where(eq(authorizedApplicationGrant.userId, authSession.user.id))
-        .orderBy(desc(authorizedApplicationGrant.updatedAt)),
-    ]);
+  const [
+    sessions,
+    providers,
+    userPasskeys,
+    authorizedApplications,
+    personalApiKeys,
+    workspaceAccess,
+  ] = await Promise.all([
+    loadVisibleSessionCandidates(authSession.user.id, currentSessionId),
+    db
+      .select({
+        id: account.id,
+        providerId: account.providerId,
+        accountId: account.accountId,
+        createdAt: account.createdAt,
+        updatedAt: account.updatedAt,
+      })
+      .from(account)
+      .where(eq(account.userId, authSession.user.id))
+      .orderBy(desc(account.updatedAt)),
+    db
+      .select({
+        id: passkey.id,
+        name: passkey.name,
+        credentialID: passkey.credentialID,
+        deviceType: passkey.deviceType,
+        backedUp: passkey.backedUp,
+        transports: passkey.transports,
+        createdAt: passkey.createdAt,
+      })
+      .from(passkey)
+      .where(eq(passkey.userId, authSession.user.id))
+      .orderBy(desc(passkey.createdAt)),
+    db
+      .select({
+        id: authorizedApplicationGrant.id,
+        appId: authorizedApplicationGrant.appId,
+        clientId: authorizedApplicationGrant.clientId,
+        name: authorizedApplicationGrant.name,
+        imageUrl: authorizedApplicationGrant.imageUrl,
+        scopes: authorizedApplicationGrant.scopes,
+        webhooksEnabled: authorizedApplicationGrant.webhooksEnabled,
+        createdAt: authorizedApplicationGrant.createdAt,
+        updatedAt: authorizedApplicationGrant.updatedAt,
+      })
+      .from(authorizedApplicationGrant)
+      .where(eq(authorizedApplicationGrant.userId, authSession.user.id))
+      .orderBy(desc(authorizedApplicationGrant.updatedAt)),
+    loadPersonalApiKeys(authSession.user.id),
+    getWorkspaceAccess(authSession.user.id),
+  ]);
+
+  const apiKeyCreationPermission = workspaceAccess
+    ? getApiKeyCreationPermission(workspaceAccess.settings)
+    : "admins";
 
   return {
     sessions: prepareVisibleSessions(sessions, currentSessionId).map(
@@ -317,6 +440,13 @@ async function buildSecurityPayload(authSession: AuthSession) {
     authorizedApplications: authorizedApplications.map(
       serializeAuthorizedApplication,
     ),
+    apiKeys: personalApiKeys.map(serializePersonalApiKey),
+    canCreateApiKeys: workspaceAccess
+      ? canMemberCreateApiKeys(
+          workspaceAccess.memberRole,
+          apiKeyCreationPermission,
+        )
+      : false,
     providers,
     passkeyEnabled: isPasskeyAuthEnabled(),
   };
@@ -428,11 +558,74 @@ export async function POST(request: Request) {
     return NextResponse.json(await buildSecurityPayload(authSession));
   }
 
-  if (body.action === "createApiKey" || body.action === "revokeApiKey") {
-    return NextResponse.json(
-      { error: "API key actions are not supported on account security." },
-      { status: 404 },
+  if (body.action === "createApiKey") {
+    const workspaceAccess = await getWorkspaceAccess(authSession.user.id);
+    if (!workspaceAccess) {
+      return NextResponse.json(
+        { error: "No active workspace found." },
+        { status: 404 },
+      );
+    }
+
+    const permissionLevel = getApiKeyCreationPermission(
+      workspaceAccess.settings,
     );
+    if (!canMemberCreateApiKeys(workspaceAccess.memberRole, permissionLevel)) {
+      return NextResponse.json(
+        { error: "You do not have permission to create API keys." },
+        { status: 403 },
+      );
+    }
+
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name) {
+      return NextResponse.json(
+        { error: "API key name is required." },
+        { status: 400 },
+      );
+    }
+    if (name.length > PERSONAL_API_KEY_NAME_MAX_LENGTH) {
+      return NextResponse.json(
+        { error: "API key name must be 255 characters or fewer." },
+        { status: 400 },
+      );
+    }
+
+    const secret = createPersonalApiKeySecret();
+    await db.insert(apiKey).values({
+      name,
+      keyHash: createApiKeyHash(secret),
+      keyPrefix: `${secret.slice(0, 12)}…`,
+      userId: authSession.user.id,
+      workspaceId: workspaceAccess.workspaceId,
+    });
+
+    return NextResponse.json({
+      ...(await buildSecurityPayload(authSession)),
+      createdCredential: {
+        kind: "apiKey",
+        label: `${name} API key`,
+        secret,
+      },
+    });
+  }
+
+  if (body.action === "revokeApiKey") {
+    const apiKeyId = typeof body.apiKeyId === "string" ? body.apiKeyId : "";
+    if (!apiKeyId) {
+      return NextResponse.json(
+        { error: "API key id is required." },
+        { status: 400 },
+      );
+    }
+
+    await db
+      .delete(apiKey)
+      .where(
+        and(eq(apiKey.id, apiKeyId), eq(apiKey.userId, authSession.user.id)),
+      );
+
+    return NextResponse.json(await buildSecurityPayload(authSession));
   }
 
   if (body.action === "revokeAuthorizedApplication") {

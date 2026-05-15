@@ -871,9 +871,12 @@ export default function ApiSettingsPage() {
         <p className="mb-4 text-[13px] text-[var(--color-text-tertiary)]">
           Members of your workspace can create API keys to interact with the
           Linear API on their behalf. View your personal API keys from your{" "}
-          <span className="font-medium text-[var(--color-accent)]">
+          <a
+            href="/settings/account/security#personal-api-keys"
+            className="font-medium text-[var(--color-accent)] hover:underline"
+          >
             security & access settings
-          </span>
+          </a>
           .
         </p>
 

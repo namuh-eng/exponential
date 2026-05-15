@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Account security and access", () => {
-  test("shows Linear-style sections and does not render account API key controls or CTA", async ({
+  test("shows Linear-style sections with personal API key controls", async ({
     page,
   }) => {
     const suffix = Date.now().toString(36);
@@ -45,19 +45,22 @@ test.describe("Account security and access", () => {
     await expect(
       page.getByText(/No passkeys have been added yet/i),
     ).toBeVisible();
-    await expect(page.getByRole("heading", { name: "API keys" })).toHaveCount(
-      0,
-    );
+    await expect(
+      page.getByRole("heading", { name: "API keys", exact: true }),
+    ).toHaveCount(0);
     await expect(
       page.getByRole("link", { name: "Open workspace API settings" }),
     ).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: "Personal API keys" }),
-    ).toHaveCount(0);
+    ).toBeVisible();
     await expect(page.getByLabel("API key name")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Create API key" }),
-    ).toHaveCount(0);
+    ).toBeVisible();
+    await expect(
+      page.getByText(/No personal API keys have been created yet/i),
+    ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Authorized applications" }),
     ).toBeVisible();
@@ -132,16 +135,46 @@ test.describe("Account security and access", () => {
     await expect(page.getByText(/No authorized applications/i)).toBeVisible();
   });
 
-  test("rejects direct account-security API key creation", async ({ page }) => {
-    const response = await page.request.post("/api/account/security", {
-      data: { action: "createApiKey", name: "E2E direct key" },
+  test("creates, hides after reload, and revokes a personal API key", async ({
+    page,
+  }) => {
+    const suffix = Date.now().toString(36);
+    const workspaceSlug = `account-security-key-${suffix}`;
+    const workspaceResponse = await page.request.post("/api/workspaces", {
+      data: {
+        name: `Account Security Key ${suffix}`,
+        urlSlug: workspaceSlug,
+      },
     });
+    expect(workspaceResponse.status()).toBe(201);
 
-    expect(response.status()).toBe(404);
-    await expect(response.json()).resolves.toEqual(
-      expect.objectContaining({
-        error: expect.stringMatching(/not supported on account security/i),
-      }),
-    );
+    await page.goto(`/${workspaceSlug}/settings/account/security`);
+    await page.getByRole("button", { name: "Create API key" }).click();
+    await page.getByLabel("API key name").fill(`E2E personal ${suffix}`);
+    await page
+      .getByRole("region", { name: "Personal API keys" })
+      .getByRole("button", { name: "Create API key" })
+      .last()
+      .click();
+
+    await expect(page.getByText(/Copy your new API key now/i)).toBeVisible();
+    const secret = page.locator("code").filter({ hasText: /^lin_api_/ });
+    await expect(secret).toBeVisible();
+    await expect(page.getByText(`E2E personal ${suffix}`)).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByText(`E2E personal ${suffix}`)).toBeVisible();
+    await expect(page.getByText(/Copy your new API key now/i)).toHaveCount(0);
+    await expect(
+      page.locator("code").filter({ hasText: /^lin_api_/ }),
+    ).toHaveCount(0);
+
+    page.once("dialog", (dialog) => dialog.accept());
+    await page
+      .getByRole("region", { name: "Personal API keys" })
+      .getByRole("button", { name: "Revoke" })
+      .click();
+    await expect(page.getByText("API key revoked.")).toBeVisible();
+    await expect(page.getByText(`E2E personal ${suffix}`)).toHaveCount(0);
   });
 });
