@@ -12,7 +12,13 @@ import { TeamRouteErrorState } from "@/components/team-route-error-state";
 import { TriageHeader } from "@/components/triage-header";
 import { TriageRow } from "@/components/triage-row";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 const PRIORITY_OPTIONS = [
   { value: "urgent", label: "Urgent" },
@@ -70,7 +76,8 @@ type TriageDecisionAction = "accept" | "decline";
 
 interface PendingTriageDecision {
   action: TriageDecisionAction;
-  issue: TriageIssue;
+  issues: TriageIssue[];
+  bulk: boolean;
 }
 
 export default function TeamTriagePage() {
@@ -86,6 +93,11 @@ export default function TeamTriagePage() {
     "created-desc",
   );
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const [bulkSelectedIssueIds, setBulkSelectedIssueIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [activeIssueIndex, setActiveIssueIndex] = useState(0);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const [pendingDecision, setPendingDecision] =
     useState<PendingTriageDecision | null>(null);
   const [decisionDestinationId, setDecisionDestinationId] = useState("");
@@ -107,6 +119,12 @@ export default function TeamTriagePage() {
             ? currentSelectedIssueId
             : null,
         );
+        setBulkSelectedIssueIds((current) => {
+          const visibleIds = new Set(json.issues.map((issue) => issue.id));
+          return new Set(
+            [...current].filter((issueId) => visibleIds.has(issueId)),
+          );
+        });
         return;
       }
 
@@ -153,14 +171,21 @@ export default function TeamTriagePage() {
       };
     });
     setSelectedIssueId((current) => (current === issueId ? null : current));
+    setBulkSelectedIssueIds((current) => {
+      const next = new Set(current);
+      next.delete(issueId);
+      return next;
+    });
   }, []);
 
   const openDecision = useCallback(
-    (action: TriageDecisionAction, issueId: string) => {
-      const issue = data?.issues.find(
-        (currentIssue) => currentIssue.id === issueId,
-      );
-      if (!issue) {
+    (action: TriageDecisionAction, issueIds: string[], bulk = false) => {
+      const issues = issueIds
+        .map((issueId) =>
+          data?.issues.find((currentIssue) => currentIssue.id === issueId),
+        )
+        .filter((issue): issue is TriageIssue => Boolean(issue));
+      if (issues.length === 0) {
         return;
       }
 
@@ -173,7 +198,7 @@ export default function TeamTriagePage() {
         destinationStates[0] ??
         null;
 
-      setPendingDecision({ action, issue });
+      setPendingDecision({ action, issues, bulk });
       setDecisionDestinationId(defaultDestination?.id ?? "");
       setDecisionReason("");
       setDecisionError(null);
@@ -186,12 +211,12 @@ export default function TeamTriagePage() {
   );
 
   const handleAccept = useCallback(
-    (issueId: string) => openDecision("accept", issueId),
+    (issueId: string) => openDecision("accept", [issueId]),
     [openDecision],
   );
 
   const handleDecline = useCallback(
-    (issueId: string) => openDecision("decline", issueId),
+    (issueId: string) => openDecision("decline", [issueId]),
     [openDecision],
   );
 
@@ -220,21 +245,24 @@ export default function TeamTriagePage() {
     setDecisionError(null);
 
     try {
-      const res = await fetch(
-        `/api/teams/${params.key}/triage/${pendingDecision.issue.id}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: pendingDecision.action,
-            destinationStateId: decisionDestinationId,
-            confirmed: true,
-            reason: decisionReason.trim() || undefined,
-          }),
-        },
-      );
+      const endpoint = pendingDecision.bulk
+        ? `/api/teams/${params.key}/triage/bulk`
+        : `/api/teams/${params.key}/triage/${pendingDecision.issues[0].id}`;
+      const res = await fetch(endpoint, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: pendingDecision.action,
+          issueIds: pendingDecision.bulk
+            ? pendingDecision.issues.map((issue) => issue.id)
+            : undefined,
+          destinationStateId: decisionDestinationId,
+          confirmed: true,
+          reason: decisionReason.trim() || undefined,
+        }),
+      });
 
-      if (!res.ok) {
+      if (!res.ok && res.status !== 207) {
         let message = "The triage decision could not be saved.";
         try {
           const payload = (await res.json()) as { error?: string };
@@ -246,7 +274,28 @@ export default function TeamTriagePage() {
         return;
       }
 
-      removeAcceptedOrDeclinedIssue(pendingDecision.issue.id);
+      if (pendingDecision.bulk) {
+        const payload = (await res.json()) as {
+          updatedCount?: number;
+          conflictCount?: number;
+          results?: { issueId: string; status: string; error?: string }[];
+        };
+        const updatedIds = new Set(
+          (payload.results ?? [])
+            .filter((result) => result.status === "updated")
+            .map((result) => result.issueId),
+        );
+        for (const issueId of updatedIds) {
+          removeAcceptedOrDeclinedIssue(issueId);
+        }
+        setBulkMessage(
+          `${payload.updatedCount ?? updatedIds.size} updated${
+            payload.conflictCount ? `, ${payload.conflictCount} conflicts` : ""
+          }`,
+        );
+      } else {
+        removeAcceptedOrDeclinedIssue(pendingDecision.issues[0].id);
+      }
       setPendingDecision(null);
       setDecisionReason("");
       setDecisionDestinationId("");
@@ -328,9 +377,100 @@ export default function TeamTriagePage() {
     setShowCreateIssue(true);
   }, []);
 
+  useEffect(() => {
+    setActiveIssueIndex((current) =>
+      filteredIssues.length === 0
+        ? 0
+        : Math.min(Math.max(current, 0), filteredIssues.length - 1),
+    );
+    setBulkSelectedIssueIds((current) => {
+      const visibleIds = new Set(filteredIssues.map((issue) => issue.id));
+      return new Set([...current].filter((issueId) => visibleIds.has(issueId)));
+    });
+  }, [filteredIssues]);
+
   const selectedIssue = useMemo(
     () => filteredIssues.find((issue) => issue.id === selectedIssueId) ?? null,
     [filteredIssues, selectedIssueId],
+  );
+
+  const selectedVisibleIssues = useMemo(
+    () => filteredIssues.filter((issue) => bulkSelectedIssueIds.has(issue.id)),
+    [bulkSelectedIssueIds, filteredIssues],
+  );
+
+  const allVisibleSelected =
+    filteredIssues.length > 0 &&
+    selectedVisibleIssues.length === filteredIssues.length;
+
+  const toggleBulkSelected = useCallback((issueId: string) => {
+    setBulkMessage(null);
+    setBulkSelectedIssueIds((current) => {
+      const next = new Set(current);
+      if (next.has(issueId)) {
+        next.delete(issueId);
+      } else {
+        next.add(issueId);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleAllVisible = useCallback(() => {
+    setBulkMessage(null);
+    setBulkSelectedIssueIds((current) => {
+      if (filteredIssues.every((issue) => current.has(issue.id))) {
+        return new Set();
+      }
+      return new Set(filteredIssues.map((issue) => issue.id));
+    });
+  }, [filteredIssues]);
+
+  const clearBulkSelection = useCallback(() => {
+    setBulkSelectedIssueIds(new Set());
+    setBulkMessage(null);
+  }, []);
+
+  const openBulkDecision = useCallback(
+    (action: TriageDecisionAction) => {
+      openDecision(
+        action,
+        selectedVisibleIssues.map((issue) => issue.id),
+        true,
+      );
+    },
+    [openDecision, selectedVisibleIssues],
+  );
+
+  const handleKeyboardIntake = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (filteredIssues.length === 0) {
+        return;
+      }
+      const activeIssue = filteredIssues[activeIssueIndex];
+      if (event.key === "ArrowDown" || event.key === "j") {
+        event.preventDefault();
+        setActiveIssueIndex((current) =>
+          Math.min(current + 1, filteredIssues.length - 1),
+        );
+      } else if (event.key === "ArrowUp" || event.key === "k") {
+        event.preventDefault();
+        setActiveIssueIndex((current) => Math.max(current - 1, 0));
+      } else if (event.key === " " && activeIssue) {
+        event.preventDefault();
+        toggleBulkSelected(activeIssue.id);
+      } else if (event.key === "Enter" && activeIssue) {
+        event.preventDefault();
+        setSelectedIssueId(activeIssue.id);
+      } else if (event.key.toLowerCase() === "a" && activeIssue) {
+        event.preventDefault();
+        openDecision("accept", [activeIssue.id]);
+      } else if (event.key.toLowerCase() === "d" && activeIssue) {
+        event.preventDefault();
+        openDecision("decline", [activeIssue.id]);
+      }
+    },
+    [activeIssueIndex, filteredIssues, openDecision, toggleBulkSelected],
   );
 
   const sortControl = (
@@ -397,7 +537,9 @@ export default function TeamTriagePage() {
               {decisionTitle}
             </h2>
             <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
-              {pendingDecision.issue.identifier}: {pendingDecision.issue.title}
+              {pendingDecision.bulk
+                ? `${pendingDecision.issues.length} selected issues`
+                : `${pendingDecision.issues[0].identifier}: ${pendingDecision.issues[0].title}`}
             </p>
           </div>
           <button
@@ -612,10 +754,60 @@ export default function TeamTriagePage() {
           {createIssueButton}
         </TriageHeader>
 
+        <div className="border-b border-[var(--color-border)] px-4 py-2">
+          <div className="flex flex-wrap items-center gap-2 text-[12px] text-[var(--color-text-secondary)]">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                aria-label="Select all visible triage issues"
+                checked={allVisibleSelected}
+                onChange={toggleAllVisible}
+                className="h-4 w-4 rounded border-[var(--color-border)] bg-[var(--color-content-bg)] accent-[var(--color-accent)]"
+              />
+              Select all visible
+            </label>
+            {selectedVisibleIssues.length > 0 ? (
+              <>
+                <span aria-live="polite">
+                  {selectedVisibleIssues.length} selected
+                </span>
+                <button
+                  type="button"
+                  onClick={() => openBulkDecision("accept")}
+                  className="rounded-md border border-green-500/30 px-2 py-1 font-medium text-green-400 hover:bg-green-400/10"
+                >
+                  Bulk accept
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openBulkDecision("decline")}
+                  className="rounded-md border border-red-500/30 px-2 py-1 font-medium text-red-400 hover:bg-red-400/10"
+                >
+                  Bulk decline
+                </button>
+                <button
+                  type="button"
+                  onClick={clearBulkSelection}
+                  className="rounded-md border border-[var(--color-border)] px-2 py-1 text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                >
+                  Clear selection
+                </button>
+              </>
+            ) : (
+              <span>
+                Use ↑/↓ or J/K to move, Space to select, Enter to review, A/D to
+                accept/decline.
+              </span>
+            )}
+            {bulkMessage ? <output>{bulkMessage}</output> : null}
+          </div>
+        </div>
+
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
           <div
             aria-label="Triage issues"
             className="min-w-0 flex-1 overflow-y-auto lg:max-w-[480px] lg:border-r lg:border-[var(--color-border)]"
+            onKeyDown={handleKeyboardIntake}
           >
             {filteredIssues.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
@@ -636,7 +828,10 @@ export default function TeamTriagePage() {
                   key={issue.id}
                   issue={issue}
                   selected={issue.id === selectedIssueId}
+                  checked={bulkSelectedIssueIds.has(issue.id)}
+                  active={issue.id === filteredIssues[activeIssueIndex]?.id}
                   onSelect={setSelectedIssueId}
+                  onToggleSelected={toggleBulkSelected}
                   onAccept={handleAccept}
                   onDecline={handleDecline}
                 />

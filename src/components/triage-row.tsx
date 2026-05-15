@@ -19,7 +19,10 @@ interface TriageIssue {
 interface TriageRowProps {
   issue: TriageIssue;
   selected?: boolean;
+  checked?: boolean;
+  active?: boolean;
   onSelect: (issueId: string) => void;
+  onToggleSelected?: (issueId: string) => void;
   onAccept: (issueId: string) => void;
   onDecline: (issueId: string) => void;
 }
@@ -68,7 +71,10 @@ function formatDate(dateStr: string): string {
 export function TriageRow({
   issue,
   selected = false,
+  checked = false,
+  active = false,
   onSelect,
+  onToggleSelected,
   onAccept,
   onDecline,
 }: TriageRowProps) {
@@ -78,16 +84,27 @@ export function TriageRow({
         selected
           ? "bg-[color-mix(in_srgb,var(--color-accent)_14%,transparent)] shadow-[inset_3px_0_0_var(--color-accent)]"
           : ""
-      }`}
+      } ${active ? "ring-1 ring-inset ring-[var(--color-accent)]" : ""}`}
     >
+      <label className="flex h-full shrink-0 items-center pl-3">
+        <input
+          type="checkbox"
+          aria-label={`Select ${issue.identifier}`}
+          checked={checked}
+          onChange={() => onToggleSelected?.(issue.id)}
+          className="h-4 w-4 rounded border-[var(--color-border)] bg-[var(--color-content-bg)] accent-[var(--color-accent)]"
+        />
+      </label>
       <button
         type="button"
         data-testid="triage-row"
         aria-current={selected ? "true" : undefined}
+        aria-selected={checked}
         onClick={() => onSelect(issue.id)}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
+            event.stopPropagation();
             onSelect(issue.id);
           }
         }}

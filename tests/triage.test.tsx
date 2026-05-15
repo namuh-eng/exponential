@@ -401,6 +401,93 @@ describe("TeamTriagePage", () => {
     expect(screen.getByText("Fix login button alignment")).toBeDefined();
   });
 
+  it("selects visible rows and reports guarded bulk conflicts", async () => {
+    vi.mocked(global.fetch).mockImplementation((input, init) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/teams/ENG/triage") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(buildTriageResponse()),
+        } as Response);
+      }
+
+      if (url === "/api/teams/ENG/triage/bulk" && init?.method === "PATCH") {
+        return Promise.resolve({
+          ok: true,
+          status: 207,
+          json: () =>
+            Promise.resolve({
+              updatedCount: 1,
+              conflictCount: 1,
+              results: [
+                { issueId: "issue-1", status: "updated" },
+                {
+                  issueId: "issue-2",
+                  status: "conflict",
+                  error: "Issue is not currently in triage",
+                },
+              ],
+            }),
+        } as Response);
+      }
+
+      return Promise.reject(new Error(`Unhandled fetch: ${url}`));
+    });
+
+    render(<TeamTriagePage />);
+
+    await screen.findAllByTestId("triage-row");
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "Select all visible triage issues",
+      }),
+    );
+    expect(screen.getByText("2 selected")).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Bulk accept" }));
+    expect(await screen.findByRole("dialog")).toBeDefined();
+    expect(screen.getByText("2 selected issues")).toBeDefined();
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Accept issue",
+      }),
+    );
+
+    expect(await screen.findByText("1 updated, 1 conflicts")).toBeDefined();
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/teams/ENG/triage/bulk",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          action: "accept",
+          issueIds: ["issue-2", "issue-1"],
+          destinationStateId: "state-backlog",
+          confirmed: true,
+        }),
+      }),
+    );
+  });
+
+  it("supports keyboard-first intake navigation and selection", async () => {
+    render(<TeamTriagePage />);
+
+    await screen.findAllByTestId("triage-row");
+    const list = screen.getByLabelText("Triage issues");
+    const firstRow = screen.getAllByTestId("triage-row")[0];
+    firstRow.focus();
+
+    fireEvent.keyDown(list, { key: " " });
+    expect(screen.getByText("1 selected")).toBeDefined();
+
+    fireEvent.keyDown(list, { key: "ArrowDown" });
+    fireEvent.keyDown(list, { key: " " });
+    expect(screen.getByText("2 selected")).toBeDefined();
+
+    fireEvent.keyDown(list, { key: "a" });
+    expect(await screen.findByRole("dialog")).toBeDefined();
+    expect(screen.getByText("Accept triage issue")).toBeDefined();
+  });
+
   it("shows disabled triage state instead of active queue controls", async () => {
     vi.mocked(global.fetch).mockImplementation((input) => {
       const url = typeof input === "string" ? input : input.toString();
