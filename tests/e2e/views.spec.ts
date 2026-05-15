@@ -80,6 +80,19 @@ test.describe("Team Views tab routes", () => {
   test("direct slug-prefixed and legacy team views tab routes render the team Views shell", async ({
     page,
   }) => {
+    await page.goto("/foreverbrowsing/team/ENG/views");
+    await expect(page).toHaveURL(/\/foreverbrowsing\/team\/ENG\/views$/);
+    await expect(
+      page.getByRole("heading", { name: "Views", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Issues" })).toHaveAttribute(
+      "data-active",
+      "true",
+    );
+    await expect(
+      page.getByText("This page could not be found"),
+    ).not.toBeVisible();
+
     for (const tab of ["issues", "projects"] as const) {
       await page.goto(`/foreverbrowsing/team/ENG/views/${tab}`);
       await expect(page).toHaveURL(
@@ -126,5 +139,27 @@ test.describe("Team Views tab routes", () => {
     await expect(
       page.getByText("This page could not be found"),
     ).not.toBeVisible();
+
+    const suffix = Date.now().toString(36);
+    const workspaceSlug = `team-views-routes-${suffix}`;
+    const workspaceResponse = await page.request.post("/api/workspaces", {
+      data: {
+        name: `Team Views Routes ${suffix}`,
+        urlSlug: workspaceSlug,
+      },
+    });
+    expect(workspaceResponse.status()).toBe(201);
+
+    await page.goto(`/${workspaceSlug}/team/ENG/views`);
+    await expect(page).toHaveURL(
+      new RegExp(`/${workspaceSlug}/team/ENG/views$`),
+    );
+    await expect(page.getByText("Team not found")).toBeVisible();
+    await expect(
+      page.getByText(
+        "The team ENG doesn't exist or you don't have access to it.",
+      ),
+    ).toBeVisible();
+    await expect(page.getByText("High priority onboarding")).not.toBeVisible();
   });
 });
