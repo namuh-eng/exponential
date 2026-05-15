@@ -1,36 +1,26 @@
+@import "./editorial-theme.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    /* Light theme */
-    --color-sidebar-bg: #f5f5f5;
-    --color-content-bg: #fcfcfd;
-    --color-border: #e0e0e0;
-    --color-text-primary: #23252a;
-    --color-text-secondary: #6b6f76;
-    --color-text-tertiary: #9ca3af;
-    --color-accent: #7180ff;
-    --color-accent-hover: #5f6df0;
-    --color-surface: #ffffff;
-    --color-surface-hover: #f0f0f0;
-    --color-surface-active: #e8e8e8;
+    /* See src/app/editorial-theme.css for canonical Editorial tokens and legacy aliases. */
 
     /* Priority colors */
     --color-priority-urgent: #f76a6a;
     --color-priority-high: #f5a623;
     --color-priority-medium: #f2c94c;
     --color-priority-low: #5a95f5;
-    --color-priority-none: #6b6f76;
+    --color-priority-none: var(--editorial-ink-3);
 
     /* Status colors */
     --color-status-triage: #f2994a;
-    --color-status-backlog: #6b6f76;
-    --color-status-unstarted: #6b6f76;
+    --color-status-backlog: var(--editorial-ink-3);
+    --color-status-unstarted: var(--editorial-ink-3);
     --color-status-started: #f2c94c;
     --color-status-completed: #4cb782;
-    --color-status-canceled: #6b6f76;
+    --color-status-canceled: var(--editorial-ink-3);
   }
 
   :root[data-font-size="small"] {
@@ -56,30 +46,10 @@
   }
 
   .dark {
-    --color-sidebar-bg: #090909;
-    --color-content-bg: #0f0f11;
-    --color-border: #1c1e21;
-    --color-text-primary: #ffffff;
-    --color-text-secondary: #6b6f76;
-    --color-text-tertiary: #484b52;
-    --color-accent: #7180ff;
-    --color-accent-hover: #5f6df0;
-    --color-surface: #18181b;
-    --color-surface-hover: #1a1a1e;
-    --color-surface-active: #1f1f23;
-
-    --color-priority-urgent: #f76a6a;
-    --color-priority-high: #f5a623;
-    --color-priority-medium: #f2c94c;
-    --color-priority-low: #5a95f5;
-    --color-priority-none: #6b6f76;
-
-    --color-status-triage: #f2994a;
-    --color-status-backlog: #6b6f76;
-    --color-status-unstarted: #6b6f76;
-    --color-status-started: #f2c94c;
-    --color-status-completed: #4cb782;
-    --color-status-canceled: #6b6f76;
+    --color-priority-none: var(--editorial-ink-3);
+    --color-status-backlog: var(--editorial-ink-3);
+    --color-status-unstarted: var(--editorial-ink-3);
+    --color-status-canceled: var(--editorial-ink-3);
   }
 
   .auth-shell {
