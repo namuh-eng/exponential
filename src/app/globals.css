@@ -52,6 +52,26 @@
     --color-status-canceled: var(--editorial-ink-3);
   }
 
+  body {
+    background-color: var(--color-sidebar-bg);
+    color: var(--color-text-primary);
+    font-feature-settings: "cv11", "ss01", "ss03";
+    letter-spacing: -0.005em;
+  }
+
+  :where(
+      a,
+      button,
+      input,
+      textarea,
+      select,
+      [role="button"],
+      [role="switch"]
+    ):focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
   .auth-shell {
     --auth-background: #08090a;
     --auth-text: #ffffff;

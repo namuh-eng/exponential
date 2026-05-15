@@ -367,7 +367,7 @@ export function AppShell({
 
   return (
     <AppShellContext.Provider value={shellContext}>
-      <div className="flex h-screen bg-[var(--color-sidebar-bg)]">
+      <div className="flex h-screen bg-[var(--color-sidebar-bg)] text-[var(--color-text-primary)]">
         <div
           data-testid="app-sidebar-shell"
           className={isSettingsRoute ? "hidden md:block" : "block"}
@@ -394,14 +394,14 @@ export function AppShell({
           className={
             isSettingsRoute
               ? "flex-1 overflow-hidden p-0 md:p-2 md:pl-0"
-              : "flex-1 overflow-hidden p-2 pl-0"
+              : "flex-1 overflow-hidden p-3 pl-0"
           }
         >
           <div
             className={
               isSettingsRoute
-                ? "h-full overflow-y-auto bg-[var(--color-content-bg)] transition-colors md:rounded-xl md:border md:border-[var(--color-border)]"
-                : "h-full overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] transition-colors"
+                ? "h-full overflow-y-auto bg-[var(--color-content-bg)] transition-colors md:rounded-[10px] md:border md:border-[var(--color-border)] md:shadow-[var(--shadow-editorial-sm)]"
+                : "h-full overflow-y-auto rounded-[10px] border border-[var(--color-border)] bg-[var(--color-content-bg)] shadow-[var(--shadow-editorial-sm)] transition-colors"
             }
           >
             {children}

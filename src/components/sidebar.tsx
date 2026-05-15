@@ -141,12 +141,12 @@ function SidebarLink({
   return (
     <Link
       href={canonicalHref}
-      className={`flex items-center gap-2.5 rounded-md px-2 py-[5px] text-[13px] transition-colors ${
+      className={`flex items-center gap-2.5 rounded-[6px] border border-transparent px-2 py-[6px] text-[13px] transition-colors ${
         indent ? "ml-4" : ""
       } ${
         active
-          ? "bg-[var(--color-surface-active)] text-[var(--color-text-primary)]"
-          : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+          ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text-primary)] shadow-[var(--shadow-editorial-sm)]"
+          : "text-[var(--color-text-secondary)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
       }`}
     >
       <span className="flex h-4 w-4 shrink-0 items-center justify-center">
@@ -181,7 +181,7 @@ function SidebarMenuButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-2.5 rounded-md px-2 py-[5px] text-left text-[13px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+      className="flex w-full items-center gap-2.5 rounded-[6px] border border-transparent px-2 py-[6px] text-left text-[13px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
     >
       <span className="flex h-4 w-4 shrink-0 items-center justify-center">
         {icon}
@@ -216,11 +216,11 @@ function SidebarCustomizeModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-[rgba(20,18,14,0.40)] p-4 backdrop-blur-[2px]">
       <dialog
         open
         aria-label="Customize sidebar"
-        className="w-full max-w-[520px] rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] p-5 shadow-2xl"
+        className="w-full max-w-[520px] rounded-[10px] border border-[var(--color-border-strong)] bg-[var(--color-content-bg)] p-5 shadow-[var(--shadow-editorial-md)]"
       >
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -258,10 +258,10 @@ function SidebarCustomizeModal({
         <div className="mt-5 space-y-4">
           {["Personal", "Workspace"].map((group) => (
             <section key={group}>
-              <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-tertiary)]">
+              <div className="mb-2 text-[11px] font-medium font-mono uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
                 {group}
               </div>
-              <div className="divide-y divide-[var(--color-border)] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+              <div className="divide-y divide-[var(--color-border)] rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
                 {sidebarItems
                   .filter((item) => item.group === group)
                   .map((item) => {
@@ -295,7 +295,7 @@ function SidebarCustomizeModal({
                           className={`relative inline-flex h-[20px] w-[36px] shrink-0 items-center rounded-full transition-colors ${
                             checked
                               ? "bg-[var(--color-accent)]"
-                              : "bg-[var(--color-border)]"
+                              : "bg-[var(--color-surface-subtle)]"
                           }`}
                         >
                           <span
@@ -380,7 +380,7 @@ function SectionHeader({
     <button
       type="button"
       onClick={onToggle}
-      className="mb-0.5 mt-4 flex w-full items-center gap-1 px-2 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-secondary)]"
+      className="mb-0.5 mt-4 flex w-full items-center gap-1 px-2 text-[11px] font-medium font-mono uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-secondary)]"
     >
       {collapsible && (
         <svg
@@ -635,8 +635,8 @@ export function Sidebar({
 
   return (
     <SidebarWorkspaceSlugContext.Provider value={workspaceSlug}>
-      <aside className="flex h-screen w-[244px] shrink-0 flex-col bg-[var(--color-sidebar-bg)] px-3 py-2.5 transition-colors">
-        <div className="mb-2 flex items-center justify-between">
+      <aside className="flex h-screen w-[260px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-sidebar-bg)] px-3 py-3 transition-colors">
+        <div className="mb-3 flex items-center justify-between">
           <div className="relative">
             <button
               type="button"
@@ -646,12 +646,12 @@ export function Sidebar({
                 setWorkspaceMenuOpen(!workspaceMenuOpen);
                 setHelpMenuOpen(false);
               }}
-              className="flex items-center gap-2 rounded-md px-1 py-1 text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+              className="flex items-center gap-2 rounded-[6px] border border-transparent px-1.5 py-1 text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
             >
-              <div className="flex h-5 w-5 items-center justify-center rounded bg-[var(--color-accent)] text-[10px] font-bold text-white">
+              <div className="flex h-5 w-5 items-center justify-center rounded-[6px] bg-[var(--color-accent)] text-[10px] font-bold text-white shadow-[var(--shadow-editorial-sm)]">
                 {workspaceInitials}
               </div>
-              <span className="max-w-[124px] truncate text-[13px] font-medium">
+              <span className="max-w-[124px] truncate text-[13px] font-semibold tracking-[-0.01em]">
                 {workspaceName}
               </span>
               <svg
@@ -672,8 +672,8 @@ export function Sidebar({
               </svg>
             </button>
             {workspaceMenuOpen && (
-              <div className="absolute left-0 top-full z-20 mt-2 min-w-[220px] rounded-lg border border-[var(--color-border)] bg-[var(--color-content-bg)] p-1 shadow-2xl">
-                <div className="px-3 py-2 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-tertiary)]">
+              <div className="absolute left-0 top-full z-20 mt-2 min-w-[220px] rounded-[10px] border border-[var(--color-border-strong)] bg-[var(--color-content-bg)] p-1 shadow-[var(--shadow-editorial-md)]">
+                <div className="px-3 py-2 text-[11px] font-medium font-mono uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
                   Workspace
                 </div>
                 <button
@@ -681,7 +681,7 @@ export function Sidebar({
                   disabled
                   className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)]"
                 >
-                  <span className="flex h-5 w-5 items-center justify-center rounded bg-[var(--color-accent)] text-[10px] font-bold text-white">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-[6px] bg-[var(--color-accent)] text-[10px] font-bold text-white shadow-[var(--shadow-editorial-sm)]">
                     {workspaceInitials}
                   </span>
                   <span className="truncate">{workspaceName}</span>
@@ -699,7 +699,7 @@ export function Sidebar({
           <div className="flex items-center gap-0.5">
             <button
               type="button"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+              className="flex h-7 w-7 items-center justify-center rounded-[6px] border border-transparent text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
               aria-label="Search"
               onClick={() =>
                 window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT))
@@ -722,7 +722,7 @@ export function Sidebar({
             </button>
             <button
               type="button"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+              className="flex h-7 w-7 items-center justify-center rounded-[6px] border border-transparent text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
               aria-label="Create issue"
               onClick={onCreateIssue}
             >
@@ -910,7 +910,7 @@ export function Sidebar({
             type="button"
             aria-expanded={moreExpanded}
             onClick={() => setMoreExpanded(!moreExpanded)}
-            className="flex w-full items-center gap-2.5 rounded-md px-2 py-[5px] text-[13px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+            className="flex w-full items-center gap-2.5 rounded-[6px] border border-transparent px-2 py-[6px] text-[13px] text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
           >
             <span className="flex h-4 w-4 shrink-0 items-center justify-center">
               <svg
@@ -1075,15 +1075,15 @@ export function Sidebar({
                         [team.key]: !current[team.key],
                       }))
                     }
-                    className={`flex w-full items-center gap-2 rounded-md px-2 py-[5px] text-[13px] transition-colors ${
+                    className={`flex w-full items-center gap-2 rounded-[6px] border border-transparent px-2 py-[6px] text-[13px] transition-colors ${
                       teamSectionActive
-                        ? "text-[var(--color-text-primary)]"
-                        : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                        ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text-primary)] shadow-[var(--shadow-editorial-sm)]"
+                        : "text-[var(--color-text-secondary)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
                     }`}
                     style={{ paddingLeft: `${8 + team.depth * 16}px` }}
                   >
                     {team.depth > 0 ? (
-                      <span className="h-px w-3 shrink-0 bg-[var(--color-border)]" />
+                      <span className="h-px w-3 shrink-0 bg-[var(--color-surface-subtle)]" />
                     ) : null}
                     <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-[var(--color-accent)] text-[8px] font-bold text-white">
                       {team.key.charAt(0)}
@@ -1295,7 +1295,7 @@ export function Sidebar({
 
         <div className="relative mt-auto pt-2">
           {helpMenuOpen && (
-            <div className="absolute bottom-9 left-0 z-20 min-w-[220px] rounded-lg border border-[var(--color-border)] bg-[var(--color-content-bg)] p-1 shadow-2xl">
+            <div className="absolute bottom-9 left-0 z-20 min-w-[220px] rounded-[10px] border border-[var(--color-border-strong)] bg-[var(--color-content-bg)] p-1 shadow-[var(--shadow-editorial-md)]">
               <a
                 href="https://linear.app/docs"
                 target="_blank"
@@ -1324,7 +1324,7 @@ export function Sidebar({
           )}
           <button
             type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+            className="flex h-7 w-7 items-center justify-center rounded-[6px] border border-transparent text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
             aria-label="Help"
             aria-expanded={helpMenuOpen}
             onClick={() => {
@@ -1351,11 +1351,11 @@ export function Sidebar({
         </div>
 
         {shortcutsOpen && (
-          <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/50 p-4">
+          <div className="fixed inset-0 z-30 flex items-center justify-center bg-[rgba(20,18,14,0.40)] p-4 backdrop-blur-[2px]">
             <dialog
               open
               aria-labelledby="keyboard-shortcuts-title"
-              className="max-h-[80vh] w-full max-w-[560px] overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] p-5 shadow-2xl"
+              className="max-h-[80vh] w-full max-w-[560px] overflow-y-auto rounded-[10px] border border-[var(--color-border-strong)] bg-[var(--color-content-bg)] p-5 shadow-[var(--shadow-editorial-md)]"
             >
               <div className="flex items-center justify-between">
                 <h2

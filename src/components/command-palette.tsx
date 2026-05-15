@@ -578,7 +578,7 @@ export function CommandPalette({
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/50"
+        className="absolute inset-0 bg-[rgba(20,18,14,0.40)] backdrop-blur-[2px]"
         onClick={() => (projectPickerOpen ? closeProjectPicker() : close())}
         onKeyDown={(e) =>
           e.key === "Escape" &&
@@ -591,7 +591,7 @@ export function CommandPalette({
       {open ? (
         <dialog
           open
-          className="relative z-10 flex w-full max-w-[640px] flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] shadow-2xl"
+          className="relative z-10 flex w-full max-w-[640px] flex-col overflow-hidden rounded-[10px] border border-[var(--color-border-strong)] bg-[var(--color-content-bg)] shadow-[var(--shadow-editorial-md)]"
           aria-label="Command palette"
           onKeyDown={handlePaletteKeyDown}
         >
@@ -633,7 +633,7 @@ export function CommandPalette({
             {/* Search results */}
             {results.length > 0 && (
               <div className="px-2">
-                <div className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-secondary)]">
+                <div className="px-2 py-1.5 text-[11px] font-medium font-mono uppercase tracking-[0.08em] text-[var(--color-text-secondary)]">
                   Quick results for &ldquo;{query}&rdquo;
                 </div>
                 {results.map((result) => {
@@ -642,9 +642,9 @@ export function CommandPalette({
                     <button
                       key={result.id}
                       type="button"
-                      className={`flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors ${
+                      className={`flex w-full items-center gap-3 rounded-[6px] border border-transparent px-2 py-1.5 text-left transition-colors ${
                         selectedIndex === idx
-                          ? "bg-[var(--color-accent)] text-white"
+                          ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text-primary)] shadow-[var(--shadow-editorial-sm)]"
                           : "text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
                       }`}
                       onClick={() => {
@@ -669,7 +669,7 @@ export function CommandPalette({
             {/* Commands */}
             {Object.entries(groupedCommands).map(([group, cmds]) => (
               <div key={group} className="px-2">
-                <div className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-secondary)]">
+                <div className="px-2 py-1.5 text-[11px] font-medium font-mono uppercase tracking-[0.08em] text-[var(--color-text-secondary)]">
                   {group}
                 </div>
                 {cmds.map((cmd) => {
@@ -678,9 +678,9 @@ export function CommandPalette({
                     <button
                       key={cmd.id}
                       type="button"
-                      className={`flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors ${
+                      className={`flex w-full items-center gap-3 rounded-[6px] border border-transparent px-2 py-1.5 text-left transition-colors ${
                         selectedIndex === idx
-                          ? "bg-[var(--color-accent)] text-white"
+                          ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text-primary)] shadow-[var(--shadow-editorial-sm)]"
                           : "text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
                       }`}
                       onClick={() => executeCommand(cmd)}
@@ -694,7 +694,7 @@ export function CommandPalette({
                               key={key}
                               className={`rounded border px-1.5 py-0.5 text-[11px] ${
                                 selectedIndex === idx
-                                  ? "border-white/30 text-white/80"
+                                  ? "border-[var(--color-accent)] text-[var(--color-text-primary)]"
                                   : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]"
                               }`}
                             >
@@ -751,7 +751,7 @@ export function CommandPalette({
       {projectPickerOpen ? (
         <dialog
           open
-          className="relative z-10 flex w-full max-w-[520px] flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] shadow-2xl"
+          className="relative z-10 flex w-full max-w-[520px] flex-col overflow-hidden rounded-[10px] border border-[var(--color-border-strong)] bg-[var(--color-content-bg)] shadow-[var(--shadow-editorial-md)]"
           aria-label="Choose a project for update"
           onKeyDown={handleProjectPickerKeyDown}
         >
