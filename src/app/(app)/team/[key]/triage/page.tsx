@@ -7,6 +7,7 @@ import {
   type FilterCondition,
   applyFilters,
 } from "@/components/filter-bar";
+import { IssueDetailView } from "@/components/issue-detail-view";
 import { TeamRouteErrorState } from "@/components/team-route-error-state";
 import { TriageHeader } from "@/components/triage-header";
 import { TriageRow } from "@/components/triage-row";
@@ -25,6 +26,7 @@ interface TriageIssue {
   id: string;
   identifier: string;
   title: string;
+  description?: string | null;
   priority: string;
   stateId: string;
   stateName: string;
@@ -37,6 +39,10 @@ interface TriageIssue {
   labels: { id: string; name: string; color: string }[];
   assigneeId: string | null;
   projectId: string | null;
+  projectName?: string | null;
+  dueDate?: string | null;
+  estimate?: number | null;
+  updatedAt?: string;
 }
 
 interface TriageResponse {
@@ -60,15 +66,22 @@ export default function TeamTriagePage() {
   const [sortOrder, setSortOrder] = useState<"created-desc" | "created-asc">(
     "created-desc",
   );
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
 
   const fetchTriage = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/teams/${params.key}/triage`);
       if (res.ok) {
-        const json = await res.json();
+        const json = (await res.json()) as TriageResponse;
         setData(json);
         setLoadState("ready");
+        setSelectedIssueId((currentSelectedIssueId) =>
+          currentSelectedIssueId &&
+          json.issues.some((issue) => issue.id === currentSelectedIssueId)
+            ? currentSelectedIssueId
+            : null,
+        );
         return;
       }
 
@@ -101,6 +114,22 @@ export default function TeamTriagePage() {
       window.removeEventListener("issue-created", handleIssueCreated);
   }, [fetchTriage, params.key]);
 
+  const removeAcceptedOrDeclinedIssue = useCallback((issueId: string) => {
+    setData((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const nextIssues = current.issues.filter((issue) => issue.id !== issueId);
+      return {
+        ...current,
+        issues: nextIssues,
+        count: nextIssues.length,
+      };
+    });
+    setSelectedIssueId((current) => (current === issueId ? null : current));
+  }, []);
+
   const handleAccept = useCallback(
     async (issueId: string) => {
       const res = await fetch(`/api/teams/${params.key}/triage/${issueId}`, {
@@ -109,10 +138,11 @@ export default function TeamTriagePage() {
         body: JSON.stringify({ action: "accept" }),
       });
       if (res.ok) {
+        removeAcceptedOrDeclinedIssue(issueId);
         void fetchTriage();
       }
     },
-    [params.key, fetchTriage],
+    [params.key, fetchTriage, removeAcceptedOrDeclinedIssue],
   );
 
   const handleDecline = useCallback(
@@ -123,10 +153,11 @@ export default function TeamTriagePage() {
         body: JSON.stringify({ action: "decline" }),
       });
       if (res.ok) {
+        removeAcceptedOrDeclinedIssue(issueId);
         void fetchTriage();
       }
     },
-    [params.key, fetchTriage],
+    [params.key, fetchTriage, removeAcceptedOrDeclinedIssue],
   );
 
   const filteredIssues = useMemo(() => {
@@ -182,6 +213,11 @@ export default function TeamTriagePage() {
   const openCreateIssue = useCallback(() => {
     setShowCreateIssue(true);
   }, []);
+
+  const selectedIssue = useMemo(
+    () => filteredIssues.find((issue) => issue.id === selectedIssueId) ?? null,
+    [filteredIssues, selectedIssueId],
+  );
 
   const sortControl = (
     <label className="flex items-center gap-2 text-[12px] text-[var(--color-text-secondary)]">
@@ -332,8 +368,11 @@ export default function TeamTriagePage() {
           {createIssueButton}
         </TriageHeader>
 
-        <div className="flex min-h-0 flex-1">
-          <div className="min-w-0 flex-1 overflow-y-auto lg:max-w-[480px] lg:border-r lg:border-[var(--color-border)]">
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+          <div
+            aria-label="Triage issues"
+            className="min-w-0 flex-1 overflow-y-auto lg:max-w-[480px] lg:border-r lg:border-[var(--color-border)]"
+          >
             {filteredIssues.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
                 <p className="text-[14px] font-medium text-[var(--color-text-primary)]">
@@ -352,6 +391,8 @@ export default function TeamTriagePage() {
                 <TriageRow
                   key={issue.id}
                   issue={issue}
+                  selected={issue.id === selectedIssueId}
+                  onSelect={setSelectedIssueId}
                   onAccept={handleAccept}
                   onDecline={handleDecline}
                 />
@@ -359,32 +400,76 @@ export default function TeamTriagePage() {
             )}
           </div>
 
-          <div className="hidden flex-1 items-center justify-center lg:flex">
-            <div className="flex max-w-[260px] flex-col items-center gap-4 text-center">
-              <svg
-                width="64"
-                height="64"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="var(--color-text-tertiary)"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+          <div className="flex min-h-[480px] min-w-0 flex-1 lg:min-h-0">
+            {selectedIssue ? (
+              <section
+                aria-label={`${selectedIssue.identifier} triage review`}
+                className="flex min-h-0 min-w-0 flex-1 flex-col"
               >
-                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-              </svg>
-              <p className="text-[14px] font-medium text-[var(--color-text-primary)]">
-                {data.count} {data.count === 1 ? "issue" : "issues"} to triage
-              </p>
-              <button
-                type="button"
-                onClick={openCreateIssue}
-                className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
-              >
-                Create triage issue
-              </button>
-            </div>
+                <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
+                  <div className="min-w-0">
+                    <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                      Triage review
+                    </div>
+                    <div className="truncate text-[13px] font-medium text-[var(--color-text-primary)]">
+                      {selectedIssue.identifier}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleAccept(selectedIssue.id)}
+                      className="rounded-md border border-green-500/30 px-3 py-1.5 text-[12px] font-medium text-green-400 transition-colors hover:bg-green-400/10"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDecline(selectedIssue.id)}
+                      className="rounded-md border border-red-500/30 px-3 py-1.5 text-[12px] font-medium text-red-400 transition-colors hover:bg-red-400/10"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </div>
+                <div className="min-h-[480px] flex-1">
+                  <IssueDetailView compact issueId={selectedIssue.id} />
+                </div>
+              </section>
+            ) : (
+              <div className="flex flex-1 items-center justify-center">
+                <div className="flex max-w-[260px] flex-col items-center gap-4 text-center">
+                  <svg
+                    width="64"
+                    height="64"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--color-text-tertiary)"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                  </svg>
+                  <p className="text-[14px] font-medium text-[var(--color-text-primary)]">
+                    {data.count} {data.count === 1 ? "issue" : "issues"} to
+                    triage
+                  </p>
+                  <p className="text-[13px] text-[var(--color-text-secondary)]">
+                    Select an issue to inspect its details before accepting or
+                    declining it.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={openCreateIssue}
+                    className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+                  >
+                    Create triage issue
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { issue, user, workflowState } from "@/lib/db/schema";
+import { issue, project, user, workflowState } from "@/lib/db/schema";
 import { getLabelsForIssues } from "@/lib/issue-labels";
 import { findAccessibleTeam } from "@/lib/teams";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -70,6 +70,7 @@ export async function GET(
       number: issue.number,
       identifier: issue.identifier,
       title: issue.title,
+      description: issue.description,
       priority: issue.priority,
       stateId: issue.stateId,
       stateName: workflowState.name,
@@ -77,11 +78,18 @@ export async function GET(
       creatorId: issue.creatorId,
       creatorName: user.name,
       creatorImage: user.image,
+      assigneeId: issue.assigneeId,
+      projectId: issue.projectId,
+      projectName: project.name,
+      dueDate: issue.dueDate,
+      estimate: issue.estimate,
       createdAt: issue.createdAt,
+      updatedAt: issue.updatedAt,
     })
     .from(issue)
     .innerJoin(workflowState, eq(issue.stateId, workflowState.id))
     .leftJoin(user, eq(issue.creatorId, user.id))
+    .leftJoin(project, eq(issue.projectId, project.id))
     .where(
       and(
         eq(issue.teamId, teamRecord.id),
@@ -98,6 +106,7 @@ export async function GET(
     id: i.id,
     identifier: i.identifier,
     title: i.title,
+    description: i.description,
     priority: i.priority,
     stateId: i.stateId,
     stateName: i.stateName,
@@ -106,10 +115,14 @@ export async function GET(
     creatorName: i.creatorName ?? "Unknown",
     creatorImage: i.creatorImage,
     createdAt: i.createdAt,
+    updatedAt: i.updatedAt,
     labelIds: (labelsMap[i.id] ?? []).map((currentLabel) => currentLabel.id),
     labels: labelsMap[i.id] ?? [],
-    assigneeId: null,
-    projectId: null,
+    assigneeId: i.assigneeId,
+    projectId: i.projectId,
+    projectName: i.projectName,
+    dueDate: i.dueDate,
+    estimate: i.estimate,
   }));
 
   return NextResponse.json({

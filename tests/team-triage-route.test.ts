@@ -40,15 +40,15 @@ vi.mock("@/lib/db", () => ({
 
       // Get issues in triage state
       if (selection && "identifier" in selection) {
+        const issueQuery = {
+          leftJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnValue({
+            orderBy: vi.fn().mockResolvedValue(issuesOrderByMock()),
+          }),
+        };
         return {
           from: vi.fn().mockReturnValue({
-            innerJoin: vi.fn().mockReturnValue({
-              leftJoin: vi.fn().mockReturnValue({
-                where: vi.fn().mockReturnValue({
-                  orderBy: vi.fn().mockResolvedValue(issuesOrderByMock()),
-                }),
-              }),
-            }),
+            innerJoin: vi.fn().mockReturnValue(issueQuery),
           }),
         };
       }
@@ -96,7 +96,13 @@ describe("team triage route", () => {
         stateColor: "#f00",
         creatorId: "user-2",
         creatorName: "Bob",
+        assigneeId: "user-assignee",
+        projectId: "project-1",
+        projectName: "Inbox cleanup",
+        dueDate: new Date("2026-05-01T00:00:00.000Z"),
+        estimate: 2,
         createdAt: new Date("2026-04-26T00:00:00.000Z"),
+        updatedAt: new Date("2026-04-27T00:00:00.000Z"),
       },
     ]);
     getLabelsForIssuesMock.mockResolvedValue({ "issue-1": [] });
@@ -135,6 +141,12 @@ describe("team triage route", () => {
     const payload = await response.json();
     expect(payload.issues.length).toBe(1);
     expect(payload.issues[0].creatorName).toBe("Bob");
+    expect(payload.issues[0]).toMatchObject({
+      assigneeId: "user-assignee",
+      projectId: "project-1",
+      projectName: "Inbox cleanup",
+      estimate: 2,
+    });
   });
 
   it("returns a disabled triage queue without querying triage issues", async () => {

@@ -354,7 +354,13 @@ function CommentReactions({
   );
 }
 
-export function IssueDetailView({ issueId }: { issueId: string }) {
+export function IssueDetailView({
+  issueId,
+  compact = false,
+}: {
+  issueId: string;
+  compact?: boolean;
+}) {
   const router = useRouter();
   const workspaceSlug = useAppShellContext()?.workspaceSlug;
   const [issue, setIssue] = useState<IssueDetail | null>(null);
@@ -858,7 +864,13 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
 
   return (
     <div className="flex h-full overflow-y-auto bg-[var(--color-content-bg)]">
-      <div className="mx-auto grid w-full max-w-[1440px] grid-cols-1 gap-8 px-6 py-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-10">
+      <div
+        className={`mx-auto grid w-full grid-cols-1 ${
+          compact
+            ? "max-w-full gap-5 px-4 py-5"
+            : "max-w-[1440px] gap-8 px-6 py-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-10"
+        }`}
+      >
         <div className="min-w-0">
           <div className="flex flex-col gap-6 border-b border-[var(--color-border)] pb-6 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
@@ -890,7 +902,9 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
                     event.currentTarget.blur();
                   }
                 }}
-                className="mt-4 min-h-[44px] rounded-md text-[36px] font-semibold leading-tight text-[var(--color-text-primary)] outline-none transition-shadow focus:shadow-[0_0_0_2px_color-mix(in_srgb,var(--color-accent)_25%,transparent)]"
+                className={`mt-4 min-h-[44px] rounded-md font-semibold leading-tight text-[var(--color-text-primary)] outline-none transition-shadow focus:shadow-[0_0_0_2px_color-mix(in_srgb,var(--color-accent)_25%,transparent)] ${
+                  compact ? "text-[24px]" : "text-[36px]"
+                }`}
                 aria-label="Issue title"
               >
                 {issue.title}

@@ -72,6 +72,7 @@ describe("TriageRow", () => {
     render(
       <TriageRow
         issue={makeTriageIssue()}
+        onSelect={vi.fn()}
         onAccept={vi.fn()}
         onDecline={vi.fn()}
       />,
@@ -84,6 +85,7 @@ describe("TriageRow", () => {
     render(
       <TriageRow
         issue={makeTriageIssue()}
+        onSelect={vi.fn()}
         onAccept={vi.fn()}
         onDecline={vi.fn()}
       />,
@@ -96,6 +98,7 @@ describe("TriageRow", () => {
     render(
       <TriageRow
         issue={makeTriageIssue()}
+        onSelect={vi.fn()}
         onAccept={vi.fn()}
         onDecline={vi.fn()}
       />,
@@ -110,6 +113,7 @@ describe("TriageRow", () => {
     render(
       <TriageRow
         issue={makeTriageIssue()}
+        onSelect={vi.fn()}
         onAccept={vi.fn()}
         onDecline={vi.fn()}
       />,
@@ -123,6 +127,7 @@ describe("TriageRow", () => {
     render(
       <TriageRow
         issue={makeTriageIssue()}
+        onSelect={vi.fn()}
         onAccept={onAccept}
         onDecline={vi.fn()}
       />,
@@ -137,12 +142,50 @@ describe("TriageRow", () => {
     render(
       <TriageRow
         issue={makeTriageIssue()}
+        onSelect={vi.fn()}
         onAccept={vi.fn()}
         onDecline={onDecline}
       />,
     );
     fireEvent.click(screen.getByLabelText("Decline issue"));
     expect(onDecline).toHaveBeenCalledWith("issue-1");
+  });
+
+  it("calls onSelect when row clicked or Enter is pressed", async () => {
+    const { TriageRow } = await import("@/components/triage-row");
+    const onSelect = vi.fn();
+    render(
+      <TriageRow
+        issue={makeTriageIssue()}
+        onSelect={onSelect}
+        onAccept={vi.fn()}
+        onDecline={vi.fn()}
+      />,
+    );
+
+    const row = screen.getByTestId("triage-row");
+    fireEvent.click(row);
+    fireEvent.keyDown(row, { key: "Enter" });
+
+    expect(onSelect).toHaveBeenCalledTimes(2);
+    expect(onSelect).toHaveBeenCalledWith("issue-1");
+  });
+
+  it("marks selected rows for assistive tech", async () => {
+    const { TriageRow } = await import("@/components/triage-row");
+    render(
+      <TriageRow
+        issue={makeTriageIssue()}
+        selected
+        onSelect={vi.fn()}
+        onAccept={vi.fn()}
+        onDecline={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("triage-row").getAttribute("aria-current")).toBe(
+      "true",
+    );
   });
 });
 
@@ -231,8 +274,8 @@ describe("TeamTriagePage", () => {
   it("refreshes the triage list after accepting an issue", async () => {
     render(<TeamTriagePage />);
 
-    const rows = await screen.findAllByTestId("triage-row");
-    fireEvent.click(within(rows[1]).getByLabelText("Accept issue"));
+    await screen.findAllByTestId("triage-row");
+    fireEvent.click(screen.getAllByLabelText("Accept issue")[1]);
 
     await waitFor(() => {
       expect(screen.queryByText("Fix login button alignment")).toBeNull();
