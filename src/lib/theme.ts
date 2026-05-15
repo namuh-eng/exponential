@@ -1,5 +1,5 @@
-export const APP_THEME_STORAGE_KEY = "whetline-theme";
-export const APP_THEME_CHANGE_EVENT = "whetline:theme-change";
+export const APP_THEME_STORAGE_KEY = "exponential-theme";
+export const APP_THEME_CHANGE_EVENT = "exponential:theme-change";
 
 export type AppTheme = "system" | "light" | "dark";
 

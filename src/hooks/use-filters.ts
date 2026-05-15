@@ -8,7 +8,7 @@ import type {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-const FILTER_STORAGE_PREFIX = "whetline-filters:";
+const FILTER_STORAGE_PREFIX = "exponential-filters:";
 const FILTER_TYPES = new Set<FilterType>([
   "status",
   "priority",

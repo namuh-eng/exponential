@@ -1,8 +1,8 @@
-# whetline
+# exponential
 
-[![GitHub stars](https://img.shields.io/github/stars/namuh-eng/whetline?style=flat-square)](https://github.com/namuh-eng/whetline)
+[![GitHub stars](https://img.shields.io/github/stars/namuh-eng/exponential?style=flat-square)](https://github.com/namuh-eng/exponential)
 [![License: ELv2](https://img.shields.io/badge/License-Elastic%202.0-blue.svg?style=flat-square)](LICENSE)
-[![Docker pulls](https://img.shields.io/docker/pulls/namuh-eng/whetline?style=flat-square)](https://hub.docker.com/r/namuh-eng/whetline)
+[![Docker pulls](https://img.shields.io/docker/pulls/namuh-eng/exponential?style=flat-square)](https://hub.docker.com/r/namuh-eng/exponential)
 
 **Open source Linear alternative — keyboard-first issue tracking for software teams.**
 
@@ -12,9 +12,9 @@ A fully functional clone of [Linear](https://linear.app) built with Next.js 16, 
 
 ## About
 
-whetline is a production-grade issue tracking and project management tool built to match Linear's speed and keyboard-first UX. Whether you're a startup building in public or an enterprise needing self-hosted infrastructure, whetline is a fully open source alternative that you can deploy, customize, and extend.
+exponential is a production-grade issue tracking and project management tool built to match Linear's speed and keyboard-first UX. Whether you're a startup building in public or an enterprise needing self-hosted infrastructure, exponential is a fully open source alternative that you can deploy, customize, and extend.
 
-Built by [ralph-to-ralph](https://github.com/namuh-eng/ralph-to-ralph), an autonomous product cloning system, whetline represents 41 features across issues, projects, cycles, initiatives, and real-time notifications — all tested and deployed from day one.
+Built by [ralph-to-ralph](https://github.com/namuh-eng/ralph-to-ralph), an autonomous product cloning system, exponential represents 41 features across issues, projects, cycles, initiatives, and real-time notifications — all tested and deployed from day one.
 
 ---
 
@@ -43,8 +43,8 @@ Core capabilities:
 
 ```bash
 # Clone the repository
-git clone https://github.com/namuh-eng/whetline.git
-cd whetline
+git clone https://github.com/namuh-eng/exponential.git
+cd exponential
 
 # Install dependencies
 npm install
@@ -66,8 +66,8 @@ npm run dev
 ### Option 2: Docker Compose (Coming Soon)
 
 ```bash
-git clone https://github.com/namuh-eng/whetline.git
-cd whetline
+git clone https://github.com/namuh-eng/exponential.git
+cd exponential
 
 docker compose up
 ```
@@ -134,7 +134,7 @@ npm run db:push
 ### Project Structure
 
 ```
-whetline/
+exponential/
 ├── src/
 │   ├── app/              # Next.js App Router pages and API routes
 │   ├── components/       # Reusable React components
@@ -164,7 +164,7 @@ Copy `.env.example` to `.env` and configure:
 
 ```bash
 # Database
-DATABASE_URL=postgresql://user:password@localhost/whetline
+DATABASE_URL=postgresql://user:password@localhost/exponential
 
 # Redis
 REDIS_URL=redis://localhost:6379
@@ -175,10 +175,10 @@ AWS_ACCESS_KEY_ID=your-access-key
 AWS_SECRET_ACCESS_KEY=your-secret-key
 
 # S3 (for file uploads)
-AWS_S3_BUCKET=whetline-uploads
+AWS_S3_BUCKET=exponential-uploads
 
 # SES (for email)
-AWS_SES_SENDER_EMAIL=noreply@whetline.com
+AWS_SES_SENDER_EMAIL=noreply@exponential.com
 
 # Authentication
 AUTH_GOOGLE_ID=your-google-oauth-id
@@ -205,7 +205,7 @@ This script will:
 
 ## Built by AI
 
-whetline was built autonomously by **[ralph-to-ralph](https://github.com/namuh-eng/ralph-to-ralph)**, a multi-agent system that clones SaaS products end-to-end.
+exponential was built autonomously by **[ralph-to-ralph](https://github.com/namuh-eng/ralph-to-ralph)**, a multi-agent system that clones SaaS products end-to-end.
 
 The system:
 1. **Inspects** the target product (Linear) using Claude + Ever CLI
@@ -233,8 +233,8 @@ We welcome contributions! Whether it's bug fixes, new features, or improvements 
 
 ## Support
 
-- **Issues** — Report bugs or request features on [GitHub Issues](https://github.com/namuh-eng/whetline/issues)
-- **Discussions** — Ask questions on [GitHub Discussions](https://github.com/namuh-eng/whetline/discussions)
+- **Issues** — Report bugs or request features on [GitHub Issues](https://github.com/namuh-eng/exponential/issues)
+- **Discussions** — Ask questions on [GitHub Discussions](https://github.com/namuh-eng/exponential/discussions)
 - **Documentation** — [Full docs coming soon]
 
 ---

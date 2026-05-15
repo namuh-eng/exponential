@@ -21,8 +21,8 @@ interface ViewTeam {
   name: string;
 }
 
-const ISSUE_FILTER_STORAGE_PREFIX = "whetline-filters:team:";
-const PROJECT_VIEW_STORAGE_KEY = "whetline-project-view:workspace";
+const ISSUE_FILTER_STORAGE_PREFIX = "exponential-filters:team:";
+const PROJECT_VIEW_STORAGE_KEY = "exponential-project-view:workspace";
 
 function getStorage(): Pick<
   Storage,

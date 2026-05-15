@@ -183,7 +183,7 @@ describe("Account Preferences Page", () => {
     fireEvent.click(screen.getByText("Light"));
 
     await waitFor(() => {
-      expect(window.localStorage.getItem("whetline-theme")).toBe("light");
+      expect(window.localStorage.getItem("exponential-theme")).toBe("light");
     });
     expect(document.documentElement.classList.contains("dark")).toBe(false);
   });

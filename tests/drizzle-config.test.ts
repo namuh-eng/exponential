@@ -72,7 +72,7 @@ describe("drizzle.config.ts SSL configuration", () => {
     const mod = await import("../drizzle.config");
 
     expect(getDbUrl(mod.default)).toBe(
-      "postgresql://postgres:password@localhost:5432/whetline",
+      "postgresql://postgres:password@localhost:5432/exponential",
     );
   });
 });

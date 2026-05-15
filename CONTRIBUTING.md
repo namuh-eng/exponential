@@ -1,4 +1,4 @@
-# Contributing to whetline
+# Contributing to exponential
 
 Thank you for your interest in contributing! We appreciate all contributions — whether it's bug reports, feature requests, code improvements, or documentation updates.
 
@@ -24,16 +24,16 @@ Be respectful, inclusive, and constructive. We're all here to make this project 
 
 ### 1. Fork the Repository
 
-Click the "Fork" button on [GitHub](https://github.com/namuh-eng/whetline) to create your own copy.
+Click the "Fork" button on [GitHub](https://github.com/namuh-eng/exponential) to create your own copy.
 
 ### 2. Clone Your Fork
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/whetline.git
-cd whetline
+git clone https://github.com/YOUR_USERNAME/exponential.git
+cd exponential
 
 # Optional: track the original repo for updates
-git remote add upstream https://github.com/namuh-eng/whetline.git
+git remote add upstream https://github.com/namuh-eng/exponential.git
 ```
 
 ### 3. Install Dependencies
@@ -355,7 +355,7 @@ Don't fight the formatter — just run `npm run lint:fix` and commit.
 
 **Q: I found a bug. How do I report it?**
 
-A: Open an issue on [GitHub Issues](https://github.com/namuh-eng/whetline/issues) with:
+A: Open an issue on [GitHub Issues](https://github.com/namuh-eng/exponential/issues) with:
 - Clear title
 - Steps to reproduce
 - Expected vs actual behavior
@@ -390,7 +390,7 @@ A: No worries! We'll explain why and suggest improvements. You're welcome to ite
 ## Need Help?
 
 - **Documentation** — See [README.md](README.md)
-- **Questions** — Open a [GitHub Discussion](https://github.com/namuh-eng/whetline/discussions)
-- **Issues** — Report on [GitHub Issues](https://github.com/namuh-eng/whetline/issues)
+- **Questions** — Open a [GitHub Discussion](https://github.com/namuh-eng/exponential/discussions)
+- **Issues** — Report on [GitHub Issues](https://github.com/namuh-eng/exponential/issues)
 
-Thank you for contributing to whetline!
+Thank you for contributing to exponential!

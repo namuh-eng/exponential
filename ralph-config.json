@@ -1,6 +1,6 @@
 {
   "targetUrl": "https://linear.app",
-  "targetName": "whetline",
+  "targetName": "exponential",
   "cloudProvider": "aws",
   "deploymentTier": "team",
   "framework": "nextjs",

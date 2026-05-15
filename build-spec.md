@@ -1,4 +1,4 @@
-# Build Spec — Linear Clone (whetline)
+# Build Spec — Linear Clone (exponential)
 
 > **Status**: COMPLETE — all pages inspected, ready for build phase
 

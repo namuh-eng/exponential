@@ -1,4 +1,4 @@
-# whetline: Linear Clone
+# exponential: Linear Clone
 
 ## What This Is
 A production-grade clone of [linear.app](https://linear.app) — a keyboard-first issue tracking and project management tool for software teams.

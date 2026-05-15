@@ -15,7 +15,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: whetline:dev
+    image: exponential:dev
     environment:
       NODE_ENV: development
     volumes:

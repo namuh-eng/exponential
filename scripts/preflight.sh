@@ -3,7 +3,7 @@
 set -euo pipefail
 
 REGION="${AWS_REGION:-us-east-1}"
-APP_NAME="whetline"
+APP_NAME="exponential"
 
 echo "=== Pre-flight Infrastructure Setup (AWS - team tier) ==="
 echo "Region: $REGION"
