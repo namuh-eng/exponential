@@ -7,6 +7,7 @@ const DEFAULT_WORKFLOW_STATE_DEFINITIONS = [
     name: "Triage",
     category: "triage" as const,
     color: "#f59e0b",
+    isDefault: true,
   },
   {
     name: "Backlog",
@@ -18,21 +19,25 @@ const DEFAULT_WORKFLOW_STATE_DEFINITIONS = [
     name: "Todo",
     category: "unstarted" as const,
     color: "#6b6f76",
+    isDefault: true,
   },
   {
     name: "In Progress",
     category: "started" as const,
     color: "#f59e0b",
+    isDefault: true,
   },
   {
     name: "Done",
     category: "completed" as const,
     color: "#22c55e",
+    isDefault: true,
   },
   {
     name: "Canceled",
     category: "canceled" as const,
     color: "#6b6f76",
+    isDefault: true,
   },
 ];
 
