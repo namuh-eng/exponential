@@ -93,6 +93,19 @@ describe("Sidebar", () => {
     expect(screen.getByText("My Issues")).toBeDefined();
   });
 
+  it("uses the Editorial accent discipline for active navigation", () => {
+    mockPathname = "/my-issues/assigned";
+
+    render(<Sidebar />);
+
+    const activeLink = screen.getByRole("link", { name: /My Issues/i });
+    expect(activeLink.className).toContain("border-[var(--color-accent)]");
+    expect(activeLink.className).toContain("bg-[var(--color-accent-soft)]");
+    expect(activeLink.className).toContain(
+      "shadow-[var(--shadow-editorial-sm)]",
+    );
+  });
+
   it("shows the inbox unread badge when provided", () => {
     render(<Sidebar inboxUnreadCount={3} />);
     expect(screen.getByText("3")).toBeInTheDocument();
@@ -170,7 +183,7 @@ describe("Sidebar", () => {
       "href",
       "/foreverbrowsing/team/ENG/analytics",
     );
-    expect(insightsLink).toHaveClass("bg-[var(--color-surface-active)]");
+    expect(insightsLink).toHaveClass("bg-[var(--color-accent-soft)]");
   });
 
   it("renders Initiatives and Cycles in Try section", () => {
@@ -378,7 +391,7 @@ describe("Sidebar", () => {
     );
     const teamsLink = screen.getByRole("link", { name: /Teams/i });
     expect(teamsLink).toHaveAttribute("href", "/foreverbrowsing/teams");
-    expect(teamsLink.className).toContain("bg-[var(--color-surface-active)]");
+    expect(teamsLink.className).toContain("bg-[var(--color-accent-soft)]");
   });
 
   it("keeps Issues highlighted on URL-addressable team issue list routes", () => {
@@ -388,7 +401,7 @@ describe("Sidebar", () => {
       render(<Sidebar teamKey="ENG" />);
 
       expect(screen.getByText("Issues").closest("a")?.className).toContain(
-        "bg-[var(--color-surface-active)]",
+        "bg-[var(--color-accent-soft)]",
       );
     }
   });
@@ -399,7 +412,7 @@ describe("Sidebar", () => {
     render(<Sidebar teamKey="ENG" />);
 
     expect(screen.getByText("Issues").closest("a")?.className).toContain(
-      "bg-[var(--color-surface-active)]",
+      "bg-[var(--color-accent-soft)]",
     );
   });
 
@@ -410,7 +423,7 @@ describe("Sidebar", () => {
 
     expect(
       screen.getAllByText("Projects")[0].closest("a")?.className,
-    ).toContain("bg-[var(--color-surface-active)]");
+    ).toContain("bg-[var(--color-accent-soft)]");
   });
 });
 
@@ -492,8 +505,10 @@ describe("AppShell", () => {
         <div>Test</div>
       </AppShell>,
     );
-    const contentDiv = container.querySelector(".rounded-xl");
-    expect(contentDiv).not.toBeNull();
+    const contentDiv = Array.from(container.querySelectorAll("div")).find(
+      (element) => element.className.includes("rounded-[10px]"),
+    );
+    expect(contentDiv).toBeDefined();
   });
 
   it("hides the app sidebar on mobile settings routes", () => {
