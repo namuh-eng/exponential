@@ -30,7 +30,19 @@ const NOTIFICATION_TYPE_EVENT_KEY: Partial<
   status_change: "statusChanges",
   mentioned: "mentions",
   comment: "comments",
+  duplicate: "relations",
 };
+
+export const ACCOUNT_NOTIFICATION_DELIVERY_EVENT_KEYS = [
+  "assignments",
+  "statusChanges",
+  "mentions",
+  "comments",
+  "dueDates",
+  "projectUpdates",
+  "teamUpdates",
+  "workspaceAdmin",
+] as const satisfies readonly AccountNotificationEventKey[];
 
 const mentionPattern = /(^|\s)@([a-z0-9][\w.-]*)/gi;
 const canonicalMentionPattern = /@\[[^\]]+]\(user:([^)]+)\)/g;
@@ -157,6 +169,15 @@ export function buildNotificationValues(input: {
   }));
 }
 
+export function shouldDeliverAccountNotificationEventForSettings(
+  eventKey: AccountNotificationEventKey,
+  settings: AccountNotificationSettings,
+) {
+  return ACCOUNT_NOTIFICATION_CHANNELS.some(
+    (channel) => settings.channels[channel].events[eventKey],
+  );
+}
+
 export function shouldDeliverNotificationForSettings(
   type: NotificationType,
   settings: AccountNotificationSettings,
@@ -167,9 +188,7 @@ export function shouldDeliverNotificationForSettings(
     return true;
   }
 
-  return ACCOUNT_NOTIFICATION_CHANNELS.some(
-    (channel) => settings.channels[channel].events[eventKey],
-  );
+  return shouldDeliverAccountNotificationEventForSettings(eventKey, settings);
 }
 
 export async function filterNotificationInputsByAccountSettings(

@@ -173,14 +173,21 @@ describe("Account Notifications Page", () => {
     await waitFor(() => {
       expect(
         screen.getByText(
-          "Enabled for assignments, status changes, and 1 other",
+          "Enabled for assignments, status changes, and 9 others",
         ),
       ).toBeInTheDocument();
     });
     expect(
       screen.getByText("Enabled for all notifications"),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("Disabled")).toHaveLength(2);
+    expect(
+      screen.getByText("Enabled for assignments, mentions, and 4 others"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Enabled for mentions, comments and replies, and 3 others",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("renders Updates from Linear section", async () => {

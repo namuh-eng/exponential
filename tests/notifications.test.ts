@@ -1,4 +1,5 @@
 import {
+  ACCOUNT_NOTIFICATION_EVENTS,
   type AccountNotificationSettings,
   DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS,
 } from "@/lib/account-notifications";
@@ -10,6 +11,7 @@ import {
   extractMentionTokens,
   filterNotificationInputsByAccountSettings,
   resolveMentionedUserIdsFromCandidates,
+  shouldDeliverAccountNotificationEventForSettings,
   shouldDeliverNotificationForSettings,
 } from "@/lib/notifications";
 import { inArray } from "drizzle-orm";
@@ -18,6 +20,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 const DISABLED_USER_ID = "notif-pref-disabled-user";
 const ENABLED_USER_ID = "notif-pref-enabled-user";
 const ACTOR_USER_ID = "notif-pref-actor-user";
+
+function allEventsDisabled(): AccountNotificationSettings["channels"]["desktop"]["events"] {
+  return Object.fromEntries(
+    ACCOUNT_NOTIFICATION_EVENTS.map((eventKey) => [eventKey, false]),
+  ) as AccountNotificationSettings["channels"]["desktop"]["events"];
+}
 
 function settingsWithEventEnabled(
   eventKey: keyof AccountNotificationSettings["channels"]["desktop"]["events"],
@@ -28,37 +36,13 @@ function settingsWithEventEnabled(
     channels: {
       desktop: {
         events: {
-          assignments: false,
-          statusChanges: false,
-          mentions: false,
-          comments: false,
+          ...allEventsDisabled(),
           [eventKey]: enabled,
         },
       },
-      mobile: {
-        events: {
-          assignments: false,
-          statusChanges: false,
-          mentions: false,
-          comments: false,
-        },
-      },
-      email: {
-        events: {
-          assignments: false,
-          statusChanges: false,
-          mentions: false,
-          comments: false,
-        },
-      },
-      slack: {
-        events: {
-          assignments: false,
-          statusChanges: false,
-          mentions: false,
-          comments: false,
-        },
-      },
+      mobile: { events: allEventsDisabled() },
+      email: { events: allEventsDisabled() },
+      slack: { events: allEventsDisabled() },
     },
   };
 }
@@ -219,9 +203,41 @@ describe("notification preference enforcement", () => {
     expect(
       shouldDeliverNotificationForSettings(
         "duplicate",
-        settingsWithEventEnabled("comments", false),
+        settingsWithEventEnabled("relations", false),
+      ),
+    ).toBe(false);
+    expect(
+      shouldDeliverNotificationForSettings(
+        "duplicate",
+        settingsWithEventEnabled("relations", true),
       ),
     ).toBe(true);
+  });
+
+  it("checks expanded account event keys used by issue, project, and admin producers", () => {
+    for (const eventKey of [
+      "statusChanges",
+      "assignments",
+      "mentions",
+      "comments",
+      "dueDates",
+      "projectUpdates",
+      "teamUpdates",
+      "workspaceAdmin",
+    ] as const) {
+      expect(
+        shouldDeliverAccountNotificationEventForSettings(
+          eventKey,
+          settingsWithEventEnabled(eventKey, false),
+        ),
+      ).toBe(false);
+      expect(
+        shouldDeliverAccountNotificationEventForSettings(
+          eventKey,
+          settingsWithEventEnabled(eventKey, true),
+        ),
+      ).toBe(true);
+    }
   });
 
   it("filters persisted notification delivery by recipient account settings", async () => {
