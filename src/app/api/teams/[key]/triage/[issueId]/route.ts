@@ -2,10 +2,34 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issue, workflowState } from "@/lib/db/schema";
 import { findAccessibleTeam } from "@/lib/teams";
-import { and, asc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
-// Accept or decline a triage issue
+const ACCEPT_DESTINATION_CATEGORIES = new Set([
+  "backlog",
+  "unstarted",
+  "started",
+  "completed",
+]);
+
+type TriageAction = "accept" | "decline";
+
+interface TriageDecisionBody {
+  action?: TriageAction;
+  destinationStateId?: string;
+  confirmed?: boolean;
+  reason?: string;
+}
+
+async function readDecisionBody(request: Request) {
+  try {
+    return (await request.json()) as TriageDecisionBody;
+  } catch {
+    return {};
+  }
+}
+
+// Accept or decline a triage issue after an explicit guarded decision.
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ key: string; issueId: string }> },
@@ -16,8 +40,7 @@ export async function PATCH(
   }
 
   const { key, issueId } = await params;
-  const body = await request.json();
-  const action = body.action as "accept" | "decline";
+  const body = await readDecisionBody(request);
 
   const teamRecord = await findAccessibleTeam(key, session.user.id, {
     request,
@@ -26,77 +49,118 @@ export async function PATCH(
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
-  if (action === "accept") {
-    // Move to first backlog state
-    const backlogStates = await db
-      .select({ id: workflowState.id })
-      .from(workflowState)
-      .where(
-        and(
-          eq(workflowState.teamId, teamRecord.id),
-          eq(workflowState.category, "backlog"),
-        ),
-      )
-      .orderBy(asc(workflowState.position))
-      .limit(1);
-
-    if (backlogStates.length === 0) {
-      return NextResponse.json(
-        { error: "No backlog state found" },
-        { status: 400 },
-      );
-    }
-
-    const updated = await db
-      .update(issue)
-      .set({ stateId: backlogStates[0].id, updatedAt: new Date() })
-      .where(and(eq(issue.id, issueId), eq(issue.teamId, teamRecord.id)))
-      .returning();
-
-    if (updated.length === 0) {
-      return NextResponse.json({ error: "Issue not found" }, { status: 404 });
-    }
-
-    return NextResponse.json(updated[0]);
+  if (body.action !== "accept" && body.action !== "decline") {
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   }
 
-  if (action === "decline") {
-    // Move to first canceled state
-    const canceledStates = await db
-      .select({ id: workflowState.id })
-      .from(workflowState)
-      .where(
-        and(
-          eq(workflowState.teamId, teamRecord.id),
-          eq(workflowState.category, "canceled"),
-        ),
-      )
-      .orderBy(asc(workflowState.position))
-      .limit(1);
-
-    if (canceledStates.length === 0) {
-      return NextResponse.json(
-        { error: "No canceled state found" },
-        { status: 400 },
-      );
-    }
-
-    const updated = await db
-      .update(issue)
-      .set({
-        stateId: canceledStates[0].id,
-        canceledAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(issue.id, issueId), eq(issue.teamId, teamRecord.id)))
-      .returning();
-
-    if (updated.length === 0) {
-      return NextResponse.json({ error: "Issue not found" }, { status: 404 });
-    }
-
-    return NextResponse.json(updated[0]);
+  if (!body.destinationStateId) {
+    return NextResponse.json(
+      { error: "Destination status is required" },
+      { status: 400 },
+    );
   }
 
-  return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+  if (body.confirmed !== true) {
+    return NextResponse.json(
+      { error: "Decision confirmation is required" },
+      { status: 400 },
+    );
+  }
+
+  const existingIssues = await db
+    .select({
+      id: issue.id,
+      teamId: issue.teamId,
+      stateId: issue.stateId,
+      stateCategory: workflowState.category,
+    })
+    .from(issue)
+    .innerJoin(workflowState, eq(issue.stateId, workflowState.id))
+    .where(and(eq(issue.id, issueId), eq(issue.teamId, teamRecord.id)))
+    .limit(1);
+
+  const existingIssue = existingIssues[0];
+  if (!existingIssue) {
+    return NextResponse.json({ error: "Issue not found" }, { status: 404 });
+  }
+
+  if (existingIssue.stateCategory !== "triage") {
+    return NextResponse.json(
+      { error: "Issue is not currently in triage" },
+      { status: 409 },
+    );
+  }
+
+  const destinationStates = await db
+    .select({
+      id: workflowState.id,
+      name: workflowState.name,
+      category: workflowState.category,
+      teamId: workflowState.teamId,
+    })
+    .from(workflowState)
+    .where(
+      and(
+        eq(workflowState.id, body.destinationStateId),
+        eq(workflowState.teamId, teamRecord.id),
+      ),
+    )
+    .limit(1);
+
+  const destinationState = destinationStates[0];
+  if (!destinationState) {
+    return NextResponse.json(
+      { error: "Destination status not found for this team" },
+      { status: 400 },
+    );
+  }
+
+  const destinationAllowed =
+    body.action === "accept"
+      ? ACCEPT_DESTINATION_CATEGORIES.has(destinationState.category)
+      : destinationState.category === "canceled";
+
+  if (!destinationAllowed) {
+    return NextResponse.json(
+      { error: "Destination status is not allowed for this triage decision" },
+      { status: 400 },
+    );
+  }
+
+  const now = new Date();
+  const updated = await db
+    .update(issue)
+    .set({
+      stateId: destinationState.id,
+      canceledAt: body.action === "decline" ? now : null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(issue.id, issueId),
+        eq(issue.teamId, teamRecord.id),
+        eq(issue.stateId, existingIssue.stateId),
+      ),
+    )
+    .returning();
+
+  if (updated.length === 0) {
+    return NextResponse.json(
+      { error: "Issue left triage before the decision completed" },
+      { status: 409 },
+    );
+  }
+
+  return NextResponse.json({
+    issue: updated[0],
+    decision: {
+      action: body.action,
+      destinationState: {
+        id: destinationState.id,
+        name: destinationState.name,
+        category: destinationState.category,
+      },
+      reason: body.reason?.trim() || null,
+    },
+  });
 }

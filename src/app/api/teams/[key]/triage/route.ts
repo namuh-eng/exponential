@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { issue, project, user, workflowState } from "@/lib/db/schema";
 import { getLabelsForIssues } from "@/lib/issue-labels";
 import { findAccessibleTeam } from "@/lib/teams";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -101,6 +101,26 @@ export async function GET(
     )
     .orderBy(desc(issue.createdAt));
 
+  const decisionStates = await db
+    .select({
+      id: workflowState.id,
+      name: workflowState.name,
+      category: workflowState.category,
+      color: workflowState.color,
+      position: workflowState.position,
+      isDefault: workflowState.isDefault,
+    })
+    .from(workflowState)
+    .where(eq(workflowState.teamId, teamRecord.id))
+    .orderBy(asc(workflowState.position), asc(workflowState.name));
+
+  const acceptDestinationStates = decisionStates.filter((state) =>
+    ["backlog", "unstarted", "started", "completed"].includes(state.category),
+  );
+  const declineDestinationStates = decisionStates.filter(
+    (state) => state.category === "canceled",
+  );
+
   // Get labels for issues
   const issueIds = issues.map((i) => i.id);
   const labelsMap = await getLabelsForIssues(issueIds);
@@ -136,5 +156,7 @@ export async function GET(
     createStateId: triageStateIds[0] ?? null,
     createStateName: triageStates[0]?.name ?? null,
     triageEnabled: teamRecord.triageEnabled ?? true,
+    acceptDestinationStates,
+    declineDestinationStates,
   });
 }

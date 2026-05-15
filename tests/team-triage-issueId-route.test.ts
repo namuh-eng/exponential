@@ -2,8 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getSessionMock = vi.fn();
 const findAccessibleTeamMock = vi.fn();
-const statesLimitMock = vi.fn();
+const updateSetMock = vi.fn();
 const updateReturningMock = vi.fn();
+let selectResults: unknown[][] = [];
+
+function nextSelectResult() {
+  return selectResults.shift() ?? [];
+}
 
 vi.mock("@/lib/auth", () => ({
   auth: {
@@ -19,21 +24,21 @@ vi.mock("@/lib/teams", () => ({
 
 vi.mock("@/lib/db", () => ({
   db: {
-    select: vi.fn(() => ({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          orderBy: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue(statesLimitMock()),
-          }),
-        }),
-      }),
-    })),
+    select: vi.fn(() => {
+      const chain = {
+        from: vi.fn(() => chain),
+        innerJoin: vi.fn(() => chain),
+        where: vi.fn(() => chain),
+        limit: vi.fn(() => Promise.resolve(nextSelectResult())),
+      };
+      return chain;
+    }),
     update: vi.fn(() => ({
-      set: vi.fn().mockReturnValue({
+      set: updateSetMock.mockImplementation(() => ({
         where: vi.fn().mockReturnValue({
           returning: vi.fn().mockResolvedValue(updateReturningMock()),
         }),
-      }),
+      })),
     })),
   },
 }));
@@ -42,10 +47,32 @@ vi.mock("next/headers", () => ({
   headers: async () => new Headers(),
 }));
 
-describe("team triage issue actions route", () => {
+const triageIssue = {
+  id: "issue-1",
+  teamId: "team-1",
+  stateId: "state-triage",
+  stateCategory: "triage",
+};
+
+const backlogDestination = {
+  id: "state-backlog",
+  name: "Accepted",
+  category: "backlog",
+  teamId: "team-1",
+};
+
+const canceledDestination = {
+  id: "state-canceled",
+  name: "Declined",
+  category: "canceled",
+  teamId: "team-1",
+};
+
+describe("team triage issue route", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    selectResults = [[triageIssue], [backlogDestination]];
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
     findAccessibleTeamMock.mockResolvedValue({
       id: "team-1",
@@ -53,9 +80,8 @@ describe("team triage issue actions route", () => {
       key: "ENG",
       workspaceId: "workspace-1",
     });
-    statesLimitMock.mockReturnValue([{ id: "state-target" }]);
     updateReturningMock.mockReturnValue([
-      { id: "issue-1", stateId: "state-target" },
+      { id: "issue-1", stateId: "state-backlog" },
     ]);
   });
 
@@ -84,7 +110,11 @@ describe("team triage issue actions route", () => {
     const response = await PATCH(
       new Request("http://localhost", {
         method: "PATCH",
-        body: JSON.stringify({ action: "accept" }),
+        body: JSON.stringify({
+          action: "accept",
+          destinationStateId: "state-backlog",
+          confirmed: true,
+        }),
       }),
       {
         params: Promise.resolve({ key: "MISSING", issueId: "issue-1" }),
@@ -94,7 +124,7 @@ describe("team triage issue actions route", () => {
     expect(response.status).toBe(404);
   });
 
-  it("accepts a triage issue", async () => {
+  it("requires an explicit destination status", async () => {
     const { PATCH } = await import(
       "@/app/api/teams/[key]/triage/[issueId]/route"
     );
@@ -102,19 +132,18 @@ describe("team triage issue actions route", () => {
     const response = await PATCH(
       new Request("http://localhost", {
         method: "PATCH",
-        body: JSON.stringify({ action: "accept" }),
+        body: JSON.stringify({ action: "accept", confirmed: true }),
       }),
       {
         params: Promise.resolve({ key: "ENG", issueId: "issue-1" }),
       },
     );
 
-    expect(response.status).toBe(200);
-    const payload = await response.json();
-    expect(payload.stateId).toBe("state-target");
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/Destination/);
   });
 
-  it("declines a triage issue", async () => {
+  it("requires explicit confirmation", async () => {
     const { PATCH } = await import(
       "@/app/api/teams/[key]/triage/[issueId]/route"
     );
@@ -122,7 +151,33 @@ describe("team triage issue actions route", () => {
     const response = await PATCH(
       new Request("http://localhost", {
         method: "PATCH",
-        body: JSON.stringify({ action: "decline" }),
+        body: JSON.stringify({
+          action: "decline",
+          destinationStateId: "state-canceled",
+        }),
+      }),
+      {
+        params: Promise.resolve({ key: "ENG", issueId: "issue-1" }),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/confirmation/);
+  });
+
+  it("accepts a triage issue into the requested allowed destination", async () => {
+    const { PATCH } = await import(
+      "@/app/api/teams/[key]/triage/[issueId]/route"
+    );
+
+    const response = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({
+          action: "accept",
+          destinationStateId: "state-backlog",
+          confirmed: true,
+        }),
       }),
       {
         params: Promise.resolve({ key: "ENG", issueId: "issue-1" }),
@@ -131,6 +186,115 @@ describe("team triage issue actions route", () => {
 
     expect(response.status).toBe(200);
     const payload = await response.json();
-    expect(payload.stateId).toBe("state-target");
+    expect(payload.issue.stateId).toBe("state-backlog");
+    expect(payload.decision.destinationState.id).toBe("state-backlog");
+    expect(updateSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({ stateId: "state-backlog", canceledAt: null }),
+    );
+  });
+
+  it("declines a triage issue into the requested canceled destination", async () => {
+    selectResults = [[triageIssue], [canceledDestination]];
+    updateReturningMock.mockReturnValue([
+      { id: "issue-1", stateId: "state-canceled" },
+    ]);
+    const { PATCH } = await import(
+      "@/app/api/teams/[key]/triage/[issueId]/route"
+    );
+
+    const response = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({
+          action: "decline",
+          destinationStateId: "state-canceled",
+          confirmed: true,
+          reason: "Duplicate request",
+        }),
+      }),
+      {
+        params: Promise.resolve({ key: "ENG", issueId: "issue-1" }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.issue.stateId).toBe("state-canceled");
+    expect(payload.decision.reason).toBe("Duplicate request");
+    expect(updateSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({ stateId: "state-canceled" }),
+    );
+  });
+
+  it("rejects decisions for issues that are not currently in triage", async () => {
+    selectResults = [[{ ...triageIssue, stateCategory: "backlog" }]];
+    const { PATCH } = await import(
+      "@/app/api/teams/[key]/triage/[issueId]/route"
+    );
+
+    const response = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({
+          action: "accept",
+          destinationStateId: "state-backlog",
+          confirmed: true,
+        }),
+      }),
+      {
+        params: Promise.resolve({ key: "ENG", issueId: "issue-1" }),
+      },
+    );
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).error).toMatch(/not currently in triage/);
+  });
+
+  it("rejects destination statuses outside the team", async () => {
+    selectResults = [[triageIssue], []];
+    const { PATCH } = await import(
+      "@/app/api/teams/[key]/triage/[issueId]/route"
+    );
+
+    const response = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({
+          action: "accept",
+          destinationStateId: "state-other-team",
+          confirmed: true,
+        }),
+      }),
+      {
+        params: Promise.resolve({ key: "ENG", issueId: "issue-1" }),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/not found/);
+  });
+
+  it("rejects destinations that are not allowed for the action", async () => {
+    selectResults = [[triageIssue], [canceledDestination]];
+    const { PATCH } = await import(
+      "@/app/api/teams/[key]/triage/[issueId]/route"
+    );
+
+    const response = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({
+          action: "accept",
+          destinationStateId: "state-canceled",
+          confirmed: true,
+        }),
+      }),
+      {
+        params: Promise.resolve({ key: "ENG", issueId: "issue-1" }),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/not allowed/);
   });
 });

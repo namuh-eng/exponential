@@ -82,6 +82,29 @@ test.describe("Team triage detail review", () => {
           createStateId: "state-triage",
           createStateName: "Triage",
           triageEnabled: true,
+          acceptDestinationStates: [
+            {
+              id: "state-backlog",
+              name: "Backlog",
+              category: "backlog",
+              color: "#6b6f76",
+              isDefault: true,
+            },
+            {
+              id: "state-ready",
+              name: "Ready",
+              category: "unstarted",
+              color: "#5e6ad2",
+            },
+          ],
+          declineDestinationStates: [
+            {
+              id: "state-canceled",
+              name: "Canceled",
+              category: "canceled",
+              color: "#95a2b3",
+            },
+          ],
         }),
       });
     });
@@ -90,6 +113,8 @@ test.describe("Team triage detail review", () => {
       expect(route.request().method()).toBe("PATCH");
       expect(await route.request().postDataJSON()).toEqual({
         action: "accept",
+        destinationStateId: "state-ready",
+        confirmed: true,
       });
       accepted = true;
       await route.fulfill({
@@ -149,6 +174,15 @@ test.describe("Team triage detail review", () => {
     await expect(row).toHaveAttribute("aria-current", "true");
 
     await page.getByRole("button", { name: "Accept", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByText("Accept triage issue")).toBeVisible();
+    await page
+      .getByRole("combobox", { name: "Triage destination status" })
+      .selectOption("state-ready");
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Accept issue" })
+      .click();
     await expect(page.getByText("No issues to triage")).toBeVisible();
     await expect(
       page.getByText("Review incoming customer escalation"),

@@ -41,6 +41,29 @@ function buildTriageResponse(overrides: Record<string, unknown> = {}) {
     count: 2,
     createStateId: "state-triage",
     createStateName: "Triage",
+    acceptDestinationStates: [
+      {
+        id: "state-backlog",
+        name: "Backlog",
+        category: "backlog",
+        color: "#6b6f76",
+        isDefault: true,
+      },
+      {
+        id: "state-ready",
+        name: "Ready",
+        category: "unstarted",
+        color: "#5e6ad2",
+      },
+    ],
+    declineDestinationStates: [
+      {
+        id: "state-canceled",
+        name: "Canceled",
+        category: "canceled",
+        color: "#95a2b3",
+      },
+    ],
     issues: [
       makeTriageIssue({
         id: "issue-1",
@@ -238,7 +261,14 @@ describe("TeamTriagePage", () => {
 
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ id: "issue-1" }),
+          json: () =>
+            Promise.resolve({
+              issue: { id: "issue-1", stateId: "state-ready" },
+              decision: {
+                action: "accept",
+                destinationState: { id: "state-ready", name: "Ready" },
+              },
+            }),
         });
       }
 
@@ -271,17 +301,104 @@ describe("TeamTriagePage", () => {
     expect(screen.getAllByText("2 issues to triage")).toHaveLength(2);
   });
 
-  it("refreshes the triage list after accepting an issue", async () => {
+  it("opens a guarded decision dialog before accepting an issue", async () => {
     render(<TeamTriagePage />);
 
     await screen.findAllByTestId("triage-row");
     fireEvent.click(screen.getAllByLabelText("Accept issue")[1]);
+
+    expect(await screen.findByRole("dialog")).toBeDefined();
+    expect(screen.getByText("Accept triage issue")).toBeDefined();
+    expect(
+      screen.getByRole("combobox", { name: "Triage destination status" }),
+    ).toBeDefined();
+    expect(screen.getByText("Fix login button alignment")).toBeDefined();
+  });
+
+  it("refreshes the triage list after confirming an accept destination", async () => {
+    render(<TeamTriagePage />);
+
+    await screen.findAllByTestId("triage-row");
+    fireEvent.click(screen.getAllByLabelText("Accept issue")[1]);
+    fireEvent.change(
+      await screen.findByRole("combobox", {
+        name: "Triage destination status",
+      }),
+      { target: { value: "state-ready" } },
+    );
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Accept issue",
+      }),
+    );
 
     await waitFor(() => {
       expect(screen.queryByText("Fix login button alignment")).toBeNull();
     });
 
     expect(screen.getByText("Secondary triage state issue")).toBeDefined();
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/teams/ENG/triage/issue-1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          action: "accept",
+          destinationStateId: "state-ready",
+          confirmed: true,
+        }),
+      }),
+    );
+  });
+
+  it("keeps a failed triage decision visible with an error", async () => {
+    vi.mocked(global.fetch).mockImplementation((input, init) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/teams/ENG/triage") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(buildTriageResponse()),
+        } as Response);
+      }
+
+      if (url === "/api/teams/ENG/triage/issue-1" && init?.method === "PATCH") {
+        return Promise.resolve({
+          ok: false,
+          json: () =>
+            Promise.resolve({ error: "Destination status is not allowed" }),
+        } as Response);
+      }
+
+      return Promise.reject(new Error(`Unhandled fetch: ${url}`));
+    });
+
+    render(<TeamTriagePage />);
+
+    await screen.findAllByTestId("triage-row");
+    fireEvent.click(screen.getAllByLabelText("Accept issue")[1]);
+    fireEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", {
+        name: "Accept issue",
+      }),
+    );
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Destination status is not allowed",
+    );
+    expect(screen.getByText("Fix login button alignment")).toBeDefined();
+  });
+
+  it("requires explicit confirmation before declining an issue", async () => {
+    render(<TeamTriagePage />);
+
+    await screen.findAllByTestId("triage-row");
+    fireEvent.click(screen.getAllByLabelText("Decline issue")[1]);
+
+    expect(await screen.findByRole("dialog")).toBeDefined();
+    expect(screen.getByText("Decline triage issue")).toBeDefined();
+    expect(
+      screen.getByRole("textbox", { name: "Decline reason" }),
+    ).toBeDefined();
+    expect(screen.getByText("Fix login button alignment")).toBeDefined();
   });
 
   it("shows disabled triage state instead of active queue controls", async () => {

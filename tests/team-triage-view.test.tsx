@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -27,6 +28,24 @@ const mockTriageData = {
   count: 2,
   createStateId: "s-triage",
   createStateName: "Triage",
+  acceptDestinationStates: [
+    {
+      id: "s-backlog",
+      name: "Backlog",
+      category: "backlog",
+      color: "#999",
+      isDefault: true,
+    },
+  ],
+  declineDestinationStates: [
+    {
+      id: "s-canceled",
+      name: "Canceled",
+      category: "canceled",
+      color: "#999",
+      isDefault: true,
+    },
+  ],
   issues: [
     {
       id: "iss-1",
@@ -146,6 +165,11 @@ describe("TeamTriagePage UI", () => {
 
     fireEvent.click(screen.getAllByTestId("triage-row")[0]);
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    fireEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", {
+        name: "Accept issue",
+      }),
+    );
 
     await waitFor(() => {
       expect(screen.queryByTestId("issue-detail-view")).not.toBeInTheDocument();
@@ -156,7 +180,11 @@ describe("TeamTriagePage UI", () => {
       "/api/teams/ENG/triage/iss-2",
       expect.objectContaining({
         method: "PATCH",
-        body: JSON.stringify({ action: "accept" }),
+        body: JSON.stringify({
+          action: "accept",
+          destinationStateId: "s-backlog",
+          confirmed: true,
+        }),
       }),
     );
     expect(screen.getAllByText(/1 issue to triage/i).length).toBeGreaterThan(0);
@@ -191,6 +219,12 @@ describe("TeamTriagePage UI", () => {
     });
     // ENG-1 is index 1 because of default created-desc sort
     fireEvent.click(acceptButtons[1]);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Accept issue",
+      }),
+    );
 
     await waitFor(() => {
       const calls = fetchSpy.mock.calls;
@@ -201,7 +235,11 @@ describe("TeamTriagePage UI", () => {
       if (patchCall) {
         expect(patchCall[1]).toMatchObject({
           method: "PATCH",
-          body: JSON.stringify({ action: "accept" }),
+          body: JSON.stringify({
+            action: "accept",
+            destinationStateId: "s-backlog",
+            confirmed: true,
+          }),
         });
       }
     });
@@ -236,6 +274,12 @@ describe("TeamTriagePage UI", () => {
     });
     // ENG-2 is index 0
     fireEvent.click(declineButtons[0]);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Decline issue",
+      }),
+    );
 
     await waitFor(() => {
       const calls = fetchSpy.mock.calls;
@@ -246,7 +290,11 @@ describe("TeamTriagePage UI", () => {
       if (patchCall) {
         expect(patchCall[1]).toMatchObject({
           method: "PATCH",
-          body: JSON.stringify({ action: "decline" }),
+          body: JSON.stringify({
+            action: "decline",
+            destinationStateId: "s-canceled",
+            confirmed: true,
+          }),
         });
       }
     });

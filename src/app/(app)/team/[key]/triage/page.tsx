@@ -46,6 +46,15 @@ interface TriageIssue {
   teamId?: string | null;
 }
 
+interface TriageDestinationState {
+  id: string;
+  name: string;
+  category: string;
+  color: string;
+  position?: number;
+  isDefault?: boolean | null;
+}
+
 interface TriageResponse {
   team: { id: string; name: string; key: string };
   issues: TriageIssue[];
@@ -53,6 +62,15 @@ interface TriageResponse {
   createStateId: string | null;
   createStateName: string | null;
   triageEnabled?: boolean;
+  acceptDestinationStates?: TriageDestinationState[];
+  declineDestinationStates?: TriageDestinationState[];
+}
+
+type TriageDecisionAction = "accept" | "decline";
+
+interface PendingTriageDecision {
+  action: TriageDecisionAction;
+  issue: TriageIssue;
 }
 
 export default function TeamTriagePage() {
@@ -68,6 +86,12 @@ export default function TeamTriagePage() {
     "created-desc",
   );
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const [pendingDecision, setPendingDecision] =
+    useState<PendingTriageDecision | null>(null);
+  const [decisionDestinationId, setDecisionDestinationId] = useState("");
+  const [decisionReason, setDecisionReason] = useState("");
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [decisionSubmitting, setDecisionSubmitting] = useState(false);
 
   const fetchTriage = useCallback(async () => {
     setLoading(true);
@@ -131,35 +155,115 @@ export default function TeamTriagePage() {
     setSelectedIssueId((current) => (current === issueId ? null : current));
   }, []);
 
-  const handleAccept = useCallback(
-    async (issueId: string) => {
-      const res = await fetch(`/api/teams/${params.key}/triage/${issueId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "accept" }),
-      });
-      if (res.ok) {
-        removeAcceptedOrDeclinedIssue(issueId);
-        void fetchTriage();
+  const openDecision = useCallback(
+    (action: TriageDecisionAction, issueId: string) => {
+      const issue = data?.issues.find(
+        (currentIssue) => currentIssue.id === issueId,
+      );
+      if (!issue) {
+        return;
       }
+
+      const destinationStates =
+        action === "accept"
+          ? (data?.acceptDestinationStates ?? [])
+          : (data?.declineDestinationStates ?? []);
+      const defaultDestination =
+        destinationStates.find((state) => state.isDefault) ??
+        destinationStates[0] ??
+        null;
+
+      setPendingDecision({ action, issue });
+      setDecisionDestinationId(defaultDestination?.id ?? "");
+      setDecisionReason("");
+      setDecisionError(null);
     },
-    [params.key, fetchTriage, removeAcceptedOrDeclinedIssue],
+    [
+      data?.acceptDestinationStates,
+      data?.declineDestinationStates,
+      data?.issues,
+    ],
+  );
+
+  const handleAccept = useCallback(
+    (issueId: string) => openDecision("accept", issueId),
+    [openDecision],
   );
 
   const handleDecline = useCallback(
-    async (issueId: string) => {
-      const res = await fetch(`/api/teams/${params.key}/triage/${issueId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "decline" }),
-      });
-      if (res.ok) {
-        removeAcceptedOrDeclinedIssue(issueId);
-        void fetchTriage();
-      }
-    },
-    [params.key, fetchTriage, removeAcceptedOrDeclinedIssue],
+    (issueId: string) => openDecision("decline", issueId),
+    [openDecision],
   );
+
+  const closeDecision = useCallback(() => {
+    if (decisionSubmitting) {
+      return;
+    }
+
+    setPendingDecision(null);
+    setDecisionError(null);
+    setDecisionReason("");
+    setDecisionDestinationId("");
+  }, [decisionSubmitting]);
+
+  const confirmDecision = useCallback(async () => {
+    if (!pendingDecision) {
+      return;
+    }
+
+    if (!decisionDestinationId) {
+      setDecisionError("Choose a destination status before confirming.");
+      return;
+    }
+
+    setDecisionSubmitting(true);
+    setDecisionError(null);
+
+    try {
+      const res = await fetch(
+        `/api/teams/${params.key}/triage/${pendingDecision.issue.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: pendingDecision.action,
+            destinationStateId: decisionDestinationId,
+            confirmed: true,
+            reason: decisionReason.trim() || undefined,
+          }),
+        },
+      );
+
+      if (!res.ok) {
+        let message = "The triage decision could not be saved.";
+        try {
+          const payload = (await res.json()) as { error?: string };
+          message = payload.error ?? message;
+        } catch {
+          // Preserve the generic message when the API response is not JSON.
+        }
+        setDecisionError(message);
+        return;
+      }
+
+      removeAcceptedOrDeclinedIssue(pendingDecision.issue.id);
+      setPendingDecision(null);
+      setDecisionReason("");
+      setDecisionDestinationId("");
+      void fetchTriage();
+    } catch {
+      setDecisionError("Network error while saving the triage decision.");
+    } finally {
+      setDecisionSubmitting(false);
+    }
+  }, [
+    decisionDestinationId,
+    decisionReason,
+    fetchTriage,
+    params.key,
+    pendingDecision,
+    removeAcceptedOrDeclinedIssue,
+  ]);
 
   const filteredIssues = useMemo(() => {
     const issues = applyFilters(data?.issues ?? [], filters);
@@ -256,6 +360,134 @@ export default function TeamTriagePage() {
     </button>
   );
 
+  const decisionDestinationStates = pendingDecision
+    ? pendingDecision.action === "accept"
+      ? (data?.acceptDestinationStates ?? [])
+      : (data?.declineDestinationStates ?? [])
+    : [];
+
+  const decisionTitle = pendingDecision
+    ? pendingDecision.action === "accept"
+      ? "Accept triage issue"
+      : "Decline triage issue"
+    : "Triage decision";
+
+  const decisionButtonLabel = pendingDecision
+    ? pendingDecision.action === "accept"
+      ? "Accept issue"
+      : "Decline issue"
+    : "Confirm";
+
+  const decisionModal = pendingDecision ? (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+      role="presentation"
+    >
+      <dialog
+        aria-labelledby="triage-decision-title"
+        className="w-full max-w-[440px] rounded-lg border border-[var(--color-border)] bg-[var(--color-content-bg)] p-5 shadow-2xl"
+        open
+      >
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h2
+              className="text-[15px] font-semibold text-[var(--color-text-primary)]"
+              id="triage-decision-title"
+            >
+              {decisionTitle}
+            </h2>
+            <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
+              {pendingDecision.issue.identifier}: {pendingDecision.issue.title}
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Close triage decision"
+            disabled={decisionSubmitting}
+            onClick={closeDecision}
+            className="rounded p-1 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
+          >
+            ×
+          </button>
+        </div>
+
+        <p className="mb-4 text-[13px] text-[var(--color-text-secondary)]">
+          {pendingDecision.action === "accept"
+            ? "Confirm where this issue should enter the team workflow before it leaves triage."
+            : "Confirm the rejection destination before this issue leaves triage."}
+        </p>
+
+        <label className="mb-4 block text-[12px] font-medium text-[var(--color-text-secondary)]">
+          Destination status
+          <select
+            aria-label="Triage destination status"
+            value={decisionDestinationId}
+            disabled={
+              decisionSubmitting || decisionDestinationStates.length === 0
+            }
+            onChange={(event) => setDecisionDestinationId(event.target.value)}
+            className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none disabled:opacity-60"
+          >
+            {decisionDestinationStates.length === 0 ? (
+              <option value="">No destination statuses available</option>
+            ) : null}
+            {decisionDestinationStates.map((state) => (
+              <option key={state.id} value={state.id}>
+                {state.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {pendingDecision.action === "decline" ? (
+          <label className="mb-4 block text-[12px] font-medium text-[var(--color-text-secondary)]">
+            Rejection reason (optional)
+            <textarea
+              aria-label="Decline reason"
+              value={decisionReason}
+              disabled={decisionSubmitting}
+              onChange={(event) => setDecisionReason(event.target.value)}
+              className="mt-1 min-h-20 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none disabled:opacity-60"
+              placeholder="Add context for why this issue is being declined"
+            />
+          </label>
+        ) : null}
+
+        {decisionError ? (
+          <div
+            className="mb-4 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-[13px] text-red-300"
+            role="alert"
+          >
+            {decisionError}
+          </div>
+        ) : null}
+
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            disabled={decisionSubmitting}
+            onClick={closeDecision}
+            className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={decisionSubmitting || !decisionDestinationId}
+            onClick={() => void confirmDecision()}
+            className={`rounded-md px-3 py-1.5 text-[13px] font-medium text-white transition-colors disabled:opacity-50 ${
+              pendingDecision.action === "accept"
+                ? "bg-green-600 hover:bg-green-500"
+                : "bg-red-600 hover:bg-red-500"
+            }`}
+          >
+            {decisionSubmitting ? "Saving…" : decisionButtonLabel}
+          </button>
+        </div>
+      </dialog>
+    </div>
+  ) : null;
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center text-[var(--color-text-secondary)]">
@@ -347,6 +579,7 @@ export default function TeamTriagePage() {
             }}
           />
         </div>
+        {decisionModal}
         <CreateIssueModal
           open={showCreateIssue}
           onClose={() => setShowCreateIssue(false)}
@@ -485,6 +718,7 @@ export default function TeamTriagePage() {
         </div>
       </div>
 
+      {decisionModal}
       <CreateIssueModal
         open={showCreateIssue}
         onClose={() => setShowCreateIssue(false)}
