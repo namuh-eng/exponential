@@ -168,12 +168,16 @@ function StatusRow({
 function StatusDialog({
   dialog,
   saving,
+  allStatuses,
+  errorMessage,
   onClose,
   onSubmit,
   onDelete,
 }: {
   dialog: DialogState;
   saving: boolean;
+  allStatuses: StatusItem[];
+  errorMessage: string;
   onClose: () => void;
   onSubmit: (values: {
     name: string;
@@ -181,7 +185,7 @@ function StatusDialog({
     color: string;
     isDefault: boolean;
   }) => void;
-  onDelete: (status: StatusItem) => void;
+  onDelete: (status: StatusItem, replacementStatusId?: string) => void;
 }) {
   const [name, setName] = useState(
     dialog?.mode === "edit" ? dialog.status.name : "",
@@ -195,6 +199,7 @@ function StatusDialog({
   const [isDefault, setIsDefault] = useState(
     dialog?.mode === "edit" ? dialog.status.isDefault === true : false,
   );
+  const [replacementStatusId, setReplacementStatusId] = useState("");
 
   useEffect(() => {
     setName(dialog?.mode === "edit" ? dialog.status.name : "");
@@ -207,9 +212,23 @@ function StatusDialog({
     setIsDefault(
       dialog?.mode === "edit" ? dialog.status.isDefault === true : false,
     );
+    setReplacementStatusId("");
   }, [dialog]);
 
   if (!dialog) return null;
+
+  const replacementOptions =
+    dialog.mode === "edit"
+      ? allStatuses.filter((status) => status.id !== dialog.status.id)
+      : [];
+  const needsReplacement =
+    dialog.mode === "edit" &&
+    dialog.status.issueCount > 0 &&
+    dialog.status.isDefault !== true;
+  const deleteDisabled =
+    saving ||
+    (dialog.mode === "edit" && dialog.status.isDefault === true) ||
+    (needsReplacement && !replacementStatusId);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -262,16 +281,51 @@ function StatusDialog({
             Default status for this category
           </label>
         )}
+        {needsReplacement && (
+          <div className="mt-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+            <p className="text-[12px] text-[var(--color-text-secondary)]">
+              Deleting this status will move{" "}
+              {formatIssueCount(dialog.status.issueCount)} to another status.
+            </p>
+            <label className="mt-3 block text-[12px] font-medium text-[var(--color-text-secondary)]">
+              Move existing issues to
+              <select
+                value={replacementStatusId}
+                onChange={(event) => setReplacementStatusId(event.target.value)}
+                className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none"
+              >
+                <option value="">Select a replacement status</option>
+                {replacementOptions.map((status) => (
+                  <option key={status.id} value={status.id}>
+                    {status.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+        {dialog.mode === "edit" && dialog.status.isDefault === true && (
+          <p className="mt-3 text-[12px] text-[var(--color-text-tertiary)]">
+            Default statuses cannot be deleted. Choose another default before
+            removing this status.
+          </p>
+        )}
+        {errorMessage && (
+          <div className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-[12px] text-red-500">
+            {errorMessage}
+          </div>
+        )}
         <div className="mt-5 flex items-center justify-between gap-2">
           {dialog.mode === "edit" && (
             <button
               type="button"
-              disabled={
-                saving ||
-                dialog.status.issueCount > 0 ||
-                dialog.status.isDefault
+              disabled={deleteDisabled}
+              onClick={() =>
+                onDelete(
+                  dialog.status,
+                  needsReplacement ? replacementStatusId : undefined,
+                )
               }
-              onClick={() => onDelete(dialog.status)}
               className="rounded-md px-3 py-1.5 text-[12px] font-medium text-red-500 hover:bg-red-500/10 disabled:opacity-40"
             >
               Delete
@@ -308,6 +362,7 @@ export default function TeamIssueStatusesPage() {
   const [dialog, setDialog] = useState<DialogState>(null);
   const [duplicateStatus, setDuplicateStatus] = useState("");
   const [message, setMessage] = useState("");
+  const [mutationError, setMutationError] = useState("");
 
   const allStatuses = useMemo(
     () => CATEGORY_ORDER.flatMap((cat) => statuses?.[cat] ?? []),
@@ -341,10 +396,11 @@ export default function TeamIssueStatusesPage() {
   async function mutate(init: RequestInit, successMessage: string) {
     setSaving(true);
     setMessage("");
+    setMutationError("");
     const res = await fetch(`/api/teams/${teamKey}/statuses`, init);
     const data = await res.json();
     if (!res.ok) {
-      setMessage(data.error ?? "Unable to save statuses.");
+      setMutationError(data.error ?? "Unable to save statuses.");
       setSaving(false);
       return false;
     }
@@ -377,12 +433,15 @@ export default function TeamIssueStatusesPage() {
     if (ok) setDialog(null);
   }
 
-  async function handleDelete(status: StatusItem) {
+  async function handleDelete(
+    status: StatusItem,
+    replacementStatusId?: string,
+  ) {
     const ok = await mutate(
       {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: status.id }),
+        body: JSON.stringify({ id: status.id, replacementStatusId }),
       },
       "Status deleted.",
     );
@@ -462,9 +521,10 @@ export default function TeamIssueStatusesPage() {
           <div key={category}>
             <CategoryHeader
               category={category}
-              onAdd={(selectedCategory) =>
-                setDialog({ mode: "create", category: selectedCategory })
-              }
+              onAdd={(selectedCategory) => {
+                setMutationError("");
+                setDialog({ mode: "create", category: selectedCategory });
+              }}
             />
             {(statuses[category] || []).map(
               (status, index, categoryStatuses) => (
@@ -474,13 +534,14 @@ export default function TeamIssueStatusesPage() {
                   category={category}
                   canMoveUp={index > 0}
                   canMoveDown={index < categoryStatuses.length - 1}
-                  onEdit={(editCategory, editStatus) =>
+                  onEdit={(editCategory, editStatus) => {
+                    setMutationError("");
                     setDialog({
                       mode: "edit",
                       category: editCategory,
                       status: editStatus,
-                    })
-                  }
+                    });
+                  }}
                   onMove={handleMove}
                 />
               ),
@@ -516,6 +577,8 @@ export default function TeamIssueStatusesPage() {
       <StatusDialog
         dialog={dialog}
         saving={saving}
+        allStatuses={allStatuses}
+        errorMessage={dialog ? mutationError : ""}
         onClose={() => setDialog(null)}
         onSubmit={handleDialogSubmit}
         onDelete={handleDelete}
