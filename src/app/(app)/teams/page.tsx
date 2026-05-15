@@ -15,5 +15,11 @@ export default async function TeamsPage() {
     notFound();
   }
 
-  return <WorkspaceTeamsDirectory teams={data.teams} />;
+  return (
+    <WorkspaceTeamsDirectory
+      canManageTeams={data.canManageTeams}
+      teams={data.teams}
+      viewerRole={data.viewerRole}
+    />
+  );
 }
