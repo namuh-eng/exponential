@@ -8,7 +8,7 @@ interface ProjectLabel {
   name: string;
   color: string;
   description: string | null;
-  issueCount: number;
+  projectCount: number;
 }
 
 const LABEL_COLORS = [
@@ -158,7 +158,7 @@ export default function ProjectLabelsPage() {
 
   const fetchLabels = useCallback(() => {
     setErrorMessage(null);
-    fetch("/api/labels")
+    fetch("/api/project-labels")
       .then(async (res) => {
         if (!res.ok) {
           throw new Error("Failed to load labels");
@@ -189,7 +189,7 @@ export default function ProjectLabelsPage() {
     color: string;
     description: string;
   }) => {
-    const res = await fetch("/api/labels", {
+    const res = await fetch("/api/project-labels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, color, description }),
@@ -219,7 +219,7 @@ export default function ProjectLabelsPage() {
       return;
     }
 
-    const res = await fetch(`/api/labels/${id}`, {
+    const res = await fetch(`/api/project-labels/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, color, description }),
@@ -304,8 +304,8 @@ export default function ProjectLabelsPage() {
                 </div>
                 <div className="flex items-center gap-4">
                   <span className="text-[12px] text-[var(--color-text-tertiary)]">
-                    {label.issueCount}{" "}
-                    {label.issueCount === 1 ? "issue" : "issues"}
+                    {label.projectCount}{" "}
+                    {label.projectCount === 1 ? "project" : "projects"}
                   </span>
                   <button
                     type="button"

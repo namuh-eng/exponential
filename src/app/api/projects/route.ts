@@ -4,7 +4,15 @@ import {
 } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { issue, project, projectTeam, team, user } from "@/lib/db/schema";
+import {
+  issue,
+  project,
+  projectLabel,
+  projectTeam,
+  team,
+  user,
+} from "@/lib/db/schema";
+import { readProjectSettings } from "@/lib/project-detail";
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -53,6 +61,7 @@ export async function GET(request?: Request) {
       leadImage: user.image,
       startDate: project.startDate,
       targetDate: project.targetDate,
+      settings: project.settings,
       createdAt: project.createdAt,
     })
     .from(project)
@@ -66,6 +75,10 @@ export async function GET(request?: Request) {
   const projectTeamsMap: Record<
     string,
     { id: string; key: string; name: string }[]
+  > = {};
+  const projectLabelsMap: Record<
+    string,
+    { id: string; name: string; color: string }[]
   > = {};
 
   if (projectIds.length > 0) {
@@ -110,6 +123,39 @@ export async function GET(request?: Request) {
         name: row.teamName,
       });
     }
+
+    const selectedProjectLabelIds = [
+      ...new Set(
+        projects.flatMap((p) => readProjectSettings(p.settings).labelIds),
+      ),
+    ];
+    if (selectedProjectLabelIds.length > 0) {
+      const projectLabelRows = await db
+        .select({
+          id: projectLabel.id,
+          name: projectLabel.name,
+          color: projectLabel.color,
+        })
+        .from(projectLabel)
+        .where(
+          and(
+            eq(projectLabel.workspaceId, workspaceId),
+            inArray(projectLabel.id, selectedProjectLabelIds),
+          ),
+        );
+      const labelsById = new Map(
+        projectLabelRows.map((label) => [label.id, label]),
+      );
+
+      for (const p of projects) {
+        projectLabelsMap[p.id] = readProjectSettings(p.settings)
+          .labelIds.map((labelId) => labelsById.get(labelId))
+          .filter(
+            (label): label is { id: string; name: string; color: string } =>
+              Boolean(label),
+          );
+      }
+    }
   }
 
   const result = projects.map((p) => {
@@ -130,6 +176,7 @@ export async function GET(request?: Request) {
       health: "No updates",
       lead: p.leadName ? { name: p.leadName, image: p.leadImage } : null,
       teams: projectTeamsMap[p.id] ?? [],
+      labels: projectLabelsMap[p.id] ?? [],
       startDate: p.startDate,
       targetDate: p.targetDate,
       progress,
@@ -190,6 +237,15 @@ export async function POST(request: Request) {
         )
       : []),
   ].filter((value): value is string => Boolean(value));
+  const requestedLabelIds: string[] = Array.isArray(body.labelIds)
+    ? Array.from(
+        new Set(
+          (body.labelIds as unknown[]).filter(
+            (value): value is string => typeof value === "string",
+          ),
+        ),
+      )
+    : [];
 
   const linkedTeamsById = new Map<
     string,
@@ -232,6 +288,30 @@ export async function POST(request: Request) {
     linkedTeamsById.set(teamRecord.id, teamRecord);
   }
 
+  const linkedLabelIds = new Set<string>();
+  if (requestedLabelIds.length > 0) {
+    const labelRows = await db
+      .select({ id: projectLabel.id })
+      .from(projectLabel)
+      .where(
+        and(
+          eq(projectLabel.workspaceId, workspaceId),
+          inArray(projectLabel.id, requestedLabelIds),
+        ),
+      );
+
+    for (const labelRow of labelRows) {
+      linkedLabelIds.add(labelRow.id);
+    }
+
+    if (linkedLabelIds.size !== requestedLabelIds.length) {
+      return NextResponse.json(
+        { error: "Project label not found in active workspace" },
+        { status: 400 },
+      );
+    }
+  }
+
   let finalSlug = slug;
   let suffix = 2;
   const takenSlugs = new Set(
@@ -258,6 +338,10 @@ export async function POST(request: Request) {
         slug: finalSlug,
         workspaceId,
         leadId: session.user.id,
+        settings:
+          linkedLabelIds.size > 0
+            ? { labelIds: Array.from(linkedLabelIds) }
+            : undefined,
       })
       .returning();
 

@@ -355,6 +355,27 @@ export const label = pgTable(
   ],
 );
 
+// ─── Project Label ───────────────────────────────────────────────────
+
+export const projectLabel = pgTable(
+  "project_label",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 255 }).notNull(),
+    color: varchar("color", { length: 7 }).notNull().default("#6b6f76"),
+    description: text("description"),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("project_label_workspace_idx").on(t.workspaceId),
+    uniqueIndex("project_label_workspace_name_idx").on(t.workspaceId, t.name),
+  ],
+);
+
 // ─── Project ─────────────────────────────────────────────────────────
 
 export const project = pgTable(
@@ -911,6 +932,7 @@ export const workspaceRelations = relations(workspace, ({ many }) => ({
   invitations: many(workspaceInvitation),
   teams: many(team),
   labels: many(label),
+  projectLabels: many(projectLabel),
   projects: many(project),
   projectTemplates: many(projectTemplate),
   initiatives: many(initiative),
@@ -1052,6 +1074,13 @@ export const labelRelations = relations(label, ({ one, many }) => ({
   }),
   childLabels: many(label, { relationName: "parentLabel" }),
   issueLabels: many(issueLabel),
+}));
+
+export const projectLabelRelations = relations(projectLabel, ({ one }) => ({
+  workspace: one(workspace, {
+    fields: [projectLabel.workspaceId],
+    references: [workspace.id],
+  }),
 }));
 
 export const projectRelations = relations(project, ({ one, many }) => ({

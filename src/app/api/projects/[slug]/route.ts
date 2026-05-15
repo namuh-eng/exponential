@@ -7,6 +7,7 @@ import {
   label,
   member,
   project,
+  projectLabel,
   projectMember,
   projectMilestone,
   projectTeam,
@@ -162,10 +163,14 @@ async function buildProjectResponse(workspaceId: string | null, slug: string) {
       .where(eq(team.workspaceId, workspaceId))
       .orderBy(asc(team.name)),
     db
-      .select({ id: label.id, name: label.name, color: label.color })
-      .from(label)
-      .where(eq(label.workspaceId, workspaceId))
-      .orderBy(asc(label.name)),
+      .select({
+        id: projectLabel.id,
+        name: projectLabel.name,
+        color: projectLabel.color,
+      })
+      .from(projectLabel)
+      .where(eq(projectLabel.workspaceId, workspaceId))
+      .orderBy(asc(projectLabel.name)),
     db
       .select({
         id: issue.id,
@@ -427,9 +432,9 @@ export async function PATCH(
       .from(team)
       .where(eq(team.workspaceId, workspaceId)),
     db
-      .select({ id: label.id })
-      .from(label)
-      .where(eq(label.workspaceId, workspaceId)),
+      .select({ id: projectLabel.id })
+      .from(projectLabel)
+      .where(eq(projectLabel.workspaceId, workspaceId)),
     db
       .select({ userId: projectMember.userId })
       .from(projectMember)

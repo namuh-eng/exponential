@@ -3,6 +3,7 @@
 import { useAppShellContext } from "@/app/(app)/app-shell";
 import { Avatar } from "@/components/avatar";
 import { PriorityIcon } from "@/components/icons/priority-icon";
+import { LabelChip } from "@/components/label-chip";
 import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import Link from "next/link";
 
@@ -92,6 +93,7 @@ export interface ProjectRowProps {
   priority: ProjectPriority;
   health: string;
   lead: { name: string; image?: string } | null;
+  labels?: { id: string; name: string; color: string }[];
   targetDate: string | null;
   progress: number;
 }
@@ -104,6 +106,7 @@ export function ProjectRow({
   priority,
   health,
   lead,
+  labels = [],
   targetDate,
   progress,
 }: ProjectRowProps) {
@@ -126,7 +129,15 @@ export function ProjectRow({
 
       {/* Health */}
       <div className="w-[120px] shrink-0 text-[12px] text-[var(--color-text-secondary)]">
-        {health}
+        {labels.length > 0 ? (
+          <div className="flex min-w-0 flex-wrap gap-1">
+            {labels.slice(0, 2).map((label) => (
+              <LabelChip key={label.id} name={label.name} color={label.color} />
+            ))}
+          </div>
+        ) : (
+          health
+        )}
       </div>
 
       {/* Priority */}

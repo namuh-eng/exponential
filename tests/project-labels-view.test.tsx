@@ -26,14 +26,14 @@ describe("ProjectLabelsPage component", () => {
         name: "Roadmap",
         color: "#ff0000",
         description: "Strategic initiatives",
-        issueCount: 5,
+        projectCount: 5,
       },
       {
         id: "l2",
         name: "Internal",
         color: "#00ff00",
         description: null,
-        issueCount: 0,
+        projectCount: 0,
       },
     ],
   };
@@ -53,9 +53,9 @@ describe("ProjectLabelsPage component", () => {
     });
 
     expect(screen.getByText("Strategic initiatives")).toBeDefined();
-    expect(screen.getByText("5 issues")).toBeDefined();
+    expect(screen.getByText("5 projects")).toBeDefined();
     expect(screen.getByText("Internal")).toBeDefined();
-    expect(screen.getByText("0 issues")).toBeDefined();
+    expect(screen.getByText("0 projects")).toBeDefined();
     expect(screen.getAllByText("Edit")).toHaveLength(2);
   });
 
@@ -92,7 +92,7 @@ describe("ProjectLabelsPage component", () => {
               name: "Customer facing",
               color: "#3b82f6",
               description: "Visible roadmap",
-              issueCount: 0,
+              projectCount: 0,
             },
           ],
         }),
@@ -123,7 +123,7 @@ describe("ProjectLabelsPage component", () => {
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(
-        "/api/labels",
+        "/api/project-labels",
         expect.objectContaining({
           method: "POST",
           body: expect.stringContaining('"name":"Customer facing"'),
@@ -183,7 +183,7 @@ describe("ProjectLabelsPage component", () => {
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(
-        "/api/labels/l1",
+        "/api/project-labels/l1",
         expect.objectContaining({
           method: "PATCH",
           body: expect.stringContaining('"name":"Roadmap updated"'),

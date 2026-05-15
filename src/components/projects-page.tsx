@@ -17,6 +17,7 @@ interface ProjectData {
   health: string;
   lead: { name: string; image?: string | null } | null;
   teams: { id: string; key: string; name: string }[];
+  labels: { id: string; name: string; color: string }[];
   targetDate: string | null;
   progress: number;
   createdAt: string;
@@ -54,6 +55,10 @@ export function ProjectsPage({
     key: string;
     name: string;
   } | null>(null);
+  const [availableLabels, setAvailableLabels] = useState<
+    { id: string; name: string; color: string }[]
+  >([]);
+  const [labelFilterId, setLabelFilterId] = useState("all");
   const [loading, setLoading] = useState(true);
   const [loadState, setLoadState] = useState<"ready" | "not-found" | "error">(
     "ready",
@@ -95,6 +100,13 @@ export function ProjectsPage({
       if (res.ok) {
         const data = await res.json();
         setProjects(data.projects ?? []);
+        const labelsRes = await fetch("/api/project-labels");
+        if (labelsRes.ok) {
+          const labelsData = await labelsRes.json();
+          setAvailableLabels(labelsData.labels ?? []);
+        } else {
+          setAvailableLabels([]);
+        }
         setActiveTeam(teamRecord);
         setLoadState("ready");
         return;
@@ -247,9 +259,15 @@ export function ProjectsPage({
       return false;
     }
 
-    return viewState.statusFilter === "all"
-      ? true
-      : project.status === viewState.statusFilter;
+    const statusMatches =
+      viewState.statusFilter === "all"
+        ? true
+        : project.status === viewState.statusFilter;
+    const labelMatches =
+      labelFilterId === "all" ||
+      project.labels.some((label) => label.id === labelFilterId);
+
+    return statusMatches && labelMatches;
   });
 
   const visibleProjects = [...filteredProjects].sort((left, right) => {
@@ -311,6 +329,22 @@ export function ProjectsPage({
             <option value="paused">Paused</option>
             <option value="completed">Completed</option>
             <option value="canceled">Canceled</option>
+          </select>
+        </label>
+        <label className="mr-2 flex items-center gap-2 text-[12px] text-[var(--color-text-secondary)]">
+          <span>Label</span>
+          <select
+            aria-label="Filter projects by label"
+            value={labelFilterId}
+            onChange={(event) => setLabelFilterId(event.target.value)}
+            className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-2 py-1 text-[12px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+          >
+            <option value="all">All labels</option>
+            {availableLabels.map((label) => (
+              <option key={label.id} value={label.id}>
+                {label.name}
+              </option>
+            ))}
           </select>
         </label>
         <label className="mr-3 flex items-center gap-2 text-[12px] text-[var(--color-text-secondary)]">
@@ -419,6 +453,7 @@ export function ProjectsPage({
               }
               targetDate={project.targetDate}
               progress={project.progress}
+              labels={project.labels}
             />
           ))
         ) : (
@@ -427,12 +462,14 @@ export function ProjectsPage({
             description="Try a different status filter or sort order."
             action={{
               label: "Reset filters",
-              onClick: () =>
+              onClick: () => {
                 updateState({
                   statusFilter: "all",
                   sortBy: "created-desc",
                   teamId: null,
-                }),
+                });
+                setLabelFilterId("all");
+              },
             }}
           />
         )}
