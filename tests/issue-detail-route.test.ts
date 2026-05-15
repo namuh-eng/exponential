@@ -29,6 +29,7 @@ const normalizeIssueDescriptionHtmlMock = vi.fn();
 const buildNotificationValuesMock = vi.fn();
 const insertNotificationsMock = vi.fn();
 const resolveRequestWorkspaceIdMock = vi.fn();
+const getIssueSubscriptionSummaryMock = vi.fn();
 let selectCallCount = 0;
 
 vi.mock("@/lib/auth", () => ({
@@ -45,6 +46,10 @@ vi.mock("@/lib/issue-description", () => ({
 
 vi.mock("@/lib/active-workspace", () => ({
   resolveRequestWorkspaceId: resolveRequestWorkspaceIdMock,
+}));
+
+vi.mock("@/lib/issue-subscriptions", () => ({
+  getIssueSubscriptionSummary: getIssueSubscriptionSummaryMock,
 }));
 
 vi.mock("@/lib/notifications", () => ({
@@ -393,6 +398,10 @@ describe("issue detail route", () => {
       { type: "status_change", userId: "user-2" },
     ]);
     insertNotificationsMock.mockResolvedValue(undefined);
+    getIssueSubscriptionSummaryMock.mockResolvedValue({
+      subscribed: true,
+      watcherCount: 2,
+    });
   });
 
   it("returns 401 without a session", async () => {
@@ -463,6 +472,7 @@ describe("issue detail route", () => {
         },
       ],
       labels: [{ name: "Bug", color: "#f00" }],
+      subscription: { subscribed: true, watcherCount: 2 },
       reactions: [
         { emoji: "👍", count: 2, reactedByMe: true },
         { emoji: "🚀", count: 1, reactedByMe: false },

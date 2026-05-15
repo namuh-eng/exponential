@@ -3,6 +3,7 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { comment, commentAttachment, issue, team } from "@/lib/db/schema";
 import { insertIssueHistoryEvent } from "@/lib/issue-history";
+import { getIssueNotificationRecipients } from "@/lib/issue-subscriptions";
 import {
   buildNotificationValues,
   insertNotifications,
@@ -197,30 +198,30 @@ export async function POST(
       })),
     );
 
-    const mentionedSet = new Set(mentionedUserIds);
-    const genericRecipients = [
-      currentIssue.assigneeId,
-      currentIssue.creatorId,
-    ].filter((userId): userId is string => {
-      if (!userId) {
-        return false;
-      }
-
-      return !mentionedSet.has(userId);
+    const notifiedRecipients = await getIssueNotificationRecipients({
+      actorId: session.user.id,
+      issueId: currentIssue.id,
+      baseUserIds: [currentIssue.assigneeId, currentIssue.creatorId],
+      mentionedUserIds,
     });
+    const mentionedSet = new Set(mentionedUserIds);
 
     await insertNotifications([
       ...buildNotificationValues({
         type: "mentioned",
         actorId: session.user.id,
         issueId: currentIssue.id,
-        userIds: mentionedUserIds,
+        userIds: notifiedRecipients.filter((userId) =>
+          mentionedSet.has(userId),
+        ),
       }),
       ...buildNotificationValues({
         type: "comment",
         actorId: session.user.id,
         issueId: currentIssue.id,
-        userIds: genericRecipients,
+        userIds: notifiedRecipients.filter(
+          (userId) => !mentionedSet.has(userId),
+        ),
       }),
     ]);
 

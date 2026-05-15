@@ -638,6 +638,27 @@ export const comment = pgTable(
 
 // ─── Reaction ────────────────────────────────────────────────────────
 
+export const issueSubscription = pgTable(
+  "issue_subscription",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    issueId: uuid("issue_id")
+      .notNull()
+      .references(() => issue.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    subscribed: boolean("subscribed").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("issue_subscription_issue_user_idx").on(t.issueId, t.userId),
+    index("issue_subscription_issue_idx").on(t.issueId),
+    index("issue_subscription_user_idx").on(t.userId),
+  ],
+);
+
 export const issueReaction = pgTable(
   "issue_reaction",
   {
@@ -962,6 +983,7 @@ export const issueRelations = relations(issue, ({ one, many }) => ({
   labels: many(issueLabel),
   comments: many(comment),
   reactions: many(issueReaction),
+  subscriptions: many(issueSubscription),
   history: many(issueHistory),
   relations: many(issueRelation, { relationName: "source" }),
   relatedFrom: many(issueRelation, { relationName: "target" }),
@@ -1108,6 +1130,20 @@ export const commentRelations = relations(comment, ({ one, many }) => ({
   reactions: many(reaction),
   attachments: many(commentAttachment),
 }));
+
+export const issueSubscriptionRelations = relations(
+  issueSubscription,
+  ({ one }) => ({
+    issue: one(issue, {
+      fields: [issueSubscription.issueId],
+      references: [issue.id],
+    }),
+    user: one(user, {
+      fields: [issueSubscription.userId],
+      references: [user.id],
+    }),
+  }),
+);
 
 export const issueReactionRelations = relations(issueReaction, ({ one }) => ({
   issue: one(issue, {

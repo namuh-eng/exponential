@@ -18,6 +18,7 @@ import {
 } from "@/lib/db/schema";
 import { normalizeIssueDescriptionHtml } from "@/lib/issue-description";
 import { insertIssueHistoryEvent } from "@/lib/issue-history";
+import { getIssueSubscriptionSummary } from "@/lib/issue-subscriptions";
 import {
   buildNotificationValues,
   insertNotifications,
@@ -164,6 +165,7 @@ export async function GET(
     sourceRelationRows,
     targetRelationRows,
     issueReactionRows,
+    subscriptionSummary,
   ] = await Promise.all([
     db.select().from(workflowState).where(eq(workflowState.id, iss.stateId)),
     iss.assigneeId
@@ -258,6 +260,10 @@ export async function GET(
       })
       .from(issueReaction)
       .where(eq(issueReaction.issueId, iss.id)),
+    getIssueSubscriptionSummary({
+      issueId: iss.id,
+      userId: session.user.id,
+    }),
   ]);
 
   const relatedIssueIds = [
@@ -451,6 +457,7 @@ export async function GET(
     parentIssue: parentIssueData,
     relations: relationData,
     labels: labelRows.map((l) => ({ name: l.labelName, color: l.labelColor })),
+    subscription: subscriptionSummary,
     reactions: Array.from(issueReactionsByEmoji.entries()).map(
       ([emoji, data]) => ({
         emoji,

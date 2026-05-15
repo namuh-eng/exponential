@@ -60,6 +60,11 @@ interface IssueSubIssue {
   } | null;
 }
 
+interface IssueSubscriptionState {
+  subscribed: boolean;
+  watcherCount: number;
+}
+
 interface IssueDetail {
   id: string;
   identifier: string;
@@ -92,6 +97,7 @@ interface IssueDetail {
     issue: { id: string; identifier: string; title: string };
   }[];
   labels: { name: string; color: string }[];
+  subscription: IssueSubscriptionState;
   reactions: IssueReaction[];
   discussionSummary: { enabled: boolean; text: string | null };
   comments: IssueComment[];
@@ -111,6 +117,25 @@ interface IssueHistoryEvent {
 }
 
 const QUICK_REACTIONS = ["👍", "🚀", "👀", "❤️"];
+const EMOJI_REACTIONS = [
+  "👍",
+  "👎",
+  "🚀",
+  "👀",
+  "❤️",
+  "🔥",
+  "🎉",
+  "💯",
+  "🙌",
+  "🤔",
+  "😄",
+  "😕",
+];
+const COMMENT_FORMAT_ACTIONS = [
+  { label: "Bold", prefix: "**", suffix: "**" },
+  { label: "Italic", prefix: "_", suffix: "_" },
+  { label: "Code", prefix: "`", suffix: "`" },
+] as const;
 const DESCRIPTION_ACTIONS: ReadonlyArray<{
   label: string;
   command: string;
@@ -316,6 +341,7 @@ function CommentReactions({
   disabled: boolean;
   onToggle: (commentId: string, emoji: string) => Promise<void>;
 }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
   const availableQuickReactions = QUICK_REACTIONS.filter(
     (emoji) => !comment.reactions.some((reaction) => reaction.emoji === emoji),
   );
@@ -338,7 +364,7 @@ function CommentReactions({
           <span>{reaction.count}</span>
         </button>
       ))}
-      {availableQuickReactions.map((emoji) => (
+      {availableQuickReactions.slice(0, 2).map((emoji) => (
         <button
           key={`${comment.id}-add-${emoji}`}
           type="button"
@@ -350,6 +376,42 @@ function CommentReactions({
           {emoji}
         </button>
       ))}
+      <div className="relative">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => setPickerOpen((current) => !current)}
+          className="inline-flex h-8 items-center justify-center rounded-full border border-[var(--color-border)] px-2 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+          aria-label="Open reaction picker"
+          aria-haspopup="menu"
+          aria-expanded={pickerOpen}
+        >
+          + Emoji
+        </button>
+        {pickerOpen ? (
+          <div
+            role="menu"
+            aria-label="Comment reaction picker"
+            className="absolute left-0 z-20 mt-2 grid w-48 grid-cols-6 gap-1 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-content-bg)] p-2 shadow-lg"
+          >
+            {EMOJI_REACTIONS.map((emoji) => (
+              <button
+                key={`${comment.id}-picker-${emoji}`}
+                type="button"
+                role="menuitem"
+                className="rounded-lg p-1.5 text-[16px] hover:bg-[var(--color-surface-hover)]"
+                onClick={() => {
+                  setPickerOpen(false);
+                  void onToggle(comment.id, emoji);
+                }}
+                aria-label={`React with ${emoji}`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -383,12 +445,22 @@ export function IssueDetailView({
   const [reactingIssueEmoji, setReactingIssueEmoji] = useState<string | null>(
     null,
   );
+  const [issueReactionPickerOpen, setIssueReactionPickerOpen] = useState(false);
+  const [subscriptionSaving, setSubscriptionSaving] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState("");
   const [descriptionFocused, setDescriptionFocused] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
     "idle",
   );
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [commentActionMenuId, setCommentActionMenuId] = useState<string | null>(
+    null,
+  );
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [commentEditBody, setCommentEditBody] = useState("");
+  const [commentActionStatus, setCommentActionStatus] = useState<string | null>(
+    null,
+  );
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [runningAction, setRunningAction] = useState<
     "archive" | "delete" | null
@@ -399,6 +471,7 @@ export function IssueDetailView({
   const titleRef = useRef<HTMLHeadingElement>(null);
   const descriptionRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const commentTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     window.localStorage.setItem(LAST_ISSUE_STORAGE_KEY, issueId);
@@ -439,6 +512,10 @@ export function IssueDetailView({
         const json = (await res.json()) as IssueDetail;
         setIssue({
           ...json,
+          subscription: json.subscription ?? {
+            subscribed: false,
+            watcherCount: 0,
+          },
           discussionSummary: json.discussionSummary ?? {
             enabled: false,
             text: null,
@@ -709,6 +786,161 @@ export function IssueDetailView({
     setDescriptionDraft(nextDraft);
   }
 
+  function applyCommentFormat(prefix: string, suffix: string) {
+    const textarea = commentTextareaRef.current;
+    if (!textarea) {
+      setCommentBody((current) => `${prefix}${current}${suffix}`);
+      return;
+    }
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = commentBody.slice(start, end) || "text";
+    const nextBody = `${commentBody.slice(0, start)}${prefix}${selectedText}${suffix}${commentBody.slice(end)}`;
+    setCommentBody(nextBody);
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(
+        start + prefix.length,
+        start + prefix.length + selectedText.length,
+      );
+    });
+  }
+
+  function insertCommentSnippet(value: string) {
+    const textarea = commentTextareaRef.current;
+    if (!textarea) {
+      setCommentBody((current) => `${current}${value}`);
+      return;
+    }
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const nextBody = `${commentBody.slice(0, start)}${value}${commentBody.slice(end)}`;
+    setCommentBody(nextBody);
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + value.length, start + value.length);
+    });
+  }
+
+  async function handleSubscriptionToggle() {
+    if (!issue || subscriptionSaving) {
+      return;
+    }
+
+    const wasSubscribed = issue.subscription.subscribed;
+    const optimisticCount = Math.max(
+      0,
+      issue.subscription.watcherCount + (wasSubscribed ? -1 : 1),
+    );
+
+    setSubscriptionSaving(true);
+    setIssue({
+      ...issue,
+      subscription: {
+        subscribed: !wasSubscribed,
+        watcherCount: optimisticCount,
+      },
+    });
+
+    try {
+      const res = await fetch(`/api/issues/${issue.identifier}/subscription`, {
+        method: wasSubscribed ? "DELETE" : "POST",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to update subscription");
+      }
+
+      const subscription = (await res.json()) as IssueSubscriptionState;
+      setIssue((current) => (current ? { ...current, subscription } : current));
+    } catch {
+      setIssue((current) =>
+        current
+          ? {
+              ...current,
+              subscription: {
+                subscribed: wasSubscribed,
+                watcherCount: issue.subscription.watcherCount,
+              },
+            }
+          : current,
+      );
+    } finally {
+      setSubscriptionSaving(false);
+    }
+  }
+
+  async function handleCommentEdit(commentId: string) {
+    const nextBody = commentEditBody.trim();
+    if (!nextBody) {
+      return;
+    }
+
+    const res = await fetch(`/api/comments/${commentId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body: nextBody }),
+    });
+
+    if (!res.ok) {
+      setCommentActionStatus("Comment edit unavailable.");
+      return;
+    }
+
+    const updated = (await res.json()) as Partial<IssueComment>;
+    setIssue((current) =>
+      current
+        ? {
+            ...current,
+            comments: current.comments.map((comment) =>
+              comment.id === commentId
+                ? { ...comment, body: updated.body ?? nextBody }
+                : comment,
+            ),
+          }
+        : current,
+    );
+    setEditingCommentId(null);
+    setCommentActionStatus("Comment updated.");
+  }
+
+  async function handleCommentDelete(commentId: string) {
+    if (!window.confirm("Delete this comment?")) {
+      return;
+    }
+
+    const res = await fetch(`/api/comments/${commentId}`, { method: "DELETE" });
+    if (!res.ok) {
+      setCommentActionStatus("Comment delete unavailable.");
+      return;
+    }
+
+    setIssue((current) =>
+      current
+        ? {
+            ...current,
+            comments: current.comments.filter(
+              (comment) => comment.id !== commentId,
+            ),
+          }
+        : current,
+    );
+    setCommentActionStatus("Comment deleted.");
+  }
+
+  async function handleCopyCommentLink(commentId: string, detailHref: string) {
+    try {
+      await navigator.clipboard.writeText(
+        `${window.location.origin}${detailHref}#comment-${commentId}`,
+      );
+      setCommentActionStatus("Comment link copied.");
+    } catch {
+      setCommentActionStatus("Comment link copy failed.");
+    }
+  }
+
   async function handleArchiveIssue() {
     if (!issue || runningAction) {
       return;
@@ -937,6 +1169,31 @@ export function IssueDetailView({
                   : copyState === "failed"
                     ? "Copy failed"
                     : "Copy link"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSubscriptionToggle()}
+                disabled={subscriptionSaving}
+                aria-label={
+                  issue.subscription.subscribed
+                    ? "Unsubscribe from issue notifications"
+                    : "Subscribe to issue notifications"
+                }
+                aria-pressed={issue.subscription.subscribed}
+                className={`rounded-full border px-3 py-1.5 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                  issue.subscription.subscribed
+                    ? "border-[var(--color-accent)] bg-[var(--color-accent-muted)] text-[var(--color-text-primary)]"
+                    : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                }`}
+              >
+                {subscriptionSaving
+                  ? "Saving..."
+                  : issue.subscription.subscribed
+                    ? "Subscribed"
+                    : "Subscribe"}
+                {issue.subscription.watcherCount > 0
+                  ? ` · ${issue.subscription.watcherCount}`
+                  : ""}
               </button>
               <Link
                 href={detailHref}
@@ -1181,31 +1438,129 @@ export function IssueDetailView({
                 </p>
               ) : null}
 
+              {commentActionStatus ? (
+                <div className="mb-4 rounded-[18px] border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
+                  {commentActionStatus}
+                </div>
+              ) : null}
+
               {issue.comments.length > 0 ? (
                 <div className="space-y-5">
                   {issue.comments.map((comment) => (
                     <div
                       key={comment.id}
+                      id={`comment-${comment.id}`}
                       className="rounded-[20px] border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-4"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-[10px] font-medium text-white">
-                          {comment.user.name?.[0]?.toUpperCase() ?? "?"}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-[10px] font-medium text-white">
+                            {comment.user.name?.[0]?.toUpperCase() ?? "?"}
+                          </div>
+                          <div>
+                            <div className="text-[13px] font-medium text-[var(--color-text-primary)]">
+                              {comment.user.name}
+                            </div>
+                            <div className="text-[12px] text-[var(--color-text-secondary)]">
+                              {formatFullDate(comment.createdAt)}
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-[13px] font-medium text-[var(--color-text-primary)]">
-                            {comment.user.name}
-                          </div>
-                          <div className="text-[12px] text-[var(--color-text-secondary)]">
-                            {formatFullDate(comment.createdAt)}
-                          </div>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            aria-haspopup="menu"
+                            aria-expanded={commentActionMenuId === comment.id}
+                            aria-label="More actions"
+                            onClick={() =>
+                              setCommentActionMenuId((current) =>
+                                current === comment.id ? null : comment.id,
+                              )
+                            }
+                            className="rounded-full border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]"
+                          >
+                            •••
+                          </button>
+                          {commentActionMenuId === comment.id ? (
+                            <div
+                              role="menu"
+                              aria-label="More actions"
+                              className="absolute right-0 z-20 mt-2 w-36 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-content-bg)] p-1 shadow-lg"
+                            >
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                                onClick={() => {
+                                  setCommentActionMenuId(null);
+                                  void handleCopyCommentLink(
+                                    comment.id,
+                                    detailHref,
+                                  );
+                                }}
+                              >
+                                Copy link
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                                onClick={() => {
+                                  setCommentActionMenuId(null);
+                                  setEditingCommentId(comment.id);
+                                  setCommentEditBody(comment.body);
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-red-500 hover:bg-[var(--color-surface-hover)]"
+                                onClick={() => {
+                                  setCommentActionMenuId(null);
+                                  void handleCommentDelete(comment.id);
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
-                      {comment.body.trim().length > 0 && (
+                      {editingCommentId === comment.id ? (
+                        <div className="mt-3 space-y-2">
+                          <textarea
+                            value={commentEditBody}
+                            onChange={(event) =>
+                              setCommentEditBody(event.target.value)
+                            }
+                            className="w-full resize-none rounded-[14px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none"
+                            rows={3}
+                            aria-label="Edit comment"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              className="rounded-full bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white"
+                              onClick={() => void handleCommentEdit(comment.id)}
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)]"
+                              onClick={() => setEditingCommentId(null)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : comment.body.trim().length > 0 ? (
                         <p className="mt-3 whitespace-pre-wrap text-[13px] leading-relaxed text-[var(--color-text-primary)]">
                           {comment.body}
                         </p>
-                      )}
+                      ) : null}
                       {comment.attachments.length > 0 && (
                         <div className="mt-3 flex flex-wrap gap-2">
                           {comment.attachments.map((attachment) => (
@@ -1227,7 +1582,47 @@ export function IssueDetailView({
               ) : null}
 
               <div className="mt-6 rounded-[24px] border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-4">
+                <div
+                  className="mb-3 flex flex-wrap items-center gap-2"
+                  aria-label="Comment composer toolbar"
+                >
+                  {COMMENT_FORMAT_ACTIONS.map((action) => (
+                    <button
+                      key={action.label}
+                      type="button"
+                      aria-label={`Format ${action.label.toLowerCase()}`}
+                      onClick={() =>
+                        applyCommentFormat(action.prefix, action.suffix)
+                      }
+                      className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => insertCommentSnippet("@")}
+                    className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                  >
+                    Mention
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertCommentSnippet("🎉")}
+                    className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                  >
+                    Emoji
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                  >
+                    Attach
+                  </button>
+                </div>
                 <textarea
+                  ref={commentTextareaRef}
                   placeholder="Leave a comment..."
                   value={commentBody}
                   onChange={(event) => setCommentBody(event.target.value)}
@@ -1271,8 +1666,15 @@ export function IssueDetailView({
                       multiple
                       onChange={handleAttachmentChange}
                       aria-label="Add attachments"
-                      className="max-w-full text-[12px] text-[var(--color-text-secondary)] file:mr-3 file:rounded-full file:border-0 file:bg-[var(--color-surface)] file:px-3 file:py-1.5 file:text-[12px] file:font-medium file:text-[var(--color-text-primary)] hover:file:bg-[var(--color-surface-hover)]"
+                      className="sr-only"
                     />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                    >
+                      Add attachments
+                    </button>
                     <div className="text-[12px] text-[var(--color-text-secondary)]">
                       Up to 5 files, 10 MB each
                     </div>
@@ -1337,7 +1739,12 @@ export function IssueDetailView({
               className="flex flex-wrap gap-2"
               aria-label="Issue-level reactions"
             >
-              {QUICK_REACTIONS.map((emoji) => {
+              {[
+                ...QUICK_REACTIONS,
+                ...issue.reactions
+                  .map((reaction) => reaction.emoji)
+                  .filter((emoji) => !QUICK_REACTIONS.includes(emoji)),
+              ].map((emoji) => {
                 const reaction = issue.reactions.find(
                   (currentReaction) => currentReaction.emoji === emoji,
                 );
@@ -1365,6 +1772,44 @@ export function IssueDetailView({
                   </button>
                 );
               })}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setIssueReactionPickerOpen((current) => !current)
+                  }
+                  disabled={reactingIssueEmoji !== null}
+                  className="inline-flex h-8 items-center justify-center rounded-full border border-[var(--color-border)] px-3 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-label="Open issue reaction picker"
+                  aria-haspopup="menu"
+                  aria-expanded={issueReactionPickerOpen}
+                >
+                  + Emoji
+                </button>
+                {issueReactionPickerOpen ? (
+                  <div
+                    role="menu"
+                    aria-label="Issue reaction picker"
+                    className="absolute right-0 z-20 mt-2 grid w-48 grid-cols-6 gap-1 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-content-bg)] p-2 shadow-lg"
+                  >
+                    {EMOJI_REACTIONS.map((emoji) => (
+                      <button
+                        key={`issue-picker-${emoji}`}
+                        type="button"
+                        role="menuitem"
+                        className="rounded-lg p-1.5 text-[16px] hover:bg-[var(--color-surface-hover)]"
+                        onClick={() => {
+                          setIssueReactionPickerOpen(false);
+                          handleIssueReactionClick(emoji);
+                        }}
+                        aria-label={`Issue reaction ${emoji}`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </div>
             {issueReactionNotice ? (
               <p className="mt-3 text-[12px] text-[var(--color-text-secondary)]">

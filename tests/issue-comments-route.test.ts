@@ -8,6 +8,7 @@ const insertNotificationsMock = vi.fn();
 const insertCommentValuesMock = vi.fn();
 const insertHistoryValuesMock = vi.fn();
 const resolveActiveWorkspaceIdMock = vi.fn();
+const getIssueNotificationRecipientsMock = vi.fn();
 const randomUuidMock = vi.spyOn(crypto, "randomUUID");
 
 vi.mock("@/lib/auth", () => ({
@@ -33,6 +34,10 @@ vi.mock("@/lib/notifications", () => ({
 
 vi.mock("@/lib/active-workspace", () => ({
   resolveActiveWorkspaceId: resolveActiveWorkspaceIdMock,
+}));
+
+vi.mock("@/lib/issue-subscriptions", () => ({
+  getIssueNotificationRecipients: getIssueNotificationRecipientsMock,
 }));
 
 vi.mock("@/lib/db/schema", () => ({
@@ -117,6 +122,7 @@ describe("issue comments route", () => {
     issueLimitMock.mockReset();
     issueLimitMock.mockResolvedValue([issueRecord]);
     resolveMentionedUserIdsMock.mockResolvedValue(["user-3"]);
+    getIssueNotificationRecipientsMock.mockResolvedValue(["user-2", "user-3"]);
     buildNotificationValuesMock.mockImplementation(({ type, userIds }) =>
       userIds.map((userId: string) => ({ type, userId })),
     );
@@ -205,6 +211,12 @@ describe("issue comments route", () => {
         commentId: "comment-1",
         attachmentCount: 0,
       },
+    });
+    expect(getIssueNotificationRecipientsMock).toHaveBeenCalledWith({
+      actorId: "user-1",
+      issueId: "issue-1",
+      baseUserIds: ["user-2", "user-3"],
+      mentionedUserIds: ["user-3"],
     });
     expect(insertNotificationsMock).toHaveBeenCalledWith([
       { type: "mentioned", userId: "user-3" },

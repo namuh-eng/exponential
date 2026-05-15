@@ -88,7 +88,7 @@ describe("IssueDetailView UI", () => {
     expect(screen.getByText("Loading...")).toBeInTheDocument();
 
     expect(await screen.findByText("A bug to fix")).toBeInTheDocument();
-    expect(screen.getByText("The description")).toBeInTheDocument();
+    expect(await screen.findByText("The description")).toBeInTheDocument();
 
     // Identifier check
     expect(screen.getAllByText(/ENG-1/i).length).toBeGreaterThan(0);
@@ -297,7 +297,7 @@ describe("IssueDetailView UI", () => {
     render(<IssueDetailView issueId="iss-1" />);
     await screen.findByText("A bug to fix");
 
-    fireEvent.click(screen.getByRole("button", { name: "Bold" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Bold" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Bullet list" }));
     fireEvent.click(screen.getByRole("button", { name: "Quote" }));
 
@@ -445,6 +445,155 @@ describe("IssueDetailView UI", () => {
         expect.objectContaining({ method: "DELETE" }),
       );
       expect(pushMock).toHaveBeenCalledWith("/team/ENG/all");
+    });
+  });
+});
+
+describe("IssueDetailView collaboration controls", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("renders and persists issue subscription toggles", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      const href = url.toString();
+      if (href.endsWith("/subscription")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ subscribed: true, watcherCount: 1 }),
+        } as Response);
+      }
+
+      if (href.includes("/history")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ history: [] }),
+        } as Response);
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          ...mockIssueDetail,
+          subscription: { subscribed: false, watcherCount: 0 },
+        }),
+      } as Response);
+    });
+
+    render(<IssueDetailView issueId="iss-1" />);
+    await screen.findByText("A bug to fix");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Subscribe to issue notifications" }),
+    );
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith("/api/issues/ENG-1/subscription", {
+        method: "POST",
+      });
+    });
+    expect(
+      await screen.findByRole("button", {
+        name: "Unsubscribe from issue notifications",
+      }),
+    ).toHaveTextContent("Subscribed · 1");
+  });
+
+  it("exposes richer comment composer, emoji picker, and comment actions", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      const href = url.toString();
+      if (href.includes("/reactions")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [{ emoji: "🔥", count: 1, reacted: true }],
+        } as Response);
+      }
+      if (href.includes("/history")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ history: [] }),
+        } as Response);
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          ...mockIssueDetail,
+          subscription: { subscribed: false, watcherCount: 0 },
+        }),
+      } as Response);
+    });
+
+    render(<IssueDetailView issueId="iss-1" />);
+    await screen.findByText("A bug to fix");
+
+    expect(
+      screen.getByLabelText("Comment composer toolbar"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Format bold"));
+    expect(screen.getByPlaceholderText("Leave a comment...")).toHaveValue(
+      "**text**",
+    );
+
+    fireEvent.click(screen.getByLabelText("Open reaction picker"));
+    fireEvent.click(screen.getByRole("menuitem", { name: "React with 🔥" }));
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "/api/comments/c1/reactions",
+        expect.objectContaining({ body: JSON.stringify({ emoji: "🔥" }) }),
+      );
+    });
+
+    fireEvent.click(screen.getByLabelText("More actions"));
+    expect(
+      screen.getByRole("menuitem", { name: "Copy link" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Edit" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Delete" }),
+    ).toBeInTheDocument();
+  });
+
+  it("supports issue reactions outside the quick four via picker", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      const href = url.toString();
+      if (href.endsWith("/reactions")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [{ emoji: "🔥", count: 1, reactedByMe: true }],
+        } as Response);
+      }
+      if (href.includes("/history")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ history: [] }),
+        } as Response);
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          ...mockIssueDetail,
+          subscription: { subscribed: false, watcherCount: 0 },
+        }),
+      } as Response);
+    });
+
+    render(<IssueDetailView issueId="iss-1" />);
+    await screen.findByText("A bug to fix");
+
+    fireEvent.click(screen.getByLabelText("Open issue reaction picker"));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Issue reaction 🔥" }),
+    );
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/issues/iss-1/reactions",
+        expect.objectContaining({ body: JSON.stringify({ emoji: "🔥" }) }),
+      );
     });
   });
 });
