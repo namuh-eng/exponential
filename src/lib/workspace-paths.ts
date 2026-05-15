@@ -7,6 +7,7 @@ const appRoutePrefixes = [
   "team",
   "members",
   "teams",
+  "agent",
   "issue",
   "initiatives",
   "settings",

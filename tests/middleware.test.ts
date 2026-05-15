@@ -188,6 +188,7 @@ describe("Auth proxy", () => {
 
   it.each([
     ["/foreverbrowsing/members", "/members"],
+    ["/foreverbrowsing/agent", "/agent"],
     ["/foreverbrowsing/project/roadmap/overview", "/project/roadmap/overview"],
   ])(
     "rewrites authenticated workspace-prefixed app route %s without changing the browser URL",

@@ -1,6 +1,12 @@
 "use client";
 
-import type { AccountPreferences } from "@/lib/account-preferences";
+import {
+  type AccountPreferences,
+  type AccountPreferencesPatch,
+  DEFAULT_ACCOUNT_PREFERENCES,
+  dispatchAccountPreferencesChanged,
+  mergeAccountPreferences,
+} from "@/lib/account-preferences";
 import { OPEN_COMMAND_PALETTE_EVENT } from "@/lib/command-palette";
 import { stripWorkspaceSlug, withWorkspaceSlug } from "@/lib/workspace-paths";
 import Link from "next/link";
@@ -128,6 +134,162 @@ function SidebarLink({
   );
 }
 
+function SidebarMenuButton({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-2.5 rounded-md px-2 py-[5px] text-left text-[13px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+    >
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+        {icon}
+      </span>
+      <span className="flex-1 truncate">{label}</span>
+    </button>
+  );
+}
+
+function SidebarCustomizeModal({
+  preferences,
+  saveState,
+  onClose,
+  onUpdate,
+}: {
+  preferences: AccountPreferences;
+  saveState: "idle" | "saving" | "saved" | "error";
+  onClose: () => void;
+  onUpdate: (patch: AccountPreferencesPatch) => void;
+}) {
+  const sidebarItems: Array<{
+    key: keyof AccountPreferences["sidebarVisibility"];
+    label: string;
+    group: "Personal" | "Workspace";
+  }> = [
+    { key: "inbox", label: "Inbox", group: "Personal" },
+    { key: "myIssues", label: "My Issues", group: "Personal" },
+    { key: "projects", label: "Projects", group: "Workspace" },
+    { key: "views", label: "Views", group: "Workspace" },
+    { key: "initiatives", label: "Initiatives", group: "Workspace" },
+    { key: "cycles", label: "Cycles", group: "Workspace" },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4">
+      <dialog
+        open
+        aria-label="Customize sidebar"
+        className="w-full max-w-[520px] rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] p-5 shadow-2xl"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-[16px] font-semibold text-[var(--color-text-primary)]">
+              Customize sidebar
+            </h2>
+            <p className="mt-1 text-[12px] leading-5 text-[var(--color-text-secondary)]">
+              Choose which primary navigation items appear in your sidebar.
+              Changes save to account preferences and update immediately.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Close customize sidebar"
+            onClick={onClose}
+            className="rounded-md p-1 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-4">
+          {["Personal", "Workspace"].map((group) => (
+            <section key={group}>
+              <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-tertiary)]">
+                {group}
+              </div>
+              <div className="divide-y divide-[var(--color-border)] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+                {sidebarItems
+                  .filter((item) => item.group === group)
+                  .map((item) => {
+                    const checked = preferences.sidebarVisibility[item.key];
+
+                    return (
+                      <div
+                        key={item.key}
+                        className="flex items-center justify-between gap-4 py-3"
+                      >
+                        <div>
+                          <div className="text-[13px] text-[var(--color-text-primary)]">
+                            {item.label}
+                          </div>
+                          <div className="text-[12px] text-[var(--color-text-secondary)]">
+                            {checked
+                              ? "Shown in sidebar"
+                              : "Hidden from sidebar"}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-label={`${item.label} visibility`}
+                          aria-checked={checked}
+                          onClick={() =>
+                            onUpdate({
+                              sidebarVisibility: { [item.key]: !checked },
+                            })
+                          }
+                          className={`relative inline-flex h-[20px] w-[36px] shrink-0 items-center rounded-full transition-colors ${
+                            checked
+                              ? "bg-[var(--color-accent)]"
+                              : "bg-[var(--color-border)]"
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-[16px] w-[16px] rounded-full bg-white shadow transition-transform ${
+                              checked
+                                ? "translate-x-[18px]"
+                                : "translate-x-[2px]"
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    );
+                  })}
+              </div>
+            </section>
+          ))}
+        </div>
+
+        <div className="mt-4 text-right text-[12px] text-[var(--color-text-secondary)]">
+          {saveState === "saving" && "Saving…"}
+          {saveState === "saved" && "Saved"}
+          {saveState === "error" && "Save failed"}
+        </div>
+      </dialog>
+    </div>
+  );
+}
+
 function SectionHeader({
   label,
   collapsible,
@@ -185,11 +347,22 @@ export function Sidebar({
     () => Object.fromEntries(resolvedTeams.map((team) => [team.key, true])),
   );
   const [moreExpanded, setMoreExpanded] = useState(false);
+  const [customizeSidebarOpen, setCustomizeSidebarOpen] = useState(false);
+  const [localPreferences, setLocalPreferences] = useState<AccountPreferences>(
+    () =>
+      mergeAccountPreferences(
+        DEFAULT_ACCOUNT_PREFERENCES,
+        accountPreferences ?? {},
+      ),
+  );
+  const [preferenceSaveState, setPreferenceSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [helpMenuOpen, setHelpMenuOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const sidebarVisibility = accountPreferences?.sidebarVisibility;
-  const badgeStyle = accountPreferences?.sidebarBadgeStyle;
+  const sidebarVisibility = localPreferences.sidebarVisibility;
+  const badgeStyle = localPreferences.sidebarBadgeStyle;
 
   function isVisible(key: keyof NonNullable<typeof sidebarVisibility>) {
     return sidebarVisibility?.[key] ?? true;
@@ -197,9 +370,19 @@ export function Sidebar({
 
   useEffect(() => {
     void pathname;
+    setMoreExpanded(false);
     setWorkspaceMenuOpen(false);
     setHelpMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    setLocalPreferences(
+      mergeAccountPreferences(
+        DEFAULT_ACCOUNT_PREFERENCES,
+        accountPreferences ?? {},
+      ),
+    );
+  }, [accountPreferences]);
 
   useEffect(() => {
     const nextTeams =
@@ -217,6 +400,42 @@ export function Sidebar({
       return next;
     });
   }, [activeTeamKey, teamKey, teamName, teams]);
+
+  function updateSidebarPreferences(patch: AccountPreferencesPatch) {
+    const nextPreferences = mergeAccountPreferences(localPreferences, patch);
+
+    setLocalPreferences(nextPreferences);
+    dispatchAccountPreferencesChanged(nextPreferences);
+    setPreferenceSaveState("saving");
+
+    void fetch("/api/account/preferences", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ accountPreferences: patch }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Failed to save account preferences");
+        }
+
+        return (await response.json()) as {
+          accountPreferences?: Partial<AccountPreferences>;
+        };
+      })
+      .then((data) => {
+        const savedPreferences = mergeAccountPreferences(
+          nextPreferences,
+          data.accountPreferences ?? {},
+        );
+        setLocalPreferences(savedPreferences);
+        dispatchAccountPreferencesChanged(savedPreferences);
+        setPreferenceSaveState("saved");
+      })
+      .catch(() => {
+        setPreferenceSaveState("error");
+      });
+  }
 
   return (
     <SidebarWorkspaceSlugContext.Provider value={workspaceSlug}>
@@ -474,9 +693,9 @@ export function Sidebar({
           {moreExpanded && (
             <div className="ml-4 border-l border-[var(--color-border)] pl-2">
               <SidebarLink
-                href={withWorkspaceSlug("/settings", workspaceSlug)}
-                label="Settings"
-                active={pathname.startsWith("/settings")}
+                href="/agent"
+                label="Agent"
+                active={pathname.startsWith("/agent")}
                 icon={
                   <svg
                     width="14"
@@ -488,10 +707,13 @@ export function Sidebar({
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     role="img"
-                    aria-label="Settings icon"
+                    aria-label="Agent icon"
                   >
-                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-                    <circle cx="12" cy="12" r="3" />
+                    <path d="M12 8V4H8" />
+                    <rect x="4" y="8" width="16" height="12" rx="3" />
+                    <path d="M9 13h.01" />
+                    <path d="M15 13h.01" />
+                    <path d="M10 17h4" />
                   </svg>
                 }
               />
@@ -540,6 +762,33 @@ export function Sidebar({
                     <rect x="14" y="4" width="7" height="7" rx="1" />
                     <rect x="3" y="15" width="7" height="7" rx="1" />
                     <rect x="14" y="15" width="7" height="7" rx="1" />
+                  </svg>
+                }
+              />
+              <SidebarMenuButton
+                label="Customize sidebar"
+                onClick={() => {
+                  setCustomizeSidebarOpen(true);
+                  setMoreExpanded(false);
+                }}
+                icon={
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    role="img"
+                    aria-label="Customize sidebar icon"
+                  >
+                    <path d="M4 5h16" />
+                    <path d="M4 12h10" />
+                    <path d="M4 19h7" />
+                    <path d="M18 15v6" />
+                    <path d="M15 18h6" />
                   </svg>
                 }
               />
@@ -862,6 +1111,14 @@ export function Sidebar({
               </div>
             </div>
           </div>
+        )}
+        {customizeSidebarOpen && (
+          <SidebarCustomizeModal
+            preferences={localPreferences}
+            saveState={preferenceSaveState}
+            onClose={() => setCustomizeSidebarOpen(false)}
+            onUpdate={updateSidebarPreferences}
+          />
         )}
       </aside>
     </SidebarWorkspaceSlugContext.Provider>

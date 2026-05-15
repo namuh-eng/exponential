@@ -201,15 +201,21 @@ describe("Sidebar", () => {
     expect(screen.getByText("More")).toBeDefined();
   });
 
-  it("toggles More menu to show Settings, Members, and Teams", () => {
+  it("toggles More menu to show Linear workspace navigation actions", () => {
     render(<Sidebar />);
-    expect(screen.queryByText("Settings")).toBeNull();
+    expect(screen.queryByText("Agent")).toBeNull();
 
     fireEvent.click(screen.getByText("More"));
-    expect(screen.getByText("Settings")).toBeDefined();
+    expect(screen.getByText("Agent")).toBeDefined();
     expect(screen.getByText("Members")).toBeDefined();
     expect(screen.getByText("Teams")).toBeDefined();
+    expect(screen.getByText("Customize sidebar")).toBeDefined();
+    expect(screen.queryByText("Settings")).not.toBeInTheDocument();
 
+    expect(screen.getByRole("link", { name: /Agent/i })).toHaveAttribute(
+      "href",
+      "/agent",
+    );
     expect(screen.getByRole("link", { name: /Members/i })).toHaveAttribute(
       "href",
       "/members",
@@ -220,7 +226,51 @@ describe("Sidebar", () => {
     );
 
     fireEvent.click(screen.getByText("More"));
-    expect(screen.queryByText("Settings")).toBeNull();
+    expect(screen.queryByText("Agent")).toBeNull();
+  });
+
+  it("opens Customize sidebar from More and updates visibility immediately", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input, init) => {
+        expect(String(input)).toBe("/api/account/preferences");
+        expect(init?.method).toBe("PATCH");
+        expect(JSON.parse(String(init?.body))).toEqual({
+          accountPreferences: {
+            sidebarVisibility: {
+              inbox: false,
+            },
+          },
+        });
+
+        return {
+          ok: true,
+          json: async () => ({
+            accountPreferences: {
+              sidebarVisibility: {
+                inbox: false,
+              },
+            },
+          }),
+        } as Response;
+      });
+
+    render(<Sidebar />);
+    expect(screen.getByRole("link", { name: /Inbox/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("More"));
+    fireEvent.click(screen.getByText("Customize sidebar"));
+
+    expect(
+      screen.getByRole("dialog", { name: "Customize sidebar" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("switch", { name: "Inbox visibility" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByRole("link", { name: /Inbox/i })).toBeNull();
   });
 
   it("renders Workspace section header", () => {
@@ -273,6 +323,10 @@ describe("Sidebar", () => {
     expect(issuesLink?.getAttribute("href")).toBe("/team/ENG/all");
 
     fireEvent.click(screen.getByText("More"));
+    expect(screen.getByRole("link", { name: /Agent/i })).toHaveAttribute(
+      "href",
+      "/agent",
+    );
     expect(screen.getByRole("link", { name: /Members/i })).toHaveAttribute(
       "href",
       "/members",
@@ -289,6 +343,10 @@ describe("Sidebar", () => {
 
     fireEvent.click(screen.getByText("More"));
 
+    expect(screen.getByRole("link", { name: /Agent/i })).toHaveAttribute(
+      "href",
+      "/foreverbrowsing/agent",
+    );
     expect(screen.getByRole("link", { name: /Members/i })).toHaveAttribute(
       "href",
       "/foreverbrowsing/members",
