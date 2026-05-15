@@ -29,6 +29,11 @@ interface IssuePropertiesProps {
   cycle?: { id: string; name: string | null; number: number } | null;
   parentIssue?: { id: string; identifier: string; title: string } | null;
   relations?: IssueRelationSummary[];
+  onAddRelation?: (type: IssueRelationSummary["type"]) => void;
+  onRemoveRelation?: (relationId: string) => void;
+  onOpenIssue?: (issueId: string) => void;
+  onEditParent?: () => void;
+  onClearParent?: () => void;
 }
 
 const priorityNumeric: Record<PriorityValue, 0 | 1 | 2 | 3 | 4> = {
@@ -116,6 +121,11 @@ export function IssueProperties({
   cycle = null,
   parentIssue = null,
   relations = [],
+  onAddRelation,
+  onRemoveRelation,
+  onOpenIssue,
+  onEditParent,
+  onClearParent,
 }: IssuePropertiesProps) {
   return (
     <div className="space-y-0.5">
@@ -206,13 +216,42 @@ export function IssueProperties({
 
       <PropertyRow label="Parent issue">
         {parentIssue ? (
-          <span className="min-w-0 truncate text-[13px] text-[var(--color-text-primary)]">
-            {parentIssue.identifier} · {parentIssue.title}
-          </span>
+          <div className="flex min-w-0 flex-1 items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onOpenIssue?.(parentIssue.id)}
+              className="min-w-0 truncate rounded-md px-1 py-0.5 text-left text-[13px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+            >
+              {parentIssue.identifier} · {parentIssue.title}
+            </button>
+            {onEditParent ? (
+              <button
+                type="button"
+                onClick={onEditParent}
+                className="shrink-0 rounded-md px-1.5 py-0.5 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+              >
+                Change
+              </button>
+            ) : null}
+            {onClearParent ? (
+              <button
+                type="button"
+                onClick={onClearParent}
+                aria-label="Clear parent issue"
+                className="shrink-0 rounded-md px-1.5 py-0.5 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-red-500"
+              >
+                Remove
+              </button>
+            ) : null}
+          </div>
         ) : (
-          <span className="text-[13px] text-[var(--color-text-secondary)]">
+          <button
+            type="button"
+            onClick={onEditParent}
+            className="rounded-md px-1 py-0.5 text-left text-[13px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+          >
             No parent
-          </span>
+          </button>
         )}
       </PropertyRow>
 
@@ -251,17 +290,50 @@ export function IssueProperties({
                       {typedRelations.map((relation) => (
                         <div
                           key={relation.id}
-                          className="truncate text-[13px] text-[var(--color-text-primary)]"
+                          className="flex min-w-0 items-center gap-1"
                         >
-                          {relation.issue.identifier} · {relation.issue.title}
+                          <button
+                            type="button"
+                            onClick={() => onOpenIssue?.(relation.issue.id)}
+                            className="min-w-0 truncate rounded-md px-1 py-0.5 text-left text-[13px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+                          >
+                            {relation.issue.identifier} · {relation.issue.title}
+                          </button>
+                          {onRemoveRelation ? (
+                            <button
+                              type="button"
+                              onClick={() => onRemoveRelation(relation.id)}
+                              aria-label={`Remove ${relation.issue.identifier} relation`}
+                              className="shrink-0 rounded-md px-1.5 py-0.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-red-500"
+                            >
+                              Remove
+                            </button>
+                          ) : null}
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <span className="text-[13px] text-[var(--color-text-secondary)]">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onAddRelation?.(type as IssueRelationSummary["type"])
+                      }
+                      className="rounded-md px-1 py-0.5 text-left text-[13px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                    >
                       Add relation
-                    </span>
+                    </button>
                   )}
+                  {typedRelations.length > 0 && onAddRelation ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onAddRelation(type as IssueRelationSummary["type"])
+                      }
+                      className="mt-1 rounded-md px-1 py-0.5 text-left text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                    >
+                      Add relation
+                    </button>
+                  ) : null}
                 </div>
               </div>
             );

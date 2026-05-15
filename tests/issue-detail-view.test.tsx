@@ -341,6 +341,149 @@ describe("IssueDetailView UI", () => {
     });
   });
 
+  it("opens a relation picker and adds a selected issue relation", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      const href = url.toString();
+      if (href.includes("/history")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ history: [] }),
+        } as Response);
+      }
+      if (href.includes("/api/issues/search")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: "iss-3", identifier: "ENG-3", title: "Related task" },
+          ],
+        } as Response);
+      }
+      if (href.includes("/relations")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: "rel-3",
+            type: "related",
+            issue: { id: "iss-3", identifier: "ENG-3", title: "Related task" },
+          }),
+        } as Response);
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => mockIssueDetail,
+      } as Response);
+    });
+
+    render(<IssueDetailView issueId="iss-1" />);
+    await screen.findByText("A bug to fix");
+
+    const addRelationButtons = screen.getAllByRole("button", {
+      name: "Add relation",
+    });
+    fireEvent.click(addRelationButtons[addRelationButtons.length - 1]);
+
+    expect(
+      screen.getByRole("dialog", { name: "Issue selector" }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Search issues"), {
+      target: { value: "ENG-3" },
+    });
+
+    fireEvent.click(await screen.findByText("Related task"));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/issues/iss-1/relations",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ type: "related", relatedIssueId: "iss-3" }),
+        }),
+      );
+    });
+  });
+
+  it("removes an existing relation from the issue properties", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      const href = url.toString();
+      if (href.includes("/history")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ history: [] }),
+        } as Response);
+      }
+      if (href.includes("/relations/rel-1")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ success: true }),
+        } as Response);
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => mockIssueDetail,
+      } as Response);
+    });
+
+    render(<IssueDetailView issueId="iss-1" />);
+    await screen.findByText("A bug to fix");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove ENG-2 relation" }),
+    );
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/issues/iss-1/relations/rel-1",
+        expect.objectContaining({ method: "DELETE" }),
+      );
+    });
+    expect(
+      await screen.findByText("Issue relation removed."),
+    ).toBeInTheDocument();
+  });
+
+  it("attaches an existing issue as a sub-issue", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      const href = url.toString();
+      if (href.includes("/history")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ history: [] }),
+        } as Response);
+      }
+      if (href.includes("/api/issues/search")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: "iss-4", identifier: "ENG-4", title: "Existing child" },
+          ],
+        } as Response);
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => mockIssueDetail,
+      } as Response);
+    });
+
+    render(<IssueDetailView issueId="iss-1" />);
+    await screen.findByText("A bug to fix");
+
+    fireEvent.click(screen.getByRole("button", { name: "Attach existing" }));
+    fireEvent.change(screen.getByLabelText("Search issues"), {
+      target: { value: "ENG-4" },
+    });
+    fireEvent.click(await screen.findByText("Existing child"));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/issues/iss-4",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ parentIssueId: "iss-1" }),
+        }),
+      );
+    });
+  });
+
   it("archives from the actions menu with confirmation and visible feedback", async () => {
     vi.stubGlobal(
       "confirm",

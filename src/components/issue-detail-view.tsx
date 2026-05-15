@@ -65,6 +65,20 @@ interface IssueSubscriptionState {
   watcherCount: number;
 }
 
+type IssueRelationType = "blocks" | "blocked_by" | "duplicate" | "related";
+
+interface IssueSearchResult {
+  id: string;
+  identifier: string;
+  title: string;
+  priority?: IssueDetail["priority"];
+}
+
+type IssuePickerMode =
+  | { kind: "relation"; type: IssueRelationType }
+  | { kind: "parent" }
+  | { kind: "subissue" };
+
 interface IssueDetail {
   id: string;
   identifier: string;
@@ -93,7 +107,7 @@ interface IssueDetail {
   parentIssue: { id: string; identifier: string; title: string } | null;
   relations: {
     id: string;
-    type: "blocks" | "blocked_by" | "duplicate" | "related";
+    type: IssueRelationType;
     issue: { id: string; identifier: string; title: string };
   }[];
   labels: { name: string; color: string }[];
@@ -437,6 +451,15 @@ export function IssueDetailView({
   const [pendingAttachments, setPendingAttachments] = useState<File[]>([]);
   const [subIssueTitle, setSubIssueTitle] = useState("");
   const [showSubIssueForm, setShowSubIssueForm] = useState(false);
+  const [issuePickerMode, setIssuePickerMode] =
+    useState<IssuePickerMode | null>(null);
+  const [issuePickerQuery, setIssuePickerQuery] = useState("");
+  const [issuePickerResults, setIssuePickerResults] = useState<
+    IssueSearchResult[]
+  >([]);
+  const [issuePickerLoading, setIssuePickerLoading] = useState(false);
+  const [issuePickerSaving, setIssuePickerSaving] = useState(false);
+  const [issuePickerError, setIssuePickerError] = useState<string | null>(null);
   const [submittingComment, setSubmittingComment] = useState(false);
   const [submittingSubIssue, setSubmittingSubIssue] = useState(false);
   const [reactingCommentId, setReactingCommentId] = useState<string | null>(
@@ -539,6 +562,49 @@ export function IssueDetailView({
   useEffect(() => {
     void fetchHistory();
   }, [fetchHistory]);
+
+  useEffect(() => {
+    if (!issuePickerMode || issuePickerQuery.trim().length === 0) {
+      setIssuePickerResults([]);
+      setIssuePickerLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setIssuePickerLoading(true);
+      setIssuePickerError(null);
+      try {
+        const res = await fetch(
+          `/api/issues/search?q=${encodeURIComponent(issuePickerQuery.trim())}`,
+          { signal: controller.signal },
+        );
+
+        if (!res.ok) {
+          throw new Error("Issue search failed");
+        }
+
+        const results = (await res.json()) as IssueSearchResult[];
+        setIssuePickerResults(
+          results.filter((result) => result.id !== issue?.id),
+        );
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setIssuePickerResults([]);
+          setIssuePickerError("Couldn’t search issues.");
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIssuePickerLoading(false);
+        }
+      }
+    }, 200);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [issue?.id, issuePickerMode, issuePickerQuery]);
 
   useEffect(() => {
     if (!issue) {
@@ -776,6 +842,126 @@ export function IssueDetailView({
       await fetchIssue();
     } finally {
       setSubmittingSubIssue(false);
+    }
+  }
+
+  function openIssuePicker(mode: IssuePickerMode) {
+    setIssuePickerMode(mode);
+    setIssuePickerQuery("");
+    setIssuePickerResults([]);
+    setIssuePickerError(null);
+    setActionsOpen(false);
+  }
+
+  function closeIssuePicker() {
+    setIssuePickerMode(null);
+    setIssuePickerQuery("");
+    setIssuePickerResults([]);
+    setIssuePickerError(null);
+    setIssuePickerSaving(false);
+  }
+
+  async function handleIssuePickerSelect(selectedIssue: IssueSearchResult) {
+    if (!issue || !issuePickerMode || issuePickerSaving) {
+      return;
+    }
+
+    setIssuePickerSaving(true);
+    setIssuePickerError(null);
+    try {
+      if (issuePickerMode.kind === "relation") {
+        const res = await fetch(`/api/issues/${issue.id}/relations`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: issuePickerMode.type,
+            relatedIssueId: selectedIssue.id,
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to add relation");
+        }
+      } else if (issuePickerMode.kind === "parent") {
+        const res = await fetch(`/api/issues/${issue.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ parentIssueId: selectedIssue.id }),
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to update parent issue");
+        }
+      } else {
+        const res = await fetch(`/api/issues/${selectedIssue.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ parentIssueId: issue.id }),
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to attach sub-issue");
+        }
+      }
+
+      closeIssuePicker();
+      await fetchIssue();
+      void fetchHistory();
+      setActionStatus("Issue relationships updated.");
+    } catch {
+      setIssuePickerSaving(false);
+      setIssuePickerError("Couldn’t update issue relationships.");
+    }
+  }
+
+  async function handleRelationRemove(relationId: string) {
+    if (!issue) {
+      return;
+    }
+
+    setActionStatus("Removing relation...");
+    try {
+      const res = await fetch(
+        `/api/issues/${issue.id}/relations/${relationId}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      if (!res.ok) {
+        throw new Error("Failed to remove relation");
+      }
+
+      await fetchIssue();
+      void fetchHistory();
+      setActionStatus("Issue relation removed.");
+    } catch {
+      setActionStatus("Relation remove unavailable.");
+    }
+  }
+
+  async function handleParentClear() {
+    if (!issue || !issue.parentIssue) {
+      return;
+    }
+
+    setActionStatus("Clearing parent issue...");
+    try {
+      const res = await fetch(`/api/issues/${issue.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parentIssueId: null }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to clear parent issue");
+      }
+
+      await fetchIssue();
+      void fetchHistory();
+      setActionStatus("Parent issue cleared.");
+    } catch {
+      setActionStatus("Parent issue update unavailable.");
     }
   }
 
@@ -1229,6 +1415,22 @@ export function IssueDetailView({
                     <button
                       type="button"
                       role="menuitem"
+                      onClick={() => openIssuePicker({ kind: "parent" })}
+                      className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                    >
+                      Set parent
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => openIssuePicker({ kind: "subissue" })}
+                      className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                    >
+                      Attach sub-issue
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
                       onClick={() => void handleArchiveIssue()}
                       disabled={runningAction !== null}
                       className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
@@ -1318,6 +1520,13 @@ export function IssueDetailView({
                   className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
                 >
                   {showSubIssueForm ? "Cancel" : "Create sub-issue"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openIssuePicker({ kind: "subissue" })}
+                  className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                >
+                  Attach existing
                 </button>
               </div>
 
@@ -1727,6 +1936,22 @@ export function IssueDetailView({
                 cycle={issue.cycle}
                 parentIssue={issue.parentIssue}
                 relations={issue.relations}
+                onAddRelation={(type) =>
+                  openIssuePicker({ kind: "relation", type })
+                }
+                onRemoveRelation={(relationId) =>
+                  void handleRelationRemove(relationId)
+                }
+                onOpenIssue={(targetIssueId) =>
+                  router.push(
+                    withWorkspaceSlug(
+                      `/team/${issue.team.key}/issue/${targetIssueId}`,
+                      workspaceSlug,
+                    ),
+                  )
+                }
+                onEditParent={() => openIssuePicker({ kind: "parent" })}
+                onClearParent={() => void handleParentClear()}
               />
             )}
           </div>
@@ -1862,6 +2087,81 @@ export function IssueDetailView({
           </div>
         </aside>
       </div>
+      {issuePickerMode ? (
+        <dialog
+          open
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 px-4 pt-24"
+          aria-label="Issue selector"
+        >
+          <div className="w-full max-w-[520px] rounded-[20px] border border-[var(--color-border)] bg-[var(--color-content-bg)] p-4 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[13px] font-medium text-[var(--color-text-primary)]">
+                  {issuePickerMode.kind === "relation"
+                    ? "Add issue relation"
+                    : issuePickerMode.kind === "parent"
+                      ? "Set parent issue"
+                      : "Attach existing sub-issue"}
+                </div>
+                <div className="mt-1 text-[12px] text-[var(--color-text-secondary)]">
+                  Search by issue key or title.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeIssuePicker}
+                className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]"
+              >
+                Close
+              </button>
+            </div>
+            <input
+              type="text"
+              value={issuePickerQuery}
+              onChange={(event) => setIssuePickerQuery(event.target.value)}
+              placeholder="Search issues…"
+              className="w-full rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-[13px] text-[var(--color-text-primary)] outline-none transition-shadow focus:shadow-[0_0_0_2px_color-mix(in_srgb,var(--color-accent)_25%,transparent)]"
+              aria-label="Search issues"
+            />
+            <div className="mt-3 max-h-[320px] space-y-1 overflow-y-auto">
+              {issuePickerLoading ? (
+                <div className="rounded-[14px] px-3 py-2 text-[13px] text-[var(--color-text-secondary)]">
+                  Searching…
+                </div>
+              ) : null}
+              {issuePickerError ? (
+                <div className="rounded-[14px] px-3 py-2 text-[13px] text-red-500">
+                  {issuePickerError}
+                </div>
+              ) : null}
+              {!issuePickerLoading &&
+              !issuePickerError &&
+              issuePickerQuery.trim().length > 0 &&
+              issuePickerResults.length === 0 ? (
+                <div className="rounded-[14px] px-3 py-2 text-[13px] text-[var(--color-text-secondary)]">
+                  No matching issues.
+                </div>
+              ) : null}
+              {issuePickerResults.map((result) => (
+                <button
+                  key={result.id}
+                  type="button"
+                  disabled={issuePickerSaving}
+                  onClick={() => void handleIssuePickerSelect(result)}
+                  className="block w-full rounded-[14px] px-3 py-2 text-left transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <div className="text-[12px] text-[var(--color-text-secondary)]">
+                    {result.identifier}
+                  </div>
+                  <div className="truncate text-[13px] text-[var(--color-text-primary)]">
+                    {result.title}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </dialog>
+      ) : null}
     </div>
   );
 }

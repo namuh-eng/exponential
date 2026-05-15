@@ -520,6 +520,7 @@ export async function PATCH(
     stateId?: string;
     sortOrder?: number;
     archive?: boolean;
+    parentIssueId?: string | null;
   };
 
   const existingIssue = await findIssueRecord(id, workspaceId);
@@ -602,6 +603,45 @@ export async function PATCH(
     updateData.archivedAt = body.archive ? new Date() : null;
     if (Boolean(existingIssue.archivedAt) !== body.archive) {
       changedFields.push("archivedAt");
+    }
+  }
+
+  if (body.parentIssueId !== undefined) {
+    if (body.parentIssueId === existingIssue.id) {
+      return NextResponse.json(
+        { error: "Issue cannot be its own parent" },
+        { status: 400 },
+      );
+    }
+
+    if (body.parentIssueId === null) {
+      updateData.parentIssueId = null;
+      if (existingIssue.parentIssueId !== null) {
+        changedFields.push("parentIssueId");
+      }
+    } else {
+      const nextParentIssue = await findIssueRecord(
+        body.parentIssueId,
+        workspaceId,
+      );
+      if (!nextParentIssue || nextParentIssue.workspaceId !== workspaceId) {
+        return NextResponse.json(
+          { error: "Parent issue not found" },
+          { status: 404 },
+        );
+      }
+
+      if (nextParentIssue.parentIssueId === existingIssue.id) {
+        return NextResponse.json(
+          { error: "Parent relationship would create a cycle" },
+          { status: 400 },
+        );
+      }
+
+      updateData.parentIssueId = nextParentIssue.id;
+      if (nextParentIssue.id !== existingIssue.parentIssueId) {
+        changedFields.push("parentIssueId");
+      }
     }
   }
 
