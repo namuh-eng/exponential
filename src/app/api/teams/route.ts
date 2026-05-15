@@ -1,0 +1,256 @@
+import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
+import { type ApiSession, requireApiSession } from "@/lib/api-auth";
+import { db } from "@/lib/db";
+import { member, team, teamMember, workflowState } from "@/lib/db/schema";
+import {
+  generateTeamKey,
+  getDefaultWorkflowStates,
+} from "@/lib/workspace-creation";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import { NextResponse } from "next/server";
+
+const MAX_TEAM_NAME_LENGTH = 255;
+const MAX_TEAM_KEY_LENGTH = 10;
+
+type WorkspaceAccess = {
+  workspaceId: string;
+  role: string;
+};
+
+function canManageTeams(role: string | undefined) {
+  return role === "owner" || role === "admin";
+}
+
+async function getWorkspaceAccess(
+  session: ApiSession,
+): Promise<WorkspaceAccess | null> {
+  const apiWorkspaceId =
+    "apiKey" in session ? session.apiKey.workspaceId : null;
+  const workspaceId =
+    apiWorkspaceId ?? (await resolveActiveWorkspaceId(session.user.id));
+  if (!workspaceId) {
+    return null;
+  }
+
+  if ("apiKey" in session && session.apiKey.workspaceId === workspaceId) {
+    return { workspaceId, role: session.apiKey.memberRole };
+  }
+
+  const [membership] = await db
+    .select({ role: member.role })
+    .from(member)
+    .where(
+      and(
+        eq(member.workspaceId, workspaceId),
+        eq(member.userId, session.user.id),
+      ),
+    )
+    .limit(1);
+
+  return membership ? { workspaceId, role: membership.role } : null;
+}
+
+function normalizeTeamName(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeTeamKey(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value.trim().toUpperCase();
+}
+
+function validateTeamName(name: string) {
+  if (!name) return "Team name is required";
+  if (name.length > MAX_TEAM_NAME_LENGTH) {
+    return `Team name must be ${MAX_TEAM_NAME_LENGTH} characters or fewer`;
+  }
+  return null;
+}
+
+function validateTeamKey(key: string) {
+  if (!key) return "Team key is required";
+  if (key.length > MAX_TEAM_KEY_LENGTH) {
+    return `Team key must be ${MAX_TEAM_KEY_LENGTH} characters or fewer`;
+  }
+  if (!/^[A-Z][A-Z0-9]*$/.test(key)) {
+    return "Team key must start with a letter and only contain letters or numbers";
+  }
+  return null;
+}
+
+async function listTeams(workspaceId: string, userId: string, role: string) {
+  const teams = await db
+    .select({
+      id: team.id,
+      name: team.name,
+      key: team.key,
+      icon: team.icon,
+      isPrivate: team.isPrivate,
+      issueCount: team.issueCount,
+      createdAt: team.createdAt,
+    })
+    .from(team)
+    .where(eq(team.workspaceId, workspaceId))
+    .orderBy(asc(team.name), asc(team.key));
+
+  const teamIds = teams.map((entry) => entry.id);
+  const memberships =
+    teamIds.length === 0
+      ? []
+      : await db
+          .select({ teamId: teamMember.teamId, userId: teamMember.userId })
+          .from(teamMember)
+          .where(inArray(teamMember.teamId, teamIds));
+
+  const memberCountsByTeamId = new Map<string, number>();
+  const currentUserTeamIds = new Set<string>();
+  for (const membership of memberships) {
+    memberCountsByTeamId.set(
+      membership.teamId,
+      (memberCountsByTeamId.get(membership.teamId) ?? 0) + 1,
+    );
+    if (membership.userId === userId) {
+      currentUserTeamIds.add(membership.teamId);
+    }
+  }
+
+  return {
+    workspaceId,
+    viewerRole: role,
+    canManageTeams: canManageTeams(role),
+    teams: teams.map((entry) => ({
+      ...entry,
+      memberCount: memberCountsByTeamId.get(entry.id) ?? 0,
+      currentUserIsMember: currentUserTeamIds.has(entry.id),
+      createdAt: entry.createdAt?.toISOString() ?? new Date(0).toISOString(),
+    })),
+  };
+}
+
+export async function GET() {
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
+  const access = await getWorkspaceAccess(session);
+  if (!access) {
+    return NextResponse.json(
+      { error: "No active workspace found" },
+      { status: 404 },
+    );
+  }
+
+  return NextResponse.json(
+    await listTeams(access.workspaceId, session.user.id, access.role),
+  );
+}
+
+export async function POST(request: Request) {
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
+  const access = await getWorkspaceAccess(session);
+  if (!access) {
+    return NextResponse.json(
+      { error: "No active workspace found" },
+      { status: 404 },
+    );
+  }
+
+  if (!canManageTeams(access.role)) {
+    return NextResponse.json(
+      { error: "Only workspace admins can create teams" },
+      { status: 403 },
+    );
+  }
+
+  let body: {
+    name?: unknown;
+    key?: unknown;
+    isPrivate?: unknown;
+    icon?: unknown;
+  };
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const name = normalizeTeamName(body.name);
+  const nameError = validateTeamName(name);
+  if (nameError) {
+    return NextResponse.json({ error: nameError }, { status: 400 });
+  }
+
+  const existingTeamKeys = await db
+    .select({ key: team.key })
+    .from(team)
+    .where(eq(team.workspaceId, access.workspaceId));
+  const requestedKey = normalizeTeamKey(body.key);
+  const key =
+    requestedKey ??
+    generateTeamKey(
+      name,
+      existingTeamKeys.map(({ key }) => key),
+    );
+  const keyError = validateTeamKey(key);
+  if (keyError) {
+    return NextResponse.json({ error: keyError }, { status: 400 });
+  }
+
+  if (existingTeamKeys.some((entry) => entry.key.toUpperCase() === key)) {
+    return NextResponse.json(
+      { error: "A team with this key already exists" },
+      { status: 409 },
+    );
+  }
+
+  const icon =
+    typeof body.icon === "string" ? body.icon.trim().slice(0, 16) : null;
+  const isPrivate = body.isPrivate === true;
+
+  const newTeam = await db.transaction(async (tx) => {
+    const [createdTeam] = await tx
+      .insert(team)
+      .values({
+        name,
+        key,
+        workspaceId: access.workspaceId,
+        icon: icon || null,
+        isPrivate,
+      })
+      .returning();
+
+    await tx.insert(teamMember).values({
+      teamId: createdTeam.id,
+      userId: session.user.id,
+    });
+
+    await tx
+      .insert(workflowState)
+      .values(getDefaultWorkflowStates(createdTeam.id));
+
+    return createdTeam;
+  });
+
+  return NextResponse.json(
+    {
+      team: {
+        ...newTeam,
+        memberCount: 1,
+        currentUserIsMember: true,
+        createdAt:
+          newTeam.createdAt?.toISOString() ?? new Date(0).toISOString(),
+      },
+    },
+    { status: 201 },
+  );
+}

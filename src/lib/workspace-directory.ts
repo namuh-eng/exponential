@@ -22,22 +22,33 @@ export interface WorkspaceDirectoryTeam {
   isPrivate: boolean | null;
   issueCount: number | null;
   memberCount: number;
+  currentUserIsMember: boolean;
   createdAt: string;
 }
 
-async function getAccessibleWorkspaceId(userId: string) {
+async function getAccessibleWorkspace(userId: string) {
   const workspaceId = await resolveActiveWorkspaceId(userId);
   if (!workspaceId) {
     return null;
   }
 
   const [workspaceMembership] = await db
-    .select({ id: member.id })
+    .select({ id: member.id, role: member.role })
     .from(member)
     .where(and(eq(member.workspaceId, workspaceId), eq(member.userId, userId)))
     .limit(1);
 
-  return workspaceMembership ? workspaceId : null;
+  return workspaceMembership
+    ? { workspaceId, role: workspaceMembership.role }
+    : null;
+}
+
+function canManageTeams(role: string) {
+  return role === "owner" || role === "admin";
+}
+
+async function getAccessibleWorkspaceId(userId: string) {
+  return (await getAccessibleWorkspace(userId))?.workspaceId ?? null;
 }
 
 export async function getWorkspaceMembersDirectory(userId: string) {
@@ -105,10 +116,11 @@ export async function getWorkspaceMembersDirectory(userId: string) {
 }
 
 export async function getWorkspaceTeamsDirectory(userId: string) {
-  const workspaceId = await getAccessibleWorkspaceId(userId);
-  if (!workspaceId) {
+  const access = await getAccessibleWorkspace(userId);
+  if (!access) {
     return null;
   }
+  const { workspaceId } = access;
 
   const teams = await db
     .select({
@@ -137,18 +149,25 @@ export async function getWorkspaceTeamsDirectory(userId: string) {
           .where(inArray(teamMember.teamId, teamIds));
 
   const memberCountsByTeamId = new Map<string, number>();
+  const currentUserTeamIds = new Set<string>();
   for (const membership of memberships) {
     memberCountsByTeamId.set(
       membership.teamId,
       (memberCountsByTeamId.get(membership.teamId) ?? 0) + 1,
     );
+    if (membership.userId === userId) {
+      currentUserTeamIds.add(membership.teamId);
+    }
   }
 
   return {
     workspaceId,
+    viewerRole: access.role,
+    canManageTeams: canManageTeams(access.role),
     teams: teams.map((entry) => ({
       ...entry,
       memberCount: memberCountsByTeamId.get(entry.id) ?? 0,
+      currentUserIsMember: currentUserTeamIds.has(entry.id),
       createdAt: entry.createdAt?.toISOString() ?? new Date(0).toISOString(),
     })),
   };

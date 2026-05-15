@@ -1,4 +1,10 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -86,6 +92,8 @@ describe("workspace directory routes", () => {
   it("renders the authenticated teams directory from workspace data", async () => {
     getWorkspaceTeamsDirectoryMock.mockResolvedValue({
       workspaceId: "workspace-1",
+      viewerRole: "admin",
+      canManageTeams: true,
       teams: [
         {
           id: "team-1",
@@ -95,6 +103,7 @@ describe("workspace directory routes", () => {
           isPrivate: false,
           issueCount: 7,
           memberCount: 3,
+          currentUserIsMember: true,
           createdAt: "2026-01-01T00:00:00.000Z",
         },
       ],
@@ -106,11 +115,118 @@ describe("workspace directory routes", () => {
 
     expect(screen.getByRole("heading", { name: "Teams" })).toBeVisible();
     expect(screen.getByText("Engineering")).toBeVisible();
-    expect(screen.getByRole("link", { name: /Engineering/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /View issues/i })).toHaveAttribute(
       "href",
       "/team/ENG/all",
     );
+    expect(screen.getByRole("link", { name: /Settings/i })).toHaveAttribute(
+      "href",
+      "/settings/teams/ENG",
+    );
+    expect(screen.getByRole("button", { name: "New team" })).toBeVisible();
     expect(getWorkspaceTeamsDirectoryMock).toHaveBeenCalledWith("user-1");
+  });
+
+  it("filters the teams directory by search and access", async () => {
+    getWorkspaceTeamsDirectoryMock.mockResolvedValue({
+      workspaceId: "workspace-1",
+      viewerRole: "member",
+      canManageTeams: false,
+      teams: [
+        {
+          id: "team-1",
+          name: "Engineering",
+          key: "ENG",
+          icon: null,
+          isPrivate: false,
+          issueCount: 7,
+          memberCount: 3,
+          currentUserIsMember: true,
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+        {
+          id: "team-2",
+          name: "Secret Ops",
+          key: "SEC",
+          icon: null,
+          isPrivate: true,
+          issueCount: 1,
+          memberCount: 1,
+          currentUserIsMember: false,
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    });
+
+    const { default: TeamsPage } = await import("@/app/(app)/teams/page");
+
+    render(await TeamsPage());
+
+    expect(screen.queryByRole("button", { name: "New team" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Search teams"), {
+      target: { value: "secret" },
+    });
+
+    expect(screen.getByText("Secret Ops")).toBeVisible();
+    expect(screen.queryByText("Engineering")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Filter"), {
+      target: { value: "member" },
+    });
+
+    expect(
+      screen.getByText("No teams match your search or filters."),
+    ).toBeVisible();
+  });
+
+  it("creates a team from the directory modal and adds it to the list", async () => {
+    getWorkspaceTeamsDirectoryMock.mockResolvedValue({
+      workspaceId: "workspace-1",
+      viewerRole: "owner",
+      canManageTeams: true,
+      teams: [],
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          team: {
+            id: "team-3",
+            name: "Support",
+            key: "SUP",
+            icon: null,
+            isPrivate: true,
+            issueCount: 0,
+            memberCount: 1,
+            currentUserIsMember: true,
+            createdAt: "2026-01-01T00:00:00.000Z",
+          },
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const { default: TeamsPage } = await import("@/app/(app)/teams/page");
+
+    render(await TeamsPage());
+    fireEvent.click(screen.getByRole("button", { name: "New team" }));
+    fireEvent.change(screen.getByLabelText("Team name"), {
+      target: { value: "Support" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("ENG"), {
+      target: { value: "sup" },
+    });
+    fireEvent.click(screen.getByLabelText("Private team"));
+    fireEvent.click(screen.getByRole("button", { name: "Create team" }));
+
+    await waitFor(() => expect(screen.getByText("Support")).toBeVisible());
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/teams",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ name: "Support", key: "SUP", isPrivate: true }),
+      }),
+    );
+    fetchMock.mockRestore();
   });
 
   it("redirects unauthenticated directory requests to login", async () => {
