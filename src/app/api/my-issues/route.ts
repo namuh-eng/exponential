@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import {
   comment,
   issue,
+  issueSubscription,
   member,
   project,
   team,
@@ -68,6 +69,7 @@ export async function GET(request: Request) {
         ...(await fetchIssuesByAssignee(userId, teamIds)),
         ...(await fetchIssuesByCreator(userId, teamIds)),
         ...(await fetchIssuesByCommenter(userId, teamIds)),
+        ...(await fetchIssuesByExplicitSubscription(userId, teamIds)),
       ]),
     );
   } else {
@@ -364,6 +366,44 @@ async function fetchIssuesByCommenter(
     .where(
       and(
         eq(comment.userId, userId),
+        inArray(issue.teamId, teamIds),
+        isNull(issue.archivedAt),
+      ),
+    )
+    .orderBy(desc(issue.updatedAt));
+}
+
+async function fetchIssuesByExplicitSubscription(
+  userId: string,
+  teamIds: string[],
+): Promise<IssueRecord[]> {
+  return db
+    .select({
+      id: issue.id,
+      number: issue.number,
+      identifier: issue.identifier,
+      title: issue.title,
+      priority: issue.priority,
+      stateId: issue.stateId,
+      assigneeId: issue.assigneeId,
+      assigneeName: user.name,
+      assigneeImage: user.image,
+      projectId: issue.projectId,
+      projectName: project.name,
+      dueDate: issue.dueDate,
+      createdAt: issue.createdAt,
+      updatedAt: issue.updatedAt,
+      sortOrder: issue.sortOrder,
+      teamId: issue.teamId,
+    })
+    .from(issueSubscription)
+    .innerJoin(issue, eq(issueSubscription.issueId, issue.id))
+    .leftJoin(user, eq(issue.assigneeId, user.id))
+    .leftJoin(project, eq(issue.projectId, project.id))
+    .where(
+      and(
+        eq(issueSubscription.userId, userId),
+        eq(issueSubscription.subscribed, true),
         inArray(issue.teamId, teamIds),
         isNull(issue.archivedAt),
       ),
