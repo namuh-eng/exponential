@@ -1,5 +1,6 @@
 "use client";
 
+import { useAppShellContext } from "@/app/(app)/app-shell";
 import { Avatar } from "@/components/avatar";
 import { EmptyState } from "@/components/empty-state";
 import type { FilterCondition } from "@/components/filter-bar";
@@ -13,6 +14,7 @@ import {
   projectViewSortOptions,
   projectViewStatusOptions,
 } from "@/lib/views";
+import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -550,6 +552,7 @@ export function ViewsPage({
   const router = useRouter();
   const params = useParams<{ key?: string }>();
   const searchParams = useSearchParams();
+  const workspaceSlug = useAppShellContext()?.workspaceSlug;
   const [views, setViews] = useState<ViewSummary[]>([]);
   const [teams, setTeams] = useState<ViewTeam[]>([]);
   const [loading, setLoading] = useState(true);
@@ -611,7 +614,10 @@ export function ViewsPage({
 
     if (initialTeamKey || routeTeamKey) {
       router.push(
-        `/team/${encodeURIComponent(activeTeamKey ?? "")}/views/${tab}`,
+        withWorkspaceSlug(
+          `/team/${encodeURIComponent(activeTeamKey ?? "")}/views/${tab}`,
+          workspaceSlug,
+        ),
       );
       return;
     }
@@ -620,7 +626,7 @@ export function ViewsPage({
     const query = activeTeamKey
       ? `?team=${encodeURIComponent(activeTeamKey)}`
       : "";
-    router.push(`${basePath}${query}`);
+    router.push(withWorkspaceSlug(`${basePath}${query}`, workspaceSlug));
   };
 
   const handleOpenView = (view: ViewSummary) => {
@@ -631,9 +637,12 @@ export function ViewsPage({
 
       writeStoredIssueFilters(view.teamKey, view.filterState.issueFilters);
       router.push(
-        view.layout === "board"
-          ? `/team/${view.teamKey}/board`
-          : `/team/${view.teamKey}/all`,
+        withWorkspaceSlug(
+          view.layout === "board"
+            ? `/team/${view.teamKey}/board`
+            : `/team/${view.teamKey}/all`,
+          workspaceSlug,
+        ),
       );
       return;
     }
@@ -643,7 +652,7 @@ export function ViewsPage({
       sortBy: view.filterState.projectSortBy,
       teamId: view.teamId,
     });
-    router.push("/projects");
+    router.push(withWorkspaceSlug("/projects", workspaceSlug));
   };
 
   const handleDeleteView = async (view: ViewSummary) => {
@@ -720,7 +729,10 @@ export function ViewsPage({
             type="button"
             onClick={() =>
               router.push(
-                activeTab === "issues" ? "/views/issues" : "/views/projects",
+                withWorkspaceSlug(
+                  activeTab === "issues" ? "/views/issues" : "/views/projects",
+                  workspaceSlug,
+                ),
               )
             }
             className="rounded-md border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)]"

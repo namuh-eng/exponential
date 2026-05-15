@@ -77,6 +77,7 @@ describe("Auth proxy", () => {
     "/foreverbrowsing/settings/account/security",
     "/foreverbrowsing/team/ENG/all",
     "/foreverbrowsing/projects",
+    "/foreverbrowsing/team/ENG/views",
   ])(
     "rewrites unauthenticated workspace deep link %s to login without changing the browser URL",
     async (path) => {
@@ -255,10 +256,13 @@ describe("Auth proxy", () => {
     "/foreverbrowsing/projects",
     "/foreverbrowsing/projects/all",
     "/foreverbrowsing/team/ENG/projects",
+    "/foreverbrowsing/team/ENG/views",
+    "/foreverbrowsing/team/ENG/views/issues",
+    "/foreverbrowsing/team/ENG/views/projects",
     "/foreverbrowsing/initiatives",
     "/foreverbrowsing/initiatives/init-1",
   ])(
-    "lets explicit workspace-prefixed projects and initiatives route %s render canonically",
+    "lets explicit workspace-prefixed route %s render canonically",
     async (path) => {
       mockRewrite.mockClear();
       mockRedirect.mockClear();
@@ -305,7 +309,14 @@ describe("Auth proxy", () => {
     expect(redirectUrl.search).toBe("?focusedComment=c-1");
   });
 
-  it.each(["/all", "/board", "/projects"])(
+  it.each([
+    "/all",
+    "/board",
+    "/projects",
+    "/views",
+    "/views/issues",
+    "/views/projects",
+  ])(
     "redirects legacy canonical ENG team%s routes to workspace-scoped routes",
     async (teamRoute) => {
       mockRedirect.mockClear();

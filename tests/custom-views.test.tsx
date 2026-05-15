@@ -11,6 +11,12 @@ import { ViewsPage } from "@/components/views-page";
 
 const push = vi.fn();
 let searchParams = new URLSearchParams();
+let mockWorkspaceSlug: string | undefined;
+
+vi.mock("@/app/(app)/app-shell", () => ({
+  useAppShellContext: () =>
+    mockWorkspaceSlug ? { workspaceSlug: mockWorkspaceSlug } : null,
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn(), back: vi.fn() }),
@@ -36,6 +42,7 @@ Object.defineProperty(window, "localStorage", {
     },
     clear: () => {
       storage.clear();
+      mockWorkspaceSlug = undefined;
     },
   },
   configurable: true,
@@ -107,6 +114,7 @@ describe("ViewsPage", () => {
     vi.clearAllMocks();
     searchParams = new URLSearchParams();
     storage.clear();
+    mockWorkspaceSlug = undefined;
   });
 
   afterEach(() => {
@@ -175,6 +183,46 @@ describe("ViewsPage", () => {
     expect(screen.getByText("Onboarding QA Team")).toBeInTheDocument();
     expect(screen.getByText("High priority onboarding")).toBeInTheDocument();
     expect(screen.queryByText("Project progress")).not.toBeInTheDocument();
+  });
+
+  it("preserves workspace slug for team view tab navigation", async () => {
+    mockWorkspaceSlug = "foreverbrowsing";
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => buildViewsResponse(),
+    });
+
+    render(<ViewsPage initialTab="issues" initialTeamKeyFromRoute />);
+    await waitForLoaded();
+
+    fireEvent.click(screen.getByRole("button", { name: "Projects" }));
+
+    expect(push).toHaveBeenCalledWith(
+      "/foreverbrowsing/team/ONB/views/projects",
+    );
+  });
+
+  it("preserves workspace slug when opening saved issue and project views", async () => {
+    mockWorkspaceSlug = "foreverbrowsing";
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => buildViewsResponse(),
+    });
+
+    render(<ViewsPage initialTab="issues" />);
+    await waitForLoaded();
+
+    fireEvent.click(await screen.findByText("High priority onboarding"));
+    expect(push).toHaveBeenCalledWith("/foreverbrowsing/team/ONB/all");
+
+    cleanup();
+    push.mockClear();
+
+    render(<ViewsPage initialTab="projects" />);
+    await waitForLoaded();
+
+    fireEvent.click(await screen.findByText("Project progress"));
+    expect(push).toHaveBeenCalledWith("/foreverbrowsing/projects");
   });
 
   it("shows team not found for unknown team view routes", async () => {

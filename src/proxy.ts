@@ -128,6 +128,23 @@ function getWorkspacePrefixedTeamProjectsRoute(pathname: string) {
   return null;
 }
 
+function getWorkspacePrefixedTeamViewsRoute(pathname: string) {
+  const segments = getPathSegments(pathname);
+
+  if (
+    isWorkspaceSlugSegment(segments[0]) &&
+    segments[1] === "team" &&
+    segments[3] === "views" &&
+    (segments.length === 4 ||
+      (segments.length === 5 &&
+        (segments[4] === "issues" || segments[4] === "projects")))
+  ) {
+    return { slug: decodeURIComponent(segments[0]) };
+  }
+
+  return null;
+}
+
 function getWorkspacePrefixedInitiativesRoute(pathname: string) {
   const segments = getPathSegments(pathname);
 
@@ -264,6 +281,16 @@ export async function proxy(request: NextRequest) {
     requestHeaders.set(
       "x-workspace-slug",
       workspacePrefixedTeamProjectsRoute.slug,
+    );
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
+  const workspacePrefixedTeamViewsRoute =
+    getWorkspacePrefixedTeamViewsRoute(pathname);
+  if (workspacePrefixedTeamViewsRoute) {
+    requestHeaders.set(
+      "x-workspace-slug",
+      workspacePrefixedTeamViewsRoute.slug,
     );
     return NextResponse.next({ request: { headers: requestHeaders } });
   }
