@@ -5,6 +5,11 @@ const resolveRequestWorkspaceIdMock = vi.fn();
 const membershipsLimitMock = vi.fn();
 const initiativesWhereMock = vi.fn();
 const projectsInnerJoinMock = vi.fn();
+const workspaceMembersWhereMock = vi.fn();
+const workspaceTeamsWhereMock = vi.fn();
+const initiativeTeamsWhereMock = vi.fn();
+const ownerLimitMock = vi.fn();
+const insertValuesMock = vi.fn();
 const insertReturningMock = vi.fn();
 
 vi.mock("@/lib/active-workspace", () => ({
@@ -34,11 +39,42 @@ vi.mock("@/lib/db", () => ({
         };
       }
 
+      if (selection && "name" in selection && "image" in selection) {
+        return {
+          from: vi.fn().mockReturnValue({
+            innerJoin: vi.fn().mockReturnValue({
+              where: workspaceMembersWhereMock,
+            }),
+          }),
+        };
+      }
+
+      if (selection && "key" in selection && "icon" in selection) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: workspaceTeamsWhereMock,
+            innerJoin: vi.fn().mockReturnValue({
+              where: initiativeTeamsWhereMock,
+            }),
+          }),
+        };
+      }
+
       if (selection && "id" in selection && "status" in selection) {
         return {
           from: vi.fn().mockReturnValue({
             innerJoin: vi.fn().mockReturnValue({
               where: projectsInnerJoinMock,
+            }),
+          }),
+        };
+      }
+
+      if (selection && "id" in selection) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: ownerLimitMock,
             }),
           }),
         };
@@ -51,7 +87,7 @@ vi.mock("@/lib/db", () => ({
       };
     }),
     insert: vi.fn(() => ({
-      values: vi.fn().mockReturnValue({
+      values: insertValuesMock.mockReturnValue({
         returning: insertReturningMock,
       }),
     })),
@@ -72,6 +108,16 @@ describe("initiatives collection route", () => {
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
     resolveRequestWorkspaceIdMock.mockResolvedValue("workspace-1");
     membershipsLimitMock.mockResolvedValue([{ workspaceId: "workspace-1" }]);
+    workspaceMembersWhereMock.mockResolvedValue([
+      { id: "user-1", name: "Ashley", image: null },
+    ]);
+    workspaceTeamsWhereMock.mockResolvedValue([
+      { id: "team-1", name: "Engineering", key: "ENG", icon: "🛠" },
+    ]);
+    initiativeTeamsWhereMock.mockResolvedValue([
+      { id: "team-1", name: "Engineering", key: "ENG", icon: "🛠" },
+    ]);
+    ownerLimitMock.mockResolvedValue([{ id: "member-1" }]);
     initiativesWhereMock.mockResolvedValue([
       {
         id: "init-1",
@@ -79,12 +125,54 @@ describe("initiatives collection route", () => {
         description: "Scale things",
         status: "active",
         createdAt: new Date("2026-04-01T00:00:00.000Z"),
+        ownerId: "user-1",
+        startDate: null,
+        targetDate: new Date("2026-09-30T00:00:00.000Z"),
+        health: "atRisk",
+        timeframe: null,
+        parentInitiativeId: null,
+        settings: {
+          updates: [
+            {
+              id: "up-1",
+              health: "atRisk",
+              body: "Launch is at risk",
+              actorName: "Ashley",
+              actorImage: null,
+              createdAt: "2026-04-02T00:00:00.000Z",
+            },
+          ],
+        },
         updatedAt: new Date("2026-04-01T00:00:00.000Z"),
       },
     ]);
     projectsInnerJoinMock.mockResolvedValue([
-      { id: "proj-1", name: "Referrals", status: "completed", icon: "rocket" },
-      { id: "proj-2", name: "Ads", status: "active", icon: "ads" },
+      {
+        id: "proj-1",
+        name: "Referrals",
+        status: "completed",
+        icon: "rocket",
+        settings: {},
+      },
+      {
+        id: "proj-2",
+        name: "Ads",
+        status: "started",
+        icon: "ads",
+        settings: {
+          activity: [
+            {
+              id: "act-1",
+              type: "update",
+              title: "Project update",
+              body: "On track",
+              actorName: "Ashley",
+              actorImage: null,
+              createdAt: "2026-04-02T00:00:00.000Z",
+            },
+          ],
+        },
+      },
     ]);
   });
 
@@ -120,11 +208,37 @@ describe("initiatives collection route", () => {
           name: "Growth",
           description: "Scale things",
           status: "active",
+          ownerId: "user-1",
+          owner: { id: "user-1", name: "Ashley", image: null },
+          teams: [{ id: "team-1", name: "Engineering", key: "ENG", icon: "🛠" }],
+          startDate: null,
+          targetDate: "2026-09-30T00:00:00.000Z",
+          timeframe: null,
+          health: "atRisk",
+          parentInitiativeId: null,
           projectCount: 2,
           completedProjectCount: 1,
+          latestUpdate: {
+            id: "up-1",
+            health: "atRisk",
+            body: "Launch is at risk",
+            actorName: "Ashley",
+            actorImage: null,
+            createdAt: "2026-04-02T00:00:00.000Z",
+          },
+          activeProjectHealthRollup: {
+            total: 1,
+            withUpdates: 1,
+            withoutUpdates: 0,
+            paused: 0,
+          },
           createdAt: "2026-04-01T00:00:00.000Z",
           updatedAt: "2026-04-01T00:00:00.000Z",
         },
+      ],
+      workspaceMembers: [{ id: "user-1", name: "Ashley", image: null }],
+      workspaceTeams: [
+        { id: "team-1", name: "Engineering", key: "ENG", icon: "🛠" },
       ],
     });
   });
@@ -143,6 +257,39 @@ describe("initiatives collection route", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Initiative name is required",
     });
+  });
+
+  it("rejects invalid owner and malformed target dates", async () => {
+    ownerLimitMock.mockResolvedValueOnce([]);
+    const { POST } = await import("@/app/api/initiatives/route");
+
+    let response = await POST(
+      new Request("http://localhost/api/initiatives", {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Invalid owner",
+          ownerId: "missing-user",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "Owner not found",
+    });
+
+    response = await POST(
+      new Request("http://localhost/api/initiatives", {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Bad date",
+          targetDate: "not-a-date",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "Invalid date" });
   });
 
   it("creates an initiative", async () => {

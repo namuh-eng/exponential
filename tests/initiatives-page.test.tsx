@@ -25,6 +25,16 @@ const mockInitiativesData = {
       status: "active",
       projectCount: 2,
       completedProjectCount: 1,
+      owner: { id: "user-1", name: "Ashley", image: null },
+      teams: [{ id: "team-1", name: "Engineering", key: "ENG", icon: "🛠" }],
+      targetDate: "2026-09-30T00:00:00.000Z",
+      health: "onTrack",
+      activeProjectHealthRollup: {
+        total: 1,
+        withUpdates: 1,
+        withoutUpdates: 0,
+        paused: 0,
+      },
       createdAt: "2026-04-01T00:00:00.000Z",
     },
     {
@@ -36,6 +46,10 @@ const mockInitiativesData = {
       completedProjectCount: 0,
       createdAt: "2026-04-02T00:00:00.000Z",
     },
+  ],
+  workspaceMembers: [{ id: "user-1", name: "Ashley", image: null }],
+  workspaceTeams: [
+    { id: "team-1", name: "Engineering", key: "ENG", icon: "🛠" },
   ],
 };
 
@@ -86,9 +100,12 @@ describe("InitiativesPage", () => {
     fireEvent.change(screen.getByPlaceholderText("Initiative name"), {
       target: { value: "Super Growth" },
     });
-    fireEvent.change(screen.getByPlaceholderText("Description (optional)"), {
-      target: { value: "More scale" },
-    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Summary or initiative document (optional)"),
+      {
+        target: { value: "More scale" },
+      },
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Create initiative" }));
 
@@ -101,6 +118,10 @@ describe("InitiativesPage", () => {
             name: "Super Growth",
             description: "More scale",
             status: "active",
+            ownerId: undefined,
+            teamIds: [],
+            targetDate: undefined,
+            health: "unknown",
           }),
         }),
       );

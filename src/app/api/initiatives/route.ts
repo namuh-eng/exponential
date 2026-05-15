@@ -5,10 +5,16 @@ import {
   initiative,
   initiativeProject,
   initiativeTeam,
+  member,
   project,
   team,
+  user,
 } from "@/lib/db/schema";
-import { isInitiativeHealth } from "@/lib/initiative-detail";
+import {
+  isInitiativeHealth,
+  readInitiativeSettings,
+} from "@/lib/initiative-detail";
+import { readProjectSettings } from "@/lib/project-detail";
 import { and, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -23,12 +29,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
   }
 
-  const initiatives = await db
-    .select()
-    .from(initiative)
-    .where(eq(initiative.workspaceId, workspaceId));
+  const [initiatives, workspaceMembers, workspaceTeams] = await Promise.all([
+    db.select().from(initiative).where(eq(initiative.workspaceId, workspaceId)),
+    db
+      .select({ id: user.id, name: user.name, image: user.image })
+      .from(member)
+      .innerJoin(user, eq(member.userId, user.id))
+      .where(eq(member.workspaceId, workspaceId)),
+    db
+      .select({ id: team.id, name: team.name, key: team.key, icon: team.icon })
+      .from(team)
+      .where(eq(team.workspaceId, workspaceId)),
+  ]);
 
-  // Get project counts per initiative
+  const membersById = new Map(workspaceMembers.map((m) => [m.id, m]));
+
+  // Get roadmap rollups per initiative
   const result = await Promise.all(
     initiatives.map(async (init) => {
       const projects = await db
@@ -37,6 +53,7 @@ export async function GET(request: Request) {
           name: project.name,
           status: project.status,
           icon: project.icon,
+          settings: project.settings,
         })
         .from(initiativeProject)
         .innerJoin(project, eq(initiativeProject.projectId, project.id))
@@ -45,6 +62,26 @@ export async function GET(request: Request) {
       const completedCount = projects.filter(
         (p) => p.status === "completed",
       ).length;
+      const teamRows = await db
+        .select({
+          id: team.id,
+          name: team.name,
+          key: team.key,
+          icon: team.icon,
+        })
+        .from(initiativeTeam)
+        .innerJoin(team, eq(initiativeTeam.teamId, team.id))
+        .where(eq(initiativeTeam.initiativeId, init.id));
+      const latestUpdate =
+        readInitiativeSettings(init.settings).updates[0] ?? null;
+      const activeProjects = projects.filter(
+        (p) => p.status !== "completed" && p.status !== "canceled",
+      );
+      const activeProjectUpdateCount = activeProjects.filter((p) =>
+        readProjectSettings(p.settings).activity.some(
+          (entry) => entry.type === "update",
+        ),
+      ).length;
 
       return {
         id: init.id,
@@ -52,6 +89,8 @@ export async function GET(request: Request) {
         description: init.description,
         status: init.status,
         ownerId: init.ownerId,
+        owner: init.ownerId ? (membersById.get(init.ownerId) ?? null) : null,
+        teams: teamRows,
         startDate: init.startDate,
         targetDate: init.targetDate,
         timeframe: init.timeframe,
@@ -59,13 +98,24 @@ export async function GET(request: Request) {
         parentInitiativeId: init.parentInitiativeId,
         projectCount: projects.length,
         completedProjectCount: completedCount,
+        latestUpdate,
+        activeProjectHealthRollup: {
+          total: activeProjects.length,
+          withUpdates: activeProjectUpdateCount,
+          withoutUpdates: activeProjects.length - activeProjectUpdateCount,
+          paused: activeProjects.filter((p) => p.status === "paused").length,
+        },
         createdAt: init.createdAt,
         updatedAt: init.updatedAt,
       };
     }),
   );
 
-  return NextResponse.json({ initiatives: result });
+  return NextResponse.json({
+    initiatives: result,
+    workspaceMembers,
+    workspaceTeams,
+  });
 }
 
 export async function POST(request: Request) {
@@ -104,6 +154,10 @@ export async function POST(request: Request) {
     typeof body.timeframe === "string" && body.timeframe.trim()
       ? body.timeframe.trim().slice(0, 120)
       : null;
+  const ownerId =
+    typeof body.ownerId === "string" && body.ownerId.trim()
+      ? body.ownerId.trim()
+      : null;
   const parentInitiativeId =
     typeof body.parentInitiativeId === "string" && body.parentInitiativeId
       ? body.parentInitiativeId
@@ -130,6 +184,19 @@ export async function POST(request: Request) {
     (startDate && Number.isNaN(startDate.getTime()))
   ) {
     return NextResponse.json({ error: "Invalid date" }, { status: 400 });
+  }
+
+  if (ownerId) {
+    const owners = await db
+      .select({ id: member.id })
+      .from(member)
+      .where(
+        and(eq(member.workspaceId, workspaceId), eq(member.userId, ownerId)),
+      )
+      .limit(1);
+    if (owners.length === 0) {
+      return NextResponse.json({ error: "Owner not found" }, { status: 404 });
+    }
   }
 
   if (parentInitiativeId) {
@@ -169,6 +236,7 @@ export async function POST(request: Request) {
     startDate,
     targetDate,
     timeframe,
+    ownerId,
     parentInitiativeId,
     workspaceId,
   };
