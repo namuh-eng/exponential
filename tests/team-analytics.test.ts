@@ -126,6 +126,26 @@ describe("Team Analytics API and Logic", () => {
     expect(response.filters.labels).toEqual(
       expect.arrayContaining(["reporting", "frontend", "bug"]),
     );
+    expect(response.metricCards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "throughput",
+          label: "Throughput",
+          issueIds: ["i-1"],
+          drilldown: expect.objectContaining({
+            analyticsKey: "metric:throughput",
+          }),
+        }),
+        expect.objectContaining({ id: "workload", label: "Workload" }),
+      ]),
+    );
+    expect(response.trend.title).toBe(
+      "Created, completed, and active issues over time",
+    );
+    expect(
+      response.trend.points.some((point) => point.issueIds.length > 0),
+    ).toBe(true);
+    expect(response.tableRows[0].drilldown.analyticsKey).toContain("bucket:");
     expect(response.actions.csv.enabled).toBe(true);
     expect(response.actions.share.enabled).toBe(true);
     expect(response.cycleMetrics[0]).toMatchObject({

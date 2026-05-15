@@ -7,11 +7,19 @@ import {
 } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import TeamAnalyticsPage from "@/app/(app)/team/[key]/analytics/page";
-import { useParams } from "next/navigation";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  useParams,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
   useParams: vi.fn(),
+  usePathname: vi.fn(),
+  useRouter: vi.fn(),
+  useSearchParams: vi.fn(),
 }));
 
 const mockAnalyticsData = {
@@ -56,8 +64,76 @@ const mockAnalyticsData = {
   chart: {
     title: "Issue count by Status",
     points: [
-      { key: "Done", label: "Done", value: 1, issueIds: ["i-1"] },
-      { key: "In Progress", label: "In Progress", value: 1, issueIds: ["i-2"] },
+      {
+        key: "Done",
+        label: "Done",
+        value: 1,
+        issueIds: ["i-1"],
+        drilldown: {
+          label: "Done",
+          analyticsKey: "bucket:Done",
+          issueIds: ["i-1"],
+        },
+      },
+      {
+        key: "In Progress",
+        label: "In Progress",
+        value: 1,
+        issueIds: ["i-2"],
+        drilldown: {
+          label: "In Progress",
+          analyticsKey: "bucket:In Progress",
+          issueIds: ["i-2"],
+        },
+      },
+    ],
+  },
+  metricCards: [
+    {
+      id: "throughput",
+      label: "Throughput",
+      value: 1,
+      helper: "completed in last 90 days",
+      delta: 1,
+      deltaLabel: "vs previous period",
+      issueIds: ["i-1"],
+      drilldown: {
+        label: "Completed throughput",
+        analyticsKey: "metric:throughput",
+        issueIds: ["i-1"],
+      },
+    },
+    {
+      id: "workload",
+      label: "Workload",
+      value: 1,
+      helper: "started or unstarted issues",
+      delta: 0,
+      deltaLabel: "active minus backlog",
+      issueIds: ["i-2"],
+      drilldown: {
+        label: "Active workload",
+        analyticsKey: "metric:workload",
+        issueIds: ["i-2"],
+      },
+    },
+  ],
+  trend: {
+    title: "Created, completed, and active issues over time",
+    points: [
+      {
+        key: "2026-05-01",
+        label: "May 1",
+        created: 2,
+        completed: 1,
+        active: 1,
+        issueIds: ["i-1", "i-2"],
+        drilldown: {
+          label: "Trend bucket May 1",
+          analyticsKey: "trend:2026-05-01",
+          issueIds: ["i-1", "i-2"],
+        },
+      },
     ],
   },
   tableRows: [
@@ -66,6 +142,11 @@ const mockAnalyticsData = {
       label: "Done",
       value: 1,
       issueIds: ["i-1"],
+      drilldown: {
+        label: "Done",
+        analyticsKey: "bucket:Done",
+        issueIds: ["i-1"],
+      },
       count: 1,
       completed: 1,
       effort: 3,
@@ -75,6 +156,11 @@ const mockAnalyticsData = {
       label: "In Progress",
       value: 1,
       issueIds: ["i-2"],
+      drilldown: {
+        label: "In Progress",
+        analyticsKey: "bucket:In Progress",
+        issueIds: ["i-2"],
+      },
       count: 1,
       completed: 0,
       effort: 5,
@@ -103,6 +189,18 @@ const mockAnalyticsData = {
 };
 
 describe("TeamAnalyticsPage component", () => {
+  const router = { push: vi.fn(), replace: vi.fn() };
+
+  beforeEach(() => {
+    vi.mocked(useRouter).mockReturnValue(router as never);
+    vi.mocked(usePathname).mockReturnValue(
+      "/foreverbrowsing/team/ENG/insights",
+    );
+    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams() as never);
+    router.push.mockClear();
+    router.replace.mockClear();
+  });
+
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
@@ -135,9 +233,12 @@ describe("TeamAnalyticsPage component", () => {
       expect(screen.getByLabelText("Project")).toBeInTheDocument();
       expect(screen.getByLabelText("Team")).toBeInTheDocument();
       expect(screen.getByLabelText("Label")).toBeInTheDocument();
+      expect(screen.getByText("Throughput")).toBeInTheDocument();
+      expect(screen.getByText("Workload")).toBeInTheDocument();
       expect(screen.getByText("Issue count by Status")).toBeInTheDocument();
       expect(screen.getByText("Backing table")).toBeInTheDocument();
       expect(screen.getByText("Cycle graph / burndown")).toBeInTheDocument();
+      expect(screen.getByLabelText("Insights trend chart")).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: "Export CSV" }),
       ).toBeInTheDocument();
@@ -173,10 +274,12 @@ describe("TeamAnalyticsPage component", () => {
       );
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /Done/ }));
-    expect(
-      screen.getByText("Highlighted 1 issues for Done."),
-    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(router.push).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "/foreverbrowsing/team/ENG/all?insight=bucket%3ADone",
+      ),
+    );
   });
 
   it("exports CSV, shares links, toggles full screen, opens via shortcut, and shows empty states", async () => {
@@ -185,6 +288,8 @@ describe("TeamAnalyticsPage component", () => {
       ...mockAnalyticsData,
       tableRows: [],
       chart: { ...mockAnalyticsData.chart, points: [] },
+      metricCards: [],
+      trend: { ...mockAnalyticsData.trend, points: [] },
       cycleMetrics: [],
       emptyState: "No issues match these analytics filters.",
     };

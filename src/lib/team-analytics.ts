@@ -75,6 +75,34 @@ export interface ChartPoint {
   value: number;
   segment?: string;
   issueIds: string[];
+  drilldown: DrilldownPayload;
+}
+
+export interface DrilldownPayload {
+  label: string;
+  issueIds: string[];
+  analyticsKey: string;
+}
+
+export interface MetricCard {
+  id: string;
+  label: string;
+  value: number;
+  helper: string;
+  delta: number;
+  deltaLabel: string;
+  issueIds: string[];
+  drilldown: DrilldownPayload;
+}
+
+export interface TrendPoint {
+  key: string;
+  label: string;
+  created: number;
+  completed: number;
+  active: number;
+  issueIds: string[];
+  drilldown: DrilldownPayload;
 }
 
 export interface TableRow extends ChartPoint {
@@ -213,12 +241,216 @@ function measureIssue(issue: AnalyticsIssueRow, measure: AnalyticsMeasure) {
   return 1;
 }
 
-function rangeStart(range: AnalyticsRange) {
+function rangeDays(range: AnalyticsRange) {
   if (range === "all") return null;
-  const days = range === "30d" ? 30 : range === "180d" ? 180 : 90;
+  return range === "30d" ? 30 : range === "180d" ? 180 : 90;
+}
+
+function rangeStart(range: AnalyticsRange) {
+  const days = rangeDays(range);
+  if (!days) return null;
   const date = new Date();
   date.setDate(date.getDate() - days);
   return date;
+}
+
+function shortDateLabel(date: Date) {
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function drilldown(
+  label: string,
+  analyticsKey: string,
+  issueIds: string[],
+): DrilldownPayload {
+  return { label, analyticsKey, issueIds };
+}
+
+function average(values: number[]) {
+  if (values.length === 0) return 0;
+  return (
+    Math.round(
+      (values.reduce((sum, value) => sum + value, 0) / values.length) * 10,
+    ) / 10
+  );
+}
+
+function buildMetricCards(
+  issues: AnalyticsIssueRow[],
+  query: AnalyticsQuery,
+): MetricCard[] {
+  const days = rangeDays(query.range);
+  const now = new Date();
+  const currentStart = rangeStart(query.range);
+  const previousStart = days && currentStart ? new Date(currentStart) : null;
+  if (previousStart && days)
+    previousStart.setDate(previousStart.getDate() - days);
+
+  const completed = issues.filter((issue) => issue.completedAt);
+  const completedCurrent = completed.filter((issue) => {
+    const completedAt = dateValue(issue.completedAt);
+    return !currentStart || (completedAt && completedAt >= currentStart);
+  });
+  const completedPrevious = completed.filter((issue) => {
+    const completedAt = dateValue(issue.completedAt);
+    return Boolean(
+      previousStart &&
+        currentStart &&
+        completedAt &&
+        completedAt >= previousStart &&
+        completedAt < currentStart,
+    );
+  });
+  const active = issues.filter((issue) =>
+    ["started", "unstarted"].includes(issue.statusCategory ?? ""),
+  );
+  const backlog = issues.filter((issue) => issue.statusCategory === "backlog");
+  const cycleTimes = completedCurrent.map((issue) =>
+    daysBetween(issue.updatedAt, issue.completedAt),
+  );
+  const previousCycleTimes = completedPrevious.map((issue) =>
+    daysBetween(issue.updatedAt, issue.completedAt),
+  );
+  const completionRate =
+    issues.length > 0
+      ? Math.round((completedCurrent.length / issues.length) * 100)
+      : 0;
+  const previousCompletionRate =
+    issues.length > 0
+      ? Math.round((completedPrevious.length / issues.length) * 100)
+      : 0;
+
+  return [
+    {
+      id: "throughput",
+      label: "Throughput",
+      value: completedCurrent.length,
+      helper: `completed in ${query.range === "all" ? "all time" : `last ${query.range.replace("d", " days")}`}`,
+      delta: completedCurrent.length - completedPrevious.length,
+      deltaLabel: "vs previous period",
+      issueIds: completedCurrent.map((issue) => issue.id),
+      drilldown: drilldown(
+        "Completed throughput",
+        "metric:throughput",
+        completedCurrent.map((issue) => issue.id),
+      ),
+    },
+    {
+      id: "cycle_time",
+      label: "Cycle time",
+      value: average(cycleTimes),
+      helper: "avg days from start to done",
+      delta:
+        Math.round((average(cycleTimes) - average(previousCycleTimes)) * 10) /
+        10,
+      deltaLabel: "days vs previous",
+      issueIds: completedCurrent.map((issue) => issue.id),
+      drilldown: drilldown(
+        "Cycle time issues",
+        "metric:cycle_time",
+        completedCurrent.map((issue) => issue.id),
+      ),
+    },
+    {
+      id: "workload",
+      label: "Workload",
+      value: active.length,
+      helper: "started or unstarted issues",
+      delta: active.length - backlog.length,
+      deltaLabel: "active minus backlog",
+      issueIds: active.map((issue) => issue.id),
+      drilldown: drilldown(
+        "Active workload",
+        "metric:workload",
+        active.map((issue) => issue.id),
+      ),
+    },
+    {
+      id: "completion_rate",
+      label: "Completion rate",
+      value: completionRate,
+      helper: "% of matching issues completed",
+      delta: completionRate - previousCompletionRate,
+      deltaLabel: "points vs previous",
+      issueIds: completedCurrent.map((issue) => issue.id),
+      drilldown: drilldown(
+        "Completion rate",
+        "metric:completion_rate",
+        completedCurrent.map((issue) => issue.id),
+      ),
+    },
+  ];
+}
+
+function buildTrendPoints(
+  issues: AnalyticsIssueRow[],
+  query: AnalyticsQuery,
+): TrendPoint[] {
+  const days = rangeDays(query.range) ?? 180;
+  const bucketCount =
+    query.range === "30d" ? 6 : query.range === "90d" ? 9 : 12;
+  const bucketDays = Math.max(1, Math.ceil(days / bucketCount));
+  const start =
+    rangeStart(query.range) ??
+    (() => {
+      const oldest = issues
+        .map((issue) => dateValue(issue.createdAt))
+        .filter((date): date is Date => Boolean(date))
+        .sort((a, b) => a.getTime() - b.getTime())[0];
+      return oldest ?? new Date();
+    })();
+  const points: TrendPoint[] = [];
+
+  for (let index = 0; index < bucketCount; index += 1) {
+    const bucketStart = new Date(start);
+    bucketStart.setDate(start.getDate() + index * bucketDays);
+    const bucketEnd = new Date(bucketStart);
+    bucketEnd.setDate(bucketStart.getDate() + bucketDays);
+    const bucketIssues = issues.filter((issue) => {
+      const createdAt = dateValue(issue.createdAt);
+      const completedAt = dateValue(issue.completedAt);
+      return Boolean(
+        (createdAt && createdAt >= bucketStart && createdAt < bucketEnd) ||
+          (completedAt &&
+            completedAt >= bucketStart &&
+            completedAt < bucketEnd),
+      );
+    });
+    points.push({
+      key: bucketStart.toISOString().slice(0, 10),
+      label: shortDateLabel(bucketStart),
+      created: bucketIssues.filter((issue) => {
+        const createdAt = dateValue(issue.createdAt);
+        return Boolean(
+          createdAt && createdAt >= bucketStart && createdAt < bucketEnd,
+        );
+      }).length,
+      completed: bucketIssues.filter((issue) => {
+        const completedAt = dateValue(issue.completedAt);
+        return Boolean(
+          completedAt && completedAt >= bucketStart && completedAt < bucketEnd,
+        );
+      }).length,
+      active: issues.filter((issue) => {
+        const createdAt = dateValue(issue.createdAt);
+        const completedAt = dateValue(issue.completedAt);
+        return Boolean(
+          createdAt &&
+            createdAt < bucketEnd &&
+            (!completedAt || completedAt >= bucketStart),
+        );
+      }).length,
+      issueIds: bucketIssues.map((issue) => issue.id),
+      drilldown: drilldown(
+        `Trend bucket ${shortDateLabel(bucketStart)}`,
+        `trend:${bucketStart.toISOString().slice(0, 10)}`,
+        bucketIssues.map((issue) => issue.id),
+      ),
+    });
+  }
+
+  const now = new Date();
+  return points.filter((point) => new Date(point.key) <= now);
 }
 
 export function filterAnalyticsIssues(
@@ -323,6 +555,11 @@ export function buildAnalyticsResponse(input: {
       segment,
       value: 0,
       issueIds: [],
+      drilldown: drilldown(
+        `${label}${segment ? ` / ${segment}` : ""}`,
+        `bucket:${key}`,
+        [],
+      ),
       count: 0,
       completed: 0,
       effort: 0,
@@ -333,6 +570,11 @@ export function buildAnalyticsResponse(input: {
     existing.completed += issue.completedAt ? 1 : 0;
     existing.effort += issue.estimate ?? 0;
     existing.issueIds.push(issue.id);
+    existing.drilldown = drilldown(
+      `${label}${segment ? ` / ${segment}` : ""}`,
+      `bucket:${key}`,
+      existing.issueIds,
+    );
     buckets.set(key, existing);
   }
 
@@ -420,13 +662,28 @@ export function buildAnalyticsResponse(input: {
     },
     chart: {
       title: `${measureLabels[input.query.measure]} by ${sliceLabels[input.query.slice]}`,
-      points: tableRows.map(({ key, label, value, segment, issueIds }) => ({
-        key,
-        label,
-        value,
-        segment,
-        issueIds,
-      })),
+      points: tableRows.map(
+        ({
+          key,
+          label,
+          value,
+          segment,
+          issueIds,
+          drilldown: rowDrilldown,
+        }) => ({
+          key,
+          label,
+          value,
+          segment,
+          issueIds,
+          drilldown: rowDrilldown,
+        }),
+      ),
+    },
+    metricCards: buildMetricCards(filteredIssues, input.query),
+    trend: {
+      title: "Created, completed, and active issues over time",
+      points: buildTrendPoints(filteredIssues, input.query),
     },
     tableRows,
     cycleMetrics,

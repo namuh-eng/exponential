@@ -6,11 +6,18 @@ import type {
   AnalyticsSegment,
   AnalyticsSlice,
 } from "@/lib/team-analytics";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 interface ControlOption {
   value: string;
   label: string;
+}
+
+interface DrilldownPayload {
+  label: string;
+  issueIds: string[];
+  analyticsKey: string;
 }
 
 interface ChartPoint {
@@ -19,6 +26,28 @@ interface ChartPoint {
   value: number;
   segment?: string;
   issueIds: string[];
+  drilldown: DrilldownPayload;
+}
+
+interface MetricCardData {
+  id: string;
+  label: string;
+  value: number;
+  helper: string;
+  delta: number;
+  deltaLabel: string;
+  issueIds: string[];
+  drilldown: DrilldownPayload;
+}
+
+interface TrendPoint {
+  key: string;
+  label: string;
+  created: number;
+  completed: number;
+  active: number;
+  issueIds: string[];
+  drilldown: DrilldownPayload;
 }
 
 interface TableRow extends ChartPoint {
@@ -74,6 +103,8 @@ interface AnalyticsData {
     period: string;
   };
   chart: { title: string; points: ChartPoint[] };
+  metricCards: MetricCardData[];
+  trend: { title: string; points: TrendPoint[] };
   tableRows: TableRow[];
   cycleMetrics: CycleMetric[];
   emptyState: string | null;
@@ -104,13 +135,24 @@ export function InsightsPanel({
   scopedIssueIds = [],
   contextLabel,
 }: InsightsPanelProps) {
-  const [measure, setMeasure] = useState<AnalyticsMeasure>("issue_count");
-  const [slice, setSlice] = useState<AnalyticsSlice>("status");
-  const [segment, setSegment] = useState<AnalyticsSegment>("none");
-  const [range, setRange] = useState<AnalyticsRange>("90d");
-  const [status, setStatus] = useState("");
-  const [project, setProject] = useState("");
-  const [label, setLabel] = useState("");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [measure, setMeasure] = useState<AnalyticsMeasure>(
+    (searchParams.get("measure") as AnalyticsMeasure) || "issue_count",
+  );
+  const [slice, setSlice] = useState<AnalyticsSlice>(
+    (searchParams.get("slice") as AnalyticsSlice) || "status",
+  );
+  const [segment, setSegment] = useState<AnalyticsSegment>(
+    (searchParams.get("segment") as AnalyticsSegment) || "none",
+  );
+  const [range, setRange] = useState<AnalyticsRange>(
+    (searchParams.get("range") as AnalyticsRange) || "90d",
+  );
+  const [status, setStatus] = useState(searchParams.get("status") || "");
+  const [project, setProject] = useState(searchParams.get("project") || "");
+  const [label, setLabel] = useState(searchParams.get("label") || "");
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const hasLoadedRef = useRef(false);
@@ -147,6 +189,14 @@ export function InsightsPanel({
     status,
     teamKey,
   ]);
+
+  useEffect(() => {
+    if (!open || mode !== "page") return;
+    const current = searchParams.toString();
+    if (current !== queryString) {
+      router.replace(`${pathname}?${queryString}`, { scroll: false });
+    }
+  }, [mode, open, pathname, queryString, router, searchParams]);
 
   useEffect(() => {
     if (!open) return;
@@ -199,6 +249,39 @@ export function InsightsPanel({
     1,
     ...(data?.chart.points.map((point) => point.value) ?? [1]),
   );
+  const maxTrendValue = Math.max(
+    1,
+    ...(data?.trend.points.flatMap((point) => [
+      point.created,
+      point.completed,
+      point.active,
+    ]) ?? [1]),
+  );
+
+  function drilldownUrl(drilldown: DrilldownPayload) {
+    const basePath = pathname.replace(/\/(analytics|insights)\/?$/, "");
+    const query = new URLSearchParams();
+    query.set("insight", drilldown.analyticsKey);
+    query.set("insightLabel", drilldown.label);
+    if (drilldown.issueIds.length > 0) {
+      query.set("issueIds", drilldown.issueIds.join(","));
+    }
+    if (status) query.set("status", status);
+    if (project) query.set("project", project);
+    if (label) query.set("label", label);
+    return `${basePath}/all?${query.toString()}`;
+  }
+
+  function openDrilldown(drilldown: DrilldownPayload) {
+    const url = drilldownUrl(drilldown);
+    if (mode === "page") {
+      router.push(url);
+    } else {
+      setActionMessage(
+        `Drilldown ready: ${drilldown.label} (${drilldown.issueIds.length} issues).`,
+      );
+    }
+  }
 
   function exportCsv() {
     if (!data) return;
@@ -230,13 +313,19 @@ export function InsightsPanel({
   async function shareLink() {
     const url = `${window.location.pathname}?${queryString}`;
     if (navigator.clipboard) {
-      await navigator.clipboard.writeText(url);
-      setActionMessage("Copied share link with the current Insights controls.");
-    } else {
-      setActionMessage(
-        "Share link is ready in the address bar for this filtered Insights view.",
-      );
+      try {
+        await navigator.clipboard.writeText(url);
+        setActionMessage(
+          "Copied share link with the current Insights controls.",
+        );
+        return;
+      } catch {
+        // Browser automation and hardened workspaces can deny clipboard writes.
+      }
     }
+    setActionMessage(
+      "Share link is ready in the address bar for this filtered Insights view.",
+    );
   }
 
   if (loading) {
@@ -275,8 +364,8 @@ export function InsightsPanel({
           </h1>
           <p className="mt-2 max-w-[720px] text-[13px] text-[var(--color-text-secondary)]">
             {contextLabel
-              ? `Explore the current ${contextLabel} issue dataset with configurable measures, slices, segments, filters, table drilldowns, CSV export, and cycle burndown context.`
-              : "Explore the current team issue dataset with configurable measures, slices, segments, filters, table drilldowns, CSV export, and cycle burndown context."}
+              ? `Review Linear-style analytics for the current ${contextLabel} issue set with trend cards, workload flow, shareable controls, and drilldowns into backing issues.`
+              : "Review team throughput, cycle time, workload, completion trends, saved/shareable controls, and drilldowns into the backing issue set."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -449,15 +538,90 @@ export function InsightsPanel({
         </div>
       </section>
 
-      <section className="mb-6 grid gap-4 sm:grid-cols-4">
-        <SummaryCard label="Issues" value={data.summary.issueCount} />
-        <SummaryCard label="Completed" value={data.summary.completedCount} />
-        <SummaryCard label="Effort" value={data.summary.effort} />
-        <SummaryCard
-          label={`Velocity (${data.summary.period})`}
-          value={data.summary.velocity}
-          helper="completed / week"
-        />
+      <section
+        className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+        aria-label="Insights metric cards"
+      >
+        {data.metricCards.map((card) => (
+          <MetricCard
+            data={card}
+            key={card.id}
+            onOpen={() => openDrilldown(card.drilldown)}
+          />
+        ))}
+      </section>
+
+      <section
+        className="mb-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] p-6"
+        aria-label="Insights trend chart"
+      >
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-[16px] font-semibold text-[var(--color-text-primary)]">
+              {data.trend.title}
+            </h2>
+            <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
+              Click a time bucket to open the exact issue set behind the
+              created, completed, and active work signals.
+            </p>
+          </div>
+          <div className="flex gap-3 text-[12px] text-[var(--color-text-secondary)]">
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-[#5E6AD2]" /> Created
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-[#22C55E]" /> Completed
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-[#F59E0B]" /> Active
+            </span>
+          </div>
+        </div>
+        {data.emptyState ? (
+          <div className="rounded-lg border border-dashed border-[var(--color-border)] p-8 text-center text-[13px] text-[var(--color-text-secondary)]">
+            {data.emptyState} Create or complete issues to populate throughput
+            and workload trend lines.
+          </div>
+        ) : (
+          <div className="grid min-h-[220px] grid-cols-[repeat(auto-fit,minmax(72px,1fr))] items-end gap-3">
+            {data.trend.points.map((point) => (
+              <button
+                aria-label={`Open drilldown for ${point.label}`}
+                className="group flex h-full min-h-[190px] flex-col justify-end gap-2 rounded-lg border border-transparent p-2 text-left hover:border-[var(--color-border)] hover:bg-[var(--color-surface-hover)]"
+                key={point.key}
+                onClick={() => openDrilldown(point.drilldown)}
+                type="button"
+              >
+                <div className="flex h-36 items-end gap-1">
+                  <span
+                    className="w-3 rounded-t bg-[#5E6AD2]"
+                    style={{
+                      height: `${Math.max(5, (point.created / maxTrendValue) * 100)}%`,
+                    }}
+                  />
+                  <span
+                    className="w-3 rounded-t bg-[#22C55E]"
+                    style={{
+                      height: `${Math.max(5, (point.completed / maxTrendValue) * 100)}%`,
+                    }}
+                  />
+                  <span
+                    className="w-3 rounded-t bg-[#F59E0B]"
+                    style={{
+                      height: `${Math.max(5, (point.active / maxTrendValue) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <span className="text-[12px] font-medium text-[var(--color-text-primary)]">
+                  {point.label}
+                </span>
+                <span className="text-[11px] text-[var(--color-text-secondary)]">
+                  {point.issueIds.length} issues
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
@@ -466,7 +630,8 @@ export function InsightsPanel({
             {data.chart.title}
           </h2>
           <p className="mb-6 text-[13px] text-[var(--color-text-secondary)]">
-            Select a bar to highlight the backing issue set and table row.
+            Select a bar to open the backing issue drilldown with the current
+            Insights filters preserved.
           </p>
           {data.emptyState ? (
             <div className="rounded-lg border border-dashed border-[var(--color-border)] p-8 text-center text-[13px] text-[var(--color-text-secondary)]">
@@ -478,7 +643,7 @@ export function InsightsPanel({
                 <button
                   className="grid w-full grid-cols-[120px_1fr_64px] items-center gap-3 text-left text-[13px]"
                   key={point.key}
-                  onClick={() => setSelectedPoint(point)}
+                  onClick={() => openDrilldown(point.drilldown)}
                   type="button"
                 >
                   <span className="truncate text-[var(--color-text-secondary)]">
@@ -581,7 +746,13 @@ export function InsightsPanel({
                   key={row.key}
                 >
                   <td className="border-t border-[var(--color-border)] py-2">
-                    {row.label}
+                    <button
+                      className="font-medium text-[#5E6AD2] hover:text-[#7a84dd]"
+                      onClick={() => openDrilldown(row.drilldown)}
+                      type="button"
+                    >
+                      {row.label}
+                    </button>
                   </td>
                   <td className="border-t border-[var(--color-border)]">
                     {row.segment ?? "—"}
@@ -608,24 +779,44 @@ export function InsightsPanel({
   );
 }
 
-function SummaryCard({
-  label,
-  value,
-  helper,
-}: { label: string; value: number; helper?: string }) {
+function MetricCard({
+  data,
+  onOpen,
+}: { data: MetricCardData; onOpen: () => void }) {
+  const deltaPrefix = data.delta > 0 ? "+" : "";
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] p-4">
-      <h2 className="text-[12px] font-medium uppercase tracking-wider text-[var(--color-text-tertiary)]">
-        {label}
-      </h2>
-      <div className="mt-2 text-[28px] font-bold text-[var(--color-text-primary)]">
-        {value}
+    <button
+      className="rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] p-4 text-left transition hover:border-[#5E6AD2] hover:bg-[var(--color-surface-hover)]"
+      onClick={onOpen}
+      type="button"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="text-[12px] font-medium uppercase tracking-wider text-[var(--color-text-tertiary)]">
+          {data.label}
+        </h2>
+        <span className="rounded-full bg-[var(--color-surface-hover)] px-2 py-0.5 text-[11px] text-[var(--color-text-secondary)]">
+          Drilldown
+        </span>
       </div>
-      {helper && (
-        <p className="text-[12px] text-[var(--color-text-secondary)]">
-          {helper}
-        </p>
-      )}
-    </div>
+      <div className="mt-2 text-[30px] font-bold text-[var(--color-text-primary)]">
+        {data.value}
+      </div>
+      <p className="text-[12px] text-[var(--color-text-secondary)]">
+        {data.helper}
+      </p>
+      <p className="mt-3 text-[12px] text-[var(--color-text-secondary)]">
+        <span
+          className={
+            data.delta >= 0
+              ? "font-medium text-[#22C55E]"
+              : "font-medium text-[#EF4444]"
+          }
+        >
+          {deltaPrefix}
+          {data.delta}
+        </span>{" "}
+        {data.deltaLabel}
+      </p>
+    </button>
   );
 }
