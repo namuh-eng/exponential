@@ -276,6 +276,7 @@ function StatusDialog({
             <input
               type="checkbox"
               checked={isDefault}
+              disabled={dialog.status.isDefault === true}
               onChange={(event) => setIsDefault(event.target.checked)}
             />
             Default status for this category

@@ -39,6 +39,7 @@ describe("workspace creation helpers", () => {
       {
         category: "triage",
         color: "#f59e0b",
+        isDefault: true,
         name: "Triage",
         position: 0,
         teamId: "team-1",
@@ -54,6 +55,7 @@ describe("workspace creation helpers", () => {
       {
         category: "unstarted",
         color: "#6b6f76",
+        isDefault: true,
         name: "Todo",
         position: 2,
         teamId: "team-1",
@@ -61,6 +63,7 @@ describe("workspace creation helpers", () => {
       {
         category: "started",
         color: "#f59e0b",
+        isDefault: true,
         name: "In Progress",
         position: 3,
         teamId: "team-1",
@@ -68,6 +71,7 @@ describe("workspace creation helpers", () => {
       {
         category: "completed",
         color: "#22c55e",
+        isDefault: true,
         name: "Done",
         position: 4,
         teamId: "team-1",
@@ -75,6 +79,7 @@ describe("workspace creation helpers", () => {
       {
         category: "canceled",
         color: "#6b6f76",
+        isDefault: true,
         name: "Canceled",
         position: 5,
         teamId: "team-1",

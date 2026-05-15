@@ -208,6 +208,27 @@ async function ensureUniqueName(
   );
 }
 
+async function categoryHasAnotherDefault(
+  teamId: string,
+  category: StatusCategory,
+  ignoreId: string,
+) {
+  const [state] = await db
+    .select({ id: workflowState.id })
+    .from(workflowState)
+    .where(
+      and(
+        eq(workflowState.teamId, teamId),
+        eq(workflowState.category, category),
+        eq(workflowState.isDefault, true),
+        ne(workflowState.id, ignoreId),
+      ),
+    )
+    .limit(1);
+
+  return Boolean(state);
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ key: string }> },
@@ -285,6 +306,8 @@ export async function POST(
   const nextPosition =
     Math.max(-1, ...categoryStates.map((state) => Number(state.position))) + 1;
 
+  const isFirstInCategory = categoryStates.length === 0;
+
   await db.insert(workflowState).values({
     teamId: result.teamRecord.id,
     category: body.category,
@@ -292,7 +315,7 @@ export async function POST(
     description: normalizeDescription(body.description),
     color: color ?? "#6b6f76",
     position: nextPosition,
-    isDefault: false,
+    isDefault: isFirstInCategory,
     updatedAt: new Date(),
   });
 
@@ -473,6 +496,26 @@ export async function PATCH(
   if (color === null) {
     return NextResponse.json(
       { error: "Color must be a hex value" },
+      { status: 400 },
+    );
+  }
+
+  const nextIsDefault =
+    body.isDefault === undefined
+      ? existing.isDefault === true
+      : body.isDefault === true;
+
+  if (
+    existing.isDefault === true &&
+    (nextCategory !== existing.category || !nextIsDefault) &&
+    !(await categoryHasAnotherDefault(
+      result.teamRecord.id,
+      existing.category,
+      existing.id,
+    ))
+  ) {
+    return NextResponse.json(
+      { error: "Each workflow category must have a default status" },
       { status: 400 },
     );
   }

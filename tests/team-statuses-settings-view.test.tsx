@@ -350,6 +350,9 @@ describe("TeamIssueStatusesPage", () => {
         "Default statuses cannot be deleted. Choose another default before removing this status.",
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Default status for this category"),
+    ).toBeDisabled();
     expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
     expect(
       screen.queryByLabelText("Move existing issues to"),

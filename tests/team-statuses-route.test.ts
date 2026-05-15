@@ -32,6 +32,7 @@ const TEST_DELETE_ISSUE_ID = "16000000-0000-0000-0000-000000000009";
 const TEST_OTHER_TEAM_ID = "16000000-0000-0000-0000-000000000010";
 const TEST_OTHER_STATE_ID = "16000000-0000-0000-0000-000000000011";
 const TEST_UNUSED_STATE_ID = "16000000-0000-0000-0000-000000000012";
+const TEST_ALT_DEFAULT_STATE_ID = "16000000-0000-0000-0000-000000000013";
 
 // Mock next/headers
 vi.mock("next/headers", () => ({
@@ -268,6 +269,109 @@ describe("Team Statuses API Route", () => {
     await expect(reloadRes.json()).resolves.toEqual(
       expect.objectContaining({ duplicateStatusId: created.id }),
     );
+  });
+
+  it("prevents removing or moving the only default status in a category", async () => {
+    const uncheckDefaultRes = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({ id: TEST_STATE_ID, isDefault: false }),
+      }),
+      { params: Promise.resolve({ key: "STAT" }) },
+    );
+
+    expect(uncheckDefaultRes.status).toBe(400);
+    await expect(uncheckDefaultRes.json()).resolves.toEqual({
+      error: "Each workflow category must have a default status",
+    });
+
+    const moveDefaultRes = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({ id: TEST_STATE_ID, category: "started" }),
+      }),
+      { params: Promise.resolve({ key: "STAT" }) },
+    );
+
+    expect(moveDefaultRes.status).toBe(400);
+    await expect(moveDefaultRes.json()).resolves.toEqual({
+      error: "Each workflow category must have a default status",
+    });
+
+    const [defaultState] = await db
+      .select({
+        category: workflowState.category,
+        isDefault: workflowState.isDefault,
+      })
+      .from(workflowState)
+      .where(eq(workflowState.id, TEST_STATE_ID))
+      .limit(1);
+    expect(defaultState).toEqual({ category: "unstarted", isDefault: true });
+  });
+
+  it("switches defaults atomically within a category and keeps exactly one default", async () => {
+    await db.insert(workflowState).values({
+      id: TEST_ALT_DEFAULT_STATE_ID,
+      teamId: TEST_TEAM_ID,
+      name: "Ready next",
+      category: "unstarted",
+      position: 20,
+    });
+
+    const switchRes = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({
+          id: TEST_ALT_DEFAULT_STATE_ID,
+          isDefault: true,
+        }),
+      }),
+      { params: Promise.resolve({ key: "STAT" }) },
+    );
+
+    expect(switchRes.status).toBe(200);
+    const switchPayload = await switchRes.json();
+    expect(
+      switchPayload.statuses.unstarted.filter(
+        (status: { isDefault: boolean | null }) => status.isDefault === true,
+      ),
+    ).toEqual([expect.objectContaining({ id: TEST_ALT_DEFAULT_STATE_ID })]);
+
+    const restoreRes = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({ id: TEST_STATE_ID, isDefault: true }),
+      }),
+      { params: Promise.resolve({ key: "STAT" }) },
+    );
+    expect(restoreRes.status).toBe(200);
+
+    await db
+      .delete(workflowState)
+      .where(eq(workflowState.id, TEST_ALT_DEFAULT_STATE_ID));
+  });
+
+  it("makes the first status in an empty category the category default", async () => {
+    const createRes = await POST(
+      new Request("http://localhost", {
+        method: "POST",
+        body: JSON.stringify({
+          category: "triage",
+          name: "Needs review",
+          color: "#123abc",
+        }),
+      }),
+      { params: Promise.resolve({ key: "STAT" }) },
+    );
+
+    expect(createRes.status).toBe(200);
+    const payload = await createRes.json();
+    const created = payload.statuses.triage.find(
+      (status: { name: string }) => status.name === "Needs review",
+    );
+    expect(created).toEqual(expect.objectContaining({ isDefault: true }));
+
+    await db.delete(workflowState).where(eq(workflowState.id, created.id));
   });
 
   it("rejects invalid mutation payloads and blocks unsafe deletion", async () => {
