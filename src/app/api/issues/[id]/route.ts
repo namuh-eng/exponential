@@ -6,6 +6,7 @@ import {
   commentAttachment,
   cycle,
   issue,
+  issueDiscussionSummary,
   issueLabel,
   issueReaction,
   issueRelation,
@@ -16,7 +17,10 @@ import {
   user,
   workflowState,
 } from "@/lib/db/schema";
-import { buildGeneratedDiscussionSummary } from "@/lib/discussion-summary";
+import {
+  type DiscussionSummaryStatus,
+  buildDiscussionSummaryState,
+} from "@/lib/discussion-summary";
 import { normalizeIssueDescriptionHtml } from "@/lib/issue-description";
 import { insertIssueHistoryEvent } from "@/lib/issue-history";
 import { getIssueSubscriptionSummary } from "@/lib/issue-subscriptions";
@@ -148,6 +152,7 @@ export async function GET(
     targetRelationRows,
     issueReactionRows,
     subscriptionSummary,
+    discussionSummaryRows,
   ] = await Promise.all([
     db.select().from(workflowState).where(eq(workflowState.id, iss.stateId)),
     iss.assigneeId
@@ -183,6 +188,7 @@ export async function GET(
         userName: user.name,
         userImage: user.image,
         createdAt: comment.createdAt,
+        updatedAt: comment.updatedAt,
       })
       .from(comment)
       .leftJoin(user, eq(comment.userId, user.id))
@@ -246,6 +252,20 @@ export async function GET(
       issueId: iss.id,
       userId: session.user.id,
     }),
+    db
+      .select({
+        status: issueDiscussionSummary.status,
+        summary: issueDiscussionSummary.summary,
+        generatedAt: issueDiscussionSummary.generatedAt,
+        generatedBy: issueDiscussionSummary.generatedBy,
+        sourceCommentCount: issueDiscussionSummary.sourceCommentCount,
+        sourceCommentVersion: issueDiscussionSummary.sourceCommentVersion,
+        error: issueDiscussionSummary.error,
+        staleAt: issueDiscussionSummary.staleAt,
+      })
+      .from(issueDiscussionSummary)
+      .where(eq(issueDiscussionSummary.issueId, iss.id))
+      .limit(1),
   ]);
 
   const relatedIssueIds = [
@@ -447,30 +467,22 @@ export async function GET(
         reactedByMe: data.reactedByMe,
       }),
     ),
-    discussionSummary: discussionSummariesEnabled
-      ? (() => {
-          try {
-            return {
-              enabled: true,
-              ...buildGeneratedDiscussionSummary(commentRows),
-            };
-          } catch {
-            return {
-              enabled: true,
-              text: null,
-              generatedAt: null,
-              sourceCommentCount: commentRows.length,
-              error:
-                "Discussion summary could not be generated. Try refreshing.",
-            };
+    discussionSummary: buildDiscussionSummaryState({
+      enabled: discussionSummariesEnabled,
+      comments: commentRows,
+      persisted: discussionSummaryRows[0]
+        ? {
+            status: discussionSummaryRows[0].status as DiscussionSummaryStatus,
+            summary: discussionSummaryRows[0].summary,
+            generatedAt: discussionSummaryRows[0].generatedAt,
+            generatedBy: discussionSummaryRows[0].generatedBy,
+            sourceCommentCount: discussionSummaryRows[0].sourceCommentCount,
+            sourceCommentVersion: discussionSummaryRows[0].sourceCommentVersion,
+            error: discussionSummaryRows[0].error,
+            staleAt: discussionSummaryRows[0].staleAt,
           }
-        })()
-      : {
-          enabled: false,
-          text: null,
-          generatedAt: null,
-          sourceCommentCount: 0,
-        },
+        : null,
+    }),
     comments: commentRows.map((c) => ({
       id: c.id,
       body: c.body,

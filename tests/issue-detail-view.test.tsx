@@ -873,14 +873,14 @@ describe("IssueDetailView collaboration controls", () => {
       await screen.findByLabelText("Discussion summary"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Add more discussion to generate an AI summary/),
+      screen.getByText(/Add at least two comments to generate an AI summary/),
     ).toBeInTheDocument();
     expect(
       screen.queryByText("No comments have been added yet."),
     ).not.toBeInTheDocument();
   });
 
-  it("shows a retry action when summary generation fails", async () => {
+  it("shows a generate retry affordance when summary generation fails", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -890,8 +890,20 @@ describe("IssueDetailView collaboration controls", () => {
           text: null,
           generatedAt: null,
           sourceCommentCount: 2,
+          status: "failed",
           error: "Discussion summary could not be generated. Try refreshing.",
         },
+        comments: [
+          ...mockIssueDetail.comments,
+          {
+            id: "c2",
+            body: "Second comment",
+            user: { name: "Morgan", image: null },
+            createdAt: "2026-04-25T10:05:00Z",
+            reactions: [],
+            attachments: [],
+          },
+        ],
       }),
     } as Response);
 
@@ -903,7 +915,7 @@ describe("IssueDetailView collaboration controls", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Retry summary" }),
+      screen.getByRole("button", { name: "Generate" }),
     ).toBeInTheDocument();
   });
 });

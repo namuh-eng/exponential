@@ -1,88 +1,123 @@
-import { buildGeneratedDiscussionSummary } from "@/lib/discussion-summary";
+import {
+  buildDiscussionSummarySourceMetadata,
+  buildDiscussionSummaryState,
+  generateDiscussionSummary,
+} from "@/lib/discussion-summary";
 import { describe, expect, it } from "vitest";
 
-describe("buildGeneratedDiscussionSummary", () => {
-  it("returns an empty state for no or short discussions", () => {
-    expect(buildGeneratedDiscussionSummary([])).toMatchObject({
+const comments = [
+  {
+    body: "We need to choose a rollout path for the API.",
+    userName: "Ashley",
+    createdAt: new Date("2026-05-15T10:00:00Z"),
+    updatedAt: new Date("2026-05-15T10:00:00Z"),
+  },
+  {
+    body: "Morgan will verify the migration before launch.",
+    userName: "Morgan",
+    createdAt: new Date("2026-05-15T10:05:00Z"),
+    updatedAt: new Date("2026-05-15T10:05:00Z"),
+  },
+];
+
+describe("discussion summary service", () => {
+  it("returns disabled and ineligible states without fabricating summaries", () => {
+    expect(
+      buildDiscussionSummaryState({
+        enabled: false,
+        comments,
+        persisted: null,
+      }),
+    ).toMatchObject({
+      enabled: false,
+      status: "disabled",
       text: null,
       generatedAt: null,
-      sourceCommentCount: 0,
     });
+
     expect(
-      buildGeneratedDiscussionSummary([
-        {
-          body: "Only one note so far",
-          userName: "Ashley",
-          createdAt: new Date("2026-05-15T10:00:00Z"),
+      buildDiscussionSummaryState({
+        enabled: true,
+        comments: [comments[0]],
+        persisted: null,
+      }),
+    ).toMatchObject({
+      enabled: true,
+      status: "ineligible",
+      text: null,
+      sourceCommentCount: 1,
+    });
+  });
+
+  it("uses a provider abstraction and records source metadata", async () => {
+    const summary = await generateDiscussionSummary({
+      issueTitle: "Persist AI discussion summaries",
+      issueIdentifier: "ENG-334",
+      comments,
+      provider: {
+        async generate(input) {
+          return `AI summary for ${input.issueIdentifier} with ${input.comments.length} comments`;
         },
-      ]),
-    ).toMatchObject({ text: null, sourceCommentCount: 1 });
+      },
+    });
+
+    expect(summary.text).toBe("AI summary for ENG-334 with 2 comments");
+    expect(summary.source).toEqual({
+      sourceCommentCount: 2,
+      sourceCommentVersion: "2026-05-15T10:05:00.000Z",
+    });
   });
 
-  it("synthesizes decisions, blockers, and next steps from the full thread", () => {
-    const summary = buildGeneratedDiscussionSummary([
-      {
-        body: "We decided to ship the API path first. The billing dependency is still blocking rollout.",
-        userName: "Ashley",
-        createdAt: new Date("2026-05-15T10:00:00Z"),
+  it("keeps persisted summaries stable until comment source changes", () => {
+    const source = buildDiscussionSummarySourceMetadata(comments);
+    const state = buildDiscussionSummaryState({
+      enabled: true,
+      comments,
+      persisted: {
+        status: "generated",
+        summary: "Stored AI summary",
+        generatedAt: new Date("2026-05-15T11:00:00Z"),
+        generatedBy: "user-1",
+        error: null,
+        staleAt: null,
+        ...source,
       },
-      {
-        body: "Next, Morgan will verify the migration and follow up with support.",
-        userName: "Morgan",
-        createdAt: new Date("2026-05-15T10:05:00Z"),
-      },
-      {
-        body: "Customer confirms the workaround is acceptable until billing is resolved.",
-        userName: "Riley",
-        createdAt: new Date("2026-05-15T10:10:00Z"),
-      },
-    ]);
+    });
 
-    expect(summary.text).toContain("Overview:");
-    expect(summary.text).toContain("Decision/status:");
-    expect(summary.text).toContain("Blockers/risks:");
-    expect(summary.text).toContain("Next steps:");
-    expect(summary.text).toContain("Ashley");
-    expect(summary.text).toContain("Morgan");
-    expect(summary.text).not.toMatch(/\d+ comments? from \d+ participants?/);
-    expect(summary.sourceCommentCount).toBe(3);
-    expect(summary.generatedAt).toEqual(expect.any(String));
+    expect(state).toMatchObject({
+      status: "generated",
+      text: "Stored AI summary",
+      generatedAt: "2026-05-15T11:00:00.000Z",
+    });
   });
 
-  it("regenerates against the latest comment content", () => {
-    const before = buildGeneratedDiscussionSummary([
-      {
-        body: "We decided to ship the API path first.",
-        userName: "Ashley",
-        createdAt: new Date("2026-05-15T10:00:00Z"),
+  it("marks persisted summaries stale when comments change", () => {
+    const state = buildDiscussionSummaryState({
+      enabled: true,
+      comments: [
+        ...comments,
+        {
+          body: "Riley added a follow-up after generation.",
+          userName: "Riley",
+          createdAt: new Date("2026-05-15T10:10:00Z"),
+          updatedAt: new Date("2026-05-15T10:10:00Z"),
+        },
+      ],
+      persisted: {
+        status: "generated",
+        summary: "Stored AI summary",
+        generatedAt: new Date("2026-05-15T11:00:00Z"),
+        generatedBy: "user-1",
+        sourceCommentCount: 2,
+        sourceCommentVersion: "2026-05-15T10:05:00.000Z",
+        error: null,
+        staleAt: null,
       },
-      {
-        body: "Next, Morgan will verify the migration.",
-        userName: "Morgan",
-        createdAt: new Date("2026-05-15T10:05:00Z"),
-      },
-    ]);
-    const after = buildGeneratedDiscussionSummary([
-      {
-        body: "We decided to ship the API path first.",
-        userName: "Ashley",
-        createdAt: new Date("2026-05-15T10:00:00Z"),
-      },
-      {
-        body: "Next, Morgan will verify the migration.",
-        userName: "Morgan",
-        createdAt: new Date("2026-05-15T10:05:00Z"),
-      },
-      {
-        body: "Billing remains blocked, so Riley will follow up tomorrow.",
-        userName: "Riley",
-        createdAt: new Date("2026-05-15T10:15:00Z"),
-      },
-    ]);
+    });
 
-    expect(before.sourceCommentCount).toBe(2);
-    expect(after.sourceCommentCount).toBe(3);
-    expect(after.text).toContain("Latest update: Riley");
-    expect(after.text).toContain("Billing remains blocked");
+    expect(state.status).toBe("stale");
+    expect(state.text).toBe("Stored AI summary");
+    expect(state.sourceCommentCount).toBe(3);
+    expect(state.staleAt).toEqual(expect.any(String));
   });
 });

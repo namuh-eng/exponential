@@ -657,6 +657,41 @@ export const comment = pgTable(
   (t) => [index("comment_issue_idx").on(t.issueId)],
 );
 
+// ─── Issue Discussion Summary ───────────────────────────────────────
+
+export const issueDiscussionSummary = pgTable(
+  "issue_discussion_summary",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    issueId: uuid("issue_id")
+      .notNull()
+      .references(() => issue.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => team.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 24 }).notNull().default("ready"),
+    summary: text("summary"),
+    sourceCommentCount: integer("source_comment_count").notNull().default(0),
+    sourceCommentVersion: text("source_comment_version"),
+    generatedAt: timestamp("generated_at"),
+    generatedBy: text("generated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    staleAt: timestamp("stale_at"),
+    error: text("error"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("issue_discussion_summary_issue_idx").on(t.issueId),
+    index("issue_discussion_summary_team_idx").on(t.teamId),
+    index("issue_discussion_summary_workspace_idx").on(t.workspaceId),
+  ],
+);
+
 // ─── Reaction ────────────────────────────────────────────────────────
 
 export const issueSubscription = pgTable(
@@ -1032,6 +1067,7 @@ export const issueRelations = relations(issue, ({ one, many }) => ({
   comments: many(comment),
   reactions: many(issueReaction),
   subscriptions: many(issueSubscription),
+  discussionSummary: many(issueDiscussionSummary),
   history: many(issueHistory),
   relations: many(issueRelation, { relationName: "source" }),
   relatedFrom: many(issueRelation, { relationName: "target" }),
@@ -1198,6 +1234,28 @@ export const commentRelations = relations(comment, ({ one, many }) => ({
   reactions: many(reaction),
   attachments: many(commentAttachment),
 }));
+
+export const issueDiscussionSummaryRelations = relations(
+  issueDiscussionSummary,
+  ({ one }) => ({
+    issue: one(issue, {
+      fields: [issueDiscussionSummary.issueId],
+      references: [issue.id],
+    }),
+    team: one(team, {
+      fields: [issueDiscussionSummary.teamId],
+      references: [team.id],
+    }),
+    workspace: one(workspace, {
+      fields: [issueDiscussionSummary.workspaceId],
+      references: [workspace.id],
+    }),
+    generator: one(user, {
+      fields: [issueDiscussionSummary.generatedBy],
+      references: [user.id],
+    }),
+  }),
+);
 
 export const issueSubscriptionRelations = relations(
   issueSubscription,

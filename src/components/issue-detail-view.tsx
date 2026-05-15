@@ -117,9 +117,20 @@ interface IssueDetail {
   reactions: IssueReaction[];
   discussionSummary: {
     enabled: boolean;
+    status?:
+      | "disabled"
+      | "ineligible"
+      | "ready"
+      | "generating"
+      | "generated"
+      | "stale"
+      | "failed";
     text: string | null;
     generatedAt?: string | null;
+    generatedBy?: string | null;
     sourceCommentCount?: number;
+    sourceCommentVersion?: string | null;
+    staleAt?: string | null;
     error?: string | null;
   };
   comments: IssueComment[];
@@ -552,6 +563,10 @@ export function IssueDetailView({
   const [commentActionStatus, setCommentActionStatus] = useState<string | null>(
     null,
   );
+  const [summaryActionStatus, setSummaryActionStatus] = useState<string | null>(
+    null,
+  );
+  const [summaryGenerating, setSummaryGenerating] = useState(false);
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [runningAction, setRunningAction] = useState<
     "archive" | "delete" | null
@@ -609,6 +624,7 @@ export function IssueDetailView({
           },
           discussionSummary: json.discussionSummary ?? {
             enabled: false,
+            status: "disabled",
             text: null,
             generatedAt: null,
             sourceCommentCount: 0,
@@ -794,6 +810,68 @@ export function IssueDetailView({
     );
   }
 
+  async function handleGenerateDiscussionSummary() {
+    if (!issue || summaryGenerating) {
+      return;
+    }
+
+    setSummaryGenerating(true);
+    setSummaryActionStatus(null);
+    setIssue((current) =>
+      current
+        ? {
+            ...current,
+            discussionSummary: {
+              ...current.discussionSummary,
+              status: "generating",
+              error: null,
+            },
+          }
+        : current,
+    );
+
+    try {
+      const res = await fetch(
+        `/api/issues/${issue.identifier}/discussion-summary`,
+        {
+          method: "POST",
+        },
+      );
+      const json = (await res.json()) as IssueDetail["discussionSummary"] & {
+        error?: string;
+      };
+
+      if (!res.ok) {
+        throw new Error(json.error ?? "Discussion summary generation failed");
+      }
+
+      setIssue((current) =>
+        current ? { ...current, discussionSummary: json } : current,
+      );
+      setSummaryActionStatus("Discussion summary updated.");
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Discussion summary generation failed";
+      setIssue((current) =>
+        current
+          ? {
+              ...current,
+              discussionSummary: {
+                ...current.discussionSummary,
+                status: "failed",
+                error: message,
+              },
+            }
+          : current,
+      );
+      setSummaryActionStatus(message);
+    } finally {
+      setSummaryGenerating(false);
+    }
+  }
+
   async function handleCommentSubmit() {
     const hasBody = commentBody.trim().length > 0;
     const hasAttachments = pendingAttachments.length > 0;
@@ -833,7 +911,8 @@ export function IssueDetailView({
               discussionSummary: current.discussionSummary.enabled
                 ? {
                     ...current.discussionSummary,
-                    text: null,
+                    status: current.discussionSummary.text ? "stale" : "ready",
+                    staleAt: new Date().toISOString(),
                     error: null,
                   }
                 : current.discussionSummary,
@@ -1092,7 +1171,8 @@ export function IssueDetailView({
             discussionSummary: current.discussionSummary.enabled
               ? {
                   ...current.discussionSummary,
-                  text: null,
+                  status: current.discussionSummary.text ? "stale" : "ready",
+                  staleAt: new Date().toISOString(),
                   error: null,
                 }
               : current.discussionSummary,
@@ -1124,7 +1204,8 @@ export function IssueDetailView({
             discussionSummary: current.discussionSummary.enabled
               ? {
                   ...current.discussionSummary,
-                  text: null,
+                  status: current.discussionSummary.text ? "stale" : "ready",
+                  staleAt: new Date().toISOString(),
                   error: null,
                 }
               : current.discussionSummary,
@@ -1598,44 +1679,74 @@ export function IssueDetailView({
                   className="mb-5 rounded-[18px] border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-3"
                   aria-label="Discussion summary"
                 >
-                  <div className="text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
-                    Discussion summary
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                        AI discussion summary
+                      </div>
+                      {issue.discussionSummary.generatedAt ? (
+                        <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+                          Generated{" "}
+                          {formatFullDate(issue.discussionSummary.generatedAt)}
+                          {issue.discussionSummary.status === "stale"
+                            ? " · stale after new discussion"
+                            : ""}
+                        </p>
+                      ) : null}
+                    </div>
+                    {issue.comments.length >= 2 ? (
+                      <button
+                        type="button"
+                        className="rounded-md border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-primary)] hover:bg-[var(--color-card-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => void handleGenerateDiscussionSummary()}
+                        disabled={summaryGenerating}
+                      >
+                        {issue.discussionSummary.text
+                          ? "Regenerate"
+                          : "Generate"}
+                      </button>
+                    ) : null}
                   </div>
-                  {issue.discussionSummary.error ? (
+                  {issue.discussionSummary.status === "generating" ||
+                  summaryGenerating ? (
+                    <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+                      Generating an AI summary from the full discussion...
+                    </p>
+                  ) : issue.discussionSummary.error ? (
                     <div className="mt-2 space-y-2 text-[13px] leading-relaxed text-[var(--color-text-primary)]">
                       <p>{issue.discussionSummary.error}</p>
-                      <button
-                        type="button"
-                        className="rounded-md border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-primary)] hover:bg-[var(--color-card-hover)]"
-                        onClick={() => void fetchIssue()}
-                      >
-                        Retry summary
-                      </button>
+                      <p className="text-[var(--color-text-secondary)]">
+                        Retry when the AI summarizer is available.
+                      </p>
                     </div>
                   ) : issue.discussionSummary.text ? (
-                    <p className="mt-2 whitespace-pre-line text-[13px] leading-relaxed text-[var(--color-text-primary)]">
-                      {issue.discussionSummary.text}
-                    </p>
-                  ) : issue.comments.length >= 2 ? (
-                    <div className="mt-2 space-y-2 text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
-                      <p>
-                        Discussion changed. Refresh to generate a new summary of
-                        decisions, blockers, and next steps.
+                    <div className="mt-2 space-y-2">
+                      {issue.discussionSummary.status === "stale" ? (
+                        <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[12px] text-amber-700 dark:text-amber-300">
+                          New discussion was added after this summary.
+                          Regenerate to refresh it.
+                        </p>
+                      ) : null}
+                      <p className="whitespace-pre-line text-[13px] leading-relaxed text-[var(--color-text-primary)]">
+                        {issue.discussionSummary.text}
                       </p>
-                      <button
-                        type="button"
-                        className="rounded-md border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-primary)] hover:bg-[var(--color-card-hover)]"
-                        onClick={() => void fetchIssue()}
-                      >
-                        Refresh summary
-                      </button>
                     </div>
+                  ) : issue.comments.length >= 2 ? (
+                    <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+                      This discussion is ready for an AI summary. Generate one
+                      to persist it for the team.
+                    </p>
                   ) : (
                     <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
-                      Add more discussion to generate an AI summary of
-                      decisions, blockers, and next steps.
+                      Add at least two comments to generate an AI summary of the
+                      discussion.
                     </p>
                   )}
+                  {summaryActionStatus ? (
+                    <p className="mt-2 text-[12px] text-[var(--color-text-tertiary)]">
+                      {summaryActionStatus}
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
 

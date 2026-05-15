@@ -18,6 +18,7 @@ const relatedIssuesWhereMock = vi.fn();
 const issueReactionsWhereMock = vi.fn();
 const reactionsWhereMock = vi.fn();
 const attachmentsOrderByMock = vi.fn();
+const discussionSummaryLimitMock = vi.fn();
 const stateLookupLimitMock = vi.fn();
 const lastIssueLimitMock = vi.fn();
 const updateSetMock = vi.fn();
@@ -205,6 +206,16 @@ vi.mock("@/lib/db", () => ({
         return {
           from: vi.fn().mockReturnValue({
             where: reactionsWhereMock,
+          }),
+        };
+      }
+
+      if (selection && "summary" in selection && "generatedAt" in selection) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: discussionSummaryLimitMock,
+            }),
           }),
         };
       }
@@ -405,6 +416,7 @@ describe("issue detail route", () => {
       subscribed: true,
       watcherCount: 2,
     });
+    discussionSummaryLimitMock.mockResolvedValue([]);
   });
 
   it("returns 401 without a session", async () => {
@@ -434,9 +446,14 @@ describe("issue detail route", () => {
       description: "<p>Hello</p>",
       discussionSummary: {
         enabled: false,
+        status: "disabled",
         text: null,
         generatedAt: null,
+        generatedBy: null,
         sourceCommentCount: 0,
+        sourceCommentVersion: null,
+        staleAt: null,
+        error: null,
       },
       priority: "high",
       estimate: 3,
@@ -520,7 +537,7 @@ describe("issue detail route", () => {
     });
   });
 
-  it("returns a generated discussion summary when enabled", async () => {
+  it("returns a persisted discussion summary when enabled", async () => {
     issueLimitMock.mockResolvedValueOnce([
       {
         id: "issue-1",
@@ -568,6 +585,18 @@ describe("issue detail route", () => {
     ]);
     reactionsWhereMock.mockResolvedValueOnce([]);
     attachmentsOrderByMock.mockResolvedValueOnce([]);
+    discussionSummaryLimitMock.mockResolvedValueOnce([
+      {
+        status: "generated",
+        summary: "Stored AI summary from the full discussion",
+        generatedAt: new Date("2026-04-23T12:00:00.000Z"),
+        generatedBy: "user-1",
+        sourceCommentCount: 2,
+        sourceCommentVersion: "2026-04-23T11:05:00.000Z",
+        error: null,
+        staleAt: null,
+      },
+    ]);
 
     const { GET } = await import("@/app/api/issues/[id]/route");
     const response = await GET(new Request("http://localhost"), {
@@ -578,15 +607,12 @@ describe("issue detail route", () => {
     const json = await response.json();
     expect(json.discussionSummary).toMatchObject({
       enabled: true,
+      status: "generated",
+      text: "Stored AI summary from the full discussion",
       sourceCommentCount: 2,
-      generatedAt: expect.any(String),
+      sourceCommentVersion: "2026-04-23T11:05:00.000Z",
+      generatedAt: "2026-04-23T12:00:00.000Z",
     });
-    expect(json.discussionSummary.text).toContain("Decision/status");
-    expect(json.discussionSummary.text).toContain("Blockers/risks");
-    expect(json.discussionSummary.text).toContain("Next steps");
-    expect(json.discussionSummary.text).not.toMatch(
-      /\d+ comments? from \d+ participants?/,
-    );
   });
 
   it("returns an enabled empty summary state for no comments", async () => {
@@ -630,9 +656,14 @@ describe("issue detail route", () => {
     const json = await response.json();
     expect(json.discussionSummary).toEqual({
       enabled: true,
+      status: "ineligible",
       text: null,
       generatedAt: null,
+      generatedBy: null,
       sourceCommentCount: 0,
+      sourceCommentVersion: null,
+      staleAt: null,
+      error: null,
     });
   });
 

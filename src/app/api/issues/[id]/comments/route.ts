@@ -2,6 +2,7 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { comment, commentAttachment, issue, team } from "@/lib/db/schema";
+import { markIssueDiscussionSummaryStale } from "@/lib/discussion-summary-store";
 import { insertIssueHistoryEvent } from "@/lib/issue-history";
 import { getIssueNotificationRecipients } from "@/lib/issue-subscriptions";
 import {
@@ -196,6 +197,8 @@ export async function POST(
       if (attachmentRows.length > 0) {
         await tx.insert(commentAttachment).values(attachmentRows);
       }
+
+      await markIssueDiscussionSummaryStale(currentIssue.id);
 
       await insertIssueHistoryEvent(
         tx,
