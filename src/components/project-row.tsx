@@ -56,7 +56,11 @@ function ProgressRing({
   const offset = circumference - (progress / 100) * circumference;
 
   const color =
-    status === "completed" ? "#4caf50" : progress > 0 ? "#5E6AD2" : "#6b6f76";
+    status === "completed"
+      ? "var(--color-status-completed)"
+      : progress > 0
+        ? "var(--color-accent)"
+        : "var(--color-text-tertiary)";
 
   return (
     <svg width={size} height={size} className="shrink-0">
@@ -117,12 +121,12 @@ export function ProjectRow({
     <Link
       href={href}
       data-testid="project-row"
-      className="group flex h-[44px] items-center border-b border-[var(--color-border)] px-4 text-[13px] transition-colors hover:bg-[var(--color-surface-hover)]"
+      className="group flex h-[46px] items-center border-b border-[var(--color-border)] bg-[color-mix(in_oklab,var(--color-surface)_72%,transparent)] px-4 text-[13px] transition-colors hover:bg-[var(--color-surface-hover)]"
     >
       {/* Icon + Name */}
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <span className="shrink-0 text-[14px]">{icon ?? "📋"}</span>
-        <span className="truncate text-[var(--color-text-primary)]">
+        <span className="truncate font-medium text-[var(--color-text-primary)]">
           {name}
         </span>
       </div>

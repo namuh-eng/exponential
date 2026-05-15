@@ -4,33 +4,75 @@
 
 @layer base {
   :root {
-    /* Light theme */
-    --color-sidebar-bg: #f5f5f5;
-    --color-content-bg: #fcfcfd;
-    --color-border: #e0e0e0;
-    --color-text-primary: #23252a;
-    --color-text-secondary: #6b6f76;
-    --color-text-tertiary: #9ca3af;
-    --color-accent: #7180ff;
-    --color-accent-hover: #5f6df0;
-    --color-surface: #ffffff;
-    --color-surface-hover: #f0f0f0;
-    --color-surface-active: #e8e8e8;
+    /* Editorial theme bridge (from design/project/og.css). Keep Linear-compatible aliases
+       so #367/#368 token work can replace this layer without touching product pages. */
+    --editorial-bg: #faf7f2;
+    --editorial-surface: #ffffff;
+    --editorial-surface-2: #f3eee5;
+    --editorial-surface-3: #ebe5d9;
+    --editorial-hover: rgba(20, 18, 14, 0.04);
+    --editorial-pressed: rgba(20, 18, 14, 0.08);
+    --editorial-ink-1: #14120e;
+    --editorial-ink-2: #2d2a23;
+    --editorial-ink-3: #5b564a;
+    --editorial-ink-4: #8a8478;
+    --editorial-ink-5: #b6b0a3;
+    --editorial-line: #e2dccd;
+    --editorial-line-strong: #cdc5b3;
+    --editorial-line-soft: #ede7d8;
+    --editorial-accent: oklch(0.56 0.16 32);
+    --editorial-accent-hover: oklch(0.5 0.17 32);
+    --editorial-accent-soft: oklch(0.92 0.06 35);
+    --editorial-ok: oklch(0.58 0.13 145);
+    --editorial-ok-soft: oklch(0.92 0.07 145);
+    --editorial-warn: oklch(0.72 0.14 75);
+    --editorial-warn-soft: oklch(0.94 0.08 80);
+    --editorial-err: oklch(0.55 0.18 25);
+    --editorial-err-soft: oklch(0.93 0.06 25);
+    --editorial-radius: 6px;
+    --editorial-radius-lg: 10px;
+    --editorial-shadow-sm: 0 1px 2px rgba(20, 18, 14, 0.04), 0 0 0 1px
+      rgba(20, 18, 14, 0.04);
+    --editorial-shadow-md: 0 2px 4px rgba(20, 18, 14, 0.05), 0 8px 24px
+      rgba(20, 18, 14, 0.06);
+    --editorial-display: Georgia, "Times New Roman", serif;
+    --editorial-sans: "Inter Tight", -apple-system, BlinkMacSystemFont,
+      system-ui, sans-serif;
+    --editorial-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo,
+      monospace;
+
+    --color-sidebar-bg: var(--editorial-surface-2);
+    --color-content-bg: var(--editorial-bg);
+    --color-border: var(--editorial-line);
+    --color-border-strong: var(--editorial-line-strong);
+    --color-text-primary: var(--editorial-ink-1);
+    --color-text-secondary: var(--editorial-ink-3);
+    --color-text-tertiary: var(--editorial-ink-4);
+    --color-accent: var(--editorial-accent);
+    --color-accent-hover: var(--editorial-accent-hover);
+    --color-accent-soft: var(--editorial-accent-soft);
+    --color-surface: var(--editorial-surface);
+    --color-surface-2: var(--editorial-surface-2);
+    --color-surface-3: var(--editorial-surface-3);
+    --color-surface-hover: var(--editorial-hover);
+    --color-surface-active: var(--editorial-pressed);
+    --color-bg-secondary: var(--editorial-surface-2);
+    --color-panel: var(--editorial-surface);
 
     /* Priority colors */
-    --color-priority-urgent: #f76a6a;
-    --color-priority-high: #f5a623;
-    --color-priority-medium: #f2c94c;
-    --color-priority-low: #5a95f5;
-    --color-priority-none: #6b6f76;
+    --color-priority-urgent: var(--editorial-err);
+    --color-priority-high: oklch(0.62 0.15 45);
+    --color-priority-medium: var(--editorial-warn);
+    --color-priority-low: oklch(0.55 0.1 250);
+    --color-priority-none: var(--editorial-ink-4);
 
     /* Status colors */
-    --color-status-triage: #f2994a;
-    --color-status-backlog: #6b6f76;
-    --color-status-unstarted: #6b6f76;
-    --color-status-started: #f2c94c;
-    --color-status-completed: #4cb782;
-    --color-status-canceled: #6b6f76;
+    --color-status-triage: oklch(0.62 0.15 45);
+    --color-status-backlog: var(--editorial-ink-4);
+    --color-status-unstarted: var(--editorial-ink-4);
+    --color-status-started: var(--editorial-warn);
+    --color-status-completed: var(--editorial-ok);
+    --color-status-canceled: var(--editorial-ink-4);
   }
 
   :root[data-font-size="small"] {
@@ -56,30 +98,23 @@
   }
 
   .dark {
-    --color-sidebar-bg: #090909;
-    --color-content-bg: #0f0f11;
-    --color-border: #1c1e21;
-    --color-text-primary: #ffffff;
-    --color-text-secondary: #6b6f76;
-    --color-text-tertiary: #484b52;
-    --color-accent: #7180ff;
-    --color-accent-hover: #5f6df0;
-    --color-surface: #18181b;
-    --color-surface-hover: #1a1a1e;
-    --color-surface-active: #1f1f23;
-
-    --color-priority-urgent: #f76a6a;
-    --color-priority-high: #f5a623;
-    --color-priority-medium: #f2c94c;
-    --color-priority-low: #5a95f5;
-    --color-priority-none: #6b6f76;
-
-    --color-status-triage: #f2994a;
-    --color-status-backlog: #6b6f76;
-    --color-status-unstarted: #6b6f76;
-    --color-status-started: #f2c94c;
-    --color-status-completed: #4cb782;
-    --color-status-canceled: #6b6f76;
+    --editorial-bg: #15130f;
+    --editorial-surface: #1c1a16;
+    --editorial-surface-2: #232019;
+    --editorial-surface-3: #2c2820;
+    --editorial-hover: rgba(255, 250, 240, 0.04);
+    --editorial-pressed: rgba(255, 250, 240, 0.08);
+    --editorial-ink-1: #f3ede0;
+    --editorial-ink-2: #ddd6c5;
+    --editorial-ink-3: #9c9583;
+    --editorial-ink-4: #6e6857;
+    --editorial-ink-5: #443f33;
+    --editorial-line: #2e2a22;
+    --editorial-line-strong: #423d31;
+    --editorial-line-soft: #25221b;
+    --editorial-accent: oklch(0.68 0.15 32);
+    --editorial-accent-hover: oklch(0.74 0.16 32);
+    --editorial-accent-soft: oklch(0.3 0.08 32);
   }
 
   .auth-shell {
@@ -162,5 +197,83 @@
 
   .auth-input:focus {
     border-color: var(--auth-accent);
+  }
+}
+
+@layer base {
+  body {
+    background: var(--editorial-bg);
+    color: var(--color-text-primary);
+    font-family: var(--editorial-sans);
+    font-feature-settings: "cv11", "ss01", "ss03";
+    letter-spacing: -0.005em;
+  }
+
+  h1,
+  h2 {
+    font-family: var(--editorial-display);
+    letter-spacing: -0.025em;
+  }
+
+  input,
+  textarea,
+  select {
+    color: var(--color-text-primary);
+  }
+
+  input:focus,
+  textarea:focus,
+  select:focus,
+  button:focus-visible,
+  a:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .editorial-page-surface {
+    background: radial-gradient(
+        circle at top left,
+        color-mix(in oklab, var(--color-accent-soft) 48%, transparent),
+        transparent 34rem
+      ), var(--color-content-bg);
+  }
+
+  .editorial-card {
+    border: 1px solid var(--color-border);
+    border-radius: var(--editorial-radius-lg);
+    background: var(--color-surface);
+    box-shadow: var(--editorial-shadow-sm);
+  }
+
+  .editorial-chip {
+    border: 1px solid var(--color-border-strong);
+    border-radius: 999px;
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+  }
+
+  .editorial-input {
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--editorial-radius);
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    transition: border-color 120ms, box-shadow 120ms, background 120ms;
+  }
+
+  .editorial-input:focus,
+  .editorial-input:focus-within {
+    border-color: var(--color-text-primary);
+    box-shadow: 0 0 0 3px var(--color-accent-soft);
+    outline: none;
+  }
+}
+
+@layer utilities {
+  .t-mono-sm {
+    font-family: var(--editorial-mono);
+    font-size: 11.5px;
+    letter-spacing: 0;
   }
 }

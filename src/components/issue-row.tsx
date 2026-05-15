@@ -113,13 +113,13 @@ export function IssueRow({
 
       {/* Identifier */}
       {showProp("id") && (
-        <span className="shrink-0 text-[var(--color-text-secondary)]">
+        <span className="t-mono-sm shrink-0 text-[var(--color-text-secondary)]">
           {identifier}
         </span>
       )}
 
       {/* Title */}
-      <span className="min-w-0 flex-1 truncate text-[var(--color-text-primary)]">
+      <span className="min-w-0 flex-1 truncate font-medium text-[var(--color-text-primary)]">
         {title}
       </span>
 
@@ -166,7 +166,7 @@ export function IssueRow({
     </>
   );
 
-  const className = `group flex h-[40px] items-center gap-2 border-b border-[var(--color-border)] px-4 text-[13px] transition-colors hover:bg-[var(--color-surface-hover)] ${
+  const className = `group flex h-[42px] items-center gap-2 border-b border-[var(--color-border)] bg-[color-mix(in_oklab,var(--color-surface)_72%,transparent)] px-4 text-[13px] transition-colors hover:bg-[var(--color-surface-hover)] ${
     selected ? "bg-[var(--color-surface-active)]" : ""
   }`;
 

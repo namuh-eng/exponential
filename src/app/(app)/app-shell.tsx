@@ -367,7 +367,10 @@ export function AppShell({
 
   return (
     <AppShellContext.Provider value={shellContext}>
-      <div className="flex h-screen bg-[var(--color-sidebar-bg)]">
+      <div
+        className="flex h-screen bg-[var(--color-sidebar-bg)]"
+        data-editorial-theme="product"
+      >
         <div
           data-testid="app-sidebar-shell"
           className={isSettingsRoute ? "hidden md:block" : "block"}
@@ -400,8 +403,8 @@ export function AppShell({
           <div
             className={
               isSettingsRoute
-                ? "h-full overflow-y-auto bg-[var(--color-content-bg)] transition-colors md:rounded-xl md:border md:border-[var(--color-border)]"
-                : "h-full overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] transition-colors"
+                ? "editorial-page-surface h-full overflow-y-auto bg-[var(--color-content-bg)] transition-colors md:rounded-xl md:border md:border-[var(--color-border)]"
+                : "editorial-page-surface h-full overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] shadow-[var(--editorial-shadow-sm)] transition-colors"
             }
           >
             {children}

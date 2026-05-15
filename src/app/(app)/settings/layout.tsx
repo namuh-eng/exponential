@@ -132,9 +132,9 @@ export default function SettingsLayout({
       : sections;
 
   return (
-    <div className="flex h-full flex-col md:flex-row">
+    <div className="editorial-page-surface flex h-full flex-col md:flex-row">
       {/* Settings sidebar */}
-      <aside className="max-h-[40vh] w-full shrink-0 overflow-y-auto border-b border-[var(--color-border)] px-3 py-4 md:max-h-none md:w-[220px] md:border-b-0 md:border-r">
+      <aside className="max-h-[40vh] w-full shrink-0 overflow-y-auto border-b border-[var(--color-border)] bg-[color-mix(in_oklab,var(--color-surface)_64%,transparent)] px-3 py-4 md:max-h-none md:w-[220px] md:border-b-0 md:border-r">
         <Link
           href={withWorkspaceSlug("/inbox", workspaceSlug)}
           className="mb-4 flex items-center gap-1.5 px-2 text-[13px] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
