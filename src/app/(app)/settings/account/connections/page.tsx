@@ -1,9 +1,9 @@
 "use client";
 
-import { linkSocialAccount } from "@/lib/auth-client";
+import { linkSocialAccount, unlinkSocialAccount } from "@/lib/auth-client";
 import { useEffect, useMemo, useState } from "react";
 
-type ProviderId = string;
+type ProviderId = "google" | "github" | "gitlab" | "slack";
 
 type ConnectedProvider = {
   id: string;
@@ -26,6 +26,8 @@ type ProviderRegistryEntry = {
   label: string;
   capabilityKey: string;
   unavailableReason: string;
+  description: string;
+  attributionPurpose: string;
 };
 
 type ProviderRow = ProviderRegistryEntry & {
@@ -38,15 +40,41 @@ type Notice = { tone: "success" | "error" | "neutral"; message: string };
 
 const CONNECTIONS_PATH = "/settings/account/connections";
 
-// Backend account-linking currently supports Google only. Add providers here as
-// their capability flag and link handler become available; the render path below
-// is intentionally provider-row based rather than Google-page based.
 const ACCOUNT_PROVIDER_REGISTRY: ProviderRegistryEntry[] = [
+  {
+    id: "github",
+    label: "GitHub",
+    capabilityKey: "github",
+    unavailableReason: "GitHub account linking is not configured",
+    description:
+      "Connect your personal GitHub account for integration attribution.",
+    attributionPurpose:
+      "Maps synced GitHub activity, comments, and assignees to you.",
+  },
+  {
+    id: "gitlab",
+    label: "GitLab",
+    capabilityKey: "gitlab",
+    unavailableReason: "GitLab account linking is not configured",
+    description: "Connect your personal GitLab account when GitLab is enabled.",
+    attributionPurpose: "Maps synced GitLab activity to your Linear user.",
+  },
+  {
+    id: "slack",
+    label: "Slack",
+    capabilityKey: "slack",
+    unavailableReason: "Slack account linking is not configured",
+    description: "Connect your Slack identity for chat-backed attribution.",
+    attributionPurpose: "Maps synced Slack interactions to your Linear user.",
+  },
   {
     id: "google",
     label: "Google",
     capabilityKey: "google",
     unavailableReason: "Google account linking is not configured",
+    description:
+      "Connect Google when this workspace supports Google sign-in linking.",
+    attributionPurpose: "Keeps sign-in identities attached to your account.",
   },
 ];
 
@@ -112,6 +140,8 @@ export default function ConnectedAccountsPage() {
   const [linkingProvider, setLinkingProvider] = useState<ProviderId | null>(
     null,
   );
+  const [disconnectingProvider, setDisconnectingProvider] =
+    useState<ProviderId | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   useEffect(() => {
@@ -222,20 +252,12 @@ export default function ConnectedAccountsPage() {
       return;
     }
 
-    if (provider.id !== "google") {
-      setNotice({
-        tone: "error",
-        message: `${provider.label} account linking is not supported yet.`,
-      });
-      return;
-    }
-
     setLinkingProvider(provider.id);
     setNotice(null);
     try {
       const successParams = new URLSearchParams({ connection: "linked" });
       const result = await linkSocialAccount({
-        provider: "google",
+        provider: provider.id,
         callbackURL: getConnectionsCallbackUrl(successParams),
         errorCallbackURL: getConnectionsCallbackUrl(),
       });
@@ -247,9 +269,9 @@ export default function ConnectedAccountsPage() {
         setNotice({
           tone: "error",
           message: isMissingProvider
-            ? "Google account linking is not configured for this workspace. Ask an admin to configure Google OAuth."
+            ? `${provider.label} account linking is not configured for this workspace. Ask an admin to configure ${provider.label} OAuth.`
             : (result.error.message ??
-              "Google account linking failed. Try again."),
+              `${provider.label} account linking failed. Try again.`),
         });
         setLinkingProvider(null);
         return;
@@ -269,10 +291,49 @@ export default function ConnectedAccountsPage() {
     } catch {
       setNotice({
         tone: "error",
-        message:
-          "Google account linking failed. Try again or contact an admin.",
+        message: `${provider.label} account linking failed. Try again or contact an admin.`,
       });
       setLinkingProvider(null);
+    }
+  }
+
+  async function disconnectProvider(row: ProviderRow) {
+    if (!row.connectedProvider) return;
+
+    setDisconnectingProvider(row.id);
+    setNotice(null);
+    try {
+      const result = await unlinkSocialAccount({
+        providerId: row.id,
+        accountId: row.connectedProvider.accountId ?? undefined,
+      });
+
+      if (result?.error) {
+        setNotice({
+          tone: "error",
+          message:
+            result.error.message ??
+            `${row.label} could not be disconnected. Try again.`,
+        });
+        return;
+      }
+
+      setProviders((currentProviders) =>
+        currentProviders.filter(
+          (currentProvider) => currentProvider.id !== row.connectedProvider?.id,
+        ),
+      );
+      setNotice({
+        tone: "success",
+        message: `${row.label} disconnected.`,
+      });
+    } catch {
+      setNotice({
+        tone: "error",
+        message: `${row.label} could not be disconnected. Try again.`,
+      });
+    } finally {
+      setDisconnectingProvider(null);
     }
   }
 
@@ -290,7 +351,9 @@ export default function ConnectedAccountsPage() {
         Connected accounts
       </h1>
       <p className="mt-3 text-[14px] text-[var(--color-text-secondary)]">
-        Manage your social logins and third-party account connections.
+        Connect personal provider accounts so synced integration activity,
+        comments, and assignees are attributed to you instead of generic
+        integration actors.
       </p>
 
       {notice && (
@@ -324,8 +387,9 @@ export default function ConnectedAccountsPage() {
                     {providerLabel(provider.providerId)}
                   </div>
                   <div className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
-                    Connected account ending in{" "}
-                    {provider.accountId?.slice(-6) ?? "unknown"}
+                    {provider.accountId
+                      ? `External identity: ${provider.accountId}`
+                      : "External identity unavailable"}
                   </div>
                 </div>
                 <span className="rounded-full border border-emerald-500/30 px-2 py-0.5 text-[12px] text-emerald-200">
@@ -348,8 +412,8 @@ export default function ConnectedAccountsPage() {
               Available providers
             </h2>
             <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
-              Connect another sign-in provider when it is configured for this
-              workspace.
+              Connect provider accounts used by workspace integrations for
+              attribution and identity mapping.
             </p>
           </div>
           {hasLinkableProvider && (
@@ -374,17 +438,34 @@ export default function ConnectedAccountsPage() {
                   {provider.label}
                 </div>
                 <div className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
-                  {provider.status === "connected"
-                    ? "This provider is already connected to your account."
-                    : provider.status === "available"
-                      ? "Available to connect."
-                      : provider.unavailableReason}
+                  <span>{provider.description}</span>
+                  <span className="mt-0.5 block">
+                    {provider.status === "connected"
+                      ? provider.connectedProvider?.accountId
+                        ? `External identity: ${provider.connectedProvider.accountId}`
+                        : "This provider is already connected to your account."
+                      : provider.status === "available"
+                        ? provider.attributionPurpose
+                        : provider.unavailableReason}
+                  </span>
                 </div>
               </div>
               {provider.status === "connected" ? (
-                <span className="rounded-full border border-emerald-500/30 px-2 py-0.5 text-[12px] text-emerald-200">
-                  Connected
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full border border-emerald-500/30 px-2 py-0.5 text-[12px] text-emerald-200">
+                    Connected
+                  </span>
+                  <button
+                    className="rounded-md border border-[#2c2d33] px-3 py-2 text-[13px] text-[var(--color-text-primary)] transition-colors hover:bg-[#1b1c22] disabled:cursor-not-allowed disabled:opacity-60"
+                    type="button"
+                    disabled={disconnectingProvider === provider.id}
+                    onClick={() => void disconnectProvider(provider)}
+                  >
+                    {disconnectingProvider === provider.id
+                      ? `Disconnecting ${provider.label}...`
+                      : `Disconnect ${provider.label}`}
+                  </button>
+                </div>
               ) : provider.status === "available" ? (
                 <button
                   className="rounded-md border border-[#2c2d33] px-3 py-2 text-[13px] text-[var(--color-text-primary)] transition-colors hover:bg-[#1b1c22] disabled:cursor-not-allowed disabled:opacity-60"

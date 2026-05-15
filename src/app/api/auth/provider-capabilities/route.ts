@@ -1,4 +1,9 @@
-import { isGoogleOAuthConfigured } from "@/lib/auth-providers";
+import {
+  isGitHubOAuthConfigured,
+  isGitLabOAuthConfigured,
+  isGoogleOAuthConfigured,
+  isSlackOAuthConfigured,
+} from "@/lib/auth-providers";
 import { isPasskeyAuthEnabled } from "@/lib/passkeys";
 import { NextResponse } from "next/server";
 
@@ -7,6 +12,9 @@ export function GET() {
     {
       providers: {
         google: isGoogleOAuthConfigured(),
+        github: isGitHubOAuthConfigured(),
+        gitlab: isGitLabOAuthConfigured(),
+        slack: isSlackOAuthConfigured(),
         passkey: isPasskeyAuthEnabled(),
       },
     },

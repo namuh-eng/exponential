@@ -11,7 +11,7 @@ export const authClient = createAuthClient({
 
 export const { signIn, signOut, useSession } = authClient;
 
-type SocialLinkProvider = "google";
+type SocialLinkProvider = "google" | "github" | "gitlab" | "slack";
 
 type LinkSocialAccountOptions = {
   provider: SocialLinkProvider;
@@ -25,16 +25,35 @@ type LinkSocialAccountResult = {
   error?: { code?: string; status?: number; message?: string };
 };
 
-type AuthClientWithLinkSocial = typeof authClient & {
+type UnlinkSocialAccountOptions = {
+  providerId: SocialLinkProvider;
+  accountId?: string;
+};
+
+type UnlinkSocialAccountResult = {
+  data?: { status?: boolean };
+  error?: { code?: string; status?: number; message?: string };
+};
+
+type AuthClientWithSocialAccounts = typeof authClient & {
   linkSocial: (
     options: LinkSocialAccountOptions,
   ) => Promise<LinkSocialAccountResult>;
+  unlinkAccount: (
+    options: UnlinkSocialAccountOptions,
+  ) => Promise<UnlinkSocialAccountResult>;
 };
 
 export async function linkSocialAccount(
   options: LinkSocialAccountOptions,
 ): Promise<LinkSocialAccountResult> {
-  return (authClient as AuthClientWithLinkSocial).linkSocial(options);
+  return (authClient as AuthClientWithSocialAccounts).linkSocial(options);
+}
+
+export async function unlinkSocialAccount(
+  options: UnlinkSocialAccountOptions,
+): Promise<UnlinkSocialAccountResult> {
+  return (authClient as AuthClientWithSocialAccounts).unlinkAccount(options);
 }
 
 type PasskeySignInOptions = {

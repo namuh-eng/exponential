@@ -1,6 +1,11 @@
 import { randomInt } from "node:crypto";
 import { getConfiguredAppUrl } from "@/lib/app-url";
-import { isGoogleOAuthConfigured } from "@/lib/auth-providers";
+import {
+  getGitHubOAuthConfig,
+  getGitLabOAuthConfig,
+  getGoogleOAuthConfig,
+  getSlackOAuthConfig,
+} from "@/lib/auth-providers";
 import { db } from "@/lib/db";
 import { sendMagicLinkEmail } from "@/lib/email";
 import {
@@ -35,19 +40,27 @@ function getBetterAuthSecret() {
 }
 
 function getSocialProviders() {
-  const clientId = process.env.AUTH_GOOGLE_ID;
-  const clientSecret = process.env.AUTH_GOOGLE_SECRET;
+  const providers: Record<string, { clientId: string; clientSecret: string }> =
+    {};
+  const google = getGoogleOAuthConfig();
+  const github = getGitHubOAuthConfig();
+  const gitlab = getGitLabOAuthConfig();
+  const slack = getSlackOAuthConfig();
 
-  if (!isGoogleOAuthConfigured() || !clientId || !clientSecret) {
-    return {};
+  if (google) {
+    providers.google = google;
+  }
+  if (github) {
+    providers.github = github;
+  }
+  if (gitlab) {
+    providers.gitlab = gitlab;
+  }
+  if (slack) {
+    providers.slack = slack;
   }
 
-  return {
-    google: {
-      clientId,
-      clientSecret,
-    },
-  };
+  return providers;
 }
 
 export const auth = betterAuth({
