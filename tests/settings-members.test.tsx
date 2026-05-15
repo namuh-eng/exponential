@@ -165,6 +165,38 @@ describe("Members Admin Page", () => {
     expect(screen.queryByText("Application")).not.toBeInTheDocument();
   });
 
+  it("uses the members API invite capability for the invite button", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () =>
+        membersResponse(mockMembers, {
+          viewerRole: "member",
+          canInviteMembers: true,
+        }),
+    });
+
+    render(<MembersPage />);
+    await waitForLoaded();
+
+    expect(screen.getByRole("button", { name: "Invite" })).toBeEnabled();
+
+    cleanup();
+    mockFetch.mockReset();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () =>
+        membersResponse(mockMembers, {
+          viewerRole: "admin",
+          canInviteMembers: false,
+        }),
+    });
+
+    render(<MembersPage />);
+    await waitForLoaded();
+
+    expect(screen.getByRole("button", { name: "Invite" })).toBeDisabled();
+  });
+
   it("opens the invite modal and submits invitations through the API", async () => {
     mockFetch
       .mockResolvedValueOnce({

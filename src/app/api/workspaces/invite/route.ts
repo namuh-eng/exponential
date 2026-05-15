@@ -5,6 +5,10 @@ import { db } from "@/lib/db";
 import { member, user, workspace, workspaceInvitation } from "@/lib/db/schema";
 import { sendInvitationEmail } from "@/lib/email";
 import { createInviteToken } from "@/lib/invite-tokens";
+import {
+  canPerformWorkspacePermission,
+  readWorkspacePermissionSettings,
+} from "@/lib/workspace-permissions";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -34,10 +38,15 @@ export async function POST(request: Request) {
     );
   }
 
-  // Verify the user is a member of the workspace
+  // Verify the user is a member of the workspace and load security policy.
   const membership = await db
-    .select({ role: member.role })
+    .select({
+      role: member.role,
+      workspaceName: workspace.name,
+      settings: workspace.settings,
+    })
     .from(member)
+    .innerJoin(workspace, eq(workspace.id, member.workspaceId))
     .where(
       and(
         eq(member.userId, session.user.id),
@@ -53,22 +62,14 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!["owner", "admin"].includes(membership[0].role)) {
+  const invitePermission = readWorkspacePermissionSettings(
+    membership[0].settings,
+  ).invitationsRole;
+  if (!canPerformWorkspacePermission(membership[0].role, invitePermission)) {
     return NextResponse.json(
       { error: "You do not have permission to invite members" },
       { status: 403 },
     );
-  }
-
-  // Get workspace info for the email
-  const [ws] = await db
-    .select({ name: workspace.name })
-    .from(workspace)
-    .where(eq(workspace.id, workspaceId))
-    .limit(1);
-
-  if (!ws) {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
   }
 
   const baseUrl = getRequestAppUrl(request);
@@ -115,7 +116,12 @@ export async function POST(request: Request) {
         baseUrl,
         `/accept-invite?token=${encodeURIComponent(inviteToken)}`,
       );
-      await sendInvitationEmail(email, ws.name, session.user.name, inviteUrl);
+      await sendInvitationEmail(
+        email,
+        membership[0].workspaceName,
+        session.user.name,
+        inviteUrl,
+      );
       await db
         .insert(workspaceInvitation)
         .values({

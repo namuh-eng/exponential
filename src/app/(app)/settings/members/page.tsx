@@ -30,6 +30,7 @@ interface MembersResponse {
   workspaceId: string;
   currentUserId: string;
   viewerRole: WorkspaceRole;
+  canInviteMembers?: boolean;
   members: MemberData[];
 }
 
@@ -69,6 +70,7 @@ export default function MembersPage() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [viewerRole, setViewerRole] = useState<WorkspaceRole>("member");
+  const [canInviteMembers, setCanInviteMembers] = useState(false);
   const [members, setMembers] = useState<MemberData[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
@@ -104,6 +106,10 @@ export default function MembersPage() {
     setWorkspaceId(data.workspaceId);
     setCurrentUserId(data.currentUserId);
     setViewerRole(data.viewerRole);
+    setCanInviteMembers(
+      data.canInviteMembers ??
+        (data.viewerRole === "owner" || data.viewerRole === "admin"),
+    );
     setMembers(data.members);
   }
 
@@ -306,7 +312,7 @@ export default function MembersPage() {
               setErrorMessage(null);
               setStatusMessage(null);
             }}
-            disabled={!canManageMembers}
+            disabled={!canInviteMembers}
             className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Invite

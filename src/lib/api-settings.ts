@@ -1,5 +1,14 @@
-export type PermissionLevel = "admins" | "members" | "anyone";
-export type WorkspaceMemberRole = "owner" | "admin" | "member" | "guest";
+import {
+  type PermissionLevel,
+  type WorkspaceMemberRole,
+  asRecord,
+  canPerformWorkspacePermission,
+  isPermissionLevel,
+  readPermissionLevel,
+} from "@/lib/workspace-permissions";
+
+export { asRecord, isPermissionLevel, readPermissionLevel };
+export type { PermissionLevel, WorkspaceMemberRole };
 export type WebhookEventType = "created" | "updated" | "deleted";
 
 export type OAuthApplicationRecord = {
@@ -55,11 +64,6 @@ export const OAUTH_APPLICATIONS_DOCS_URL =
   "https://linear.app/developers/oauth-2-0-authentication";
 export const WEBHOOKS_DOCS_URL = "https://linear.app/developers/webhooks";
 
-const PERMISSION_LEVELS = new Set<PermissionLevel>([
-  "admins",
-  "members",
-  "anyone",
-]);
 const WEBHOOK_EVENT_TYPES = new Set<WebhookEventType>([
   "created",
   "updated",
@@ -73,28 +77,6 @@ type WorkspaceApiSettingsState = {
 const DEFAULT_WORKSPACE_API_SETTINGS: WorkspaceApiSettingsState = {
   oauthApplications: [],
 };
-
-export function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-export function readPermissionLevel(
-  value: unknown,
-  fallback: PermissionLevel,
-): PermissionLevel {
-  return typeof value === "string" &&
-    PERMISSION_LEVELS.has(value as PermissionLevel)
-    ? (value as PermissionLevel)
-    : fallback;
-}
-
-export function isPermissionLevel(value: unknown): value is PermissionLevel {
-  return (
-    typeof value === "string" && PERMISSION_LEVELS.has(value as PermissionLevel)
-  );
-}
 
 export function normalizeWebhookEvents(value: unknown): WebhookEventType[] {
   if (!Array.isArray(value)) {
@@ -281,9 +263,7 @@ export function canMemberCreateApiKeys(
   role: WorkspaceMemberRole,
   permissionLevel: PermissionLevel,
 ) {
-  if (permissionLevel === "admins") {
-    return canManageWorkspaceApi(role);
-  }
-
-  return role !== "guest";
+  return canPerformWorkspacePermission(role, permissionLevel, {
+    includeGuestsForAnyone: false,
+  });
 }

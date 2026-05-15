@@ -107,6 +107,13 @@ async function seed() {
     id: TEST_WS_ID,
     name: "Teams Directory Workspace",
     urlSlug: "teams-252",
+    settings: {
+      security: {
+        permissions: {
+          teamCreationRole: "admins",
+        },
+      },
+    },
   });
 
   await db.insert(member).values([
@@ -200,7 +207,47 @@ describe("workspace teams API route", () => {
     expect(states.length).toBeGreaterThan(0);
   });
 
-  it("validates team creation and enforces admin permissions", async () => {
+  it("allows regular members to create teams when the workspace policy allows members", async () => {
+    await db
+      .update(workspace)
+      .set({
+        settings: {
+          security: {
+            permissions: {
+              teamCreationRole: "members",
+            },
+          },
+        },
+      })
+      .where(eq(workspace.id, TEST_WS_ID));
+    mockSession(MEMBER_USER_ID);
+
+    const res = await POST(
+      new Request("http://localhost/api/teams", {
+        method: "POST",
+        body: JSON.stringify({ name: "Support", key: "SUP" }),
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    expect(data.team).toMatchObject({
+      name: "Support",
+      key: "SUP",
+      memberCount: 1,
+      currentUserIsMember: true,
+    });
+
+    const persistedMemberships = await db
+      .select()
+      .from(teamMember)
+      .where(eq(teamMember.teamId, data.team.id));
+    expect(persistedMemberships.map((row) => row.userId)).toEqual([
+      MEMBER_USER_ID,
+    ]);
+  });
+
+  it("validates team creation and blocks members when the workspace policy is admins only", async () => {
     const invalidRes = await POST(
       new Request("http://localhost/api/teams", {
         method: "POST",

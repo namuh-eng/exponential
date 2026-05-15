@@ -1,11 +1,21 @@
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { type ApiSession, requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { member, team, teamMember, workflowState } from "@/lib/db/schema";
+import {
+  member,
+  team,
+  teamMember,
+  workflowState,
+  workspace,
+} from "@/lib/db/schema";
 import {
   generateTeamKey,
   getDefaultWorkflowStates,
 } from "@/lib/workspace-creation";
+import {
+  canPerformWorkspacePermission,
+  readWorkspacePermissionSettings,
+} from "@/lib/workspace-permissions";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -15,10 +25,14 @@ const MAX_TEAM_KEY_LENGTH = 10;
 type WorkspaceAccess = {
   workspaceId: string;
   role: string;
+  settings: unknown;
 };
 
-function canManageTeams(role: string | undefined) {
-  return role === "owner" || role === "admin";
+function canCreateTeams(role: string | undefined, settings: unknown) {
+  return canPerformWorkspacePermission(
+    role,
+    readWorkspacePermissionSettings(settings).teamCreationRole,
+  );
 }
 
 async function getWorkspaceAccess(
@@ -32,13 +46,10 @@ async function getWorkspaceAccess(
     return null;
   }
 
-  if ("apiKey" in session && session.apiKey.workspaceId === workspaceId) {
-    return { workspaceId, role: session.apiKey.memberRole };
-  }
-
-  const [membership] = await db
-    .select({ role: member.role })
+  const [access] = await db
+    .select({ role: member.role, settings: workspace.settings })
     .from(member)
+    .innerJoin(workspace, eq(workspace.id, member.workspaceId))
     .where(
       and(
         eq(member.workspaceId, workspaceId),
@@ -47,7 +58,27 @@ async function getWorkspaceAccess(
     )
     .limit(1);
 
-  return membership ? { workspaceId, role: membership.role } : null;
+  if (access) {
+    return { workspaceId, role: access.role, settings: access.settings };
+  }
+
+  if ("apiKey" in session && session.apiKey.workspaceId === workspaceId) {
+    const [apiWorkspace] = await db
+      .select({ settings: workspace.settings })
+      .from(workspace)
+      .where(eq(workspace.id, workspaceId))
+      .limit(1);
+
+    return apiWorkspace
+      ? {
+          workspaceId,
+          role: session.apiKey.memberRole,
+          settings: apiWorkspace.settings,
+        }
+      : null;
+  }
+
+  return null;
 }
 
 function normalizeTeamName(value: unknown) {
@@ -83,7 +114,8 @@ function validateTeamKey(key: string) {
   return null;
 }
 
-async function listTeams(workspaceId: string, userId: string, role: string) {
+async function listTeams(access: WorkspaceAccess, userId: string) {
+  const { workspaceId, role } = access;
   const teams = await db
     .select({
       id: team.id,
@@ -122,7 +154,7 @@ async function listTeams(workspaceId: string, userId: string, role: string) {
   return {
     workspaceId,
     viewerRole: role,
-    canManageTeams: canManageTeams(role),
+    canManageTeams: canCreateTeams(role, access.settings),
     teams: teams.map((entry) => ({
       ...entry,
       memberCount: memberCountsByTeamId.get(entry.id) ?? 0,
@@ -146,9 +178,7 @@ export async function GET() {
     );
   }
 
-  return NextResponse.json(
-    await listTeams(access.workspaceId, session.user.id, access.role),
-  );
+  return NextResponse.json(await listTeams(access, session.user.id));
 }
 
 export async function POST(request: Request) {
@@ -165,9 +195,9 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!canManageTeams(access.role)) {
+  if (!canCreateTeams(access.role, access.settings)) {
     return NextResponse.json(
-      { error: "Only workspace admins can create teams" },
+      { error: "You do not have permission to create teams" },
       { status: 403 },
     );
   }

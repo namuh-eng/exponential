@@ -8,8 +8,13 @@ import {
   team,
   teamMember,
   user,
+  workspace,
   workspaceInvitation,
 } from "@/lib/db/schema";
+import {
+  canPerformWorkspacePermission,
+  readWorkspacePermissionSettings,
+} from "@/lib/workspace-permissions";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
@@ -30,8 +35,10 @@ async function getWorkspaceAccess(userId: string) {
     .select({
       id: member.id,
       role: member.role,
+      settings: workspace.settings,
     })
     .from(member)
+    .innerJoin(workspace, eq(workspace.id, member.workspaceId))
     .where(and(eq(member.workspaceId, workspaceId), eq(member.userId, userId)))
     .limit(1);
 
@@ -172,6 +179,11 @@ export async function GET() {
     workspaceId: access.workspaceId,
     currentUserId: authSession.user.id,
     viewerRole: access.membership.role,
+    canInviteMembers: canPerformWorkspacePermission(
+      access.membership.role,
+      readWorkspacePermissionSettings(access.membership.settings)
+        .invitationsRole,
+    ),
     members,
   });
 }

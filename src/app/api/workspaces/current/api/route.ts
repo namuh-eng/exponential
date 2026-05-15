@@ -226,7 +226,7 @@ export async function PATCH(request: Request) {
     permissionLevel?: unknown;
   } | null;
 
-  if (!isPermissionLevel(body?.permissionLevel)) {
+  if (!body || !isPermissionLevel(body.permissionLevel)) {
     return NextResponse.json(
       { error: "A valid permission level is required." },
       { status: 400 },

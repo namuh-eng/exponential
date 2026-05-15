@@ -37,12 +37,14 @@ vi.mock("@/lib/invite-tokens", () => ({
 vi.mock("@/lib/db", () => ({
   db: {
     select: vi.fn((selection: Record<string, unknown>) => {
-      // workspace name lookup
-      if (selection && "name" in selection) {
+      // membership + workspace policy lookup
+      if (selection && "workspaceName" in selection) {
         return {
           from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue(workspaceLimitMock()),
+            innerJoin: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue(membershipLimitMock()),
+              }),
             }),
           }),
         };
@@ -91,7 +93,9 @@ describe("workspace invite route", () => {
       user: { id: "user-1", name: "Ashley" },
     });
     resolveActiveWorkspaceIdMock.mockResolvedValue("workspace-1");
-    membershipLimitMock.mockReturnValue([{ role: "admin" }]);
+    membershipLimitMock.mockReturnValue([
+      { role: "admin", workspaceName: "Namuh", settings: {} },
+    ]);
     workspaceLimitMock.mockReturnValue([{ name: "Namuh" }]);
     existingMemberInnerJoinMock.mockReturnValue([]);
     createInviteTokenMock.mockReturnValue("token-123");
@@ -155,8 +159,40 @@ describe("workspace invite route", () => {
     );
   });
 
-  it("blocks invites from non-admins", async () => {
-    membershipLimitMock.mockReturnValue([{ role: "member" }]);
+  it("allows regular members to invite when the workspace policy allows members", async () => {
+    membershipLimitMock.mockReturnValue([
+      {
+        role: "member",
+        workspaceName: "Namuh",
+        settings: {
+          security: { permissions: { invitationsRole: "members" } },
+        },
+      },
+    ]);
+    const { POST } = await import("@/app/api/workspaces/invite/route");
+
+    const response = await POST(
+      new Request("http://localhost", {
+        method: "POST",
+        body: JSON.stringify({
+          invites: [{ email: "new@test.com", role: "member" }],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.results[0].status).toBe("sent");
+  });
+
+  it("blocks invites from members when the workspace policy is admins only", async () => {
+    membershipLimitMock.mockReturnValue([
+      {
+        role: "member",
+        workspaceName: "Namuh",
+        settings: { security: { permissions: { invitationsRole: "admins" } } },
+      },
+    ]);
     const { POST } = await import("@/app/api/workspaces/invite/route");
 
     const response = await POST(

@@ -1,6 +1,10 @@
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { db } from "@/lib/db";
-import { member, team, teamMember, user } from "@/lib/db/schema";
+import { member, team, teamMember, user, workspace } from "@/lib/db/schema";
+import {
+  canPerformWorkspacePermission,
+  readWorkspacePermissionSettings,
+} from "@/lib/workspace-permissions";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 export interface WorkspaceDirectoryMember {
@@ -33,18 +37,26 @@ async function getAccessibleWorkspace(userId: string) {
   }
 
   const [workspaceMembership] = await db
-    .select({ id: member.id, role: member.role })
+    .select({ id: member.id, role: member.role, settings: workspace.settings })
     .from(member)
+    .innerJoin(workspace, eq(workspace.id, member.workspaceId))
     .where(and(eq(member.workspaceId, workspaceId), eq(member.userId, userId)))
     .limit(1);
 
   return workspaceMembership
-    ? { workspaceId, role: workspaceMembership.role }
+    ? {
+        workspaceId,
+        role: workspaceMembership.role,
+        settings: workspaceMembership.settings,
+      }
     : null;
 }
 
-function canManageTeams(role: string) {
-  return role === "owner" || role === "admin";
+function canCreateTeams(role: string, settings: unknown) {
+  return canPerformWorkspacePermission(
+    role,
+    readWorkspacePermissionSettings(settings).teamCreationRole,
+  );
 }
 
 async function getAccessibleWorkspaceId(userId: string) {
@@ -163,7 +175,7 @@ export async function getWorkspaceTeamsDirectory(userId: string) {
   return {
     workspaceId,
     viewerRole: access.role,
-    canManageTeams: canManageTeams(access.role),
+    canManageTeams: canCreateTeams(access.role, access.settings),
     teams: teams.map((entry) => ({
       ...entry,
       memberCount: memberCountsByTeamId.get(entry.id) ?? 0,

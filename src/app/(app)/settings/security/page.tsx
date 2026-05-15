@@ -202,13 +202,33 @@ function buildPayload(security: SecuritySettings) {
 const PERMISSION_ROWS: Array<{
   key: keyof SecuritySettings["permissions"];
   title: string;
+  description?: string;
+  disabledReason?: string;
 }> = [
   { key: "invitationsRole", title: "New user invitations" },
   { key: "teamCreationRole", title: "Team creation" },
-  { key: "labelManagementRole", title: "Manage workspace labels" },
-  { key: "templateManagementRole", title: "Manage workspace templates" },
+  {
+    key: "labelManagementRole",
+    title: "Manage workspace labels",
+    description:
+      "Coming soon — label management mutations are not implemented in this clone yet.",
+    disabledReason: "Workspace label controls are coming soon",
+  },
+  {
+    key: "templateManagementRole",
+    title: "Manage workspace templates",
+    description:
+      "Coming soon — template management mutations are not implemented in this clone yet.",
+    disabledReason: "Workspace template controls are coming soon",
+  },
   { key: "apiKeyCreationRole", title: "API key creation" },
-  { key: "agentGuidanceRole", title: "Modify agent guidance" },
+  {
+    key: "agentGuidanceRole",
+    title: "Modify agent guidance",
+    description:
+      "Coming soon — agent guidance mutations are not implemented in this clone yet.",
+    disabledReason: "Agent guidance controls are coming soon",
+  },
 ];
 
 export default function SecurityPage() {
@@ -680,12 +700,20 @@ export default function SecurityPage() {
         <SectionHeader>Workspace management</SectionHeader>
 
         {PERMISSION_ROWS.map((row) => (
-          <SettingRow key={row.key} title={row.title}>
+          <SettingRow
+            key={row.key}
+            title={row.title}
+            description={row.description}
+          >
             <PermissionSelect
               label={row.title}
-              disabled={saving}
+              disabled={saving || Boolean(row.disabledReason)}
               value={security.permissions[row.key]}
-              onChange={(value) =>
+              onChange={(value) => {
+                if (row.disabledReason) {
+                  return;
+                }
+
                 void persistSecurity(
                   {
                     ...security,
@@ -695,8 +723,8 @@ export default function SecurityPage() {
                     },
                   },
                   { successMessage: `${row.title} updated.` },
-                )
-              }
+                );
+              }}
             />
           </SettingRow>
         ))}

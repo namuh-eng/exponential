@@ -4,10 +4,14 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
+import {
+  DEFAULT_WORKSPACE_PERMISSION_SETTINGS,
+  type PermissionLevel,
+  asRecord,
+  readPermissionLevel,
+} from "@/lib/workspace-permissions";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-
-type PermissionLevel = "admins" | "members" | "anyone";
 
 type AuthenticationSettings = {
   google: boolean;
@@ -48,24 +52,13 @@ type CurrentWorkspaceRecord = {
   approvedEmailDomains: unknown;
 };
 
-const PERMISSION_LEVELS = new Set<PermissionLevel>([
-  "admins",
-  "members",
-  "anyone",
-]);
-
 const DEFAULT_SECURITY_STATE: WorkspaceSecurityState = {
   authentication: {
     google: true,
     emailPasskey: true,
   },
   permissions: {
-    invitationsRole: "members",
-    teamCreationRole: "members",
-    labelManagementRole: "members",
-    templateManagementRole: "members",
-    apiKeyCreationRole: "admins",
-    agentGuidanceRole: "admins",
+    ...DEFAULT_WORKSPACE_PERMISSION_SETTINGS,
   },
   restrictFileUploads: false,
   improveAi: true,
@@ -73,12 +66,6 @@ const DEFAULT_SECURITY_STATE: WorkspaceSecurityState = {
   hipaa: false,
   ipRestrictions: [],
 };
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
 
 function normalizeDomain(value: string) {
   return value.trim().toLowerCase().replace(/^@+/, "");
@@ -187,16 +174,6 @@ function validateIpRestrictions(value: unknown) {
   }
 
   return null;
-}
-
-function readPermissionLevel(
-  value: unknown,
-  fallback: PermissionLevel,
-): PermissionLevel {
-  return typeof value === "string" &&
-    PERMISSION_LEVELS.has(value as PermissionLevel)
-    ? (value as PermissionLevel)
-    : fallback;
 }
 
 function readWorkspaceSecurityState(settings: unknown): WorkspaceSecurityState {

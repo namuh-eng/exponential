@@ -142,6 +142,46 @@ describe("SecurityPage component", () => {
     );
   });
 
+  it("marks unsupported workspace management permission controls as coming soon", async () => {
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => mockSecurityData,
+    });
+
+    render(<SecurityPage />);
+    await waitFor(() => screen.getByText("example.com"));
+
+    expect(
+      screen.getByText(
+        "Coming soon — label management mutations are not implemented in this clone yet.",
+      ),
+    ).toBeDefined();
+    expect(screen.getByLabelText("Manage workspace labels")).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(screen.getByLabelText("Manage workspace templates")).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(screen.getByLabelText("Modify agent guidance")).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(screen.getByLabelText("New user invitations")).toHaveProperty(
+      "disabled",
+      false,
+    );
+    expect(screen.getByLabelText("Team creation")).toHaveProperty(
+      "disabled",
+      false,
+    );
+    expect(screen.getByLabelText("API key creation")).toHaveProperty(
+      "disabled",
+      false,
+    );
+  });
+
   it("updates permission levels", async () => {
     (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
