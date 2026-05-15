@@ -13,10 +13,20 @@ import {
   formatShortcutKeys,
   isPlainKeyShortcut,
 } from "@/lib/keyboard-shortcuts";
+import {
+  SIDEBAR_FAVORITES_CHANGED_EVENT,
+  type SidebarFavorite,
+} from "@/lib/sidebar-favorites";
 import { stripWorkspaceSlug, withWorkspaceSlug } from "@/lib/workspace-paths";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 export interface SidebarTeam {
   id?: string;
@@ -426,8 +436,32 @@ export function Sidebar({
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [helpMenuOpen, setHelpMenuOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [favorites, setFavorites] = useState<SidebarFavorite[]>([]);
+  const [favoritesLoading, setFavoritesLoading] = useState(false);
+  const [managingFavorites, setManagingFavorites] = useState(false);
   const sidebarVisibility = localPreferences.sidebarVisibility;
   const badgeStyle = localPreferences.sidebarBadgeStyle;
+
+  const syncFavorites = useCallback(async () => {
+    setFavoritesLoading(true);
+    try {
+      const response = await fetch("/api/sidebar/favorites", {
+        credentials: "include",
+      });
+      if (!response?.ok) {
+        return;
+      }
+
+      const data = (await response.json()) as {
+        favorites?: SidebarFavorite[];
+      };
+      setFavorites(data.favorites ?? []);
+    } catch {
+      setFavorites([]);
+    } finally {
+      setFavoritesLoading(false);
+    }
+  }, []);
 
   function isVisible(key: keyof NonNullable<typeof sidebarVisibility>) {
     return sidebarVisibility?.[key] ?? true;
@@ -439,6 +473,30 @@ export function Sidebar({
     setWorkspaceMenuOpen(false);
     setHelpMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!workspaceSlug) {
+      return;
+    }
+
+    void syncFavorites();
+
+    function handleFavoritesChanged() {
+      void syncFavorites();
+    }
+
+    window.addEventListener(
+      SIDEBAR_FAVORITES_CHANGED_EVENT,
+      handleFavoritesChanged,
+    );
+
+    return () => {
+      window.removeEventListener(
+        SIDEBAR_FAVORITES_CHANGED_EVENT,
+        handleFavoritesChanged,
+      );
+    };
+  }, [syncFavorites, workspaceSlug]);
 
   useEffect(() => {
     setLocalPreferences(
@@ -490,6 +548,53 @@ export function Sidebar({
       return next;
     });
   }, [activeTeamKey, teamKey, teamName, teams]);
+
+  async function removeFavorite(favorite: SidebarFavorite) {
+    const nextFavorites = favorites.filter((entry) => entry.id !== favorite.id);
+    setFavorites(nextFavorites);
+
+    const response = await fetch(
+      `/api/sidebar/favorites?objectType=${encodeURIComponent(
+        favorite.objectType,
+      )}&objectId=${encodeURIComponent(favorite.objectId)}`,
+      { method: "DELETE", credentials: "include" },
+    );
+
+    if (!response.ok) {
+      void syncFavorites();
+      return;
+    }
+
+    window.dispatchEvent(new Event(SIDEBAR_FAVORITES_CHANGED_EVENT));
+  }
+
+  async function moveFavorite(favoriteId: string, direction: -1 | 1) {
+    const currentIndex = favorites.findIndex(
+      (favorite) => favorite.id === favoriteId,
+    );
+    const nextIndex = currentIndex + direction;
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= favorites.length) {
+      return;
+    }
+
+    const nextFavorites = [...favorites];
+    const [movedFavorite] = nextFavorites.splice(currentIndex, 1);
+    nextFavorites.splice(nextIndex, 0, movedFavorite);
+    setFavorites(nextFavorites);
+
+    const response = await fetch("/api/sidebar/favorites", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        orderedIds: nextFavorites.map((favorite) => favorite.id),
+      }),
+    });
+
+    if (!response.ok) {
+      void syncFavorites();
+    }
+  }
 
   function updateSidebarPreferences(patch: AccountPreferencesPatch) {
     const nextPreferences = mergeAccountPreferences(localPreferences, patch);
@@ -688,6 +793,65 @@ export function Sidebar({
                 </svg>
               }
             />
+          )}
+
+          {(favorites.length > 0 || favoritesLoading) && (
+            <>
+              <SectionHeader label="Favorites" />
+              {favorites.map((favorite, index) => (
+                <div
+                  key={favorite.id}
+                  className="group flex items-center gap-1"
+                  title={favorite.context ?? favorite.label}
+                >
+                  <div className="min-w-0 flex-1">
+                    <SidebarLink
+                      href={favorite.href}
+                      label={favorite.label}
+                      active={pathname === favorite.href}
+                      icon={<span aria-hidden="true">★</span>}
+                    />
+                  </div>
+                  {managingFavorites && (
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <button
+                        type="button"
+                        aria-label={`Move ${favorite.label} up`}
+                        disabled={index === 0}
+                        onClick={() => void moveFavorite(favorite.id, -1)}
+                        className="rounded px-1 text-[11px] text-[var(--color-text-tertiary)] hover:bg-[var(--color-surface-hover)] disabled:opacity-30"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Move ${favorite.label} down`}
+                        disabled={index === favorites.length - 1}
+                        onClick={() => void moveFavorite(favorite.id, 1)}
+                        className="rounded px-1 text-[11px] text-[var(--color-text-tertiary)] hover:bg-[var(--color-surface-hover)] disabled:opacity-30"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${favorite.label} from favorites`}
+                        onClick={() => void removeFavorite(favorite)}
+                        className="rounded px-1 text-[11px] text-[var(--color-text-tertiary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setManagingFavorites((current) => !current)}
+                className="ml-6 rounded-md px-2 py-1 text-[11px] text-[var(--color-text-tertiary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+              >
+                {managingFavorites ? "Done managing" : "Manage favorites"}
+              </button>
+            </>
           )}
 
           <SectionHeader label="Workspace" />

@@ -8,6 +8,7 @@ import {
   ProjectProperties,
   type ProjectPropertiesSaveInput,
 } from "@/components/project-properties";
+import { SidebarFavoriteButton } from "@/components/sidebar-favorite-button";
 import { OPEN_PROJECT_UPDATE_EVENT } from "@/lib/command-palette";
 import type {
   ProjectActivityEntry,
@@ -446,10 +447,17 @@ export function ProjectDetailPage() {
       <div className="border-b border-[var(--color-border)] px-6 py-4">
         <div className="mb-3 flex items-center gap-3">
           <span className="text-[24px]">{project.icon ?? "📋"}</span>
-          <div>
-            <h1 className="text-[24px] font-semibold text-[var(--color-text-primary)]">
-              {project.name}
-            </h1>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-[24px] font-semibold text-[var(--color-text-primary)]">
+                {project.name}
+              </h1>
+              <SidebarFavoriteButton
+                objectType="project"
+                objectId={project.id}
+                label={project.name}
+              />
+            </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {summaryItems.map((item) => (
                 <span

@@ -4,6 +4,7 @@ import { useAppShellContext } from "@/app/(app)/app-shell";
 import { Avatar } from "@/components/avatar";
 import { EmptyState } from "@/components/empty-state";
 import type { FilterCondition } from "@/components/filter-bar";
+import { SidebarFavoriteButton } from "@/components/sidebar-favorite-button";
 import { TeamRouteErrorState } from "@/components/team-route-error-state";
 import {
   type ProjectViewSortOption,
@@ -194,6 +195,12 @@ function ViewRow({
       </div>
 
       <div className="ml-2 flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+        <SidebarFavoriteButton
+          objectType="view"
+          objectId={view.id}
+          label={view.name}
+          className="rounded-md px-2 py-1 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-active)] hover:text-[var(--color-text-primary)] disabled:opacity-50"
+        />
         <button
           type="button"
           onClick={() => onEdit(view)}
@@ -807,7 +814,7 @@ export function ViewsPage({
             <div className="hidden w-[180px] shrink-0 text-right sm:block">
               Owner
             </div>
-            <div className="w-[92px] shrink-0 text-right">Actions</div>
+            <div className="w-[150px] shrink-0 text-right">Actions</div>
           </div>
 
           {personalViews.length > 0 && (

@@ -2,6 +2,7 @@
 
 import { useAppShellContext } from "@/app/(app)/app-shell";
 import { IssueProperties } from "@/components/issue-properties";
+import { SidebarFavoriteButton } from "@/components/sidebar-favorite-button";
 import { LAST_ISSUE_STORAGE_KEY } from "@/lib/command-palette";
 import {
   normalizeIssueDescriptionHtml,
@@ -1327,6 +1328,11 @@ export function IssueDetailView({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <SidebarFavoriteButton
+                objectType="issue"
+                objectId={issue.id}
+                label={issue.identifier}
+              />
               <Link
                 href={teamIssuesHref}
                 className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
