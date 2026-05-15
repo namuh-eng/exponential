@@ -113,6 +113,20 @@ function getWorkspacePrefixedProjectsRoute(pathname: string) {
   return null;
 }
 
+function getWorkspacePrefixedProjectRoute(pathname: string) {
+  const segments = getPathSegments(pathname);
+
+  if (
+    isWorkspaceSlugSegment(segments[0]) &&
+    segments[1] === "project" &&
+    segments.length >= 3
+  ) {
+    return { slug: decodeURIComponent(segments[0]) };
+  }
+
+  return null;
+}
+
 function getWorkspacePrefixedTeamProjectsRoute(pathname: string) {
   const segments = getPathSegments(pathname);
 
@@ -272,6 +286,13 @@ export async function proxy(request: NextRequest) {
     getWorkspacePrefixedProjectsRoute(pathname);
   if (workspacePrefixedProjectsRoute) {
     requestHeaders.set("x-workspace-slug", workspacePrefixedProjectsRoute.slug);
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
+  const workspacePrefixedProjectRoute =
+    getWorkspacePrefixedProjectRoute(pathname);
+  if (workspacePrefixedProjectRoute) {
+    requestHeaders.set("x-workspace-slug", workspacePrefixedProjectRoute.slug);
     return NextResponse.next({ request: { headers: requestHeaders } });
   }
 

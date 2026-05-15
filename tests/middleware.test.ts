@@ -190,7 +190,6 @@ describe("Auth proxy", () => {
   it.each([
     ["/foreverbrowsing/members", "/members"],
     ["/foreverbrowsing/agent", "/agent"],
-    ["/foreverbrowsing/project/roadmap/overview", "/project/roadmap/overview"],
   ])(
     "rewrites authenticated workspace-prefixed app route %s without changing the browser URL",
     async (sourcePath, rewrittenPath) => {
@@ -256,6 +255,8 @@ describe("Auth proxy", () => {
   it.each([
     "/foreverbrowsing/projects",
     "/foreverbrowsing/projects/all",
+    "/foreverbrowsing/project/roadmap",
+    "/foreverbrowsing/project/roadmap/overview",
     "/foreverbrowsing/team/ENG/projects",
     "/foreverbrowsing/team/ENG/views",
     "/foreverbrowsing/team/ENG/views/issues",

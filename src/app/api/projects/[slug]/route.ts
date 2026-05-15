@@ -79,6 +79,11 @@ async function findDefaultWorkspaceId(userId: string) {
 }
 
 async function resolveProjectWorkspaceId(userId: string, request: Request) {
+  const workspaceSlug = new URL(request.url).searchParams.get("workspaceSlug");
+  if (workspaceSlug) {
+    return resolveWorkspaceIdBySlug(userId, workspaceSlug);
+  }
+
   const referer = request.headers.get("referer");
   if (referer) {
     try {
@@ -107,7 +112,11 @@ async function findProjectInWorkspace(workspaceId: string, slug: string) {
   return projects[0] ?? null;
 }
 
-async function buildProjectResponse(workspaceId: string | null, slug: string) {
+async function buildProjectResponse(
+  workspaceId: string | null,
+  slug: string,
+  workspaceSlug?: string | null,
+) {
   if (!workspaceId) {
     return { status: 404 as const, body: { error: "Not found" } };
   }
@@ -275,7 +284,7 @@ async function buildProjectResponse(workspaceId: string | null, slug: string) {
         : null,
       createdAt: projectIssue.createdAt,
       href: projectIssue.teamKey
-        ? `/team/${projectIssue.teamKey}/issue/${projectIssue.id}`
+        ? `${workspaceSlug ? `/${encodeURIComponent(workspaceSlug)}` : ""}/team/${projectIssue.teamKey}/issue/${projectIssue.id}`
         : null,
       labels: labelsByIssue.get(projectIssue.id) ?? [],
     });
@@ -381,7 +390,8 @@ export async function GET(
 
   const { slug } = await params;
   const workspaceId = await resolveProjectWorkspaceId(session.user.id, request);
-  const result = await buildProjectResponse(workspaceId, slug);
+  const workspaceSlug = new URL(request.url).searchParams.get("workspaceSlug");
+  const result = await buildProjectResponse(workspaceId, slug, workspaceSlug);
   return NextResponse.json(result.body, { status: result.status });
 }
 
@@ -396,6 +406,7 @@ export async function PATCH(
 
   const { slug } = await params;
   const workspaceId = await resolveProjectWorkspaceId(session.user.id, request);
+  const workspaceSlug = new URL(request.url).searchParams.get("workspaceSlug");
   if (!workspaceId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -712,7 +723,7 @@ export async function PATCH(
       .where(eq(project.id, proj.id));
   });
 
-  const updated = await buildProjectResponse(workspaceId, slug);
+  const updated = await buildProjectResponse(workspaceId, slug, workspaceSlug);
   return NextResponse.json(updated.body, { status: updated.status });
 }
 
