@@ -37,14 +37,34 @@ type Passkey = {
   createdAt: string;
 };
 
+type PersonalApiKey = {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  workspaceName: string;
+  accessLevel: "Member";
+  createdAt: string;
+  lastUsedAt: string | null;
+};
+
 type AccountSecurityState = {
   sessions: SecuritySession[];
   passkeys: Passkey[];
   authorizedApplications: AuthorizedApplication[];
+  apiKeys: PersonalApiKey[];
+  canCreateApiKeys: boolean;
   passkeyEnabled: boolean;
 };
 
-type MutationResponse = AccountSecurityState;
+type CreatedCredential = {
+  kind: "apiKey";
+  label: string;
+  secret: string;
+};
+
+type MutationResponse = AccountSecurityState & {
+  createdCredential?: CreatedCredential;
+};
 
 function formatDate(value: string | null) {
   if (!value) {
@@ -74,11 +94,13 @@ function deviceLabel(session: SecuritySession) {
 }
 
 function Section({
+  id,
   title,
   description,
   action,
   children,
 }: {
+  id?: string;
   title: string;
   description: string;
   action?: React.ReactNode;
@@ -86,6 +108,7 @@ function Section({
 }) {
   return (
     <section
+      id={id}
       aria-label={title}
       className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
     >
@@ -149,6 +172,10 @@ export default function AccountSecurityPage() {
     null,
   );
   const [passkeySupported, setPasskeySupported] = useState(false);
+  const [apiKeyFormOpen, setApiKeyFormOpen] = useState(false);
+  const [apiKeyName, setApiKeyName] = useState("Personal API key");
+  const [createdCredential, setCreatedCredential] =
+    useState<CreatedCredential | null>(null);
 
   const loadSecurityState = useCallback(async (signal?: AbortSignal) => {
     const response = await fetch("/api/account/security", { signal });
@@ -168,6 +195,8 @@ export default function AccountSecurityPage() {
       authorizedApplications: Array.isArray(data.authorizedApplications)
         ? data.authorizedApplications
         : [],
+      apiKeys: Array.isArray(data.apiKeys) ? data.apiKeys : [],
+      canCreateApiKeys: data.canCreateApiKeys === true,
       passkeyEnabled: data.passkeyEnabled !== false,
     });
   }, []);
@@ -222,8 +251,11 @@ export default function AccountSecurityPage() {
         sessions: data.sessions,
         passkeys: data.passkeys,
         authorizedApplications: data.authorizedApplications,
+        apiKeys: data.apiKeys,
+        canCreateApiKeys: data.canCreateApiKeys,
         passkeyEnabled: data.passkeyEnabled,
       });
+      setCreatedCredential(data.createdCredential ?? null);
       setStatus(successMessage);
       return true;
     } finally {
@@ -267,6 +299,37 @@ export default function AccountSecurityPage() {
     }
   }
 
+  async function createApiKey(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = apiKeyName.trim();
+    if (!name) {
+      setError("API key name is required.");
+      return;
+    }
+
+    const created = await mutate(
+      { action: "createApiKey", name },
+      "API key created. Copy it now; it cannot be shown again.",
+    );
+    if (created) {
+      setApiKeyFormOpen(false);
+      setApiKeyName("Personal API key");
+    }
+  }
+
+  async function copyCreatedSecret() {
+    if (!createdCredential) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(createdCredential.secret);
+      setStatus("API key copied to clipboard.");
+    } catch {
+      setError("Unable to copy API key. Select and copy it manually.");
+    }
+  }
+
   if (loading) {
     return (
       <div className="max-w-[720px]">
@@ -302,7 +365,8 @@ export default function AccountSecurityPage() {
         Security & access
       </h1>
       <p className="mt-3 text-[14px] text-[var(--color-text-secondary)]">
-        Manage sessions, passkeys, and application access for your account.
+        Manage sessions, passkeys, personal API keys, and application access for
+        your account.
       </p>
 
       {status ? (
@@ -316,6 +380,19 @@ export default function AccountSecurityPage() {
           role="alert"
         >
           {error}
+        </div>
+      ) : null}
+      {createdCredential ? (
+        <div className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-[13px] text-[var(--color-text-primary)]">
+          <div className="font-medium">
+            Copy your new API key now. You won't be able to see it again.
+          </div>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <code className="min-w-0 flex-1 overflow-x-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[12px]">
+              {createdCredential.secret}
+            </code>
+            <SmallButton onClick={copyCreatedSecret}>Copy API key</SmallButton>
+          </div>
         </div>
       ) : null}
 
@@ -498,6 +575,105 @@ export default function AccountSecurityPage() {
           <EmptyState>
             No passkeys have been added yet. Add a passkey to enable passkey
             sign-in for this account.
+          </EmptyState>
+        )}
+      </Section>
+
+      <Section
+        id="personal-api-keys"
+        title="Personal API keys"
+        description="Create API keys that authenticate as your user for developer tools and scripts. Secrets are shown once after creation."
+        action={
+          <SmallButton
+            disabled={saving || !securityState.canCreateApiKeys}
+            onClick={() => setApiKeyFormOpen((current) => !current)}
+          >
+            Create API key
+          </SmallButton>
+        }
+      >
+        {!securityState.canCreateApiKeys ? (
+          <EmptyState>
+            Your workspace permissions don't allow creating API keys. Ask a
+            workspace admin to change API key creation access.
+          </EmptyState>
+        ) : null}
+        {apiKeyFormOpen ? (
+          <form
+            className="mb-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-hover)] p-4"
+            onSubmit={createApiKey}
+          >
+            <label
+              htmlFor="personal-api-key-name"
+              className="text-[12px] font-medium text-[var(--color-text-secondary)]"
+            >
+              API key name
+            </label>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+              <input
+                id="personal-api-key-name"
+                type="text"
+                value={apiKeyName}
+                onChange={(event) => setApiKeyName(event.target.value)}
+                maxLength={255}
+                className="min-w-0 flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+                placeholder="Personal API key"
+              />
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Create API key
+              </button>
+            </div>
+          </form>
+        ) : null}
+        {securityState.apiKeys.length ? (
+          <div className="divide-y divide-[var(--color-border)]">
+            {securityState.apiKeys.map((apiKey) => (
+              <div
+                key={apiKey.id}
+                className="flex items-start justify-between gap-3 py-4 first:pt-0 last:pb-0"
+              >
+                <div className="min-w-0">
+                  <h3 className="text-[14px] font-medium text-[var(--color-text-primary)]">
+                    {apiKey.name}
+                  </h3>
+                  <p className="mt-1 break-all text-[12px] text-[var(--color-text-secondary)]">
+                    {apiKey.keyPrefix} · {apiKey.accessLevel} access ·{" "}
+                    {apiKey.workspaceName}
+                  </p>
+                  <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+                    Created {formatDate(apiKey.createdAt)} · Last used{" "}
+                    {formatDate(apiKey.lastUsedAt)}
+                  </p>
+                </div>
+                <SmallButton
+                  tone="danger"
+                  disabled={saving}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Revoke the "${apiKey.name}" personal API key?`,
+                      )
+                    ) {
+                      void mutate(
+                        { action: "revokeApiKey", apiKeyId: apiKey.id },
+                        "API key revoked.",
+                      );
+                    }
+                  }}
+                >
+                  Revoke
+                </SmallButton>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState>
+            No personal API keys have been created yet. Create one to use the
+            API from scripts, CLIs, or local integrations.
           </EmptyState>
         )}
       </Section>
