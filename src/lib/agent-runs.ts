@@ -1,3 +1,5 @@
+import type { EffectiveAgentGuidance } from "@/lib/agent-guidance";
+
 export type AgentRunStatus =
   | "queued"
   | "running"
@@ -18,6 +20,9 @@ export interface AgentRun {
   title: string;
   prompt: string;
   teamKey: string;
+  promptConfig: {
+    guidance: EffectiveAgentGuidance;
+  };
   context: string;
   status: AgentRunStatus;
   owner: string;
@@ -35,6 +40,7 @@ interface CreateAgentRunInput {
   teamKey: string;
   context: string;
   owner?: string;
+  guidance?: EffectiveAgentGuidance;
 }
 
 const fallbackCreatedAt = "2026-05-15T12:00:00.000Z";
@@ -47,6 +53,13 @@ const seededRuns: AgentRun[] = [
       "Find triage issues without an assignee and suggest the next owner or status.",
     teamKey: "EXP",
     context: "Team backlog",
+    promptConfig: {
+      guidance: {
+        entries: [],
+        effectiveInstructions: "",
+        teamKey: "EXP",
+      },
+    },
     status: "needs_review",
     owner: "Linear Agent",
     target: "EXP triage queue",
@@ -119,6 +132,13 @@ export function createAgentRun(
     title: normalizedTitle,
     prompt: normalizedPrompt,
     teamKey,
+    promptConfig: {
+      guidance: input.guidance ?? {
+        entries: [],
+        effectiveInstructions: "",
+        teamKey,
+      },
+    },
     context: normalizedContext,
     status: "queued",
     owner: input.owner?.trim() || "You",
@@ -130,6 +150,9 @@ export function createAgentRun(
     logs: [
       "Created run from Agent dashboard composer.",
       `Captured context: ${teamKey} · ${normalizedContext}.`,
+      input.guidance?.effectiveInstructions
+        ? "Applied workspace/account/team agent guidance to the prompt configuration."
+        : "No saved agent guidance was available for this request context.",
       "Queued deterministic mock execution for product validation.",
     ],
     suggestions: [

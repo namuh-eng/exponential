@@ -1,6 +1,8 @@
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
+import { resolveEffectiveAgentGuidance } from "@/lib/agent-guidance";
 import { createAgentRun, listAgentRuns } from "@/lib/agent-runs";
 import { requireApiSession } from "@/lib/api-auth";
+import { findAccessibleTeam } from "@/lib/teams";
 import { NextResponse } from "next/server";
 
 function normalizeString(value: unknown) {
@@ -58,12 +60,30 @@ export async function POST(request: Request) {
     );
   }
 
+  let resolvedTeamKey = teamKey;
+  if (teamKey) {
+    const teamRecord = await findAccessibleTeam(teamKey, session.user.id, {
+      request,
+    });
+    if (!teamRecord) {
+      return NextResponse.json({ error: "Team not found" }, { status: 404 });
+    }
+    resolvedTeamKey = teamRecord.key;
+  }
+
+  const guidance = await resolveEffectiveAgentGuidance({
+    workspaceId,
+    userId: session.user.id,
+    teamKey: resolvedTeamKey,
+  });
+
   const run = createAgentRun(workspaceId, {
     title,
     prompt,
-    teamKey,
+    teamKey: resolvedTeamKey,
     context,
     owner: session.user.name ?? session.user.email ?? "You",
+    guidance,
   });
 
   return NextResponse.json({ run }, { status: 201 });
