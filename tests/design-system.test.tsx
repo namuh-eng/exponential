@@ -257,10 +257,12 @@ describe("LabelChip", () => {
 });
 
 describe("Design tokens", () => {
-  it("defines the Linear accent token in globals.css", () => {
-    const css = readFileSync("src/app/globals.css", "utf8");
+  it("defines the product accent through Editorial theme tokens", () => {
+    const globalsCss = readFileSync("src/app/globals.css", "utf8");
+    const editorialCss = readFileSync("src/app/editorial-theme.css", "utf8");
 
-    expect(css).toContain("--color-accent: #7180ff;");
-    expect(css).toContain("--auth-primary-bg: #7180ff;");
+    expect(editorialCss).toContain("--editorial-accent: oklch(0.56 0.16 32);");
+    expect(editorialCss).toContain("--color-accent: var(--editorial-accent);");
+    expect(globalsCss).toContain("--auth-primary-bg: #7180ff;");
   });
 });

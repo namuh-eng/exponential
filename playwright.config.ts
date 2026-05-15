@@ -1,13 +1,15 @@
 import { defineConfig } from "@playwright/test";
 
 const authFile = "tests/e2e/.auth/user.json";
+const port = Number(process.env.PLAYWRIGHT_PORT ?? process.env.PORT ?? "3015");
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${port}`;
 
 export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 30000,
   retries: 1,
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL,
     headless: true,
     screenshot: "only-on-failure",
   },
@@ -30,8 +32,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "PLAYWRIGHT_TEST=true npm run dev",
-    port: 3000,
-    reuseExistingServer: false,
+    command: `PLAYWRIGHT_TEST=true PORT=${port} npm run dev`,
+    port,
+    reuseExistingServer: process.env.CI !== "true",
   },
 });
