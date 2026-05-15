@@ -125,6 +125,7 @@ export async function PATCH(
     key?: string;
     timezone?: string;
     estimateType?: string;
+    triageEnabled?: boolean;
     cyclesEnabled?: boolean;
     cycleStartDay?: number;
     cycleDurationWeeks?: number;
@@ -138,14 +139,21 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const nextName = body.name?.trim();
+  const nextName = body.name === undefined ? teamRecord.name : body.name.trim();
   const nextIcon = body.icon?.trim() || teamRecord.icon || "•";
-  const nextKey = body.key?.trim().toUpperCase();
+  const nextKey =
+    body.key === undefined ? teamRecord.key : body.key.trim().toUpperCase();
+  const nextTimezone =
+    body.timezone === undefined
+      ? (teamRecord.timezone ?? null)
+      : body.timezone.trim() || null;
   const nextEstimateType = (
     body.estimateType === "none" ? "not_in_use" : body.estimateType
   ) as EstimateTypeValue | undefined;
   const nextCyclesEnabled =
     body.cyclesEnabled ?? teamRecord.cyclesEnabled ?? false;
+  const nextTriageEnabled =
+    body.triageEnabled ?? teamRecord.triageEnabled ?? true;
 
   if (!nextName) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -235,11 +243,12 @@ export async function PATCH(
       name: nextName,
       icon: nextIcon,
       key: nextKey,
-      timezone: body.timezone?.trim() || null,
+      timezone: nextTimezone,
       estimateType:
         nextEstimateType ??
         (teamRecord.estimateType as EstimateTypeValue | null) ??
         "not_in_use",
+      triageEnabled: nextTriageEnabled,
       cyclesEnabled: nextCyclesEnabled,
       cycleStartDay: nextCycleStartDay,
       cycleDurationWeeks: nextCycleDurationWeeks,

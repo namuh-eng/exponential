@@ -240,6 +240,46 @@ describe("TeamTriagePage", () => {
 
     expect(screen.getByText("Secondary triage state issue")).toBeDefined();
   });
+
+  it("shows disabled triage state instead of active queue controls", async () => {
+    vi.mocked(global.fetch).mockImplementation((input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/teams/ENG/triage") {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve(
+              buildTriageResponse({
+                triageEnabled: false,
+                count: 0,
+                issues: [],
+                createStateId: null,
+                createStateName: null,
+              }),
+            ),
+        } as Response);
+      }
+
+      return Promise.reject(new Error(`Unhandled fetch: ${url}`));
+    });
+
+    render(<TeamTriagePage />);
+
+    expect(await screen.findByText("Triage is disabled")).toBeDefined();
+    expect(
+      screen.getByText(
+        "Incoming issues go directly to the team backlog. Enable triage in team settings to review issues here first.",
+      ),
+    ).toBeDefined();
+    expect(
+      screen
+        .getByRole("link", { name: "Open triage settings" })
+        .getAttribute("href"),
+    ).toBe("/settings/teams/ENG/triage");
+    expect(
+      screen.queryByRole("button", { name: "Create triage issue" }),
+    ).toBeNull();
+  });
 });
 
 describe("Triage API route", () => {

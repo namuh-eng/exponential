@@ -45,6 +45,7 @@ interface TriageResponse {
   count: number;
   createStateId: string | null;
   createStateName: string | null;
+  triageEnabled?: boolean;
 }
 
 export default function TeamTriagePage() {
@@ -234,6 +235,39 @@ export default function TeamTriagePage() {
         variant="error"
         onRetry={fetchTriage}
       />
+    );
+  }
+
+  if (data.triageEnabled === false) {
+    return (
+      <div className="flex h-full flex-col">
+        <TriageHeader count={0} />
+        <EmptyState
+          title="Triage is disabled"
+          description="Incoming issues go directly to the team backlog. Enable triage in team settings to review issues here first."
+          icon={
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#6b6f76"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              role="img"
+              aria-label="Triage disabled"
+            >
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+              <path d="M4 4l16 16" />
+            </svg>
+          }
+          action={{
+            label: "Open triage settings",
+            href: `/settings/teams/${encodeURIComponent(params.key)}/triage`,
+          }}
+        />
+      </div>
     );
   }
 

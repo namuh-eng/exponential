@@ -64,6 +64,7 @@ describe("Team Settings API Route", () => {
       name: "Initial Team",
       key: "INIT",
       icon: "⚙️",
+      timezone: "America/Los_Angeles",
     });
 
     await db.insert(teamMember).values({
@@ -152,6 +153,61 @@ describe("Team Settings API Route", () => {
       .where(eq(team.id, TEST_TEAM_ID));
     expect(dbTeam.name).toBe("Updated Team");
     expect(dbTeam.key).toBe("UPDT");
+  });
+
+  it("PATCH persists triageEnabled without requiring name or key", async () => {
+    getSessionMock.mockResolvedValue({
+      session: {
+        id: "session-id",
+        userId: TEST_USER_ID,
+        token: "token",
+        expiresAt: new Date(Date.now() + 60_000),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      user: {
+        id: TEST_USER_ID,
+        name: "Test User",
+        email: "test@example.com",
+        emailVerified: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    const disableReq = new Request("http://localhost", {
+      method: "PATCH",
+      body: JSON.stringify({ triageEnabled: false }),
+    });
+
+    const disableRes = await PATCH(disableReq, {
+      params: Promise.resolve({ key: "UPDT" }),
+    });
+
+    expect(disableRes.status).toBe(200);
+    const disabledPayload = await disableRes.json();
+    expect(disabledPayload.team.name).toBe("Updated Team");
+    expect(disabledPayload.team.key).toBe("UPDT");
+    expect(disabledPayload.team.timezone).toBe("America/Los_Angeles");
+    expect(disabledPayload.team.triageEnabled).toBe(false);
+
+    const disabledGetRes = await GET(new Request("http://localhost"), {
+      params: Promise.resolve({ key: "UPDT" }),
+    });
+    expect(disabledGetRes.status).toBe(200);
+    expect((await disabledGetRes.json()).team.triageEnabled).toBe(false);
+
+    const enableReq = new Request("http://localhost", {
+      method: "PATCH",
+      body: JSON.stringify({ triageEnabled: true }),
+    });
+
+    const enableRes = await PATCH(enableReq, {
+      params: Promise.resolve({ key: "UPDT" }),
+    });
+
+    expect(enableRes.status).toBe(200);
+    expect((await enableRes.json()).team.triageEnabled).toBe(true);
   });
 
   it("POST leave team action removes membership", async () => {

@@ -80,6 +80,7 @@ describe("team triage route", () => {
       id: "team-1",
       name: "Engineering",
       key: "ENG",
+      triageEnabled: true,
     });
     triageStatesWhereMock.mockReturnValue([
       { id: "state-triage", name: "Triage", color: "#f00" },
@@ -134,5 +135,26 @@ describe("team triage route", () => {
     const payload = await response.json();
     expect(payload.issues.length).toBe(1);
     expect(payload.issues[0].creatorName).toBe("Bob");
+  });
+
+  it("returns a disabled triage queue without querying triage issues", async () => {
+    findAccessibleTeamMock.mockResolvedValue({
+      id: "team-1",
+      name: "Engineering",
+      key: "ENG",
+      triageEnabled: false,
+    });
+    const { GET } = await import("@/app/api/teams/[key]/triage/route");
+
+    const response = await GET(new Request("http://localhost"), {
+      params: Promise.resolve({ key: "ENG" }),
+    });
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.triageEnabled).toBe(false);
+    expect(payload.issues).toEqual([]);
+    expect(payload.createStateId).toBeNull();
+    expect(triageStatesWhereMock).not.toHaveBeenCalled();
   });
 });

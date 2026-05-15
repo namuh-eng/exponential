@@ -24,6 +24,17 @@ export async function GET(
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
+  if (teamRecord.triageEnabled === false) {
+    return NextResponse.json({
+      team: teamRecord,
+      issues: [],
+      count: 0,
+      createStateId: null,
+      createStateName: null,
+      triageEnabled: false,
+    });
+  }
+
   // Find triage workflow states
   const triageStates = await db
     .select({
@@ -46,6 +57,7 @@ export async function GET(
       count: 0,
       createStateId: null,
       createStateName: null,
+      triageEnabled: teamRecord.triageEnabled ?? true,
     });
   }
 
@@ -106,5 +118,6 @@ export async function GET(
     count: formattedIssues.length,
     createStateId: triageStateIds[0] ?? null,
     createStateName: triageStates[0]?.name ?? null,
+    triageEnabled: teamRecord.triageEnabled ?? true,
   });
 }
