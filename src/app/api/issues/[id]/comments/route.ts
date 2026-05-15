@@ -1,13 +1,8 @@
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import {
-  comment,
-  commentAttachment,
-  issue,
-  issueHistory,
-  team,
-} from "@/lib/db/schema";
+import { comment, commentAttachment, issue, team } from "@/lib/db/schema";
+import { insertIssueHistoryEvent } from "@/lib/issue-history";
 import {
   buildNotificationValues,
   insertNotifications,
@@ -24,6 +19,7 @@ async function findIssueRecord(id: string) {
       workspaceId: team.workspaceId,
       assigneeId: issue.assigneeId,
       creatorId: issue.creatorId,
+      teamSettings: team.settings,
     })
     .from(issue)
     .innerJoin(team, eq(issue.teamId, team.id))
@@ -40,6 +36,7 @@ async function findIssueRecord(id: string) {
       workspaceId: team.workspaceId,
       assigneeId: issue.assigneeId,
       creatorId: issue.creatorId,
+      teamSettings: team.settings,
     })
     .from(issue)
     .innerJoin(team, eq(issue.teamId, team.id))
@@ -171,17 +168,21 @@ export async function POST(
         await tx.insert(commentAttachment).values(attachmentRows);
       }
 
-      await tx.insert(issueHistory).values({
-        issueId: currentIssue.id,
-        actorId: session.user.id,
-        actorName: session.user.name ?? null,
-        actorEmail: session.user.email ?? null,
-        eventType: "comment_created",
-        metadata: {
-          commentId,
-          attachmentCount: attachmentRows.length,
+      await insertIssueHistoryEvent(
+        tx,
+        { settings: currentIssue.teamSettings },
+        {
+          issueId: currentIssue.id,
+          actorId: session.user.id,
+          actorName: session.user.name ?? null,
+          actorEmail: session.user.email ?? null,
+          eventType: "comment_created",
+          metadata: {
+            commentId,
+            attachmentCount: attachmentRows.length,
+          },
         },
-      });
+      );
 
       return insertedComment[0];
     });

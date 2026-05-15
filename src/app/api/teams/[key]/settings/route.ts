@@ -1,6 +1,13 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { label, team, teamMember, workflowState } from "@/lib/db/schema";
+import {
+  label,
+  team,
+  teamMember,
+  workflowState,
+  workspace,
+} from "@/lib/db/schema";
+import { buildTeamInboundEmailAddress } from "@/lib/team-email";
 import { findAccessibleTeam } from "@/lib/teams";
 import { and, count, eq, ne } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -22,7 +29,7 @@ function readTeamSettings(settings: unknown): TeamSettingsFlags {
 
   return {
     emailEnabled: parsed.emailEnabled === true,
-    detailedHistory: parsed.detailedHistory === true,
+    detailedHistory: parsed.detailedHistory !== false,
     agentGuidance:
       typeof parsed.agentGuidance === "string" ? parsed.agentGuidance : "",
     autoAssignment: parsed.autoAssignment === true,
@@ -42,7 +49,7 @@ async function getTeamMembership(teamId: string, userId: string) {
 async function buildTeamResponse(
   teamRecord: NonNullable<Awaited<ReturnType<typeof findAccessibleTeam>>>,
 ) {
-  const [memberCountResult, labelCountResult, statusCountResult] =
+  const [memberCountResult, labelCountResult, statusCountResult, workspaceRow] =
     await Promise.all([
       db
         .select({ value: count() })
@@ -56,9 +63,15 @@ async function buildTeamResponse(
         .select({ value: count() })
         .from(workflowState)
         .where(eq(workflowState.teamId, teamRecord.id)),
+      db
+        .select({ urlSlug: workspace.urlSlug })
+        .from(workspace)
+        .where(eq(workspace.id, teamRecord.workspaceId))
+        .limit(1),
     ]);
 
   const flags = readTeamSettings(teamRecord.settings);
+  const workspaceSlug = workspaceRow[0]?.urlSlug ?? "workspace";
 
   return {
     id: teamRecord.id,
@@ -78,6 +91,10 @@ async function buildTeamResponse(
     labelCount: labelCountResult[0]?.value ?? 0,
     statusCount: statusCountResult[0]?.value ?? 0,
     emailEnabled: flags.emailEnabled,
+    inboundEmailAddress: buildTeamInboundEmailAddress(
+      teamRecord.key,
+      workspaceSlug,
+    ),
     detailedHistory: flags.detailedHistory,
     agentGuidance: flags.agentGuidance,
     autoAssignment: flags.autoAssignment,

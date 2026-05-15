@@ -1,14 +1,9 @@
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import {
-  issue,
-  issueHistory,
-  issueLabel,
-  team,
-  workflowState,
-} from "@/lib/db/schema";
+import { issue, issueLabel, team, workflowState } from "@/lib/db/schema";
 import { normalizeIssueDescriptionHtml } from "@/lib/issue-description";
+import { insertIssueHistoryEvent } from "@/lib/issue-history";
 import {
   buildNotificationValues,
   insertNotifications,
@@ -51,7 +46,12 @@ export async function POST(request: Request) {
   }
 
   const teams = await db
-    .select({ id: team.id, key: team.key, workspaceId: team.workspaceId })
+    .select({
+      id: team.id,
+      key: team.key,
+      workspaceId: team.workspaceId,
+      settings: team.settings,
+    })
     .from(team)
     .where(eq(team.id, teamId))
     .limit(1);
@@ -130,7 +130,7 @@ export async function POST(request: Request) {
       );
     }
 
-    await tx.insert(issueHistory).values({
+    await insertIssueHistoryEvent(tx, teamRecord, {
       issueId: createdIssue.id,
       actorId: session.user.id,
       actorName: session.user.name ?? null,

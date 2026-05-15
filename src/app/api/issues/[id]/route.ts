@@ -6,7 +6,6 @@ import {
   commentAttachment,
   cycle,
   issue,
-  issueHistory,
   issueLabel,
   issueReaction,
   issueRelation,
@@ -18,6 +17,7 @@ import {
   workflowState,
 } from "@/lib/db/schema";
 import { normalizeIssueDescriptionHtml } from "@/lib/issue-description";
+import { insertIssueHistoryEvent } from "@/lib/issue-history";
 import {
   buildNotificationValues,
   insertNotifications,
@@ -54,6 +54,7 @@ async function findIssueRecord(id: string, workspaceId: string) {
       updatedAt: issue.updatedAt,
       teamId: issue.teamId,
       workspaceId: team.workspaceId,
+      teamSettings: team.settings,
       archivedAt: issue.archivedAt,
       canceledAt: issue.canceledAt,
       completedAt: issue.completedAt,
@@ -92,6 +93,7 @@ async function findIssueRecord(id: string, workspaceId: string) {
       updatedAt: issue.updatedAt,
       teamId: issue.teamId,
       workspaceId: team.workspaceId,
+      teamSettings: team.settings,
       archivedAt: issue.archivedAt,
       canceledAt: issue.canceledAt,
       completedAt: issue.completedAt,
@@ -592,17 +594,21 @@ export async function PATCH(
     });
 
   if (updated[0] && changedFields.length > 0) {
-    await db.insert(issueHistory).values({
-      issueId: existingIssue.id,
-      actorId: session.user.id,
-      actorName: session.user.name ?? null,
-      actorEmail: session.user.email ?? null,
-      eventType: "updated",
-      metadata: {
-        changedFields,
-        identifier: existingIssue.identifier,
+    await insertIssueHistoryEvent(
+      db,
+      { settings: existingIssue.teamSettings },
+      {
+        issueId: existingIssue.id,
+        actorId: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email ?? null,
+        eventType: "updated",
+        metadata: {
+          changedFields,
+          identifier: existingIssue.identifier,
+        },
       },
-    });
+    );
   }
 
   if (
