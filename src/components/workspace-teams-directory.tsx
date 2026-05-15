@@ -62,6 +62,11 @@ export function WorkspaceTeamsDirectory({
     });
   }, [accessFilter, directoryTeams, query]);
 
+  const teamNameById = useMemo(
+    () => new Map(directoryTeams.map((team) => [team.id, team.name])),
+    [directoryTeams],
+  );
+
   const resetCreateForm = () => {
     setTeamName("");
     setTeamKey("");
@@ -183,7 +188,9 @@ export function WorkspaceTeamsDirectory({
           <section className="grid gap-3 sm:grid-cols-2">
             {filteredTeams.map((team) => (
               <article
-                className="rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] p-5"
+                className={`rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] p-5 ${
+                  team.parentTeamId ? "ml-6 border-l-4" : ""
+                }`}
                 key={team.id}
               >
                 <div className="mb-4 flex items-start justify-between gap-3">
@@ -198,6 +205,12 @@ export function WorkspaceTeamsDirectory({
                       <p className="text-xs uppercase tracking-[0.12em] text-[var(--color-text-tertiary)]">
                         {team.key}
                       </p>
+                      {team.parentTeamId ? (
+                        <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                          Sub-team of{" "}
+                          {teamNameById.get(team.parentTeamId) ?? "parent team"}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">

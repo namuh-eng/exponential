@@ -47,6 +47,7 @@ interface IssueData {
   estimate: number | null;
   dueDate: string | null;
   createdAt: string;
+  teamId?: string | null;
 }
 
 interface StateGroup {
@@ -70,6 +71,7 @@ interface FilterOptions {
   estimates: { value: string; label: string }[];
   dueDates: { value: string; label: string }[];
   priorities: { value: string; label: string }[];
+  teams?: { id: string; name: string }[];
 }
 
 interface IssuesResponse {
@@ -345,6 +347,7 @@ export default function TeamIssuesPage() {
             availableCycles={data.filterOptions?.cycles ?? []}
             availableEstimates={data.filterOptions?.estimates ?? []}
             availableDueDates={data.filterOptions?.dueDates ?? []}
+            availableTeams={data.filterOptions?.teams ?? []}
             availablePriorities={
               data.filterOptions?.priorities ?? [
                 { value: "urgent", label: "Urgent" },

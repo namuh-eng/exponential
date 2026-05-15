@@ -2,7 +2,7 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { db } from "@/lib/db";
 import { member, team, workspace } from "@/lib/db/schema";
 import { getWorkspaceSlugFromPath } from "@/lib/workspace-paths";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 /**
  * @deprecated This resolves team keys globally. Do not use for authenticated
@@ -80,6 +80,35 @@ async function resolveAccessibleWorkspaceId(userId: string, request?: Request) {
   return resolveActiveWorkspaceId(userId);
 }
 
+async function getDescendantTeamIds(rootTeamId: string, workspaceId: string) {
+  const descendantIds: string[] = [];
+  let frontier = [rootTeamId];
+  const seen = new Set(frontier);
+
+  while (frontier.length > 0) {
+    const children = await db
+      .select({ id: team.id })
+      .from(team)
+      .where(
+        and(
+          eq(team.workspaceId, workspaceId),
+          inArray(team.parentTeamId, frontier),
+        ),
+      );
+
+    frontier = children
+      .map((child) => child.id)
+      .filter((id) => {
+        if (seen.has(id)) return false;
+        seen.add(id);
+        descendantIds.push(id);
+        return true;
+      });
+  }
+
+  return descendantIds;
+}
+
 export async function findAccessibleTeam(
   key: string,
   userId: string,
@@ -114,5 +143,16 @@ export async function findAccessibleTeam(
     .where(and(eq(team.key, key), eq(team.workspaceId, workspaceId)))
     .limit(1);
 
-  return teamRecord ?? null;
+  if (!teamRecord) return null;
+
+  const descendantTeamIds = await getDescendantTeamIds(
+    teamRecord.id,
+    teamRecord.workspaceId,
+  );
+
+  return {
+    ...teamRecord,
+    childTeamIds: descendantTeamIds,
+    hierarchyTeamIds: [teamRecord.id, ...descendantTeamIds],
+  };
 }

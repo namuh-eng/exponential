@@ -28,6 +28,7 @@ export interface WorkspaceDirectoryTeam {
   memberCount: number;
   currentUserIsMember: boolean;
   createdAt: string;
+  parentTeamId: string | null;
 }
 
 async function getAccessibleWorkspace(userId: string) {
@@ -143,6 +144,7 @@ export async function getWorkspaceTeamsDirectory(userId: string) {
       isPrivate: team.isPrivate,
       issueCount: team.issueCount,
       createdAt: team.createdAt,
+      parentTeamId: team.parentTeamId,
     })
     .from(team)
     .where(eq(team.workspaceId, workspaceId))

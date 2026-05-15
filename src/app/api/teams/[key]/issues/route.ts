@@ -1,6 +1,13 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { cycle, issue, project, user, workflowState } from "@/lib/db/schema";
+import {
+  cycle,
+  issue,
+  project,
+  team,
+  user,
+  workflowState,
+} from "@/lib/db/schema";
 import { getLabelsForIssues } from "@/lib/issue-labels";
 import { findAccessibleTeam } from "@/lib/teams";
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
@@ -24,11 +31,13 @@ export async function GET(
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
-  // Get workflow states for this team
+  const hierarchyTeamIds = teamRecord.hierarchyTeamIds ?? [teamRecord.id];
+
+  // Get workflow states for this team hierarchy
   const states = await db
     .select()
     .from(workflowState)
-    .where(eq(workflowState.teamId, teamRecord.id))
+    .where(inArray(workflowState.teamId, hierarchyTeamIds))
     .orderBy(asc(workflowState.position));
 
   // Get issues with assignee info
@@ -51,11 +60,14 @@ export async function GET(
       dueDate: issue.dueDate,
       createdAt: issue.createdAt,
       sortOrder: issue.sortOrder,
+      teamId: issue.teamId,
     })
     .from(issue)
     .leftJoin(user, eq(issue.assigneeId, user.id))
     .leftJoin(project, eq(issue.projectId, project.id))
-    .where(and(eq(issue.teamId, teamRecord.id), isNull(issue.archivedAt)))
+    .where(
+      and(inArray(issue.teamId, hierarchyTeamIds), isNull(issue.archivedAt)),
+    )
     .orderBy(asc(issue.sortOrder), desc(issue.createdAt));
 
   // Get labels for all issues
@@ -128,6 +140,7 @@ export async function GET(
         estimate: i.estimate,
         dueDate: i.dueDate,
         createdAt: i.createdAt,
+        teamId: i.teamId,
       })),
   }));
 
@@ -234,6 +247,13 @@ export async function GET(
       cycles: uniqueCycles,
       estimates: uniqueEstimates,
       dueDates: uniqueDueDates,
+      teams:
+        hierarchyTeamIds.length > 1
+          ? await db
+              .select({ id: team.id, name: team.name })
+              .from(team)
+              .where(inArray(team.id, hierarchyTeamIds))
+          : [{ id: teamRecord.id, name: teamRecord.name }],
       priorities: [
         { value: "urgent", label: "Urgent" },
         { value: "high", label: "High" },
