@@ -182,6 +182,112 @@ describe("InitiativeDetailPage", () => {
     });
   });
 
+  it("sets and clears the parent initiative", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...mockInitiativeData,
+        availableParentInitiatives: [
+          {
+            id: "init-parent",
+            name: "Company roadmap",
+            status: "active",
+            parentInitiativeId: null,
+          },
+        ],
+      }),
+    } as Response);
+
+    render(<InitiativeDetailPage />);
+    await screen.findByText("Growth");
+
+    fireEvent.change(screen.getByLabelText("Parent initiative"), {
+      target: { value: "init-parent" },
+    });
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/initiatives/init-1",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ parentInitiativeId: "init-parent" }),
+        }),
+      );
+    });
+
+    fetchSpy.mockClear();
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...mockInitiativeData,
+        initiative: {
+          ...mockInitiativeData.initiative,
+          parentInitiativeId: "init-parent",
+          parentInitiative: {
+            id: "init-parent",
+            name: "Company roadmap",
+            status: "active",
+          },
+        },
+        availableParentInitiatives: [
+          {
+            id: "init-parent",
+            name: "Company roadmap",
+            status: "active",
+            parentInitiativeId: null,
+          },
+        ],
+      }),
+    } as Response);
+
+    render(<InitiativeDetailPage />);
+    await screen.findByText("Clear parent");
+    fireEvent.click(screen.getByRole("button", { name: "Clear parent" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/initiatives/init-1",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ parentInitiativeId: null }),
+        }),
+      );
+    });
+  });
+
+  it("removes an existing child initiative without navigating", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...mockInitiativeData,
+        initiative: {
+          ...mockInitiativeData.initiative,
+          childInitiatives: [
+            { id: "init-child", name: "Mobile expansion", status: "planned" },
+          ],
+        },
+      }),
+    } as Response);
+
+    render(<InitiativeDetailPage />);
+    await screen.findByText("Mobile expansion");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove from initiative" }),
+    );
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/initiatives/init-1",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ removeChildInitiativeId: "init-child" }),
+        }),
+      );
+    });
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
   it("deletes the initiative", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,

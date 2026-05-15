@@ -20,6 +20,12 @@ import {
   makeInitiativeUpdateEntry,
   readInitiativeSettings,
 } from "@/lib/initiative-detail";
+import {
+  type InitiativeHierarchyNode,
+  getDescendantInitiativeIds,
+  getInitiativeName,
+  validateInitiativeParentLink,
+} from "@/lib/initiative-hierarchy";
 import { and, count, eq, inArray, ne, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -62,6 +68,19 @@ function addActivity(
     makeInitiativeActivityEntry(entry),
     ...settings.activity,
   ].slice(0, 50);
+}
+
+async function readWorkspaceInitiativeHierarchy(
+  workspaceId: string,
+): Promise<InitiativeHierarchyNode[]> {
+  return db
+    .select({
+      id: initiative.id,
+      name: initiative.name,
+      parentInitiativeId: initiative.parentInitiativeId,
+    })
+    .from(initiative)
+    .where(eq(initiative.workspaceId, workspaceId));
 }
 
 async function buildInitiativeDetailResponse(workspaceId: string, id: string) {
@@ -234,6 +253,17 @@ async function buildInitiativeDetailResponse(workspaceId: string, id: string) {
   );
 
   const childIds = new Set(childRows.map((child) => child.id));
+  const descendantIds = getDescendantInitiativeIds(
+    [
+      ...candidateRows,
+      {
+        id: init.id,
+        name: init.name,
+        parentInitiativeId: init.parentInitiativeId,
+      },
+    ],
+    id,
+  );
 
   return {
     initiative: {
@@ -252,7 +282,8 @@ async function buildInitiativeDetailResponse(workspaceId: string, id: string) {
     workspaceMembers,
     workspaceTeams,
     availableParentInitiatives: candidateRows.filter(
-      (candidate) => !childIds.has(candidate.id),
+      (candidate) =>
+        !childIds.has(candidate.id) && !descendantIds.has(candidate.id),
     ),
     updates: settings.updates,
     activity: settings.activity,
@@ -311,6 +342,7 @@ export async function PATCH(
   }
 
   const currentInitiative = existing[0];
+  const hierarchy = await readWorkspaceInitiativeHierarchy(workspaceId);
   const currentSettings = readInitiativeSettings(currentInitiative.settings);
   const nextSettings = {
     ...currentSettings,
@@ -476,37 +508,43 @@ export async function PATCH(
       body.parentInitiativeId.trim()
         ? body.parentInitiativeId.trim()
         : null;
-    if (parentInitiativeId === id) {
-      return NextResponse.json(
-        { error: "An initiative cannot be its own parent" },
-        { status: 400 },
-      );
-    }
     if (parentInitiativeId) {
-      const parents = await db
-        .select({ id: initiative.id })
-        .from(initiative)
-        .where(
-          and(
-            eq(initiative.id, parentInitiativeId),
-            eq(initiative.workspaceId, workspaceId),
-          ),
-        )
-        .limit(1);
-      if (parents.length === 0) {
+      const parent = hierarchy.find(
+        (initiative) => initiative.id === parentInitiativeId,
+      );
+      if (!parent) {
         return NextResponse.json(
           { error: "Parent initiative not found" },
           { status: 404 },
         );
       }
     }
+    const hierarchyValidation = validateInitiativeParentLink(
+      hierarchy,
+      id,
+      parentInitiativeId,
+    );
+    if (!hierarchyValidation.ok) {
+      return NextResponse.json(
+        { error: hierarchyValidation.error },
+        { status: 400 },
+      );
+    }
     if (parentInitiativeId !== currentInitiative.parentInitiativeId) {
       updateData.parentInitiativeId = parentInitiativeId;
-      recordPropertyChange(
-        "Parent initiative",
+      const previousParentName = getInitiativeName(
+        hierarchy,
         currentInitiative.parentInitiativeId,
-        parentInitiativeId,
       );
+      const nextParentName = getInitiativeName(hierarchy, parentInitiativeId);
+      addActivity(nextSettings, {
+        type: "property_change",
+        message: parentInitiativeId
+          ? `Set parent initiative to ${nextParentName}`
+          : `Cleared parent initiative ${previousParentName}`,
+        ...actor,
+      });
+      settingsChanged = true;
     }
   }
 
@@ -547,33 +585,60 @@ export async function PATCH(
     typeof body.childInitiativeId === "string" && body.childInitiativeId.trim()
       ? body.childInitiativeId.trim()
       : null;
+  const removeChildInitiativeId =
+    typeof body.removeChildInitiativeId === "string" &&
+    body.removeChildInitiativeId.trim()
+      ? body.removeChildInitiativeId.trim()
+      : null;
 
   if (childInitiativeId) {
-    if (childInitiativeId === id) {
-      return NextResponse.json(
-        { error: "An initiative cannot be its own child" },
-        { status: 400 },
-      );
-    }
-    const children = await db
-      .select({ id: initiative.id })
-      .from(initiative)
-      .where(
-        and(
-          eq(initiative.id, childInitiativeId),
-          eq(initiative.workspaceId, workspaceId),
-        ),
-      )
-      .limit(1);
-    if (children.length === 0) {
+    const child = hierarchy.find(
+      (initiative) => initiative.id === childInitiativeId,
+    );
+    if (!child) {
       return NextResponse.json(
         { error: "Child initiative not found" },
         { status: 404 },
       );
     }
+    const hierarchyValidation = validateInitiativeParentLink(
+      hierarchy,
+      childInitiativeId,
+      id,
+    );
+    if (!hierarchyValidation.ok) {
+      return NextResponse.json(
+        { error: hierarchyValidation.error },
+        { status: 400 },
+      );
+    }
     addActivity(nextSettings, {
       type: "property_change",
-      message: "Child initiative added",
+      message: `Added child initiative ${child.name ?? childInitiativeId}`,
+      ...actor,
+    });
+    settingsChanged = true;
+  }
+
+  if (removeChildInitiativeId) {
+    const child = hierarchy.find(
+      (initiative) => initiative.id === removeChildInitiativeId,
+    );
+    if (!child) {
+      return NextResponse.json(
+        { error: "Child initiative not found" },
+        { status: 404 },
+      );
+    }
+    if (child.parentInitiativeId !== id) {
+      return NextResponse.json(
+        { error: "Child initiative link not found" },
+        { status: 404 },
+      );
+    }
+    addActivity(nextSettings, {
+      type: "property_change",
+      message: `Removed child initiative ${child.name ?? removeChildInitiativeId}`,
       ...actor,
     });
     settingsChanged = true;
@@ -670,7 +735,13 @@ export async function PATCH(
 
   const shouldUpdateInitiative =
     Object.keys(updateData).length > 0 ||
-    Boolean(addProjectId || removeProjectId || childInitiativeId || teamIds);
+    Boolean(
+      addProjectId ||
+        removeProjectId ||
+        childInitiativeId ||
+        removeChildInitiativeId ||
+        teamIds,
+    );
 
   if (!shouldUpdateInitiative) {
     const unchanged = await buildInitiativeDetailResponse(workspaceId, id);
@@ -730,6 +801,19 @@ export async function PATCH(
         .where(
           and(
             eq(initiative.id, childInitiativeId),
+            eq(initiative.workspaceId, workspaceId),
+          ),
+        );
+    }
+
+    if (removeChildInitiativeId) {
+      await tx
+        .update(initiative)
+        .set({ parentInitiativeId: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(initiative.id, removeChildInitiativeId),
+            eq(initiative.parentInitiativeId, id),
             eq(initiative.workspaceId, workspaceId),
           ),
         );

@@ -5,6 +5,7 @@ const resolveRequestWorkspaceIdMock = vi.fn();
 const membershipsLimitMock = vi.fn();
 const initiativesWhereMock = vi.fn();
 const linkedProjectsInnerJoinMock = vi.fn();
+const initiativeNameRowsMock = vi.fn();
 const issueCountsWhereMock = vi.fn();
 const completedStatesWhereMock = vi.fn();
 const completedIssueCountsWhereMock = vi.fn();
@@ -126,15 +127,20 @@ vi.mock("@/lib/db", () => ({
       }
 
       if (selection && "name" in selection) {
-        const whereResult = Promise.resolve([]) as unknown as Promise<
-          unknown[]
-        > & {
-          limit: ReturnType<typeof vi.fn>;
+        const makeWhereResult = () => {
+          const whereResult = Promise.resolve(
+            initiativeNameRowsMock(),
+          ) as unknown as Promise<unknown[]> & {
+            limit: ReturnType<typeof vi.fn>;
+          };
+          whereResult.limit = vi
+            .fn()
+            .mockResolvedValue(initiativeNameRowsMock());
+          return whereResult;
         };
-        whereResult.limit = vi.fn().mockResolvedValue([]);
         return {
           from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue(whereResult),
+            where: vi.fn().mockReturnValue(makeWhereResult()),
           }),
         };
       }
@@ -268,6 +274,7 @@ describe("initiative detail route", () => {
         slug: "referrals",
       },
     ]);
+    initiativeNameRowsMock.mockReturnValue([]);
     issueCountsWhereMock.mockReturnValue([
       { projectId: "proj-1", issueCount: 10 },
     ]);
@@ -362,6 +369,100 @@ describe("initiative detail route", () => {
     );
     const payload = await response.json();
     expect(payload.initiative.id).toBe("init-1");
+  });
+
+  it("rejects setting a descendant as the parent initiative", async () => {
+    initiativeNameRowsMock.mockReturnValue([
+      { id: "init-1", name: "Growth", parentInitiativeId: null },
+      { id: "init-child", name: "Child", parentInitiativeId: "init-1" },
+    ]);
+    const { PATCH } = await import("@/app/api/initiatives/[id]/route");
+
+    const response = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({ parentInitiativeId: "init-child" }),
+      }),
+      { params: Promise.resolve({ id: "init-1" }) },
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Cannot create a circular initiative hierarchy",
+    });
+  });
+
+  it("rejects adding an ancestor as a child initiative", async () => {
+    initiativesWhereMock.mockResolvedValue([
+      {
+        id: "init-1",
+        name: "Growth",
+        description: "Details",
+        status: "active",
+        ownerId: "user-1",
+        startDate: null,
+        targetDate: null,
+        timeframe: null,
+        health: "onTrack",
+        parentInitiativeId: "init-parent",
+        settings: { updates: [] },
+        createdAt: new Date("2026-04-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-04-01T00:00:00.000Z"),
+      },
+    ]);
+    initiativeNameRowsMock.mockReturnValue([
+      { id: "init-parent", name: "Parent", parentInitiativeId: null },
+      { id: "init-1", name: "Growth", parentInitiativeId: "init-parent" },
+    ]);
+    const { PATCH } = await import("@/app/api/initiatives/[id]/route");
+
+    const response = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({ childInitiativeId: "init-parent" }),
+      }),
+      { params: Promise.resolve({ id: "init-1" }) },
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Cannot create a circular initiative hierarchy",
+    });
+  });
+
+  it("unlinks an existing child initiative without deleting it", async () => {
+    initiativeNameRowsMock.mockReturnValue([
+      { id: "init-1", name: "Growth", parentInitiativeId: null },
+      { id: "init-child", name: "Child", parentInitiativeId: "init-1" },
+    ]);
+    const { PATCH } = await import("@/app/api/initiatives/[id]/route");
+
+    const response = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({ removeChildInitiativeId: "init-child" }),
+      }),
+      { params: Promise.resolve({ id: "init-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(txUpdateSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parentInitiativeId: null,
+        updatedAt: expect.any(Date),
+      }),
+    );
+    expect(txUpdateSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        settings: expect.objectContaining({
+          activity: expect.arrayContaining([
+            expect.objectContaining({
+              message: "Removed child initiative Child",
+            }),
+          ]),
+        }),
+      }),
+    );
   });
 
   it("deletes an initiative", async () => {

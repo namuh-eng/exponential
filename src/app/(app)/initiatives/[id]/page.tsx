@@ -279,6 +279,10 @@ export default function InitiativeDetailPage() {
     setUnlinkingProjectId(null);
   }
 
+  async function handleRemoveChildInitiative(childId: string) {
+    await patchInitiative({ removeChildInitiativeId: childId });
+  }
+
   async function handlePostUpdate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const success = await patchInitiative({
@@ -584,26 +588,38 @@ export default function InitiativeDetailPage() {
             ) : (
               <div className="space-y-2">
                 {data.initiative.childInitiatives.map((child) => (
-                  <button
-                    type="button"
+                  <div
                     key={child.id}
-                    onClick={() =>
-                      router.push(
-                        withWorkspaceSlug(
-                          `/initiatives/${child.id}`,
-                          workspaceSlug,
-                        ),
-                      )
-                    }
-                    className="flex w-full items-center justify-between rounded-lg border border-[var(--color-border)] px-3 py-2 text-left text-[13px] hover:bg-[var(--color-surface-hover)]"
+                    className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2 text-[13px]"
                   >
-                    <span className="text-[var(--color-text-primary)]">
-                      {child.name}
-                    </span>
-                    {child.status ? (
-                      <InitiativeStatusBadge status={child.status} />
-                    ) : null}
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(
+                          withWorkspaceSlug(
+                            `/initiatives/${child.id}`,
+                            workspaceSlug,
+                          ),
+                        )
+                      }
+                      className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left hover:text-[var(--color-accent)]"
+                    >
+                      <span className="truncate text-[var(--color-text-primary)]">
+                        {child.name}
+                      </span>
+                      {child.status ? (
+                        <InitiativeStatusBadge status={child.status} />
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleRemoveChildInitiative(child.id)}
+                      disabled={saving}
+                      className="rounded-md px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:text-rose-300 disabled:opacity-60"
+                    >
+                      Remove from initiative
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -861,7 +877,7 @@ export default function InitiativeDetailPage() {
               />
             </label>
 
-            <label className="block text-[12px] text-[var(--color-text-secondary)]">
+            <div className="block text-[12px] text-[var(--color-text-secondary)]">
               Parent initiative
               <select
                 aria-label="Parent initiative"
@@ -881,7 +897,19 @@ export default function InitiativeDetailPage() {
                   </option>
                 ))}
               </select>
-            </label>
+              {data.initiative.parentInitiativeId ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void patchInitiative({ parentInitiativeId: null })
+                  }
+                  disabled={saving}
+                  className="mt-2 rounded-md border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-60"
+                >
+                  Clear parent
+                </button>
+              ) : null}
+            </div>
           </div>
         </aside>
       </div>
