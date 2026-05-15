@@ -10,6 +10,7 @@ import {
 } from "@/lib/db/schema";
 import { normalizeIssueDescriptionHtml } from "@/lib/issue-description";
 import { insertIssueHistoryEvent } from "@/lib/issue-history";
+import { normalizeApplicableIssueLabelIds } from "@/lib/label-application";
 import {
   buildNotificationValues,
   insertNotifications,
@@ -143,9 +144,18 @@ export async function POST(request: Request) {
   }
 
   const normalizedDescription = normalizeIssueDescriptionHtml(description);
-  const uniqueLabelIds = Array.isArray(labelIds)
-    ? [...new Set(labelIds.filter((value): value is string => Boolean(value)))]
-    : [];
+  const normalizedLabels = await normalizeApplicableIssueLabelIds({
+    db,
+    labelIds,
+    workspaceId,
+    teamId,
+  });
+  if (!normalizedLabels.ok) {
+    return NextResponse.json(
+      { error: normalizedLabels.error },
+      { status: 400 },
+    );
+  }
 
   const newIssue = await db.transaction(async (tx) => {
     const [createdIssue] = await tx
@@ -165,9 +175,9 @@ export async function POST(request: Request) {
       })
       .returning();
 
-    if (uniqueLabelIds.length > 0) {
+    if (normalizedLabels.labelIds.length > 0) {
       await tx.insert(issueLabel).values(
-        uniqueLabelIds.map((labelId) => ({
+        normalizedLabels.labelIds.map((labelId) => ({
           issueId: createdIssue.id,
           labelId,
         })),

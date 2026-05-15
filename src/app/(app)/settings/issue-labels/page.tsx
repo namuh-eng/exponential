@@ -11,6 +11,17 @@ interface LabelData {
   issueCount: number;
   lastApplied: string | null;
   createdAt: string;
+  archivedAt: string | null;
+  teamId: string | null;
+  teamName: string | null;
+  teamKey: string | null;
+  scope: "workspace" | "team";
+}
+
+interface TeamData {
+  id: string;
+  name: string;
+  key: string;
 }
 
 type CreateMode = "group" | "label";
@@ -19,6 +30,7 @@ interface CreateState {
   parentLabelId: string | null;
 }
 type SortDirection = "asc" | "desc";
+type ScopeFilter = "workspace" | "all" | "team";
 
 const LABEL_COLORS = [
   "#e5484d",
@@ -425,26 +437,56 @@ function EditLabelModal({
 function LabelRow({
   labelItem,
   isChild,
+  isSelected,
   onAddChild,
   onEdit,
   onDelete,
+  onArchive,
+  onUnarchive,
+  onConvertToGroup,
+  onRescope,
+  onMerge,
+  onToggleSelected,
+  onContextMenu,
+  onFocusRow,
   onUpdateDescription,
 }: {
   labelItem: LabelData;
   isChild: boolean;
+  isSelected: boolean;
   onAddChild?: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onArchive: () => void;
+  onUnarchive: () => void;
+  onConvertToGroup: () => void;
+  onRescope: () => void;
+  onMerge: () => void;
+  onToggleSelected: (shiftKey: boolean) => void;
+  onContextMenu: (event: React.MouseEvent) => void;
+  onFocusRow: () => void;
   onUpdateDescription: (id: string, desc: string) => void;
 }) {
   return (
     <div
-      className="group flex h-[44px] items-center border-b border-[var(--color-border)] text-[13px] transition-colors hover:bg-[var(--color-surface-hover)]"
+      className={`group flex h-[44px] items-center border-b border-[var(--color-border)] text-[13px] transition-colors hover:bg-[var(--color-surface-hover)] ${isSelected ? "bg-[var(--color-surface-hover)]" : ""} ${labelItem.archivedAt ? "opacity-60" : ""}`}
       data-testid={isChild ? "nested-label-row" : "label-row"}
+      onContextMenu={onContextMenu}
+      onMouseEnter={onFocusRow}
     >
       <div
         className={`flex min-w-0 flex-1 items-center gap-2 px-4 ${isChild ? "pl-10" : ""}`}
       >
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={(event) =>
+            onToggleSelected((event.nativeEvent as MouseEvent).shiftKey)
+          }
+          onClick={(event) => event.stopPropagation()}
+          aria-label={`Select ${labelItem.name}`}
+          className="h-3.5 w-3.5 rounded border-[var(--color-border)] bg-transparent"
+        />
         {isChild ? (
           <span
             className="text-[var(--color-text-tertiary)]"
@@ -456,10 +498,20 @@ function LabelRow({
         <ColorDot color={labelItem.color} />
         <span
           data-testid="label-name"
-          className="truncate text-[var(--color-text-primary)]"
+          className="shrink-0 text-[var(--color-text-primary)]"
         >
           {labelItem.name}
         </span>
+        {labelItem.archivedAt ? (
+          <span className="rounded bg-[var(--color-surface-hover)] px-1.5 py-0.5 text-[10px] uppercase text-[var(--color-text-tertiary)]">
+            Archived
+          </span>
+        ) : null}
+        {labelItem.teamName ? (
+          <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-tertiary)]">
+            {labelItem.teamKey ?? labelItem.teamName}
+          </span>
+        ) : null}
         {onAddChild ? (
           <button
             type="button"
@@ -482,6 +534,14 @@ function LabelRow({
         </button>
         <button
           type="button"
+          onClick={labelItem.archivedAt ? onUnarchive : onArchive}
+          className="rounded px-2 py-1 text-[11px] text-[var(--color-text-tertiary)] opacity-0 transition group-hover:opacity-100 hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)] focus:opacity-100"
+          aria-label={`${labelItem.archivedAt ? "Unarchive" : "Archive"} ${labelItem.name}`}
+        >
+          {labelItem.archivedAt ? "Unarchive" : "Archive"}
+        </button>
+        <button
+          type="button"
           onClick={onDelete}
           className="rounded px-2 py-1 text-[11px] text-[var(--color-text-tertiary)] opacity-0 transition group-hover:opacity-100 hover:bg-[var(--color-surface-hover)] hover:text-[#f87171] focus:opacity-100"
           aria-label={`Delete ${labelItem.name}`}
@@ -496,8 +556,8 @@ function LabelRow({
           onSave={onUpdateDescription}
         />
       </div>
-      <div className="w-[60px] shrink-0 px-2 text-center text-[12px] text-[var(--color-text-tertiary)]">
-        —
+      <div className="w-[80px] shrink-0 px-2 text-center text-[12px] text-[var(--color-text-tertiary)]">
+        {labelItem.parentLabelId ? "Exclusive" : "—"}
       </div>
       <div className="w-[60px] shrink-0 px-2 text-center text-[12px] text-[var(--color-text-secondary)]">
         {labelItem.issueCount}
@@ -514,16 +574,41 @@ function LabelRow({
 
 export default function IssueLabelsPage() {
   const [labels, setLabels] = useState<LabelData[]>([]);
+  const [teams, setTeams] = useState<TeamData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [createState, setCreateState] = useState<CreateState | null>(null);
   const [editingLabel, setEditingLabel] = useState<LabelData | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("workspace");
+  const [selectedTeamId, setSelectedTeamId] = useState<string>("");
+  const [showArchived, setShowArchived] = useState(false);
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
+  const [lastSelectedLabelId, setLastSelectedLabelId] = useState<string | null>(
+    null,
+  );
+  const [focusedLabelId, setFocusedLabelId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    labelId: string;
+  } | null>(null);
 
   const fetchLabels = useCallback(() => {
     setError(null);
-    fetch("/api/labels")
+    const params = new URLSearchParams({
+      scope: scopeFilter,
+      includeArchived: String(showArchived),
+    });
+    if (scopeFilter === "team" && selectedTeamId) {
+      params.set("teamId", selectedTeamId);
+    }
+    const url =
+      scopeFilter === "workspace" && !showArchived
+        ? "/api/labels"
+        : `/api/labels?${params.toString()}`;
+    fetch(url)
       .then(async (res) => {
         if (!res.ok) {
           throw new Error("Failed to load labels");
@@ -538,11 +623,30 @@ export default function IssueLabelsPage() {
         setError("Could not load labels right now.");
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [scopeFilter, selectedTeamId, showArchived]);
 
   useEffect(() => {
     fetchLabels();
   }, [fetchLabels]);
+  const loadTeams = useCallback(() => {
+    if (teams.length > 0) return;
+    fetch("/api/teams")
+      .then((res) => (res?.ok ? res.json() : null))
+      .then((data) => setTeams(data?.teams ?? []))
+      .catch(() => setTeams([]));
+  }, [teams.length]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "x" || !focusedLabelId) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, button")) return;
+      event.preventDefault();
+      toggleLabelSelection(focusedLabelId, event.shiftKey);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  });
 
   const handleUpdateDescription = async (id: string, description: string) => {
     const res = await fetch(`/api/labels/${id}`, {
@@ -573,7 +677,13 @@ export default function IssueLabelsPage() {
     const res = await fetch("/api/labels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, color, description, parentLabelId }),
+      body: JSON.stringify({
+        name,
+        color,
+        description,
+        parentLabelId,
+        teamId: scopeFilter === "team" ? selectedTeamId || null : null,
+      }),
     });
     if (res.ok) {
       setCreateState(null);
@@ -599,7 +709,12 @@ export default function IssueLabelsPage() {
     const res = await fetch(`/api/labels/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, color, description, parentLabelId }),
+      body: JSON.stringify({
+        name,
+        color,
+        description,
+        parentLabelId,
+      }),
     });
     if (!res.ok) {
       setError("Could not save that label.");
@@ -635,6 +750,106 @@ export default function IssueLabelsPage() {
 
     setLabels((prev) => prev.filter((l) => l.id !== id));
   };
+
+  const toggleLabelSelection = (id: string, shiftKey = false) => {
+    setFocusedLabelId(id);
+    setSelectedLabelIds((current) => {
+      if (shiftKey && lastSelectedLabelId) {
+        const orderedIds = labels.map((item) => item.id);
+        const start = orderedIds.indexOf(lastSelectedLabelId);
+        const end = orderedIds.indexOf(id);
+        if (start >= 0 && end >= 0) {
+          const [from, to] = start < end ? [start, end] : [end, start];
+          return [...new Set([...current, ...orderedIds.slice(from, to + 1)])];
+        }
+      }
+      return current.includes(id)
+        ? current.filter((selectedId) => selectedId !== id)
+        : [...current, id];
+    });
+    setLastSelectedLabelId(id);
+  };
+
+  const runBulkAction = async (
+    action: string,
+    labelIds: string[] = selectedLabelIds,
+    extra: Record<string, unknown> = {},
+  ) => {
+    if (labelIds.length === 0) return;
+    const res = await fetch("/api/labels/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, labelIds, ...extra }),
+    });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      setError(payload.error ?? "Could not update labels.");
+      return;
+    }
+    setContextMenu(null);
+    setSelectedLabelIds([]);
+    fetchLabels();
+  };
+
+  const handleArchiveToggle = (labelItem: LabelData) => {
+    void runBulkAction(labelItem.archivedAt ? "unarchive" : "archive", [
+      labelItem.id,
+    ]);
+  };
+
+  const handleRescope = (labelIds: string[] = selectedLabelIds) => {
+    const options = [
+      "workspace",
+      ...teams.map((entry) => `${entry.key}:${entry.id}`),
+    ].join(", ");
+    const choice = window.prompt(
+      `Move to scope (${options}). Enter workspace or a team key.`,
+      "workspace",
+    );
+    if (choice === null) return;
+    const normalized = choice.trim().toLowerCase();
+    const targetTeam = teams.find(
+      (entry) =>
+        entry.key.toLowerCase() === normalized || entry.id === choice.trim(),
+    );
+    if (normalized !== "workspace" && !targetTeam) {
+      setError("Choose workspace or an existing team key.");
+      return;
+    }
+    void runBulkAction("rescope", labelIds, { teamId: targetTeam?.id ?? null });
+  };
+
+  const handleMerge = (labelIds: string[] = selectedLabelIds) => {
+    if (labelIds.length < 2) {
+      setError("Select at least two labels to merge.");
+      return;
+    }
+    const selectedLabels = labels.filter((item) => labelIds.includes(item.id));
+    const choice = window.prompt(
+      `Merge into which label? ${selectedLabels.map((item) => item.name).join(", ")}`,
+      selectedLabels[0]?.name ?? "",
+    );
+    if (choice === null) return;
+    const destination = selectedLabels.find(
+      (item) => item.name.toLowerCase() === choice.trim().toLowerCase(),
+    );
+    if (!destination) {
+      setError("Choose one of the selected labels as the merge destination.");
+      return;
+    }
+    void runBulkAction("merge", labelIds, {
+      destinationLabelId: destination.id,
+    });
+  };
+
+  const contextLabel = contextMenu
+    ? (labels.find((item) => item.id === contextMenu.labelId) ?? null)
+    : null;
+  const actionLabelIds = contextLabel
+    ? selectedLabelIds.includes(contextLabel.id)
+      ? selectedLabelIds
+      : [contextLabel.id]
+    : selectedLabelIds;
 
   const sortLabels = (items: LabelData[]) =>
     [...items].sort((a, b) => {
@@ -748,23 +963,97 @@ export default function IssueLabelsPage() {
             className="w-full rounded-md border border-[var(--color-border)] bg-transparent py-1.5 pr-3 pl-9 text-[13px] text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)]"
           />
         </div>
-        <button
-          type="button"
-          className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+        <select
+          value={
+            scopeFilter === "team" ? `team:${selectedTeamId}` : scopeFilter
+          }
+          onChange={(event) => {
+            const value = event.target.value;
+            if (value.startsWith("team:")) {
+              setScopeFilter("team");
+              setSelectedTeamId(value.slice(5));
+              setSelectedLabelIds([]);
+              setLastSelectedLabelId(null);
+              return;
+            }
+            setScopeFilter(value as ScopeFilter);
+            setSelectedTeamId("");
+            setSelectedLabelIds([]);
+            setLastSelectedLabelId(null);
+          }}
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] outline-none"
+          aria-label="Label scope"
+          onFocus={loadTeams}
         >
-          Workspace
-          <svg
-            className="h-3 w-3"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            aria-hidden="true"
-          >
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-        </button>
+          <option value="workspace">Workspace</option>
+          <option value="all">All labels</option>
+          {teams.map((teamItem) => (
+            <option key={teamItem.id} value={`team:${teamItem.id}`}>
+              {teamItem.name}
+            </option>
+          ))}
+        </select>
+        <label className="flex items-center gap-1 text-[12px] text-[var(--color-text-secondary)]">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(event) => {
+              setShowArchived(event.target.checked);
+              setSelectedLabelIds([]);
+              setLastSelectedLabelId(null);
+            }}
+          />
+          Show archived
+        </label>
       </div>
+
+      {selectedLabelIds.length > 0 ? (
+        <div className="mb-4 flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-hover)] px-3 py-2 text-[12px] text-[var(--color-text-secondary)]">
+          <span>{selectedLabelIds.length} selected</span>
+          <button
+            type="button"
+            onClick={() => void runBulkAction("archive")}
+            className="rounded px-2 py-1 hover:bg-[var(--color-content-bg)]"
+          >
+            Archive
+          </button>
+          <button
+            type="button"
+            onClick={() => void runBulkAction("unarchive")}
+            className="rounded px-2 py-1 hover:bg-[var(--color-content-bg)]"
+          >
+            Unarchive
+          </button>
+          <button
+            type="button"
+            onClick={() => handleRescope()}
+            className="rounded px-2 py-1 hover:bg-[var(--color-content-bg)]"
+          >
+            Move/rescope
+          </button>
+          <button
+            type="button"
+            onClick={() => handleMerge()}
+            className="rounded px-2 py-1 hover:bg-[var(--color-content-bg)]"
+          >
+            Merge
+          </button>
+          <button
+            type="button"
+            onClick={() => void runBulkAction("convertToGroup")}
+            className="rounded px-2 py-1 hover:bg-[var(--color-content-bg)]"
+          >
+            Convert to group
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedLabelIds([])}
+            className="ml-auto rounded px-2 py-1 hover:bg-[var(--color-content-bg)]"
+          >
+            Clear
+          </button>
+        </div>
+      ) : null}
 
       {error ? (
         <div className="mb-4 rounded-md border border-[#5c2c2c] bg-[#2b1717] px-3 py-2 text-[12px] text-[#f5b7b7]">
@@ -789,7 +1078,7 @@ export default function IssueLabelsPage() {
           </button>
         </div>
         <div className="w-[200px] shrink-0 px-2">Description</div>
-        <div className="w-[60px] shrink-0 px-2 text-center">Rules</div>
+        <div className="w-[80px] shrink-0 px-2 text-center">Rules</div>
         <div className="w-[60px] shrink-0 px-2 text-center">Issues</div>
         <div className="w-[100px] shrink-0 px-2">Last applied</div>
         <div className="w-[90px] shrink-0 px-2">Created</div>
@@ -809,11 +1098,38 @@ export default function IssueLabelsPage() {
               <LabelRow
                 labelItem={group}
                 isChild={false}
+                isSelected={selectedLabelIds.includes(group.id)}
+                onToggleSelected={(shiftKey) =>
+                  toggleLabelSelection(group.id, shiftKey)
+                }
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setFocusedLabelId(group.id);
+                  setContextMenu({
+                    x: event.clientX,
+                    y: event.clientY,
+                    labelId: group.id,
+                  });
+                }}
+                onFocusRow={() => setFocusedLabelId(group.id)}
                 onAddChild={() =>
                   setCreateState({ mode: "label", parentLabelId: group.id })
                 }
                 onEdit={() => setEditingLabel(group)}
                 onDelete={() => handleDelete(group.id, group.name)}
+                onArchive={() => handleArchiveToggle(group)}
+                onUnarchive={() => handleArchiveToggle(group)}
+                onConvertToGroup={() =>
+                  void runBulkAction("convertToGroup", [group.id])
+                }
+                onRescope={() => handleRescope([group.id])}
+                onMerge={() =>
+                  handleMerge(
+                    selectedLabelIds.includes(group.id)
+                      ? selectedLabelIds
+                      : [group.id],
+                  )
+                }
                 onUpdateDescription={handleUpdateDescription}
               />
               {children.map((child) => (
@@ -821,8 +1137,35 @@ export default function IssueLabelsPage() {
                   key={child.id}
                   labelItem={child}
                   isChild
+                  isSelected={selectedLabelIds.includes(child.id)}
+                  onToggleSelected={(shiftKey) =>
+                    toggleLabelSelection(child.id, shiftKey)
+                  }
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setFocusedLabelId(child.id);
+                    setContextMenu({
+                      x: event.clientX,
+                      y: event.clientY,
+                      labelId: child.id,
+                    });
+                  }}
+                  onFocusRow={() => setFocusedLabelId(child.id)}
                   onEdit={() => setEditingLabel(child)}
                   onDelete={() => handleDelete(child.id, child.name)}
+                  onArchive={() => handleArchiveToggle(child)}
+                  onUnarchive={() => handleArchiveToggle(child)}
+                  onConvertToGroup={() =>
+                    void runBulkAction("convertToGroup", [child.id])
+                  }
+                  onRescope={() => handleRescope([child.id])}
+                  onMerge={() =>
+                    handleMerge(
+                      selectedLabelIds.includes(child.id)
+                        ? selectedLabelIds
+                        : [child.id],
+                    )
+                  }
                   onUpdateDescription={handleUpdateDescription}
                 />
               ))}
@@ -833,13 +1176,109 @@ export default function IssueLabelsPage() {
               key={labelItem.id}
               labelItem={labelItem}
               isChild={false}
+              isSelected={selectedLabelIds.includes(labelItem.id)}
+              onToggleSelected={(shiftKey) =>
+                toggleLabelSelection(labelItem.id, shiftKey)
+              }
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setFocusedLabelId(labelItem.id);
+                setContextMenu({
+                  x: event.clientX,
+                  y: event.clientY,
+                  labelId: labelItem.id,
+                });
+              }}
+              onFocusRow={() => setFocusedLabelId(labelItem.id)}
               onEdit={() => setEditingLabel(labelItem)}
               onDelete={() => handleDelete(labelItem.id, labelItem.name)}
+              onArchive={() => handleArchiveToggle(labelItem)}
+              onUnarchive={() => handleArchiveToggle(labelItem)}
+              onConvertToGroup={() =>
+                void runBulkAction("convertToGroup", [labelItem.id])
+              }
+              onRescope={() => handleRescope([labelItem.id])}
+              onMerge={() =>
+                handleMerge(
+                  selectedLabelIds.includes(labelItem.id)
+                    ? selectedLabelIds
+                    : [labelItem.id],
+                )
+              }
               onUpdateDescription={handleUpdateDescription}
             />
           ))}
         </div>
       )}
+
+      {contextMenu && contextLabel ? (
+        <div
+          className="fixed z-50 w-48 rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] p-1 text-[12px] shadow-xl"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          role="menu"
+          onMouseLeave={() => setContextMenu(null)}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setEditingLabel(contextLabel);
+              setContextMenu(null);
+            }}
+            className="block w-full rounded px-2 py-1.5 text-left hover:bg-[var(--color-surface-hover)]"
+            role="menuitem"
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => void runBulkAction("convertToGroup", actionLabelIds)}
+            className="block w-full rounded px-2 py-1.5 text-left hover:bg-[var(--color-surface-hover)]"
+            role="menuitem"
+          >
+            Convert to group
+          </button>
+          <button
+            type="button"
+            onClick={() => handleRescope(actionLabelIds)}
+            className="block w-full rounded px-2 py-1.5 text-left hover:bg-[var(--color-surface-hover)]"
+            role="menuitem"
+          >
+            Move/rescope
+          </button>
+          <button
+            type="button"
+            onClick={() => handleMerge(actionLabelIds)}
+            className="block w-full rounded px-2 py-1.5 text-left hover:bg-[var(--color-surface-hover)]"
+            role="menuitem"
+          >
+            Merge selected
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              void runBulkAction(
+                contextLabel.archivedAt ? "unarchive" : "archive",
+                actionLabelIds,
+              )
+            }
+            className="block w-full rounded px-2 py-1.5 text-left hover:bg-[var(--color-surface-hover)]"
+            role="menuitem"
+          >
+            {contextLabel.archivedAt ? "Unarchive" : "Archive"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setContextMenu(null);
+              void handleDelete(contextLabel.id, contextLabel.name);
+            }}
+            className="block w-full rounded px-2 py-1.5 text-left text-[#f87171] hover:bg-[var(--color-surface-hover)]"
+            role="menuitem"
+          >
+            Delete
+          </button>
+        </div>
+      ) : null}
 
       {/* Create label modal */}
       {createState && (

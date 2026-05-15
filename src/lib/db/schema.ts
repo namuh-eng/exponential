@@ -346,6 +346,7 @@ export const label = pgTable(
     }),
     teamId: uuid("team_id").references(() => team.id, { onDelete: "cascade" }),
     parentLabelId: uuid("parent_label_id"),
+    archivedAt: timestamp("archived_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

@@ -1,10 +1,21 @@
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { issueLabel, label } from "@/lib/db/schema";
+import { issueLabel, label, team } from "@/lib/db/schema";
 import { validateWorkspaceParentLabel } from "@/lib/label-parent-validation";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+
+async function validateTeamScope(workspaceId: string, teamId: unknown) {
+  if (teamId === null || teamId === undefined || teamId === "") return null;
+  if (typeof teamId !== "string") return undefined;
+  const [teamRecord] = await db
+    .select({ id: team.id })
+    .from(team)
+    .where(and(eq(team.id, teamId), eq(team.workspaceId, workspaceId)))
+    .limit(1);
+  return teamRecord?.id;
+}
 
 export async function PATCH(
   request: Request,
@@ -24,7 +35,7 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json();
 
-  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  const updates: Partial<typeof label.$inferInsert> = { updatedAt: new Date() };
   if (body.name !== undefined) {
     const trimmedName = typeof body.name === "string" ? body.name.trim() : "";
     if (!trimmedName) {
@@ -34,6 +45,20 @@ export async function PATCH(
   }
   if (body.color !== undefined) updates.color = body.color;
   if (body.description !== undefined) updates.description = body.description;
+  if (body.archived !== undefined) {
+    updates.archivedAt = body.archived ? new Date() : null;
+  }
+  if (body.convertToGroup === true) {
+    updates.parentLabelId = null;
+    updates.color = "#6b6f76";
+  }
+  if (body.teamId !== undefined) {
+    const nextTeamId = await validateTeamScope(workspaceId, body.teamId);
+    if (nextTeamId === undefined) {
+      return NextResponse.json({ error: "Team not found" }, { status: 404 });
+    }
+    updates.teamId = nextTeamId;
+  }
   if (body.parentLabelId !== undefined) {
     const parentValidation = await validateWorkspaceParentLabel({
       workspaceId,
@@ -52,13 +77,7 @@ export async function PATCH(
   const [updated] = await db
     .update(label)
     .set(updates)
-    .where(
-      and(
-        eq(label.id, id),
-        eq(label.workspaceId, workspaceId),
-        isNull(label.teamId),
-      ),
-    )
+    .where(and(eq(label.id, id), eq(label.workspaceId, workspaceId)))
     .returning();
 
   if (!updated) {
@@ -89,13 +108,7 @@ export async function DELETE(
     const [existing] = await tx
       .select({ id: label.id })
       .from(label)
-      .where(
-        and(
-          eq(label.id, id),
-          eq(label.workspaceId, workspaceId),
-          isNull(label.teamId),
-        ),
-      )
+      .where(and(eq(label.id, id), eq(label.workspaceId, workspaceId)))
       .limit(1);
 
     if (!existing) {
@@ -106,13 +119,7 @@ export async function DELETE(
 
     const [deletedLabel] = await tx
       .delete(label)
-      .where(
-        and(
-          eq(label.id, id),
-          eq(label.workspaceId, workspaceId),
-          isNull(label.teamId),
-        ),
-      )
+      .where(and(eq(label.id, id), eq(label.workspaceId, workspaceId)))
       .returning();
 
     return deletedLabel;

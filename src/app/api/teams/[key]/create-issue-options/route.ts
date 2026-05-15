@@ -61,6 +61,7 @@ export async function GET(
         and(
           eq(label.workspaceId, teamContext.workspaceId),
           or(isNull(label.teamId), eq(label.teamId, teamContext.id)),
+          isNull(label.archivedAt),
         ),
       )
       .orderBy(asc(label.name)),

@@ -20,16 +20,19 @@ vi.mock("@/lib/db", () => ({
     select: vi.fn((selection?: Record<string, unknown>) => {
       // GET labels with issueCount
       if (selection && "issueCount" in selection) {
-        return {
-          from: vi.fn().mockReturnValue({
-            leftJoin: vi.fn().mockReturnValue({
-              where: vi.fn().mockReturnValue({
-                groupBy: vi.fn().mockReturnValue({
-                  orderBy: vi.fn().mockResolvedValue(labelsOrderByMock()),
-                }),
-              }),
+        const afterJoins = {
+          where: vi.fn().mockReturnValue({
+            groupBy: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockResolvedValue(labelsOrderByMock()),
             }),
           }),
+        };
+        const joinable = {
+          leftJoin: vi.fn(() => joinable),
+          where: afterJoins.where,
+        };
+        return {
+          from: vi.fn().mockReturnValue(joinable),
         };
       }
 
@@ -74,6 +77,10 @@ describe("labels collection route", () => {
         name: "Bug",
         color: "#f00",
         description: "Bugs",
+        teamId: null,
+        teamName: null,
+        teamKey: null,
+        archivedAt: null,
         issueCount: 2,
         createdAt: new Date("2026-04-01T00:00:00.000Z"),
         updatedAt: new Date("2026-04-01T00:00:00.000Z"),

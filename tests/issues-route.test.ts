@@ -69,6 +69,17 @@ vi.mock("@/lib/db", () => ({
         };
       }
 
+      if ("parentLabelId" in selection) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockResolvedValue([
+              { id: "label-1", parentLabelId: null },
+              { id: "label-2", parentLabelId: null },
+            ]),
+          }),
+        };
+      }
+
       if ("maxNum" in selection) {
         return {
           from: vi.fn().mockReturnValue({
@@ -148,6 +159,13 @@ vi.mock("@/lib/db/schema", () => ({
   issue: { __name: "issue", assigneeId: "issue.assigneeId" },
   issueHistory: { __name: "issueHistory" },
   issueLabel: { __name: "issueLabel" },
+  label: {
+    id: "label.id",
+    parentLabelId: "label.parentLabelId",
+    workspaceId: "label.workspaceId",
+    archivedAt: "label.archivedAt",
+    teamId: "label.teamId",
+  },
   team: {},
   teamMember: {},
   workflowState: {},

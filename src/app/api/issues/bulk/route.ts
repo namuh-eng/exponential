@@ -12,6 +12,7 @@ import {
   workflowState,
 } from "@/lib/db/schema";
 import { insertIssueHistoryEvent } from "@/lib/issue-history";
+import { normalizeBulkIssueLabelIds } from "@/lib/label-application";
 import { canAccessTeam, getWorkspaceMember } from "@/lib/teams";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -252,32 +253,21 @@ export async function PATCH(request: Request) {
     changedFields.push("archivedAt");
   }
 
-  const labelIds =
-    updates.labelIds === undefined
-      ? undefined
-      : uniqueStrings(updates.labelIds);
-  if (labelIds !== undefined && labelIds.length > 0) {
-    const validLabels = await db
-      .select({ id: label.id })
-      .from(label)
-      .where(
-        and(
-          inArray(label.id, labelIds),
-          or(
-            eq(label.workspaceId, workspaceId),
-            inArray(label.teamId, teamIds),
-            isNull(label.teamId),
-          ),
-        ),
-      );
-    if (validLabels.length !== labelIds.length) {
+  let labelIds: string[] | undefined;
+  if (updates.labelIds !== undefined) {
+    const normalizedLabels = await normalizeBulkIssueLabelIds({
+      db,
+      labelIds: updates.labelIds,
+      workspaceId,
+      teamIds,
+    });
+    if (!normalizedLabels.ok) {
       return NextResponse.json(
-        { error: "One or more labels were not found" },
+        { error: normalizedLabels.error },
         { status: 400 },
       );
     }
-    changedFields.push("labelIds");
-  } else if (labelIds !== undefined) {
+    labelIds = normalizedLabels.labelIds;
     changedFields.push("labelIds");
   }
 
