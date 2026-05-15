@@ -1188,6 +1188,12 @@ export function Sidebar({
                   </kbd>
                 </div>
                 <div className="flex items-center justify-between">
+                  <span>New project update</span>
+                  <kbd className="rounded border border-[var(--color-border)] px-2 py-1 text-[var(--color-text-primary)]">
+                    N U
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between">
                   <span>Open help</span>
                   <kbd className="rounded border border-[var(--color-border)] px-2 py-1 text-[var(--color-text-primary)]">
                     /

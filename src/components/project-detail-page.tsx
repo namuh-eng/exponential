@@ -8,12 +8,13 @@ import {
   ProjectProperties,
   type ProjectPropertiesSaveInput,
 } from "@/components/project-properties";
+import { OPEN_PROJECT_UPDATE_EVENT } from "@/lib/command-palette";
 import type {
   ProjectActivityEntry,
   ProjectResource,
 } from "@/lib/project-detail";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type StatusCategory =
   | "triage"
@@ -155,6 +156,13 @@ export function ProjectDetailPage() {
     useState<CreateIssueDefaults>({});
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const projectUpdateTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const openProjectUpdateComposer = useCallback(() => {
+    setActiveTab("overview");
+    setShowUpdateComposer(true);
+    requestAnimationFrame(() => projectUpdateTextareaRef.current?.focus());
+  }, []);
 
   useEffect(() => {
     async function fetchProject() {
@@ -173,6 +181,29 @@ export function ProjectDetailPage() {
     }
     fetchProject();
   }, [params.slug]);
+
+  useEffect(() => {
+    function handleOpenProjectUpdate() {
+      openProjectUpdateComposer();
+    }
+
+    window.addEventListener(OPEN_PROJECT_UPDATE_EVENT, handleOpenProjectUpdate);
+    return () => {
+      window.removeEventListener(
+        OPEN_PROJECT_UPDATE_EVENT,
+        handleOpenProjectUpdate,
+      );
+    };
+  }, [openProjectUpdateComposer]);
+
+  useEffect(() => {
+    if (loading || !data) return;
+
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get("newUpdate") === "1") {
+      openProjectUpdateComposer();
+    }
+  }, [data, loading, openProjectUpdateComposer]);
 
   async function patchProject(payload: object) {
     setSaving(true);
@@ -629,6 +660,8 @@ export function ProjectDetailPage() {
                   {showUpdateComposer ? (
                     <div className="space-y-3">
                       <textarea
+                        ref={projectUpdateTextareaRef}
+                        aria-label="Project update"
                         value={projectUpdate}
                         onChange={(event) =>
                           setProjectUpdate(event.target.value)

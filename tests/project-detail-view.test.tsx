@@ -99,6 +99,7 @@ const mockProjectData = {
 describe("ProjectDetailPage UI", () => {
   afterEach(() => {
     cleanup();
+    window.history.pushState(null, "", "/");
     vi.clearAllMocks();
   });
 
@@ -237,6 +238,27 @@ describe("ProjectDetailPage UI", () => {
         }),
       );
     });
+  });
+
+  it("opens and focuses the project update composer from the newUpdate query", async () => {
+    window.history.pushState(
+      null,
+      "",
+      "/project/agent-speed/overview?newUpdate=1",
+    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => mockProjectData,
+    } as Response);
+
+    render(<ProjectDetailPage />);
+
+    const textarea = await screen.findByLabelText("Project update");
+    await waitFor(() => expect(textarea).toHaveFocus());
+    expect(textarea).toHaveAttribute(
+      "placeholder",
+      "Share a concise update with progress, blockers, or the next checkpoint.",
+    );
   });
 
   it("posts a project update", async () => {

@@ -31,6 +31,43 @@ async function gotoProjectsWithShortcutReady(
   });
 }
 
+test("New project update command opens a project picker and composer", async ({
+  page,
+}) => {
+  const projectName = `Palette Update ${Date.now()}`;
+  const projectResponse = await page.request.post("/api/projects", {
+    data: {
+      name: projectName,
+      description: "Created for command palette update composer coverage",
+      teamKey: "ENG",
+    },
+  });
+  expect(projectResponse.ok()).toBeTruthy();
+  const projectPayload = await projectResponse.json();
+  const projectSlug = projectPayload.slug;
+
+  await page.goto("/foreverbrowsing/team/ENG/all");
+  await page.getByLabel("Search").click();
+  await page.getByRole("button", { name: /New project update/i }).click();
+
+  const picker = page.getByRole("dialog", {
+    name: "Choose a project for update",
+  });
+  await expect(picker).toBeVisible();
+  await expect(page.getByLabel("Search projects for update")).toBeFocused();
+
+  await page.getByLabel("Search projects for update").fill(projectName);
+  await page.getByRole("button", { name: new RegExp(projectName) }).click();
+
+  await expect(page).toHaveURL(
+    new RegExp(
+      `/foreverbrowsing/project/${projectSlug}/overview\\?newUpdate=1`,
+    ),
+  );
+  await expect(page.getByLabel("Project update")).toBeVisible();
+  await expect(page.getByLabel("Project update")).toBeFocused();
+});
+
 test.describe("Command Palette", () => {
   test("opens with Ctrl+K on workspace projects and closes with Escape", async ({
     page,
