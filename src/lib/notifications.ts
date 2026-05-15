@@ -1,6 +1,12 @@
+import {
+  ACCOUNT_NOTIFICATION_CHANNELS,
+  type AccountNotificationEventKey,
+  type AccountNotificationSettings,
+  readAccountNotificationsFromUserSettings,
+} from "@/lib/account-notifications";
 import { db } from "@/lib/db";
 import { member, notification, user } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 type NotificationType = (typeof notification.$inferInsert)["type"];
 
@@ -16,6 +22,15 @@ interface NotificationInput {
   type: NotificationType;
   userId: string;
 }
+
+const NOTIFICATION_TYPE_EVENT_KEY: Partial<
+  Record<NotificationType, AccountNotificationEventKey>
+> = {
+  assigned: "assignments",
+  status_change: "statusChanges",
+  mentioned: "mentions",
+  comment: "comments",
+};
 
 const mentionPattern = /(^|\s)@([a-z0-9][\w.-]*)/gi;
 
@@ -101,7 +116,9 @@ export function buildNotificationValues(input: {
   userIds: Array<string | null | undefined>;
 }) {
   const userIds = new Set(
-    input.userIds.filter((value): value is string => Boolean(value)),
+    input.userIds.filter(
+      (value): value is string => Boolean(value) && value !== input.actorId,
+    ),
   );
 
   return [...userIds].map((userId) => ({
@@ -112,13 +129,64 @@ export function buildNotificationValues(input: {
   }));
 }
 
-export async function insertNotifications(inputs: NotificationInput[]) {
+export function shouldDeliverNotificationForSettings(
+  type: NotificationType,
+  settings: AccountNotificationSettings,
+) {
+  const eventKey = NOTIFICATION_TYPE_EVENT_KEY[type];
+
+  if (!eventKey) {
+    return true;
+  }
+
+  return ACCOUNT_NOTIFICATION_CHANNELS.some(
+    (channel) => settings.channels[channel].events[eventKey],
+  );
+}
+
+export async function filterNotificationInputsByAccountSettings(
+  inputs: NotificationInput[],
+) {
   if (inputs.length === 0) {
+    return [];
+  }
+
+  const userIds = [...new Set(inputs.map((input) => input.userId))];
+  const rows = await db
+    .select({ id: user.id, settings: user.settings })
+    .from(user)
+    .where(inArray(user.id, userIds));
+  const settingsByUserId = new Map(
+    rows.map((row) => [
+      row.id,
+      readAccountNotificationsFromUserSettings(row.settings),
+    ]),
+  );
+
+  return inputs.filter((input) => {
+    if (input.userId === input.actorId) {
+      return false;
+    }
+
+    const settings = settingsByUserId.get(input.userId);
+    if (!settings) {
+      return true;
+    }
+
+    return shouldDeliverNotificationForSettings(input.type, settings);
+  });
+}
+
+export async function insertNotifications(inputs: NotificationInput[]) {
+  const deliverableInputs =
+    await filterNotificationInputsByAccountSettings(inputs);
+
+  if (deliverableInputs.length === 0) {
     return;
   }
 
   await db.insert(notification).values(
-    inputs.map((input) => ({
+    deliverableInputs.map((input) => ({
       actorId: input.actorId,
       issueId: input.issueId,
       type: input.type,
