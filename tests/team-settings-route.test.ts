@@ -333,6 +333,106 @@ describe("Team Settings API Route", () => {
     expect((await res.json()).error).toMatch(/cycle/i);
   });
 
+  it("persists agent guidance and reports modify permission", async () => {
+    getSessionMock.mockResolvedValue({
+      session: {
+        id: "session-id",
+        userId: TEST_USER_ID,
+        token: "token",
+        expiresAt: new Date(Date.now() + 60_000),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      user: {
+        id: TEST_USER_ID,
+        name: "Test User",
+        email: "test@example.com",
+        emailVerified: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    await db
+      .update(workspace)
+      .set({
+        settings: {
+          security: { permissions: { agentGuidanceRole: "admins" } },
+        },
+      })
+      .where(eq(workspace.id, TEST_WS_ID));
+
+    const res = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({
+          agentGuidance: "Use ENG-specific QA evidence.",
+        }),
+      }),
+      { params: Promise.resolve({ key: "UPDT" }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).team.agentGuidance).toBe(
+      "Use ENG-specific QA evidence.",
+    );
+
+    const getRes = await GET(new Request("http://localhost"), {
+      params: Promise.resolve({ key: "UPDT" }),
+    });
+    const payload = await getRes.json();
+    expect(payload.team.agentGuidance).toBe("Use ENG-specific QA evidence.");
+    expect(payload.team.canModifyAgentGuidance).toBe(true);
+  });
+
+  it("forbids agent guidance changes when workspace permissions disallow them", async () => {
+    getSessionMock.mockResolvedValue({
+      session: {
+        id: "session-other-id",
+        userId: TEST_OTHER_USER_ID,
+        token: "token-other",
+        expiresAt: new Date(Date.now() + 60_000),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      user: {
+        id: TEST_OTHER_USER_ID,
+        name: "Other User",
+        email: "other@example.com",
+        emailVerified: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    await db
+      .update(workspace)
+      .set({
+        settings: {
+          security: { permissions: { agentGuidanceRole: "admins" } },
+        },
+      })
+      .where(eq(workspace.id, TEST_WS_ID));
+
+    const getRes = await GET(new Request("http://localhost"), {
+      params: Promise.resolve({ key: "UPDT" }),
+    });
+    expect((await getRes.json()).team.canModifyAgentGuidance).toBe(false);
+
+    const res = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({ agentGuidance: "Member should not save this." }),
+      }),
+      { params: Promise.resolve({ key: "UPDT" }) },
+    );
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      error: "You do not have permission to modify agent guidance",
+    });
+  });
+
   it("GET hides private team settings from workspace non-members", async () => {
     await db
       .update(team)

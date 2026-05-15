@@ -11,7 +11,11 @@ import {
 import { buildTeamInboundEmailAddress } from "@/lib/team-email";
 import { getMutableTeamSettings, readTeamSettings } from "@/lib/team-settings";
 import { findAccessibleTeam } from "@/lib/teams";
-import { isWorkspaceAdminRole } from "@/lib/workspace-permissions";
+import {
+  canPerformWorkspacePermission,
+  isWorkspaceAdminRole,
+  readWorkspacePermissionSettings,
+} from "@/lib/workspace-permissions";
 import { and, count, eq, inArray, ne } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -61,7 +65,7 @@ async function buildTeamResponse(
       .from(workflowState)
       .where(eq(workflowState.teamId, teamRecord.id)),
     db
-      .select({ urlSlug: workspace.urlSlug })
+      .select({ urlSlug: workspace.urlSlug, settings: workspace.settings })
       .from(workspace)
       .where(eq(workspace.id, teamRecord.workspaceId))
       .limit(1),
@@ -121,7 +125,15 @@ async function buildTeamResponse(
   const eligibleMembershipIds = new Set(
     eligibleMembershipRows.map((row) => row.teamId),
   );
-  const viewerIsAdmin = isWorkspaceAdminRole(workspaceMemberRow[0]?.role);
+  const viewerRole = workspaceMemberRow[0]?.role;
+  const viewerIsAdmin = isWorkspaceAdminRole(viewerRole);
+  const permissions = readWorkspacePermissionSettings(
+    workspaceRow[0]?.settings,
+  );
+  const canModifyAgentGuidance = canPerformWorkspacePermission(
+    viewerRole,
+    permissions.agentGuidanceRole,
+  );
   const canSeeTeamSummary = (entry: {
     id: string;
     isPrivate: boolean | null;
@@ -163,6 +175,7 @@ async function buildTeamResponse(
     ),
     detailedHistory: flags.detailedHistory,
     agentGuidance: flags.agentGuidance,
+    canModifyAgentGuidance,
     autoAssignment: flags.autoAssignment,
     discussionSummariesEnabled: flags.discussionSummariesEnabled,
     parentTeamId: teamRecord.parentTeamId ?? null,
@@ -381,6 +394,43 @@ export async function PATCH(
 
   const currentFlags = readTeamSettings(teamRecord.settings);
   const currentSettings = getMutableTeamSettings(teamRecord.settings);
+  const nextAgentGuidance =
+    body.agentGuidance === undefined
+      ? currentFlags.agentGuidance
+      : body.agentGuidance;
+
+  if (
+    body.agentGuidance !== undefined &&
+    nextAgentGuidance !== currentFlags.agentGuidance
+  ) {
+    const [workspaceAccess] = await db
+      .select({ role: member.role, settings: workspace.settings })
+      .from(workspace)
+      .innerJoin(
+        member,
+        and(
+          eq(member.workspaceId, workspace.id),
+          eq(member.userId, session.user.id),
+        ),
+      )
+      .where(eq(workspace.id, teamRecord.workspaceId))
+      .limit(1);
+    const permissions = readWorkspacePermissionSettings(
+      workspaceAccess?.settings,
+    );
+
+    if (
+      !canPerformWorkspacePermission(
+        workspaceAccess?.role,
+        permissions.agentGuidanceRole,
+      )
+    ) {
+      return NextResponse.json(
+        { error: "You do not have permission to modify agent guidance" },
+        { status: 403 },
+      );
+    }
+  }
   const [updatedTeam] = await db
     .update(team)
     .set({
@@ -400,7 +450,7 @@ export async function PATCH(
         ...currentSettings,
         emailEnabled: body.emailEnabled ?? currentFlags.emailEnabled,
         detailedHistory: body.detailedHistory ?? currentFlags.detailedHistory,
-        agentGuidance: body.agentGuidance ?? currentFlags.agentGuidance,
+        agentGuidance: nextAgentGuidance,
         autoAssignment: body.autoAssignment ?? currentFlags.autoAssignment,
         discussionSummariesEnabled:
           body.discussionSummariesEnabled ??

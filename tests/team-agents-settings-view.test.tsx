@@ -59,6 +59,12 @@ describe("TeamAgentsSettingsPage", () => {
     });
 
     expect(screen.getByDisplayValue("Original Guidance")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/stored but not active/i),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/included in agent run prompt configuration/i),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Enable auto-assignment")).toBeInTheDocument();
   });
 
@@ -81,6 +87,26 @@ describe("TeamAgentsSettingsPage", () => {
         body: expect.stringContaining('"agentGuidance":"New Guidance"'),
       }),
     );
+  });
+
+  it("disables guidance editing when permission is denied", async () => {
+    vi.mocked(global.fetch).mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            team: { ...mockTeam, canModifyAgentGuidance: false },
+          }),
+      } as Response),
+    );
+
+    render(<TeamAgentsSettingsPage />);
+    const textarea = await screen.findByLabelText("Agent guidance");
+
+    expect(textarea).toBeDisabled();
+    expect(
+      screen.getByText(/do not have permission to modify agent guidance/i),
+    ).toBeInTheDocument();
   });
 
   it("handles toggling auto-assignment", async () => {

@@ -8,6 +8,7 @@ interface TeamAgentsData {
   name: string;
   agentGuidance: string;
   autoAssignment: boolean;
+  canModifyAgentGuidance?: boolean;
 }
 
 function Toggle({
@@ -82,12 +83,31 @@ export default function TeamAgentsSettingsPage() {
       });
 
       if (!res.ok) {
-        throw new Error("Failed to save agent settings");
+        const payload =
+          typeof res.json === "function"
+            ? ((await res.json().catch(() => null)) as {
+                error?: string;
+              } | null)
+            : null;
+        throw new Error(payload?.error ?? "Failed to update agent settings");
       }
 
+      const payload =
+        typeof res.json === "function"
+          ? ((await res.json().catch(() => null)) as {
+              team?: TeamAgentsData;
+            } | null)
+          : null;
+      if (payload?.team) {
+        setTeam(payload.team);
+      }
       setSaveMessage("Agent settings updated");
     } catch (error) {
-      setSaveMessage("Failed to update agent settings");
+      setSaveMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to update agent settings",
+      );
     } finally {
       setSaving(false);
     }
@@ -133,17 +153,24 @@ export default function TeamAgentsSettingsPage() {
             Agent guidance
           </h3>
           <p className="mb-4 text-[13px] text-[var(--color-text-secondary)]">
-            Saved team instructions for future AI agent prompts. This clone does
-            not run team-scoped AI agents yet, so guidance is stored but not
-            active in an agent runtime.
+            Team-specific instructions are included in agent run prompt
+            configuration when this team is selected.
           </p>
           <textarea
             value={agentGuidance}
             onChange={(e) => setAgentGuidance(e.target.value)}
             onBlur={() => handleSave({ agentGuidance })}
+            disabled={saving || team.canModifyAgentGuidance === false}
+            aria-label="Agent guidance"
             className="h-32 w-full rounded-md border border-[var(--color-border)] bg-transparent p-3 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
             placeholder="e.g. Always include a testing plan for frontend changes..."
           />
+          {team.canModifyAgentGuidance === false && (
+            <p className="mt-2 text-[12px] text-[var(--color-text-tertiary)]">
+              You do not have permission to modify agent guidance in this
+              workspace.
+            </p>
+          )}
         </div>
 
         <div className="rounded-lg border border-[var(--color-border)] p-4">

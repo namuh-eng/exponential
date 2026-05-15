@@ -6,7 +6,7 @@ import {
   sanitizeWorkspaceSlug,
 } from "@/lib/workspace-creation";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function CreateWorkspacePage() {
   const router = useRouter();
@@ -14,6 +14,13 @@ export default function CreateWorkspacePage() {
   const [urlSlug, setUrlSlug] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   function handleNameChange(value: string) {
     setName(value);
@@ -37,11 +44,17 @@ export default function CreateWorkspacePage() {
 
       if (!res.ok) {
         const data = await res.json();
-        setError(data.error || "Failed to create workspace");
+        if (mountedRef.current) {
+          setError(data.error || "Failed to create workspace");
+        }
         return;
       }
 
       const data = await res.json();
+      if (!mountedRef.current) {
+        return;
+      }
+
       // Redirect to invite team members step
       const inviteParams = new URLSearchParams({
         workspaceId: data.workspace.id,
@@ -49,9 +62,13 @@ export default function CreateWorkspacePage() {
       });
       router.push(`/onboarding/invite?${inviteParams.toString()}`);
     } catch {
-      setError("Something went wrong. Please try again.");
+      if (mountedRef.current) {
+        setError("Something went wrong. Please try again.");
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   }
 
