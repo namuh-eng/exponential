@@ -2,7 +2,7 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issueLabel, label, team } from "@/lib/db/schema";
-import { validateWorkspaceParentLabel } from "@/lib/label-parent-validation";
+import { validateScopedParentLabel } from "@/lib/label-parent-validation";
 import { and, asc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -128,8 +128,9 @@ export async function POST(request: Request) {
     }
   }
 
-  const parentValidation = await validateWorkspaceParentLabel({
+  const parentValidation = await validateScopedParentLabel({
     workspaceId,
+    teamId: teamId || null,
     parentLabelId,
   });
   if (!parentValidation.ok) {

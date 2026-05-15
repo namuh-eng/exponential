@@ -143,6 +143,60 @@ describe("labels collection route", () => {
     );
   });
 
+  it("creates a team label under a team parent", async () => {
+    selectRowsMock
+      .mockReturnValueOnce([{ id: "team-1" }])
+      .mockReturnValueOnce([{ id: "team-group-1", parentLabelId: null }]);
+    insertReturningMock.mockReturnValue([
+      {
+        id: "label-4",
+        name: "API",
+        parentLabelId: "team-group-1",
+        teamId: "team-1",
+      },
+    ]);
+    const { POST } = await import("@/app/api/labels/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/labels", {
+        method: "POST",
+        body: JSON.stringify({
+          name: "API",
+          teamId: "team-1",
+          parentLabelId: "team-group-1",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(insertValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        teamId: "team-1",
+        parentLabelId: "team-group-1",
+      }),
+    );
+  });
+
+  it("rejects a team label under a parent from another scope", async () => {
+    selectRowsMock
+      .mockReturnValueOnce([{ id: "team-1" }])
+      .mockReturnValueOnce([]);
+    const { POST } = await import("@/app/api/labels/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/labels", {
+        method: "POST",
+        body: JSON.stringify({
+          name: "API",
+          teamId: "team-1",
+          parentLabelId: "workspace-group",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+  });
+
   it("rejects an invalid parent label", async () => {
     selectRowsMock.mockReturnValue([]);
     const { POST } = await import("@/app/api/labels/route");

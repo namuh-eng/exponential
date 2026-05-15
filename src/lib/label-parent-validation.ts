@@ -2,15 +2,16 @@ import { db } from "@/lib/db";
 import { label } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 
-type WorkspaceLabel = {
+type ScopedLabel = {
   id: string;
   parentLabelId: string | null;
 };
 
-async function findWorkspaceLabel(
+async function findScopedLabel(
   labelId: string,
   workspaceId: string,
-): Promise<WorkspaceLabel | null> {
+  teamId: string | null,
+): Promise<ScopedLabel | null> {
   const [row] = await db
     .select({ id: label.id, parentLabelId: label.parentLabelId })
     .from(label)
@@ -18,7 +19,7 @@ async function findWorkspaceLabel(
       and(
         eq(label.id, labelId),
         eq(label.workspaceId, workspaceId),
-        isNull(label.teamId),
+        teamId ? eq(label.teamId, teamId) : isNull(label.teamId),
       ),
     )
     .limit(1);
@@ -26,12 +27,14 @@ async function findWorkspaceLabel(
   return row ?? null;
 }
 
-export async function validateWorkspaceParentLabel({
+export async function validateScopedParentLabel({
   workspaceId,
+  teamId = null,
   parentLabelId,
   currentLabelId,
 }: {
   workspaceId: string;
+  teamId?: string | null;
   parentLabelId: unknown;
   currentLabelId?: string;
 }): Promise<
@@ -58,7 +61,7 @@ export async function validateWorkspaceParentLabel({
     };
   }
 
-  let parent = await findWorkspaceLabel(parentLabelId, workspaceId);
+  let parent = await findScopedLabel(parentLabelId, workspaceId, teamId);
   if (!parent) {
     return { ok: false, error: "Parent label not found", status: 400 };
   }
@@ -76,7 +79,7 @@ export async function validateWorkspaceParentLabel({
       return { ok: false, error: "Parent label has a cycle", status: 400 };
     }
     seen.add(parent.parentLabelId);
-    parent = await findWorkspaceLabel(parent.parentLabelId, workspaceId);
+    parent = await findScopedLabel(parent.parentLabelId, workspaceId, teamId);
     if (!parent) {
       return { ok: false, error: "Parent label not found", status: 400 };
     }
@@ -84,3 +87,5 @@ export async function validateWorkspaceParentLabel({
 
   return { ok: true, parentLabelId };
 }
+
+export const validateWorkspaceParentLabel = validateScopedParentLabel;

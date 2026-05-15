@@ -2,7 +2,7 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issueLabel, label, team } from "@/lib/db/schema";
-import { validateWorkspaceParentLabel } from "@/lib/label-parent-validation";
+import { validateScopedParentLabel } from "@/lib/label-parent-validation";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -52,16 +52,29 @@ export async function PATCH(
     updates.parentLabelId = null;
     updates.color = "#6b6f76";
   }
+  let nextTeamId: string | null | undefined;
   if (body.teamId !== undefined) {
-    const nextTeamId = await validateTeamScope(workspaceId, body.teamId);
+    nextTeamId = await validateTeamScope(workspaceId, body.teamId);
     if (nextTeamId === undefined) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
     }
     updates.teamId = nextTeamId;
   }
   if (body.parentLabelId !== undefined) {
-    const parentValidation = await validateWorkspaceParentLabel({
+    const [currentLabel] = await db
+      .select({ id: label.id, teamId: label.teamId })
+      .from(label)
+      .where(and(eq(label.id, id), eq(label.workspaceId, workspaceId)))
+      .limit(1);
+
+    if (!currentLabel) {
+      return NextResponse.json({ error: "Label not found" }, { status: 404 });
+    }
+
+    const parentValidation = await validateScopedParentLabel({
       workspaceId,
+      teamId:
+        body.teamId !== undefined ? (nextTeamId ?? null) : currentLabel.teamId,
       parentLabelId: body.parentLabelId,
       currentLabelId: id,
     });
@@ -72,6 +85,8 @@ export async function PATCH(
       );
     }
     updates.parentLabelId = parentValidation.parentLabelId;
+  } else if (body.teamId !== undefined) {
+    updates.parentLabelId = null;
   }
 
   const [updated] = await db

@@ -57,7 +57,9 @@ describe("label detail route", () => {
   });
 
   it("moves a label into a valid workspace group", async () => {
-    selectRowsMock.mockReturnValue([{ id: "group-1", parentLabelId: null }]);
+    selectRowsMock
+      .mockReturnValueOnce([{ id: "label-1", teamId: null }])
+      .mockReturnValueOnce([{ id: "group-1", parentLabelId: null }]);
     const { PATCH } = await import("@/app/api/labels/[id]/route");
 
     const response = await PATCH(
@@ -74,7 +76,45 @@ describe("label detail route", () => {
     );
   });
 
+  it("moves a team label into a valid team group", async () => {
+    selectRowsMock
+      .mockReturnValueOnce([{ id: "label-1", teamId: "team-1" }])
+      .mockReturnValueOnce([{ id: "team-group-1", parentLabelId: null }]);
+    const { PATCH } = await import("@/app/api/labels/[id]/route");
+
+    const response = await PATCH(
+      new Request("http://localhost/api/labels/label-1", {
+        method: "PATCH",
+        body: JSON.stringify({ parentLabelId: "team-group-1" }),
+      }),
+      { params: Promise.resolve({ id: "label-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ parentLabelId: "team-group-1" }),
+    );
+  });
+
+  it("rejects moving a team label under a parent outside its team scope", async () => {
+    selectRowsMock
+      .mockReturnValueOnce([{ id: "label-1", teamId: "team-1" }])
+      .mockReturnValueOnce([]);
+    const { PATCH } = await import("@/app/api/labels/[id]/route");
+
+    const response = await PATCH(
+      new Request("http://localhost/api/labels/label-1", {
+        method: "PATCH",
+        body: JSON.stringify({ parentLabelId: "workspace-group" }),
+      }),
+      { params: Promise.resolve({ id: "label-1" }) },
+    );
+
+    expect(response.status).toBe(400);
+  });
+
   it("allows clearing a label group", async () => {
+    selectRowsMock.mockReturnValue([{ id: "label-1", teamId: null }]);
     const { PATCH } = await import("@/app/api/labels/[id]/route");
 
     const response = await PATCH(
@@ -92,6 +132,7 @@ describe("label detail route", () => {
   });
 
   it("rejects self-parenting", async () => {
+    selectRowsMock.mockReturnValue([{ id: "label-1", teamId: null }]);
     const { PATCH } = await import("@/app/api/labels/[id]/route");
 
     const response = await PATCH(
@@ -107,6 +148,7 @@ describe("label detail route", () => {
 
   it("rejects cycles when moving under a descendant", async () => {
     selectRowsMock
+      .mockReturnValueOnce([{ id: "label-1", teamId: null }])
       .mockReturnValueOnce([{ id: "child-1", parentLabelId: "label-1" }])
       .mockReturnValueOnce([{ id: "label-1", parentLabelId: null }]);
     const { PATCH } = await import("@/app/api/labels/[id]/route");

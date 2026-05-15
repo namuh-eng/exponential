@@ -379,7 +379,9 @@ function EditLabelModal({
               {labels
                 .filter(
                   (candidate) =>
-                    candidate.id !== label.id && !candidate.parentLabelId,
+                    candidate.id !== label.id &&
+                    !candidate.parentLabelId &&
+                    (candidate.teamId ?? null) === (label.teamId ?? null),
                 )
                 .map((candidate) => (
                   <option key={candidate.id} value={candidate.id}>
@@ -572,7 +574,19 @@ function LabelRow({
   );
 }
 
-export default function IssueLabelsPage() {
+interface IssueLabelsPageProps {
+  initialScope?: ScopeFilter;
+  initialTeamId?: string;
+  showScopePicker?: boolean;
+  description?: string;
+}
+
+export default function IssueLabelsPage({
+  initialScope = "workspace",
+  initialTeamId = "",
+  showScopePicker = true,
+  description,
+}: IssueLabelsPageProps = {}) {
   const [labels, setLabels] = useState<LabelData[]>([]);
   const [teams, setTeams] = useState<TeamData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -581,8 +595,8 @@ export default function IssueLabelsPage() {
   const [createState, setCreateState] = useState<CreateState | null>(null);
   const [editingLabel, setEditingLabel] = useState<LabelData | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("workspace");
-  const [selectedTeamId, setSelectedTeamId] = useState<string>("");
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(initialScope);
+  const [selectedTeamId, setSelectedTeamId] = useState<string>(initialTeamId);
   const [showArchived, setShowArchived] = useState(false);
   const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
   const [lastSelectedLabelId, setLastSelectedLabelId] = useState<string | null>(
@@ -674,6 +688,9 @@ export default function IssueLabelsPage() {
     description: string;
     parentLabelId: string | null;
   }) => {
+    const parentLabel = parentLabelId
+      ? (labels.find((item) => item.id === parentLabelId) ?? null)
+      : null;
     const res = await fetch("/api/labels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -682,7 +699,9 @@ export default function IssueLabelsPage() {
         color,
         description,
         parentLabelId,
-        teamId: scopeFilter === "team" ? selectedTeamId || null : null,
+        teamId:
+          parentLabel?.teamId ??
+          (scopeFilter === "team" ? selectedTeamId || null : null),
       }),
     });
     if (res.ok) {
@@ -914,9 +933,16 @@ export default function IssueLabelsPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-[20px] font-semibold text-[var(--color-text-primary)]">
-          Issue labels
-        </h1>
+        <div>
+          <h1 className="text-[20px] font-semibold text-[var(--color-text-primary)]">
+            Issue labels
+          </h1>
+          {description ? (
+            <p className="mt-2 text-[13px] text-[var(--color-text-tertiary)]">
+              {description}
+            </p>
+          ) : null}
+        </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -963,36 +989,38 @@ export default function IssueLabelsPage() {
             className="w-full rounded-md border border-[var(--color-border)] bg-transparent py-1.5 pr-3 pl-9 text-[13px] text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)]"
           />
         </div>
-        <select
-          value={
-            scopeFilter === "team" ? `team:${selectedTeamId}` : scopeFilter
-          }
-          onChange={(event) => {
-            const value = event.target.value;
-            if (value.startsWith("team:")) {
-              setScopeFilter("team");
-              setSelectedTeamId(value.slice(5));
+        {showScopePicker ? (
+          <select
+            value={
+              scopeFilter === "team" ? `team:${selectedTeamId}` : scopeFilter
+            }
+            onChange={(event) => {
+              const value = event.target.value;
+              if (value.startsWith("team:")) {
+                setScopeFilter("team");
+                setSelectedTeamId(value.slice(5));
+                setSelectedLabelIds([]);
+                setLastSelectedLabelId(null);
+                return;
+              }
+              setScopeFilter(value as ScopeFilter);
+              setSelectedTeamId("");
               setSelectedLabelIds([]);
               setLastSelectedLabelId(null);
-              return;
-            }
-            setScopeFilter(value as ScopeFilter);
-            setSelectedTeamId("");
-            setSelectedLabelIds([]);
-            setLastSelectedLabelId(null);
-          }}
-          className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] outline-none"
-          aria-label="Label scope"
-          onFocus={loadTeams}
-        >
-          <option value="workspace">Workspace</option>
-          <option value="all">All labels</option>
-          {teams.map((teamItem) => (
-            <option key={teamItem.id} value={`team:${teamItem.id}`}>
-              {teamItem.name}
-            </option>
-          ))}
-        </select>
+            }}
+            className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] outline-none"
+            aria-label="Label scope"
+            onFocus={loadTeams}
+          >
+            <option value="workspace">Workspace</option>
+            <option value="all">All labels</option>
+            {teams.map((teamItem) => (
+              <option key={teamItem.id} value={`team:${teamItem.id}`}>
+                {teamItem.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
         <label className="flex items-center gap-1 text-[12px] text-[var(--color-text-secondary)]">
           <input
             type="checkbox"
