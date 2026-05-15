@@ -141,6 +141,26 @@ describe("Team Analytics API and Logic", () => {
     });
   });
 
+  it("scopes analytics to view issue ids", () => {
+    const query = normalizeAnalyticsQuery(
+      new URLSearchParams("range=all&issueIds=i-2"),
+    );
+
+    expect(query.issueIds).toEqual(["i-2"]);
+
+    const response = buildAnalyticsResponse({
+      team: { id: "t-1", key: "ENG", name: "Engineering" },
+      query,
+      issues,
+      cycles: [],
+    });
+
+    expect(response.summary.issueCount).toBe(1);
+    expect(response.tableRows).toEqual([
+      expect.objectContaining({ issueIds: ["i-2"], label: "In Progress" }),
+    ]);
+  });
+
   it("returns a meaningful empty state when filters remove all issues", () => {
     const response = buildAnalyticsResponse({
       team: { id: "t-1", key: "ENG", name: "Engineering" },

@@ -39,6 +39,7 @@ export interface AnalyticsQuery {
   label?: string;
   createdAfter?: string;
   completedAfter?: string;
+  issueIds?: string[];
 }
 
 export interface AnalyticsIssueRow {
@@ -146,6 +147,11 @@ export function normalizeAnalyticsQuery(
     label: searchParams.get("label") || undefined,
     createdAfter: searchParams.get("createdAfter") || undefined,
     completedAfter: searchParams.get("completedAfter") || undefined,
+    issueIds: searchParams
+      .get("issueIds")
+      ?.split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
   };
 }
 
@@ -227,6 +233,8 @@ export function filterAnalyticsIssues(
     ? dateValue(query.completedAfter)
     : null;
   return issues.filter((issue) => {
+    if (query.issueIds?.length && !query.issueIds.includes(issue.id))
+      return false;
     const createdAt = dateValue(issue.createdAt);
     const completedAt = dateValue(issue.completedAt);
     if (

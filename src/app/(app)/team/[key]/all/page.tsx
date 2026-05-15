@@ -1,6 +1,7 @@
 "use client";
 
 import { useAppShellContext } from "@/app/(app)/app-shell";
+import { ContextualInsights } from "@/components/contextual-insights";
 import { CreateIssueModal } from "@/components/create-issue-modal";
 import {
   DisplayOptionsPanel,
@@ -215,6 +216,11 @@ export default function TeamIssuesPage() {
     (sum, g) => sum + g.issues.length,
     0,
   );
+  const visibleIssueIds = useMemo(
+    () =>
+      filteredGroups.flatMap((group) => group.issues.map((issue) => issue.id)),
+    [filteredGroups],
+  );
 
   const tabs = [
     { id: "all", label: "All issues" },
@@ -354,6 +360,11 @@ export default function TeamIssuesPage() {
         <span className="mr-2 text-[12px] text-[var(--color-text-secondary)]">
           {visibleIssueCount} issues
         </span>
+        <ContextualInsights
+          teamKey={data.team.key}
+          scopedIssueIds={visibleIssueIds}
+          contextLabel={`${routeTab} issues`}
+        />
         {/* Display options trigger */}
         <div className="relative">
           <button
