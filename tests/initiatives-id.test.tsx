@@ -29,6 +29,16 @@ const mockInitiativeData = {
     name: "Growth",
     description: "Scale things",
     status: "active",
+    ownerId: "user-1",
+    owner: { id: "user-1", name: "Ashley", image: null },
+    teams: [{ id: "team-1", name: "Growth", key: "GRO", icon: "🚀" }],
+    startDate: "2026-04-01T00:00:00.000Z",
+    targetDate: "2026-09-30T00:00:00.000Z",
+    timeframe: "Q3 2026",
+    health: "onTrack",
+    parentInitiativeId: null,
+    parentInitiative: null,
+    childInitiatives: [],
     projectCount: 2,
     completedProjectCount: 1,
     createdAt: "2026-04-01T00:00:00.000Z",
@@ -54,6 +64,9 @@ const mockInitiativeData = {
       status: "started",
     },
   ],
+  workspaceMembers: [{ id: "user-1", name: "Ashley", image: null }],
+  workspaceTeams: [{ id: "team-1", name: "Growth", key: "GRO", icon: "🚀" }],
+  availableParentInitiatives: [],
   updates: [
     {
       id: "up-1",
@@ -62,6 +75,16 @@ const mockInitiativeData = {
       actorName: "Ashley",
       actorImage: null,
       createdAt: "2026-04-25T10:00:00.000Z",
+    },
+  ],
+  activity: [
+    {
+      id: "act-1",
+      type: "property_change",
+      message: "Status changed from planned to active",
+      actorName: "Ashley",
+      actorImage: null,
+      createdAt: "2026-04-25T09:00:00.000Z",
     },
   ],
 };
@@ -85,9 +108,16 @@ describe("InitiativeDetailPage", () => {
 
     expect(await screen.findByText("Growth")).toBeInTheDocument();
     expect(screen.getByText("Scale things")).toBeInTheDocument();
+    expect(screen.getByLabelText("Initiative owner")).toHaveValue("user-1");
+    expect(screen.getByLabelText("Initiative target date")).toHaveValue(
+      "2026-09-30",
+    );
     expect(screen.getByText("1 / 2 projects completed")).toBeInTheDocument();
     expect(screen.getByText("Referrals")).toBeInTheDocument();
     expect(screen.getByText("Doing well")).toBeInTheDocument();
+    expect(
+      screen.getByText("Status changed from planned to active"),
+    ).toBeInTheDocument();
   });
 
   it("links a new project", async () => {

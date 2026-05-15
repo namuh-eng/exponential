@@ -195,7 +195,7 @@ describe("InitiativeProjectList", () => {
     expect(screen.getByText("50%")).toBeTruthy();
   });
 
-  it("links to the project slug", async () => {
+  it("links to the valid project overview route", async () => {
     const { InitiativeProjectList } = await import(
       "@/components/initiative-project-list"
     );
@@ -215,6 +215,6 @@ describe("InitiativeProjectList", () => {
       screen
         .getByRole("link", { name: /Slugged Project/i })
         .getAttribute("href"),
-    ).toBe("/project/slugged-project");
+    ).toBe("/project/slugged-project/overview");
   });
 });

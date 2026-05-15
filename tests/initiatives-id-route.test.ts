@@ -29,12 +29,24 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/initiative-detail", () => ({
   readInitiativeSettings: vi.fn((settings: unknown) => ({
     updates: (settings as { updates?: unknown[] })?.updates ?? [],
+    activity: (settings as { activity?: unknown[] })?.activity ?? [],
   })),
-  makeInitiativeUpdateEntry: vi.fn((health: string, body: string) => ({
+  makeInitiativeUpdateEntry: vi.fn(({ health, body }) => ({
     health,
     body,
     createdAt: new Date().toISOString(),
   })),
+  makeInitiativeActivityEntry: vi.fn(({ type, message }) => ({
+    id: "activity-1",
+    type,
+    message,
+    actorName: "Test User",
+    actorImage: null,
+    createdAt: new Date().toISOString(),
+  })),
+  isInitiativeHealth: vi.fn((value: unknown) =>
+    ["unknown", "onTrack", "atRisk", "offTrack"].includes(String(value)),
+  ),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -77,6 +89,52 @@ vi.mock("@/lib/db", () => ({
             where: vi.fn().mockReturnValue({
               orderBy: vi.fn().mockResolvedValue([]),
             }),
+          }),
+        };
+      }
+
+      if (selection && "key" in selection && "icon" in selection) {
+        return {
+          from: vi.fn().mockReturnValue({
+            innerJoin: vi.fn().mockReturnValue({
+              where: vi.fn().mockResolvedValue([]),
+            }),
+            where: vi.fn().mockResolvedValue([]),
+          }),
+        };
+      }
+
+      if (selection && "name" in selection && "image" in selection) {
+        return {
+          from: vi.fn().mockReturnValue({
+            innerJoin: vi.fn().mockReturnValue({
+              where: vi
+                .fn()
+                .mockResolvedValue([
+                  { id: "user-1", name: "Test User", image: null },
+                ]),
+            }),
+            where: vi.fn().mockReturnValue({
+              limit: vi
+                .fn()
+                .mockResolvedValue([
+                  { id: "user-1", name: "Test User", image: null },
+                ]),
+            }),
+          }),
+        };
+      }
+
+      if (selection && "name" in selection) {
+        const whereResult = Promise.resolve([]) as unknown as Promise<
+          unknown[]
+        > & {
+          limit: ReturnType<typeof vi.fn>;
+        };
+        whereResult.limit = vi.fn().mockResolvedValue([]);
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue(whereResult),
           }),
         };
       }
@@ -190,6 +248,12 @@ describe("initiative detail route", () => {
         name: "Growth",
         description: "Details",
         status: "active",
+        ownerId: "user-1",
+        startDate: new Date("2026-04-01T00:00:00.000Z"),
+        targetDate: new Date("2026-09-30T00:00:00.000Z"),
+        timeframe: "Q3 2026",
+        health: "onTrack",
+        parentInitiativeId: null,
         settings: { updates: [] },
         createdAt: new Date("2026-04-01T00:00:00.000Z"),
         updatedAt: new Date("2026-04-01T00:00:00.000Z"),
@@ -239,7 +303,17 @@ describe("initiative detail route", () => {
         name: "Growth",
         description: "Details",
         status: "active",
+        ownerId: "user-1",
+        startDate: "2026-04-01T00:00:00.000Z",
+        targetDate: "2026-09-30T00:00:00.000Z",
+        timeframe: "Q3 2026",
+        health: "onTrack",
+        parentInitiativeId: null,
         settings: { updates: [] },
+        owner: { id: "user-1", name: "Test User", image: null },
+        teams: [],
+        parentInitiative: null,
+        childInitiatives: [],
         projectCount: 1,
         completedProjectCount: 1,
         createdAt: "2026-04-01T00:00:00.000Z",
@@ -257,7 +331,11 @@ describe("initiative detail route", () => {
         },
       ],
       availableProjects: [],
+      workspaceMembers: [{ id: "user-1", name: "Test User", image: null }],
+      workspaceTeams: [],
+      availableParentInitiatives: [],
       updates: [],
+      activity: [],
     });
   });
 

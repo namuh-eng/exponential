@@ -731,6 +731,13 @@ export const initiative = pgTable(
     name: varchar("name", { length: 255 }).notNull(),
     description: text("description"),
     status: initiativeStatus("status").notNull().default("planned"),
+    ownerId: text("owner_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    startDate: timestamp("start_date"),
+    targetDate: timestamp("target_date"),
+    timeframe: varchar("timeframe", { length: 120 }),
+    health: varchar("health", { length: 20 }).notNull().default("unknown"),
     settings: jsonb("settings").default({}),
     workspaceId: uuid("workspace_id")
       .notNull()
@@ -740,6 +747,25 @@ export const initiative = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [index("initiative_workspace_idx").on(t.workspaceId)],
+);
+
+// ─── Initiative Team (many-to-many) ──────────────────────────────────
+
+export const initiativeTeam = pgTable(
+  "initiative_team",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    initiativeId: uuid("initiative_id")
+      .notNull()
+      .references(() => initiative.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => team.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    uniqueIndex("initiative_team_idx").on(t.initiativeId, t.teamId),
+    index("initiative_team_initiative_idx").on(t.initiativeId),
+  ],
 );
 
 // ─── Initiative Project (many-to-many) ───────────────────────────────
@@ -1092,13 +1118,26 @@ export const initiativeRelations = relations(initiative, ({ one, many }) => ({
     fields: [initiative.workspaceId],
     references: [workspace.id],
   }),
+  owner: one(user, { fields: [initiative.ownerId], references: [user.id] }),
   parentInitiative: one(initiative, {
     fields: [initiative.parentInitiativeId],
     references: [initiative.id],
     relationName: "parentInitiative",
   }),
   childInitiatives: many(initiative, { relationName: "parentInitiative" }),
+  teams: many(initiativeTeam),
   projects: many(initiativeProject),
+}));
+
+export const initiativeTeamRelations = relations(initiativeTeam, ({ one }) => ({
+  initiative: one(initiative, {
+    fields: [initiativeTeam.initiativeId],
+    references: [initiative.id],
+  }),
+  team: one(team, {
+    fields: [initiativeTeam.teamId],
+    references: [team.id],
+  }),
 }));
 
 export const initiativeProjectRelations = relations(

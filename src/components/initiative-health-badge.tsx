@@ -1,9 +1,15 @@
-import type { InitiativeUpdateHealth } from "@/lib/initiative-detail";
+import type { InitiativeHealth } from "@/lib/initiative-detail";
 
 const healthConfig: Record<
-  InitiativeUpdateHealth,
+  InitiativeHealth,
   { label: string; bgColor: string; textColor: string; dotColor: string }
 > = {
+  unknown: {
+    label: "Unknown",
+    bgColor: "bg-neutral-400/10",
+    textColor: "text-[var(--color-text-tertiary)]",
+    dotColor: "bg-neutral-400",
+  },
   onTrack: {
     label: "On track",
     bgColor: "bg-emerald-400/10",
@@ -27,7 +33,7 @@ const healthConfig: Record<
 export function InitiativeHealthBadge({
   health,
 }: {
-  health: InitiativeUpdateHealth;
+  health: InitiativeHealth;
 }) {
   const config = healthConfig[health];
 
