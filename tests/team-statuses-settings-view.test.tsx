@@ -233,6 +233,129 @@ describe("TeamIssueStatusesPage", () => {
     );
   });
 
+  it("deletes an unused non-default status without requiring replacement", async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "DELETE") {
+          return {
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                statuses: { ...mockStatuses, backlog: [] },
+                duplicateStatusId: "s6",
+              }),
+          } as Response;
+        }
+
+        return {
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              statuses: mockStatuses,
+              duplicateStatusId: "s6",
+            }),
+        } as Response;
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<TeamIssueStatusesPage />);
+    await screen.findByText("Issue statuses");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[1]);
+    expect(
+      screen.queryByLabelText("Move existing issues to"),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => screen.getByText("Status deleted."));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/teams/TEAM/statuses",
+      expect.objectContaining({
+        method: "DELETE",
+        body: JSON.stringify({ id: "s2" }),
+      }),
+    );
+  });
+
+  it("requires a replacement status before deleting a used non-default status", async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "DELETE") {
+          return {
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                statuses: { ...mockStatuses, triage: [] },
+                duplicateStatusId: "s6",
+              }),
+          } as Response;
+        }
+
+        return {
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              statuses: mockStatuses,
+              duplicateStatusId: "s6",
+            }),
+        } as Response;
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<TeamIssueStatusesPage />);
+    await screen.findByText("Issue statuses");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]);
+
+    expect(
+      screen.getByText(
+        "Deleting this status will move 5 issues to another status.",
+      ),
+    ).toBeInTheDocument();
+    const replacementSelect = screen.getByLabelText("Move existing issues to");
+    expect(replacementSelect).toBeInTheDocument();
+    const replacementOptionLabels = Array.from(
+      (replacementSelect as HTMLSelectElement).options,
+    ).map((option) => option.textContent);
+    expect(replacementOptionLabels).not.toContain("Triage");
+    expect(replacementOptionLabels).toContain("Backlog");
+
+    const deleteButton = screen.getByRole("button", { name: "Delete" });
+    expect(deleteButton).toBeDisabled();
+
+    fireEvent.change(replacementSelect, { target: { value: "s2" } });
+    expect(deleteButton).not.toBeDisabled();
+    fireEvent.click(deleteButton);
+
+    await waitFor(() => screen.getByText("Status deleted."));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/teams/TEAM/statuses",
+      expect.objectContaining({
+        method: "DELETE",
+        body: JSON.stringify({ id: "s1", replacementStatusId: "s2" }),
+      }),
+    );
+  });
+
+  it("keeps default status deletion blocked", async () => {
+    render(<TeamIssueStatusesPage />);
+    await screen.findByText("Issue statuses");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[2]);
+
+    expect(
+      screen.getByText(
+        "Default statuses cannot be deleted. Choose another default before removing this status.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
+    expect(
+      screen.queryByLabelText("Move existing issues to"),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders duplicate issue status selector with all statuses", async () => {
     render(<TeamIssueStatusesPage />);
     await waitFor(() => screen.getByText("Duplicate issue status"));

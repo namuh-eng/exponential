@@ -63,6 +63,7 @@ const createIssueOptionsResponse = {
 describe("Sidebar", () => {
   afterEach(() => {
     cleanup();
+    mockPathname = "/inbox";
   });
 
   it("renders workspace name", () => {
@@ -131,9 +132,10 @@ describe("Sidebar", () => {
     render(<Sidebar teamKey="ENG" />);
     expect(screen.getByText("Triage")).toBeDefined();
     expect(screen.getByText("Issues")).toBeDefined();
+    expect(screen.getByText("Insights")).toBeDefined();
   });
 
-  it("links team Projects and Views to team-scoped pages", () => {
+  it("links team Projects, Views, and Insights to team-scoped pages", () => {
     render(<Sidebar teamName="Engineering" teamKey="ENG" />);
 
     expect(
@@ -146,6 +148,29 @@ describe("Sidebar", () => {
         .getAllByRole("link", { name: /Views/i })
         .some((link) => link.getAttribute("href") === "/team/ENG/views"),
     ).toBe(true);
+    expect(
+      screen
+        .getAllByRole("link", { name: /Insights/i })
+        .some((link) => link.getAttribute("href") === "/team/ENG/analytics"),
+    ).toBe(true);
+  });
+
+  it("preserves workspace slug for team Insights and marks it active", () => {
+    mockPathname = "/foreverbrowsing/team/ENG/analytics";
+    render(
+      <Sidebar
+        teamName="Engineering"
+        teamKey="ENG"
+        workspaceSlug="foreverbrowsing"
+      />,
+    );
+
+    const insightsLink = screen.getByRole("link", { name: /Insights/i });
+    expect(insightsLink).toHaveAttribute(
+      "href",
+      "/foreverbrowsing/team/ENG/analytics",
+    );
+    expect(insightsLink).toHaveClass("bg-[var(--color-surface-active)]");
   });
 
   it("renders Initiatives and Cycles in Try section", () => {

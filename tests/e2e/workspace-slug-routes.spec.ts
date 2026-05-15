@@ -47,6 +47,32 @@ test.describe("Workspace slug routes", () => {
       page.getByText("This page could not be found"),
     ).not.toBeVisible();
 
+    const insightsLink = page.getByRole("link", { name: "Insights" });
+    await expect(insightsLink).toHaveAttribute(
+      "href",
+      `/${workspaceSlug}/team/${teamKey}/analytics`,
+    );
+    await insightsLink.click();
+    await expect(page).toHaveURL(
+      new RegExp(`/${workspaceSlug}/team/${teamKey}/analytics$`),
+    );
+    await expect(page.getByText("Linear Insights")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /Analytics/ }),
+    ).toBeVisible();
+
+    await page.goto(`/${workspaceSlug}/team/${teamKey}/analytics`);
+    await expect(page.getByText("Linear Insights")).toBeVisible();
+    await expect(
+      page.getByText("This page could not be found"),
+    ).not.toBeVisible();
+
+    await page.goto(`/${workspaceSlug}/team/${teamKey}/insights`);
+    await expect(page.getByText("Linear Insights")).toBeVisible();
+    await expect(
+      page.getByText("This page could not be found"),
+    ).not.toBeVisible();
+
     await page.getByRole("link", { name: "Inbox" }).click();
     await expect(page).toHaveURL(new RegExp(`/${workspaceSlug}/inbox$`));
 

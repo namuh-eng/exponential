@@ -191,6 +191,11 @@ describe("TeamAnalyticsPage component", () => {
     stubFetch(emptyData);
     const clipboard = { writeText: vi.fn().mockResolvedValue(undefined) };
     vi.stubGlobal("navigator", { clipboard });
+    window.history.pushState(
+      {},
+      "",
+      "/foreverbrowsing/team/EMPTY/analytics?range=30d",
+    );
 
     render(<TeamAnalyticsPage />);
 
@@ -203,7 +208,9 @@ describe("TeamAnalyticsPage component", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy share link" }));
     await waitFor(() =>
       expect(clipboard.writeText).toHaveBeenCalledWith(
-        expect.stringContaining("measure=issue_count"),
+        expect.stringContaining(
+          "/foreverbrowsing/team/EMPTY/analytics?measure=issue_count",
+        ),
       ),
     );
 

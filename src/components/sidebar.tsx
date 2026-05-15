@@ -69,6 +69,15 @@ function isTeamViewsRoute(pathname: string, teamKey: string) {
   );
 }
 
+function isTeamAnalyticsRoute(pathname: string, teamKey: string) {
+  return (
+    pathname === `/team/${teamKey}/analytics` ||
+    pathname.startsWith(`/team/${teamKey}/analytics/`) ||
+    pathname === `/team/${teamKey}/insights` ||
+    pathname.startsWith(`/team/${teamKey}/insights/`)
+  );
+}
+
 function getPathTeamKey(pathname: string) {
   const teamMatch = pathname.match(/^\/team\/([^/]+)/);
   if (teamMatch) {
@@ -807,7 +816,8 @@ export function Sidebar({
                 pathname === `/team/${team.key}/triage` ||
                 isTeamIssuesRoute(pathname, team.key) ||
                 isTeamProjectsRoute(pathname, team.key) ||
-                isTeamViewsRoute(pathname, team.key);
+                isTeamViewsRoute(pathname, team.key) ||
+                isTeamAnalyticsRoute(pathname, team.key);
 
               return (
                 <div key={team.key}>
@@ -937,6 +947,31 @@ export function Sidebar({
                           >
                             <path d="M5 12s2.545-5 7-5c4.454 0 7 5 7 5s-2.546 5-7 5c-4.455 0-7-5-7-5z" />
                             <path d="M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" />
+                          </svg>
+                        }
+                      />
+                      <SidebarLink
+                        href={`/team/${team.key}/analytics`}
+                        label="Insights"
+                        active={isTeamAnalyticsRoute(pathname, team.key)}
+                        indent
+                        icon={
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            role="img"
+                            aria-label="Team Insights icon"
+                          >
+                            <path d="M3 3v18h18" />
+                            <path d="m7 14 3-3 3 2 5-6" />
+                            <path d="M18 7h-4" />
+                            <path d="M18 7v4" />
                           </svg>
                         }
                       />

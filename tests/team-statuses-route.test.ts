@@ -26,6 +26,12 @@ const TEST_TEAM_ID = "16000000-0000-0000-0000-000000000003";
 const TEST_STATE_ID = "16000000-0000-0000-0000-000000000004";
 const TEST_STATE_2_ID = "16000000-0000-0000-0000-000000000005";
 const TEST_ISSUE_ID = "16000000-0000-0000-0000-000000000006";
+const TEST_DELETE_STATE_ID = "16000000-0000-0000-0000-000000000007";
+const TEST_REPLACEMENT_STATE_ID = "16000000-0000-0000-0000-000000000008";
+const TEST_DELETE_ISSUE_ID = "16000000-0000-0000-0000-000000000009";
+const TEST_OTHER_TEAM_ID = "16000000-0000-0000-0000-000000000010";
+const TEST_OTHER_STATE_ID = "16000000-0000-0000-0000-000000000011";
+const TEST_UNUSED_STATE_ID = "16000000-0000-0000-0000-000000000012";
 
 // Mock next/headers
 vi.mock("next/headers", () => ({
@@ -77,7 +83,11 @@ describe("Team Statuses API Route", () => {
     await db.delete(issue).where(eq(issue.teamId, TEST_TEAM_ID));
     await db
       .delete(workflowState)
+      .where(eq(workflowState.teamId, TEST_OTHER_TEAM_ID));
+    await db
+      .delete(workflowState)
       .where(eq(workflowState.teamId, TEST_TEAM_ID));
+    await db.delete(team).where(eq(team.id, TEST_OTHER_TEAM_ID));
     await db.delete(team).where(eq(team.id, TEST_TEAM_ID));
     await db.delete(member).where(eq(member.userId, TEST_USER_ID));
     await db.delete(workspace).where(eq(workspace.id, TEST_WS_ID));
@@ -102,12 +112,20 @@ describe("Team Statuses API Route", () => {
       role: "admin",
     });
 
-    await db.insert(team).values({
-      id: TEST_TEAM_ID,
-      workspaceId: TEST_WS_ID,
-      name: "Status Team",
-      key: "STAT",
-    });
+    await db.insert(team).values([
+      {
+        id: TEST_TEAM_ID,
+        workspaceId: TEST_WS_ID,
+        name: "Status Team",
+        key: "STAT",
+      },
+      {
+        id: TEST_OTHER_TEAM_ID,
+        workspaceId: TEST_WS_ID,
+        name: "Other Status Team",
+        key: "OST",
+      },
+    ]);
 
     await db.insert(workflowState).values([
       {
@@ -124,6 +142,13 @@ describe("Team Statuses API Route", () => {
         name: "Later",
         category: "unstarted",
         position: 2,
+      },
+      {
+        id: TEST_OTHER_STATE_ID,
+        teamId: TEST_OTHER_TEAM_ID,
+        name: "Other team status",
+        category: "unstarted",
+        position: 1,
       },
     ]);
 
@@ -142,7 +167,11 @@ describe("Team Statuses API Route", () => {
     await db.delete(issue).where(eq(issue.teamId, TEST_TEAM_ID));
     await db
       .delete(workflowState)
+      .where(eq(workflowState.teamId, TEST_OTHER_TEAM_ID));
+    await db
+      .delete(workflowState)
       .where(eq(workflowState.teamId, TEST_TEAM_ID));
+    await db.delete(team).where(eq(team.id, TEST_OTHER_TEAM_ID));
     await db.delete(team).where(eq(team.id, TEST_TEAM_ID));
     await db.delete(member).where(eq(member.userId, TEST_USER_ID));
     await db.delete(workspace).where(eq(workspace.id, TEST_WS_ID));
@@ -272,6 +301,105 @@ describe("Team Statuses API Route", () => {
     expect(deleteRes.status).toBe(400);
     await expect(deleteRes.json()).resolves.toEqual({
       error: "Statuses with issues require a replacement status",
+    });
+  });
+
+  it("deletes unused statuses and reassigns issues to a same-team replacement before deleting used statuses", async () => {
+    await db.insert(workflowState).values([
+      {
+        id: TEST_UNUSED_STATE_ID,
+        teamId: TEST_TEAM_ID,
+        name: "Unused",
+        category: "started",
+        position: 10,
+      },
+      {
+        id: TEST_DELETE_STATE_ID,
+        teamId: TEST_TEAM_ID,
+        name: "Retire me",
+        category: "started",
+        position: 11,
+      },
+      {
+        id: TEST_REPLACEMENT_STATE_ID,
+        teamId: TEST_TEAM_ID,
+        name: "Move here",
+        category: "started",
+        position: 12,
+      },
+    ]);
+    await db.insert(issue).values({
+      id: TEST_DELETE_ISSUE_ID,
+      teamId: TEST_TEAM_ID,
+      stateId: TEST_DELETE_STATE_ID,
+      creatorId: TEST_USER_ID,
+      number: 2,
+      identifier: "STAT-2",
+      title: "Issue that should move",
+    });
+
+    const unusedDeleteRes = await DELETE(
+      new Request("http://localhost", {
+        method: "DELETE",
+        body: JSON.stringify({ id: TEST_UNUSED_STATE_ID }),
+      }),
+      { params: Promise.resolve({ key: "STAT" }) },
+    );
+    expect(unusedDeleteRes.status).toBe(200);
+
+    const wrongTeamReplacementRes = await DELETE(
+      new Request("http://localhost", {
+        method: "DELETE",
+        body: JSON.stringify({
+          id: TEST_DELETE_STATE_ID,
+          replacementStatusId: TEST_OTHER_STATE_ID,
+        }),
+      }),
+      { params: Promise.resolve({ key: "STAT" }) },
+    );
+    expect(wrongTeamReplacementRes.status).toBe(400);
+    await expect(wrongTeamReplacementRes.json()).resolves.toEqual({
+      error: "Replacement status must exist on this team",
+    });
+
+    const usedDeleteRes = await DELETE(
+      new Request("http://localhost", {
+        method: "DELETE",
+        body: JSON.stringify({
+          id: TEST_DELETE_STATE_ID,
+          replacementStatusId: TEST_REPLACEMENT_STATE_ID,
+        }),
+      }),
+      { params: Promise.resolve({ key: "STAT" }) },
+    );
+    expect(usedDeleteRes.status).toBe(200);
+    const usedDeletePayload = await usedDeleteRes.json();
+    expect(
+      usedDeletePayload.statuses.started.map(
+        (status: { id: string }) => status.id,
+      ),
+    ).not.toContain(TEST_DELETE_STATE_ID);
+
+    const [movedIssue] = await db
+      .select({ stateId: issue.stateId })
+      .from(issue)
+      .where(eq(issue.id, TEST_DELETE_ISSUE_ID))
+      .limit(1);
+    expect(movedIssue.stateId).toBe(TEST_REPLACEMENT_STATE_ID);
+  });
+
+  it("blocks deleting default statuses", async () => {
+    const deleteDefaultRes = await DELETE(
+      new Request("http://localhost", {
+        method: "DELETE",
+        body: JSON.stringify({ id: TEST_STATE_ID }),
+      }),
+      { params: Promise.resolve({ key: "STAT" }) },
+    );
+
+    expect(deleteDefaultRes.status).toBe(400);
+    await expect(deleteDefaultRes.json()).resolves.toEqual({
+      error: "Default statuses cannot be deleted",
     });
   });
 
