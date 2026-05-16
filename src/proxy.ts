@@ -159,6 +159,21 @@ function getWorkspacePrefixedTeamViewsRoute(pathname: string) {
   return null;
 }
 
+function getWorkspacePrefixedTeamAnalyticsRoute(pathname: string) {
+  const segments = getPathSegments(pathname);
+
+  if (
+    isWorkspaceSlugSegment(segments[0]) &&
+    segments[1] === "team" &&
+    segments.length >= 4 &&
+    (segments[3] === "analytics" || segments[3] === "insights")
+  ) {
+    return { slug: decodeURIComponent(segments[0]) };
+  }
+
+  return null;
+}
+
 function getWorkspacePrefixedInitiativesRoute(pathname: string) {
   const segments = getPathSegments(pathname);
 
@@ -312,6 +327,16 @@ export async function proxy(request: NextRequest) {
     requestHeaders.set(
       "x-workspace-slug",
       workspacePrefixedTeamViewsRoute.slug,
+    );
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
+  const workspacePrefixedTeamAnalyticsRoute =
+    getWorkspacePrefixedTeamAnalyticsRoute(pathname);
+  if (workspacePrefixedTeamAnalyticsRoute) {
+    requestHeaders.set(
+      "x-workspace-slug",
+      workspacePrefixedTeamAnalyticsRoute.slug,
     );
     return NextResponse.next({ request: { headers: requestHeaders } });
   }
