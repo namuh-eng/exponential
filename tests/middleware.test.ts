@@ -263,6 +263,8 @@ describe("Auth proxy", () => {
     "/foreverbrowsing/team/ENG/views/projects",
     "/foreverbrowsing/initiatives",
     "/foreverbrowsing/initiatives/init-1",
+    "/foreverbrowsing/roadmap",
+    "/foreverbrowsing/roadmap/init-1",
   ])(
     "lets explicit workspace-prefixed route %s render canonically",
     async (path) => {

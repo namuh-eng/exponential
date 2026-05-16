@@ -29,6 +29,12 @@ test.describe("Workspace initiative routes", () => {
     expect(initiativeResponse.status()).toBe(201);
     const initiative = (await initiativeResponse.json()) as { id: string };
 
+    await page.goto(`/${workspaceSlug}/roadmap`);
+    await expect(page).toHaveURL(new RegExp(`/${workspaceSlug}/roadmap$`));
+    await expect(
+      page.getByRole("heading", { name: "Initiatives" }),
+    ).toBeVisible({ timeout: 15_000 });
+
     await page.goto(`/${workspaceSlug}/initiatives`);
     await expect(page).toHaveURL(new RegExp(`/${workspaceSlug}/initiatives$`));
     const row = page.getByRole("link", { name: new RegExp(initiativeName) });
@@ -36,6 +42,14 @@ test.describe("Workspace initiative routes", () => {
       "href",
       `/${workspaceSlug}/initiatives/${initiative.id}`,
     );
+
+    await page.goto(`/${workspaceSlug}/roadmap/${initiative.id}`);
+    await expect(page).toHaveURL(
+      new RegExp(`/${workspaceSlug}/roadmap/${initiative.id}$`),
+    );
+    await expect(
+      page.getByRole("heading", { name: initiativeName }),
+    ).toBeVisible({ timeout: 15_000 });
 
     await page.goto(`/${workspaceSlug}/initiatives/${initiative.id}`);
     await expect(page).toHaveURL(
