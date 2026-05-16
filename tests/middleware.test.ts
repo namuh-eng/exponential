@@ -78,6 +78,8 @@ describe("Auth proxy", () => {
     "/foreverbrowsing/team/ENG/all",
     "/foreverbrowsing/projects",
     "/foreverbrowsing/team/ENG/views",
+    "/foreverbrowsing/team/ENG/analytics",
+    "/foreverbrowsing/team/ENG/insights",
   ])(
     "rewrites unauthenticated workspace deep link %s to login without changing the browser URL",
     async (path) => {
@@ -261,6 +263,10 @@ describe("Auth proxy", () => {
     "/foreverbrowsing/team/ENG/views",
     "/foreverbrowsing/team/ENG/views/issues",
     "/foreverbrowsing/team/ENG/views/projects",
+    "/foreverbrowsing/team/ENG/analytics",
+    "/foreverbrowsing/team/ENG/analytics/drilldown",
+    "/foreverbrowsing/team/ENG/insights",
+    "/foreverbrowsing/team/ENG/insights/drilldown",
     "/foreverbrowsing/initiatives",
     "/foreverbrowsing/initiatives/init-1",
   ])(
@@ -318,6 +324,8 @@ describe("Auth proxy", () => {
     "/views",
     "/views/issues",
     "/views/projects",
+    "/analytics",
+    "/insights",
   ])(
     "redirects legacy canonical ENG team%s routes to workspace-scoped routes",
     async (teamRoute) => {
