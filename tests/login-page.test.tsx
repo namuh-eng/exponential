@@ -737,7 +737,7 @@ describe("Login page", () => {
     expect(screen.getByText("Sign up")).toBeDefined();
     const learnMore = screen.getByText("learn more");
     expect(learnMore).toBeDefined();
-    expect(learnMore.getAttribute("href")).toBe("https://linear.app/homepage");
+    expect(learnMore.getAttribute("href")).toBe("/homepage");
     expect(screen.queryByText("Terms of Service")).toBeNull();
     expect(screen.queryByText("Privacy Policy")).toBeNull();
   });

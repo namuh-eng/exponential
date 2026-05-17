@@ -213,12 +213,12 @@ function FooterLinks({ mode }: { mode: AuthMode }) {
         Sign up
       </Link>{" "}
       or{" "}
-      <a
-        href="https://linear.app/homepage"
+      <Link
+        href="/homepage"
         className="font-medium text-[var(--auth-link)] transition-opacity hover:opacity-80"
       >
         learn more
-      </a>
+      </Link>
     </p>
   );
 }
