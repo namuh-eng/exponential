@@ -15,13 +15,13 @@ test.describe("Initiatives settings", () => {
     expect(workspaceResponse.status()).toBe(201);
 
     await page.goto(`/${workspaceSlug}/settings`);
-    await page.getByRole("link", { name: "Initiatives" }).click();
+    await page.getByRole("link", { name: "Initiatives", exact: true }).click();
 
     await expect(page).toHaveURL(
       new RegExp(`/${workspaceSlug}/settings/initiatives$`),
     );
     await expect(
-      page.getByRole("heading", { name: "Initiatives" }),
+      page.getByRole("heading", { name: "Initiatives", exact: true }),
     ).toBeVisible();
     await expect(page.getByText("Feature settings")).toBeVisible();
     await expect(
@@ -30,7 +30,7 @@ test.describe("Initiatives settings", () => {
 
     await page.goto("/settings/initiatives");
     await expect(
-      page.getByRole("heading", { name: "Initiatives" }),
+      page.getByRole("heading", { name: "Initiatives", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByText("This page could not be found"),

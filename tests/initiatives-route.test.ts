@@ -4,6 +4,7 @@ const getSessionMock = vi.fn();
 const resolveRequestWorkspaceIdMock = vi.fn();
 const membershipsLimitMock = vi.fn();
 const initiativesWhereMock = vi.fn();
+const workspaceSettingsLimitMock = vi.fn();
 const projectsInnerJoinMock = vi.fn();
 const workspaceMembersWhereMock = vi.fn();
 const workspaceTeamsWhereMock = vi.fn();
@@ -27,6 +28,16 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/db", () => ({
   db: {
     select: vi.fn((selection?: Record<string, unknown>) => {
+      if (selection && "settings" in selection && !("id" in selection)) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: workspaceSettingsLimitMock,
+            }),
+          }),
+        };
+      }
+
       if (selection && "workspaceId" in selection) {
         return {
           from: vi.fn().mockReturnValue({
@@ -108,6 +119,7 @@ describe("initiatives collection route", () => {
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
     resolveRequestWorkspaceIdMock.mockResolvedValue("workspace-1");
     membershipsLimitMock.mockResolvedValue([{ workspaceId: "workspace-1" }]);
+    workspaceSettingsLimitMock.mockResolvedValue([{ settings: {} }]);
     workspaceMembersWhereMock.mockResolvedValue([
       { id: "user-1", name: "Ashley", image: null },
     ]);
@@ -240,6 +252,46 @@ describe("initiatives collection route", () => {
       workspaceTeams: [
         { id: "team-1", name: "Engineering", key: "ENG", icon: "🛠" },
       ],
+      initiativesSettings: {
+        enabled: true,
+        projectRollups: true,
+        visibility: "workspace",
+        roadmapMode: "all",
+      },
+    });
+  });
+
+  it("returns an empty list and settings when initiatives are disabled", async () => {
+    workspaceSettingsLimitMock.mockResolvedValue([
+      { settings: { features: { initiatives: { enabled: false } } } },
+    ]);
+    const { GET } = await import("@/app/api/initiatives/route");
+
+    const response = await GET(new Request("http://localhost/api/initiatives"));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      initiatives: [],
+      initiativesSettings: { enabled: false },
+    });
+  });
+
+  it("rejects creation when initiatives are disabled", async () => {
+    workspaceSettingsLimitMock.mockResolvedValue([
+      { settings: { features: { initiatives: { enabled: false } } } },
+    ]);
+    const { POST } = await import("@/app/api/initiatives/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/initiatives", {
+        method: "POST",
+        body: JSON.stringify({ name: "Disabled initiative" }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Initiatives are disabled for this workspace",
     });
   });
 

@@ -233,4 +233,26 @@ describe("InitiativesPage", () => {
 
     expect(await screen.findByText("No initiatives")).toBeInTheDocument();
   });
+
+  it("reflects disabled initiative project rollups in list controls and rows", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...mockInitiativesData,
+        initiativesSettings: { enabled: true, projectRollups: false },
+        initiatives: mockInitiativesData.initiatives.map((initiative) => ({
+          ...initiative,
+          activeProjectHealthRollup: null,
+        })),
+      }),
+    } as Response);
+
+    render(<InitiativesPage />);
+
+    expect(await screen.findByText("Active Growth")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Filter by active project state"),
+    ).toBeDisabled();
+    expect(screen.getAllByText("Rollups disabled")).toHaveLength(2);
+  });
 });
