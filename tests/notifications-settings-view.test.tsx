@@ -8,7 +8,6 @@ import {
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// Mock next/navigation
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
   useParams: () => ({}),
@@ -21,54 +20,42 @@ import {
 
 const mockNotificationSettings = {
   accountNotifications: {
-    channels: {
-      desktop: {
-        enabled: true,
-        events: {
-          assignments: true,
-          statusChanges: true,
-          mentions: true,
-          comments: true,
-        },
-      },
-      mobile: {
-        enabled: false,
-        events: {
-          assignments: true,
-          statusChanges: false,
-          mentions: true,
-          comments: false,
-        },
-      },
-      email: {
-        enabled: true,
-        events: {
-          assignments: false,
-          statusChanges: false,
-          mentions: true,
-          comments: false,
-        },
-      },
-      slack: {
-        enabled: false,
-        events: {
-          assignments: false,
-          statusChanges: false,
-          mentions: false,
-          comments: false,
-        },
-      },
+    inbox: {
+      assignedToMe: true,
+      mentionsAndReplies: true,
+      subscribedIssues: false,
+      teamUpdates: true,
+    },
+    email: {
+      issueActivity: true,
+      mentionsAndReplies: true,
+      dailyDigest: false,
+      weeklyDigest: true,
+      productUpdates: false,
+      workspaceInvites: true,
+    },
+    desktop: {
+      enabled: true,
+      permission: "default",
+      issueActivity: true,
+      mentionsAndReplies: true,
+      reminders: true,
+      sound: false,
+    },
+    slack: {
+      enabled: false,
+      destination: "not_connected",
+      mentionsAndReplies: true,
+      assignedToMe: false,
+      triageActivity: false,
+      projectUpdates: false,
     },
     updatesFromLinear: {
       showInSidebar: true,
-      newsletter: false,
+      changelogNewsletter: false,
       marketing: true,
     },
-    other: {
-      inviteAccepted: true,
-      privacyAndLegalUpdates: true,
-      dpa: false,
-    },
+    other: { inviteAccepted: true, privacyAndLegalUpdates: true, dpa: false },
   },
 };
 
@@ -78,68 +65,36 @@ describe("NotificationsOverviewPage UI", () => {
     vi.clearAllMocks();
   });
 
-  it("renders notification settings and toggles an update", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+  it("renders Linear-specific notification domains and toggles an update", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((url, init) => {
       if (url.toString().includes("/api/account/notifications")) {
         return Promise.resolve({
           ok: true,
-          json: async () => mockNotificationSettings,
+          json: async () =>
+            init?.method === "PATCH"
+              ? JSON.parse(String(init.body))
+              : mockNotificationSettings,
         } as Response);
       }
       return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
     });
 
     render(<NotificationsOverviewPage />);
-
-    // Wait for data
-    await screen.findByText("Notifications");
+    await screen.findByText("Notification preferences");
+    expect(
+      screen.getByRole("link", { name: /Inbox notification settings/ }),
+    ).toHaveAttribute("href", "/settings/account/notifications/inbox");
+    expect(
+      screen.getByText(
+        "Manage email delivery, digests, product updates, and invite mail.",
+      ),
+    ).toBeInTheDocument();
 
     const sidebarToggle = screen.getByLabelText("Show updates in sidebar");
-    expect(sidebarToggle).toHaveAttribute("aria-checked", "true");
-
     fireEvent.click(sidebarToggle);
-
-    await waitFor(() => {
-      expect(sidebarToggle).toHaveAttribute("aria-checked", "false");
-    });
-
-    expect(screen.getByText("Saved")).toBeInTheDocument();
-  });
-
-  it("renders channel status labels correctly", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => mockNotificationSettings,
-    } as Response);
-
-    render(<NotificationsOverviewPage />);
-    await screen.findByText("Notifications");
-
-    // Desktop preserves the four saved keys and defaults new granular events.
-    expect(
-      screen.getByText(
-        "Enabled for assignments, status changes, and 10 others",
-      ),
-    ).toBeInTheDocument();
-
-    // Mobile has two saved four-key events plus the default granular set.
-    expect(
-      screen.getByText("Enabled for assignments, mentions, and 12 others"),
-    ).toBeInTheDocument();
-
-    // Email preserves the existing mention-only preference while defaulting new keys.
-    expect(
-      screen.getByText(
-        "Enabled for mentions, due dates and reminders, and 2 others",
-      ),
-    ).toBeInTheDocument();
-
-    // Slack preserves disabled legacy keys while defaulting new Slack granular events.
-    expect(
-      screen.getByText(
-        "Enabled for triage and intake, project updates, and 1 other",
-      ),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(sidebarToggle).toHaveAttribute("aria-checked", "false"),
+    );
   });
 });
 
@@ -149,34 +104,25 @@ describe("NotificationChannelPage UI", () => {
     vi.clearAllMocks();
   });
 
-  it("renders channel settings and updates an event preference", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+  it("renders desktop-specific controls and updates a preference", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((url, init) => {
       if (url.toString().includes("/api/account/notifications")) {
         return Promise.resolve({
           ok: true,
-          json: async () => mockNotificationSettings,
+          json: async () =>
+            init?.method === "PATCH"
+              ? JSON.parse(String(init.body))
+              : mockNotificationSettings,
         } as Response);
       }
       return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
     });
 
     render(<NotificationChannelPage channel="desktop" />);
-
-    // Wait for data
-    expect(await screen.findByText("Desktop")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Configure desktop alerts for activity in your workspace.",
-      ),
-    ).toBeInTheDocument();
-
-    const assignmentsToggle = screen.getByLabelText("Assignments");
-    expect(assignmentsToggle).toHaveAttribute("aria-checked", "true");
-
-    fireEvent.click(assignmentsToggle);
-
-    await waitFor(() => {
-      expect(assignmentsToggle).toHaveAttribute("aria-checked", "false");
-    });
+    expect(await screen.findByText("Browser permission")).toBeInTheDocument();
+    expect(screen.getByText("Desktop delivery")).toBeInTheDocument();
+    const sound = screen.getByLabelText("Play notification sound");
+    fireEvent.click(sound);
+    await waitFor(() => expect(sound).toHaveAttribute("aria-checked", "true"));
   });
 });

@@ -1,51 +1,94 @@
-export const ACCOUNT_NOTIFICATION_CHANNELS = [
+export const ACCOUNT_NOTIFICATION_DOMAINS = [
+  "inbox",
+  "email",
+  "desktop",
+  "slack",
+] as const;
+export const LEGACY_ACCOUNT_NOTIFICATION_CHANNELS = [
   "desktop",
   "mobile",
   "email",
   "slack",
 ] as const;
 
+export type AccountNotificationDomainKey =
+  (typeof ACCOUNT_NOTIFICATION_DOMAINS)[number];
+export type AccountNotificationChannelKey = AccountNotificationDomainKey;
+
+export const ACCOUNT_NOTIFICATION_CHANNELS =
+  LEGACY_ACCOUNT_NOTIFICATION_CHANNELS;
 export const ACCOUNT_NOTIFICATION_EVENTS = [
   "assignments",
   "statusChanges",
   "mentions",
   "comments",
-  "priorityChanges",
   "dueDates",
   "relations",
   "triage",
   "projectUpdates",
-  "cycleUpdates",
-  "initiativeUpdates",
-  "documentActivity",
   "teamUpdates",
-  "workspaceAdmin",
-  "customerRequests",
   "productUpdates",
+  "workspaceAdmin",
 ] as const;
-
-export type AccountNotificationChannelKey =
-  (typeof ACCOUNT_NOTIFICATION_CHANNELS)[number];
 export type AccountNotificationEventKey =
   (typeof ACCOUNT_NOTIFICATION_EVENTS)[number];
 
-export type NotificationEventPreferences = Record<
+export type InboxNotificationPreferences = {
+  assignedToMe: boolean;
+  mentionsAndReplies: boolean;
+  subscribedIssues: boolean;
+  teamUpdates: boolean;
+};
+
+export type EmailNotificationPreferences = {
+  issueActivity: boolean;
+  mentionsAndReplies: boolean;
+  dailyDigest: boolean;
+  weeklyDigest: boolean;
+  productUpdates: boolean;
+  workspaceInvites: boolean;
+};
+
+export type DesktopNotificationPreferences = {
+  enabled: boolean;
+  permission: "default" | "granted" | "denied";
+  issueActivity: boolean;
+  mentionsAndReplies: boolean;
+  reminders: boolean;
+  sound: boolean;
+};
+
+export type SlackNotificationPreferences = {
+  enabled: boolean;
+  destination:
+    | "not_connected"
+    | "workspace"
+    | "team_channel"
+    | "direct_message";
+  mentionsAndReplies: boolean;
+  assignedToMe: boolean;
+  triageActivity: boolean;
+  projectUpdates: boolean;
+};
+
+export type LegacyNotificationEventPreferences = Record<
   AccountNotificationEventKey,
   boolean
 >;
-
-export type NotificationChannelPreferences = {
-  events: NotificationEventPreferences;
-};
+export type LegacyNotificationChannels = Record<
+  (typeof LEGACY_ACCOUNT_NOTIFICATION_CHANNELS)[number],
+  { events: LegacyNotificationEventPreferences }
+>;
 
 export type AccountNotificationSettings = {
-  channels: Record<
-    AccountNotificationChannelKey,
-    NotificationChannelPreferences
-  >;
+  channels: LegacyNotificationChannels;
+  inbox: InboxNotificationPreferences;
+  email: EmailNotificationPreferences;
+  desktop: DesktopNotificationPreferences;
+  slack: SlackNotificationPreferences;
   updatesFromLinear: {
     showInSidebar: boolean;
-    newsletter: boolean;
+    changelogNewsletter: boolean;
     marketing: boolean;
   };
   other: {
@@ -55,161 +98,77 @@ export type AccountNotificationSettings = {
   };
 };
 
-export type NotificationChannelPreferencesPatch = {
-  events?: Partial<NotificationEventPreferences>;
-};
+export type AccountNotificationSettingsPatch = Partial<{
+  inbox: Partial<InboxNotificationPreferences>;
+  email: Partial<EmailNotificationPreferences>;
+  desktop: Partial<DesktopNotificationPreferences>;
+  slack: Partial<SlackNotificationPreferences>;
+  updatesFromLinear: Partial<
+    AccountNotificationSettings["updatesFromLinear"]
+  > & {
+    newsletter?: boolean;
+  };
+  other: Partial<AccountNotificationSettings["other"]>;
+  channels: Partial<Record<string, { events?: Record<string, boolean> }>>;
+}>;
 
-export type AccountNotificationSettingsPatch = {
-  channels?: Partial<
-    Record<AccountNotificationChannelKey, NotificationChannelPreferencesPatch>
-  >;
-  updatesFromLinear?: Partial<AccountNotificationSettings["updatesFromLinear"]>;
-  other?: Partial<AccountNotificationSettings["other"]>;
-};
+const DEFAULT_LEGACY_EVENTS: LegacyNotificationEventPreferences =
+  Object.fromEntries(
+    ACCOUNT_NOTIFICATION_EVENTS.map((eventKey) => [eventKey, true]),
+  ) as LegacyNotificationEventPreferences;
 
-export const ACCOUNT_NOTIFICATION_EVENT_LABELS: Record<
-  AccountNotificationEventKey,
-  string
-> = {
-  assignments: "Assignments",
-  statusChanges: "Status changes",
-  mentions: "Mentions",
-  comments: "Comments and replies",
-  priorityChanges: "Priority changes",
-  dueDates: "Due dates and reminders",
-  relations: "Relations and blockers",
-  triage: "Triage and intake",
-  projectUpdates: "Project updates",
-  cycleUpdates: "Cycles",
-  initiativeUpdates: "Initiatives",
-  documentActivity: "Documents",
-  teamUpdates: "Team updates",
-  workspaceAdmin: "Workspace and admin",
-  customerRequests: "Customer requests and SLA",
-  productUpdates: "Product updates and digests",
-};
-
-export const ACCOUNT_NOTIFICATION_EVENT_DESCRIPTIONS: Record<
-  AccountNotificationEventKey,
-  string
-> = {
-  assignments: "When you're assigned to an issue.",
-  statusChanges: "When an issue you follow changes status.",
-  mentions: "When someone mentions you in a comment or description.",
-  comments: "When someone comments on work you're involved in.",
-  priorityChanges: "When priority changes on issues you follow.",
-  dueDates: "When due dates are added, changed, overdue, or coming up.",
-  relations: "When blockers, relations, or duplicates change on followed work.",
-  triage: "When intake or triage issues need review or change state.",
-  projectUpdates:
-    "When projects you follow get updates, milestones, or health changes.",
-  cycleUpdates: "When cycle scope, start dates, or completion status changes.",
-  initiativeUpdates:
-    "When initiatives you follow receive updates or status changes.",
-  documentActivity:
-    "When documents you own or follow are edited or commented on.",
-  teamUpdates: "When team settings, membership, or routing rules change.",
-  workspaceAdmin:
-    "When workspace-level security, billing, or admin events occur.",
-  customerRequests:
-    "When customer requests, support links, or SLA risk changes.",
-  productUpdates:
-    "When product digests, changelog items, or release notes are available.",
-};
-
-export const ACCOUNT_NOTIFICATION_EVENT_GROUPS: Array<{
-  title: string;
-  description: string;
-  events: AccountNotificationEventKey[];
-}> = [
-  {
-    title: "Issues",
-    description: "Direct issue activity and routing changes.",
-    events: [
-      "assignments",
-      "statusChanges",
-      "mentions",
-      "comments",
-      "priorityChanges",
-      "dueDates",
-      "relations",
-      "triage",
-    ],
-  },
-  {
-    title: "Projects, cycles, and initiatives",
-    description: "Higher-level planning activity and progress updates.",
-    events: ["projectUpdates", "cycleUpdates", "initiativeUpdates"],
-  },
-  {
-    title: "Documents and workspace",
-    description: "Collaboration, team, and administrative notifications.",
-    events: ["documentActivity", "teamUpdates", "workspaceAdmin"],
-  },
-  {
-    title: "Customer and product",
-    description: "Customer-request activity, SLA changes, and digest delivery.",
-    events: ["customerRequests", "productUpdates"],
-  },
-];
-
-function makeEventPreferences(
-  enabledEvents: AccountNotificationEventKey[],
-): NotificationEventPreferences {
-  const enabled = new Set(enabledEvents);
+function makeLegacyChannels(
+  overrides: Partial<
+    Record<
+      keyof LegacyNotificationChannels,
+      Partial<LegacyNotificationEventPreferences>
+    >
+  > = {},
+): LegacyNotificationChannels {
   return Object.fromEntries(
-    ACCOUNT_NOTIFICATION_EVENTS.map((eventKey) => [
-      eventKey,
-      enabled.has(eventKey),
+    LEGACY_ACCOUNT_NOTIFICATION_CHANNELS.map((channel) => [
+      channel,
+      { events: { ...DEFAULT_LEGACY_EVENTS, ...overrides[channel] } },
     ]),
-  ) as NotificationEventPreferences;
+  ) as LegacyNotificationChannels;
 }
 
 export const DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS: AccountNotificationSettings =
   {
-    channels: {
-      desktop: {
-        events: makeEventPreferences([
-          "assignments",
-          "statusChanges",
-          "mentions",
-          "comments",
-          "priorityChanges",
-          "dueDates",
-          "relations",
-          "triage",
-          "projectUpdates",
-          "cycleUpdates",
-          "initiativeUpdates",
-          "documentActivity",
-        ]),
-      },
-      mobile: {
-        events: makeEventPreferences([...ACCOUNT_NOTIFICATION_EVENTS]),
-      },
-      email: {
-        events: makeEventPreferences([
-          "assignments",
-          "mentions",
-          "comments",
-          "dueDates",
-          "projectUpdates",
-          "productUpdates",
-        ]),
-      },
-      slack: {
-        events: makeEventPreferences([
-          "mentions",
-          "comments",
-          "triage",
-          "projectUpdates",
-          "customerRequests",
-        ]),
-      },
+    channels: makeLegacyChannels({ slack: { assignments: false } }),
+    inbox: {
+      assignedToMe: true,
+      mentionsAndReplies: true,
+      subscribedIssues: true,
+      teamUpdates: true,
+    },
+    email: {
+      issueActivity: true,
+      mentionsAndReplies: true,
+      dailyDigest: false,
+      weeklyDigest: true,
+      productUpdates: false,
+      workspaceInvites: true,
+    },
+    desktop: {
+      enabled: true,
+      permission: "default",
+      issueActivity: true,
+      mentionsAndReplies: true,
+      reminders: true,
+      sound: false,
+    },
+    slack: {
+      enabled: false,
+      destination: "not_connected",
+      mentionsAndReplies: true,
+      assignedToMe: false,
+      triageActivity: false,
+      projectUpdates: false,
     },
     updatesFromLinear: {
       showInSidebar: true,
-      newsletter: false,
+      changelogNewsletter: false,
       marketing: false,
     },
     other: {
@@ -225,106 +184,286 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function normalizeEventPreferences(
-  value: unknown,
-  channel: AccountNotificationChannelKey,
-) {
-  const parsed = asRecord(value);
-  const defaults =
-    DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.channels[channel].events;
+function bool(value: unknown, fallback: boolean) {
+  return typeof value === "boolean" ? value : fallback;
+}
 
-  return Object.fromEntries(
-    ACCOUNT_NOTIFICATION_EVENTS.map((eventKey) => [
-      eventKey,
-      typeof parsed[eventKey] === "boolean"
-        ? parsed[eventKey]
-        : defaults[eventKey],
-    ]),
-  ) as NotificationEventPreferences;
+function destination(
+  value: unknown,
+): SlackNotificationPreferences["destination"] {
+  return value === "workspace" ||
+    value === "team_channel" ||
+    value === "direct_message" ||
+    value === "not_connected"
+    ? value
+    : DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.destination;
+}
+
+function permission(
+  value: unknown,
+): DesktopNotificationPreferences["permission"] {
+  return value === "granted" || value === "denied" || value === "default"
+    ? value
+    : DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.desktop.permission;
+}
+
+function migrateLegacyChannelEvents(parsed: Record<string, unknown>) {
+  const channels = asRecord(parsed.channels);
+  const desktopEvents = asRecord(asRecord(channels.desktop).events);
+  const emailEvents = asRecord(asRecord(channels.email).events);
+  const slackEvents = asRecord(asRecord(channels.slack).events);
+  const mobileEvents = asRecord(asRecord(channels.mobile).events);
+
+  return {
+    inbox: {
+      assignedToMe: desktopEvents.assignments,
+      mentionsAndReplies: desktopEvents.mentions ?? mobileEvents.mentions,
+      subscribedIssues: desktopEvents.comments,
+      teamUpdates: desktopEvents.teamUpdates,
+    },
+    email: {
+      issueActivity: emailEvents.assignments,
+      mentionsAndReplies: emailEvents.mentions,
+      dailyDigest: emailEvents.productUpdates,
+      productUpdates: emailEvents.productUpdates,
+    },
+    desktop: {
+      issueActivity: desktopEvents.assignments,
+      mentionsAndReplies: desktopEvents.mentions,
+      reminders: desktopEvents.dueDates,
+    },
+    slack: {
+      mentionsAndReplies: slackEvents.mentions,
+      assignedToMe: slackEvents.assignments,
+      triageActivity: slackEvents.triage,
+      projectUpdates: slackEvents.projectUpdates,
+    },
+  };
 }
 
 export function normalizeAccountNotificationSettings(
   value: unknown,
 ): AccountNotificationSettings {
   const parsed = asRecord(value);
-  const channels = asRecord(parsed.channels);
+  const legacy = migrateLegacyChannelEvents(parsed);
+  const inbox: Record<string, unknown> = {
+    ...legacy.inbox,
+    ...asRecord(parsed.inbox),
+  };
+  const email: Record<string, unknown> = {
+    ...legacy.email,
+    ...asRecord(parsed.email),
+  };
+  const desktop: Record<string, unknown> = {
+    ...legacy.desktop,
+    ...asRecord(parsed.desktop),
+  };
+  const slack: Record<string, unknown> = {
+    ...legacy.slack,
+    ...asRecord(parsed.slack),
+  };
   const updatesFromLinear = asRecord(parsed.updatesFromLinear);
   const other = asRecord(parsed.other);
 
-  return {
-    channels: Object.fromEntries(
-      ACCOUNT_NOTIFICATION_CHANNELS.map((channel) => [
-        channel,
-        {
-          events: normalizeEventPreferences(
-            asRecord(channels[channel]).events,
-            channel,
-          ),
-        },
-      ]),
-    ) as AccountNotificationSettings["channels"],
+  const normalized = {
+    channels: makeLegacyChannels({
+      desktop: {
+        assignments: bool(
+          desktop.issueActivity,
+          DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.desktop.issueActivity,
+        ),
+        mentions: bool(
+          desktop.mentionsAndReplies,
+          DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.desktop.mentionsAndReplies,
+        ),
+        comments: bool(
+          desktop.mentionsAndReplies,
+          DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.desktop.mentionsAndReplies,
+        ),
+        dueDates: bool(
+          desktop.reminders,
+          DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.desktop.reminders,
+        ),
+      },
+      email: {
+        assignments: bool(
+          email.issueActivity,
+          DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.email.issueActivity,
+        ),
+        mentions: bool(
+          email.mentionsAndReplies,
+          DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.email.mentionsAndReplies,
+        ),
+        comments: bool(
+          email.mentionsAndReplies,
+          DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.email.mentionsAndReplies,
+        ),
+        productUpdates: bool(
+          email.productUpdates,
+          DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.email.productUpdates,
+        ),
+      },
+      slack: {
+        assignments: bool(
+          slack.assignedToMe,
+          DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.assignedToMe,
+        ),
+        mentions: bool(
+          slack.mentionsAndReplies,
+          DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.mentionsAndReplies,
+        ),
+        comments: bool(
+          slack.mentionsAndReplies,
+          DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.mentionsAndReplies,
+        ),
+        triage: bool(
+          slack.triageActivity,
+          DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.triageActivity,
+        ),
+        projectUpdates: bool(
+          slack.projectUpdates,
+          DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.projectUpdates,
+        ),
+      },
+    }),
+    inbox: {
+      assignedToMe: bool(
+        inbox.assignedToMe,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.inbox.assignedToMe,
+      ),
+      mentionsAndReplies: bool(
+        inbox.mentionsAndReplies,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.inbox.mentionsAndReplies,
+      ),
+      subscribedIssues: bool(
+        inbox.subscribedIssues,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.inbox.subscribedIssues,
+      ),
+      teamUpdates: bool(
+        inbox.teamUpdates,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.inbox.teamUpdates,
+      ),
+    },
+    email: {
+      issueActivity: bool(
+        email.issueActivity,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.email.issueActivity,
+      ),
+      mentionsAndReplies: bool(
+        email.mentionsAndReplies,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.email.mentionsAndReplies,
+      ),
+      dailyDigest: bool(
+        email.dailyDigest,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.email.dailyDigest,
+      ),
+      weeklyDigest: bool(
+        email.weeklyDigest,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.email.weeklyDigest,
+      ),
+      productUpdates: bool(
+        email.productUpdates,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.email.productUpdates,
+      ),
+      workspaceInvites: bool(
+        email.workspaceInvites,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.email.workspaceInvites,
+      ),
+    },
+    desktop: {
+      enabled: bool(
+        desktop.enabled,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.desktop.enabled,
+      ),
+      permission: permission(desktop.permission),
+      issueActivity: bool(
+        desktop.issueActivity,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.desktop.issueActivity,
+      ),
+      mentionsAndReplies: bool(
+        desktop.mentionsAndReplies,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.desktop.mentionsAndReplies,
+      ),
+      reminders: bool(
+        desktop.reminders,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.desktop.reminders,
+      ),
+      sound: bool(
+        desktop.sound,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.desktop.sound,
+      ),
+    },
+    slack: {
+      enabled: bool(
+        slack.enabled,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.enabled,
+      ),
+      destination: destination(slack.destination),
+      mentionsAndReplies: bool(
+        slack.mentionsAndReplies,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.mentionsAndReplies,
+      ),
+      assignedToMe: bool(
+        slack.assignedToMe,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.assignedToMe,
+      ),
+      triageActivity: bool(
+        slack.triageActivity,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.triageActivity,
+      ),
+      projectUpdates: bool(
+        slack.projectUpdates,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.projectUpdates,
+      ),
+    },
     updatesFromLinear: {
-      showInSidebar:
-        typeof updatesFromLinear.showInSidebar === "boolean"
-          ? updatesFromLinear.showInSidebar
-          : DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.updatesFromLinear
-              .showInSidebar,
-      newsletter:
-        typeof updatesFromLinear.newsletter === "boolean"
-          ? updatesFromLinear.newsletter
-          : DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.updatesFromLinear.newsletter,
-      marketing:
-        typeof updatesFromLinear.marketing === "boolean"
-          ? updatesFromLinear.marketing
-          : DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.updatesFromLinear.marketing,
+      showInSidebar: bool(
+        updatesFromLinear.showInSidebar,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.updatesFromLinear.showInSidebar,
+      ),
+      changelogNewsletter: bool(
+        updatesFromLinear.changelogNewsletter ?? updatesFromLinear.newsletter,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.updatesFromLinear
+          .changelogNewsletter,
+      ),
+      marketing: bool(
+        updatesFromLinear.marketing,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.updatesFromLinear.marketing,
+      ),
     },
     other: {
-      inviteAccepted:
-        typeof other.inviteAccepted === "boolean"
-          ? other.inviteAccepted
-          : DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.other.inviteAccepted,
-      privacyAndLegalUpdates:
-        typeof other.privacyAndLegalUpdates === "boolean"
-          ? other.privacyAndLegalUpdates
-          : DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.other.privacyAndLegalUpdates,
-      dpa:
-        typeof other.dpa === "boolean"
-          ? other.dpa
-          : DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.other.dpa,
+      inviteAccepted: bool(
+        other.inviteAccepted,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.other.inviteAccepted,
+      ),
+      privacyAndLegalUpdates: bool(
+        other.privacyAndLegalUpdates,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.other.privacyAndLegalUpdates,
+      ),
+      dpa: bool(other.dpa, DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.other.dpa),
     },
   };
+
+  return normalized;
 }
 
 export function mergeAccountNotificationSettings(
   current: AccountNotificationSettings,
   patch: AccountNotificationSettingsPatch,
 ): AccountNotificationSettings {
-  const nextChannels = Object.fromEntries(
-    ACCOUNT_NOTIFICATION_CHANNELS.map((channel) => [
-      channel,
-      {
-        ...current.channels[channel],
-        ...patch.channels?.[channel],
-        events: {
-          ...current.channels[channel].events,
-          ...patch.channels?.[channel]?.events,
-        },
-      },
-    ]),
-  ) as AccountNotificationSettings["channels"];
-
   return normalizeAccountNotificationSettings({
     ...current,
     ...patch,
-    channels: nextChannels,
+    inbox: { ...current.inbox, ...patch.inbox },
+    email: { ...current.email, ...patch.email },
+    desktop: { ...current.desktop, ...patch.desktop },
+    slack: { ...current.slack, ...patch.slack },
     updatesFromLinear: {
       ...current.updatesFromLinear,
       ...patch.updatesFromLinear,
     },
-    other: {
-      ...current.other,
-      ...patch.other,
-    },
+    other: { ...current.other, ...patch.other },
+    channels: patch.channels,
   });
 }
 
@@ -338,57 +477,47 @@ export function writeAccountNotificationsToUserSettings(
   settings: unknown,
   accountNotifications: AccountNotificationSettings,
 ) {
-  const parsed = asRecord(settings);
-
-  return {
-    ...parsed,
-    accountNotifications,
-  };
+  return { ...asRecord(settings), accountNotifications };
 }
 
 export function isAccountNotificationChannelKey(
   value: string,
-): value is AccountNotificationChannelKey {
-  return ACCOUNT_NOTIFICATION_CHANNELS.includes(
-    value as AccountNotificationChannelKey,
+): value is AccountNotificationDomainKey {
+  return ACCOUNT_NOTIFICATION_DOMAINS.includes(
+    value as AccountNotificationDomainKey,
   );
 }
 
-export function countEnabledNotificationEvents(
-  channelPreferences: NotificationChannelPreferences,
+export function describeNotificationDomainPreferences(
+  domain: AccountNotificationDomainKey,
+  settings: AccountNotificationSettings,
 ) {
-  return ACCOUNT_NOTIFICATION_EVENTS.filter(
-    (eventKey) => channelPreferences.events[eventKey],
+  if (domain === "desktop") {
+    if (!settings.desktop.enabled) return "Desktop notifications are off";
+    return settings.desktop.permission === "granted"
+      ? "Enabled when browser permission is allowed"
+      : "Requires browser permission";
+  }
+  if (domain === "slack") {
+    if (!settings.slack.enabled)
+      return "Connect Slack to deliver notifications";
+    return settings.slack.destination === "direct_message"
+      ? "Delivering as Slack direct messages"
+      : "Delivering to Slack workspace destinations";
+  }
+  const prefs = settings[domain];
+  const enabled = Object.values(prefs).filter(Boolean).length;
+  return enabled === 0 ? "Disabled" : `${enabled} preferences enabled`;
+}
+
+export function describeNotificationChannelPreferences(channelPreferences: {
+  events: Record<string, boolean>;
+}) {
+  const enabled = Object.values(channelPreferences.events).filter(
+    Boolean,
   ).length;
-}
-
-export function describeNotificationChannelPreferences(
-  channelPreferences: NotificationChannelPreferences,
-) {
-  const enabledLabels = ACCOUNT_NOTIFICATION_EVENTS.filter(
-    (eventKey) => channelPreferences.events[eventKey],
-  ).map((eventKey) =>
-    ACCOUNT_NOTIFICATION_EVENT_LABELS[eventKey].toLowerCase(),
-  );
-
-  if (enabledLabels.length === 0) {
-    return "Disabled";
-  }
-
-  if (enabledLabels.length === ACCOUNT_NOTIFICATION_EVENTS.length) {
+  if (enabled === 0) return "Disabled";
+  if (enabled === Object.keys(channelPreferences.events).length)
     return "Enabled for all notifications";
-  }
-
-  if (enabledLabels.length === 1) {
-    return `Enabled for ${enabledLabels[0]}`;
-  }
-
-  if (enabledLabels.length === 2) {
-    return `Enabled for ${enabledLabels[0]} and ${enabledLabels[1]}`;
-  }
-
-  const remainingCount = enabledLabels.length - 2;
-  const remainingLabel = remainingCount === 1 ? "other" : "others";
-
-  return `Enabled for ${enabledLabels[0]}, ${enabledLabels[1]}, and ${remainingCount} ${remainingLabel}`;
+  return `${enabled} preferences enabled`;
 }

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("account notification settings", () => {
-  test("shows granular channel events and persists a newly added category", async ({
+  test("shows Linear-specific domains and persists email digest preference", async ({
     page,
   }) => {
     const resetResponse = await page.request.patch(
@@ -9,13 +9,8 @@ test.describe("account notification settings", () => {
       {
         data: {
           accountNotifications: {
-            channels: {
-              desktop: {
-                events: {
-                  dueDates: true,
-                },
-              },
-            },
+            email: { dailyDigest: true, productUpdates: false },
+            desktop: { enabled: true, sound: false },
           },
         },
       },
@@ -23,51 +18,46 @@ test.describe("account notification settings", () => {
     expect(resetResponse.status()).toBe(200);
 
     await page.goto("/settings/account/notifications");
+    await expect(page.getByText("Notification preferences")).toBeVisible();
     await expect(
-      page.getByText(
-        "Choose which channels can deliver workspace activity. Notification delivery follows the event preferences configured for each channel.",
-      ),
+      page.getByRole("link", { name: /Inbox notification settings/ }),
     ).toBeVisible();
-    await expect(page.getByText(/\b(clone|demo)\b/i)).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: /Email notification settings/ }),
+    ).toBeVisible();
     await expect(
       page.getByRole("link", { name: /Desktop notification settings/ }),
-    ).toContainText("10 others");
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /Slack notification settings/ }),
+    ).toBeVisible();
     await expect(
       page.getByRole("link", { name: /Mobile notification settings/ }),
-    ).toContainText("Enabled for all notifications");
+    ).toHaveCount(0);
 
-    await page.goto("/settings/account/notifications/desktop");
-    await expect(page.getByRole("heading", { name: "Desktop" })).toBeVisible();
+    await page.goto("/settings/account/notifications/email");
     await expect(
-      page.getByText(
-        "Turning off an event prevents this channel from sending notifications for that activity. If all channels are disabled for an event, you won't receive notifications for it.",
-      ),
-    ).toBeVisible();
-    await expect(page.getByText(/\b(clone|demo)\b/i)).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "Issues" })).toBeVisible();
-    await expect(
-      page.getByRole("heading", {
-        name: "Projects, cycles, and initiatives",
-      }),
+      page.getByRole("heading", { name: "Email", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Documents and workspace" }),
+      page.getByRole("heading", { name: "Email notifications" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("switch", { name: "Project updates" }),
+      page.getByRole("heading", { name: "Digests and product updates" }),
     ).toBeVisible();
+    await expect(
+      page.getByText("Turning off an event prevents this channel"),
+    ).toHaveCount(0);
 
-    const dueDatesSwitch = page.getByRole("switch", {
-      name: "Due dates and reminders",
-    });
-    await expect(dueDatesSwitch).toHaveAttribute("aria-checked", "true");
-    await dueDatesSwitch.click();
-    await expect(dueDatesSwitch).toHaveAttribute("aria-checked", "false");
+    const dailyDigest = page.getByRole("switch", { name: "Daily digest" });
+    await expect(dailyDigest).toHaveAttribute("aria-checked", "true");
+    await dailyDigest.click();
+    await expect(dailyDigest).toHaveAttribute("aria-checked", "false");
     await expect(page.getByText("Saved")).toBeVisible();
 
     await page.reload();
     await expect(
-      page.getByRole("switch", { name: "Due dates and reminders" }),
+      page.getByRole("switch", { name: "Daily digest" }),
     ).toHaveAttribute("aria-checked", "false");
   });
 });

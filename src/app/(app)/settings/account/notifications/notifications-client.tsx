@@ -1,42 +1,40 @@
 "use client";
 
 import {
-  ACCOUNT_NOTIFICATION_CHANNELS,
-  ACCOUNT_NOTIFICATION_EVENT_DESCRIPTIONS,
-  ACCOUNT_NOTIFICATION_EVENT_GROUPS,
-  ACCOUNT_NOTIFICATION_EVENT_LABELS,
+  ACCOUNT_NOTIFICATION_DOMAINS,
   type AccountNotificationChannelKey,
   type AccountNotificationSettings,
   type AccountNotificationSettingsPatch,
   DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS,
-  describeNotificationChannelPreferences,
+  describeNotificationDomainPreferences,
   mergeAccountNotificationSettings,
 } from "@/lib/account-notifications";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-const CHANNEL_METADATA: Record<
+const DOMAIN_METADATA: Record<
   AccountNotificationChannelKey,
-  {
-    name: string;
-    description: string;
-  }
+  { name: string; description: string }
 > = {
-  desktop: {
-    name: "Desktop",
-    description: "Configure desktop alerts for activity in your workspace.",
-  },
-  mobile: {
-    name: "Mobile",
-    description: "Manage which updates are delivered to your mobile device.",
+  inbox: {
+    name: "Inbox",
+    description:
+      "Control which workspace notifications appear in your Linear inbox.",
   },
   email: {
     name: "Email",
-    description: "Choose which activity should arrive in your inbox.",
+    description:
+      "Manage email delivery, digests, product updates, and invite mail.",
+  },
+  desktop: {
+    name: "Desktop",
+    description:
+      "Configure browser notification permission, alerts, reminders, and sound.",
   },
   slack: {
     name: "Slack",
-    description: "Decide which Linear events get forwarded to Slack.",
+    description:
+      "Connect Slack destinations and choose which Linear events are forwarded.",
   },
 };
 
@@ -56,14 +54,10 @@ function Toggle({
       aria-label={ariaLabel}
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={`relative h-6 w-10 rounded-full transition-colors ${
-        checked ? "bg-[var(--color-accent)]" : "bg-[var(--color-border)]"
-      }`}
+      className={`relative h-6 w-10 rounded-full transition-colors ${checked ? "bg-[var(--color-accent)]" : "bg-[var(--color-border)]"}`}
     >
       <span
-        className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-          checked ? "translate-x-4" : ""
-        }`}
+        className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform ${checked ? "translate-x-4" : ""}`}
       />
     </button>
   );
@@ -72,10 +66,7 @@ function Toggle({
 function SectionTitle({
   title,
   description,
-}: {
-  title: string;
-  description?: string;
-}) {
+}: { title: string; description?: string }) {
   return (
     <div className="mb-4">
       <h2 className="text-[13px] font-semibold text-[var(--color-text-primary)]">
@@ -116,77 +107,9 @@ function SettingRow({
   );
 }
 
-function ChannelIcon({ channel }: { channel: AccountNotificationChannelKey }) {
-  if (channel === "desktop") {
-    return (
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        aria-hidden="true"
-      >
-        <rect x="3" y="4" width="18" height="12" rx="2" />
-        <path d="M8 20h8" />
-        <path d="M12 16v4" />
-      </svg>
-    );
-  }
-
-  if (channel === "mobile") {
-    return (
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        aria-hidden="true"
-      >
-        <rect x="7" y="2.5" width="10" height="19" rx="2.5" />
-        <path d="M11 18h2" />
-      </svg>
-    );
-  }
-
-  if (channel === "email") {
-    return (
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        aria-hidden="true"
-      >
-        <rect x="3" y="5" width="18" height="14" rx="2" />
-        <path d="m4 7 8 6 8-6" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <path d="M9.22 13.43a2.16 2.16 0 1 0 0-4.32 2.16 2.16 0 0 0 0 4.32Zm5.56 0a2.16 2.16 0 1 0 0-4.32 2.16 2.16 0 0 0 0 4.32Zm-8.22 5.35a2.16 2.16 0 1 0 0-4.32 2.16 2.16 0 0 0 0 4.32Zm11 0a2.16 2.16 0 1 0 0-4.32 2.16 2.16 0 0 0 0 4.32ZM6.56 8.08a2.16 2.16 0 1 0 0-4.32 2.16 2.16 0 0 0 0 4.32Zm11 0a2.16 2.16 0 1 0 0-4.32 2.16 2.16 0 0 0 0 4.32Z" />
-    </svg>
-  );
-}
-
 function SaveIndicator({
   saveState,
-}: {
-  saveState: "idle" | "saving" | "saved" | "error";
-}) {
+}: { saveState: "idle" | "saving" | "saved" | "error" }) {
   return (
     <div className="text-[12px] text-[var(--color-text-secondary)]">
       {saveState === "saving" && "Saving…"}
@@ -208,46 +131,33 @@ function useAccountNotificationsSettings() {
 
   useEffect(() => {
     let cancelled = false;
-
     void fetch("/api/account/notifications", { credentials: "include" })
       .then(async (response) => {
-        if (!response.ok) {
+        if (!response.ok)
           throw new Error("Failed to load account notifications");
-        }
-
         return (await response.json()) as {
           accountNotifications?: Partial<AccountNotificationSettings>;
         };
       })
       .then((data) => {
-        if (cancelled || !data.accountNotifications) {
-          return;
-        }
-
-        setSettings(
-          mergeAccountNotificationSettings(
-            DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS,
-            data.accountNotifications,
-          ),
-        );
+        if (!cancelled && data.accountNotifications)
+          setSettings(
+            mergeAccountNotificationSettings(
+              DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS,
+              data.accountNotifications,
+            ),
+          );
       })
-      .catch(() => {
-        setSaveState("error");
-      });
-
+      .catch(() => setSaveState("error"));
     return () => {
       cancelled = true;
-      if (saveStateTimeout.current) {
+      if (saveStateTimeout.current)
         window.clearTimeout(saveStateTimeout.current);
-      }
     };
   }, []);
 
   function updateSavedIndicator() {
-    if (saveStateTimeout.current) {
-      window.clearTimeout(saveStateTimeout.current);
-    }
-
+    if (saveStateTimeout.current) window.clearTimeout(saveStateTimeout.current);
     saveStateTimeout.current = window.setTimeout(() => {
       setSaveState("idle");
       saveStateTimeout.current = null;
@@ -257,29 +167,19 @@ function useAccountNotificationsSettings() {
   async function persistSettings(nextSettings: AccountNotificationSettings) {
     const requestId = ++saveRequestId.current;
     setSaveState("saving");
-
     try {
       const response = await fetch("/api/account/notifications", {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ accountNotifications: nextSettings }),
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to save account notifications");
-      }
-
+      if (!response.ok) throw new Error("Failed to save account notifications");
       const data = (await response.json()) as {
         accountNotifications?: Partial<AccountNotificationSettings>;
       };
-
-      if (requestId !== saveRequestId.current || !data.accountNotifications) {
+      if (requestId !== saveRequestId.current || !data.accountNotifications)
         return;
-      }
-
       setSettings(
         mergeAccountNotificationSettings(
           DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS,
@@ -289,9 +189,7 @@ function useAccountNotificationsSettings() {
       setSaveState("saved");
       updateSavedIndicator();
     } catch {
-      if (requestId === saveRequestId.current) {
-        setSaveState("error");
-      }
+      if (requestId === saveRequestId.current) setSaveState("error");
     }
   }
 
@@ -302,12 +200,15 @@ function useAccountNotificationsSettings() {
       return nextSettings;
     });
   }
+  return { settings, saveState, updateSettings };
+}
 
-  return {
-    settings,
-    saveState,
-    updateSettings,
-  };
+function patchFor(
+  domain: AccountNotificationChannelKey,
+  key: string,
+  value: boolean,
+): AccountNotificationSettingsPatch {
+  return { [domain]: { [key]: value } } as AccountNotificationSettingsPatch;
 }
 
 export function NotificationsOverviewPage() {
@@ -317,55 +218,36 @@ export function NotificationsOverviewPage() {
   return (
     <div className="max-w-[820px]">
       <div className="mb-8 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[28px] font-semibold text-[var(--color-text-primary)]">
-            Notifications
-          </h1>
-        </div>
+        <h1 className="text-[28px] font-semibold text-[var(--color-text-primary)]">
+          Notifications
+        </h1>
         <SaveIndicator saveState={saveState} />
       </div>
 
       <section className="mb-12">
         <SectionTitle
-          title="Notification channels"
-          description="Choose which channels can deliver workspace activity. Notification delivery follows the event preferences configured for each channel."
+          title="Notification preferences"
+          description="Configure Linear-specific notification areas instead of a shared channel matrix. Each area has controls for how that destination behaves."
         />
-
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
-          {ACCOUNT_NOTIFICATION_CHANNELS.map((channel) => {
-            const metadata = CHANNEL_METADATA[channel];
-
+          {ACCOUNT_NOTIFICATION_DOMAINS.map((domain) => {
+            const metadata = DOMAIN_METADATA[domain];
             return (
               <Link
-                key={channel}
-                href={`/settings/account/notifications/${channel}`}
+                key={domain}
+                href={`/settings/account/notifications/${domain}`}
                 aria-label={`${metadata.name} notification settings`}
                 className="flex items-center justify-between gap-4 border-b border-[var(--color-border)] px-4 py-4 transition-colors last:border-b-0 hover:bg-[var(--color-surface-hover)]"
               >
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
-                    <ChannelIcon channel={channel} />
+                <div className="min-w-0">
+                  <div className="text-[14px] font-medium text-[var(--color-text-primary)]">
+                    {metadata.name}
                   </div>
-                  <div className="min-w-0">
-                    <div className="text-[14px] font-medium text-[var(--color-text-primary)]">
-                      {metadata.name}
-                    </div>
-                    <div className="mt-1 flex items-center gap-2 text-[12px] text-[var(--color-text-secondary)]">
-                      <span
-                        className={`h-1.5 w-1.5 rounded-full ${
-                          describeNotificationChannelPreferences(
-                            settings.channels[channel],
-                          ) === "Disabled"
-                            ? "bg-[var(--color-text-tertiary)]"
-                            : "bg-emerald-400"
-                        }`}
-                      />
-                      <span>
-                        {describeNotificationChannelPreferences(
-                          settings.channels[channel],
-                        )}
-                      </span>
-                    </div>
+                  <div className="mt-1 text-[12px] text-[var(--color-text-secondary)]">
+                    {metadata.description}
+                  </div>
+                  <div className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+                    {describeNotificationDomainPreferences(domain, settings)}
                   </div>
                 </div>
                 <svg
@@ -400,18 +282,16 @@ export function NotificationsOverviewPage() {
             description="Highlight new features and improvements in the app sidebar."
             checked={settings.updatesFromLinear.showInSidebar}
             onChange={(value) =>
-              updateSettings({
-                updatesFromLinear: { showInSidebar: value },
-              })
+              updateSettings({ updatesFromLinear: { showInSidebar: value } })
             }
           />
           <SettingRow
             label="Changelog newsletter"
             description="Receive an email twice a month highlighting new features and improvements."
-            checked={settings.updatesFromLinear.newsletter}
+            checked={settings.updatesFromLinear.changelogNewsletter}
             onChange={(value) =>
               updateSettings({
-                updatesFromLinear: { newsletter: value },
+                updatesFromLinear: { changelogNewsletter: value },
               })
             }
           />
@@ -420,9 +300,7 @@ export function NotificationsOverviewPage() {
             description="Occasional product announcements and tips."
             checked={settings.updatesFromLinear.marketing}
             onChange={(value) =>
-              updateSettings({
-                updatesFromLinear: { marketing: value },
-              })
+              updateSettings({ updatesFromLinear: { marketing: value } })
             }
           />
         </div>
@@ -436,9 +314,7 @@ export function NotificationsOverviewPage() {
             description="Notify when someone accepts your invite."
             checked={settings.other.inviteAccepted}
             onChange={(value) =>
-              updateSettings({
-                other: { inviteAccepted: value },
-              })
+              updateSettings({ other: { inviteAccepted: value } })
             }
           />
           <SettingRow
@@ -446,20 +322,14 @@ export function NotificationsOverviewPage() {
             description="Important privacy and legal notifications."
             checked={settings.other.privacyAndLegalUpdates}
             onChange={(value) =>
-              updateSettings({
-                other: { privacyAndLegalUpdates: value },
-              })
+              updateSettings({ other: { privacyAndLegalUpdates: value } })
             }
           />
           <SettingRow
             label="DPA"
             description="Data Processing Agreement notifications."
             checked={settings.other.dpa}
-            onChange={(value) =>
-              updateSettings({
-                other: { dpa: value },
-              })
-            }
+            onChange={(value) => updateSettings({ other: { dpa: value } })}
           />
         </div>
       </section>
@@ -469,12 +339,19 @@ export function NotificationsOverviewPage() {
 
 export function NotificationChannelPage({
   channel,
-}: {
-  channel: AccountNotificationChannelKey;
-}) {
+}: { channel: AccountNotificationChannelKey | "mobile" }) {
   const { settings, saveState, updateSettings } =
     useAccountNotificationsSettings();
-  const channelMetadata = CHANNEL_METADATA[channel];
+  const activeChannel: AccountNotificationChannelKey =
+    channel === "mobile" ? "inbox" : channel;
+  const metadata =
+    channel === "mobile"
+      ? {
+          name: "Mobile",
+          description:
+            "Mobile delivery is represented by Inbox notification preferences.",
+        }
+      : DOMAIN_METADATA[activeChannel];
 
   return (
     <div className="max-w-[820px]">
@@ -484,67 +361,256 @@ export function NotificationChannelPage({
             href="/settings/account/notifications"
             className="mb-3 inline-flex items-center gap-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              aria-hidden="true"
-            >
-              <path d="m15 18-6-6 6-6" />
-            </svg>
-            Notifications
+            ← Notifications
           </Link>
           <h1 className="text-[28px] font-semibold text-[var(--color-text-primary)]">
-            {channelMetadata.name}
+            {metadata.name}
           </h1>
           <p className="mt-2 text-[13px] text-[var(--color-text-secondary)]">
-            {channelMetadata.description}
+            {metadata.description}
           </p>
           <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
-            {describeNotificationChannelPreferences(settings.channels[channel])}
-          </p>
-          <p className="mt-2 max-w-[620px] text-[12px] text-[var(--color-text-tertiary)]">
-            Turning off an event prevents this channel from sending
-            notifications for that activity. If all channels are disabled for an
-            event, you won't receive notifications for it.
+            {describeNotificationDomainPreferences(activeChannel, settings)}
           </p>
         </div>
         <SaveIndicator saveState={saveState} />
       </div>
 
-      <div className="space-y-5">
-        {ACCOUNT_NOTIFICATION_EVENT_GROUPS.map((group) => (
-          <section key={group.title}>
-            <SectionTitle title={group.title} description={group.description} />
+      {activeChannel === "inbox" ? (
+        <section>
+          <SectionTitle
+            title="Inbox notifications"
+            description="Choose which Linear activity creates inbox items."
+          />
+          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+            <SettingRow
+              label="Assigned to me"
+              description="Create inbox notifications when issues are assigned to you."
+              checked={settings.inbox.assignedToMe}
+              onChange={(value) =>
+                updateSettings(patchFor("inbox", "assignedToMe", value))
+              }
+            />
+            <SettingRow
+              label="Mentions and replies"
+              description="Notify when you are mentioned or someone replies in a thread."
+              checked={settings.inbox.mentionsAndReplies}
+              onChange={(value) =>
+                updateSettings(patchFor("inbox", "mentionsAndReplies", value))
+              }
+            />
+            <SettingRow
+              label="Subscribed issues"
+              description="Include updates from issues and documents you subscribe to."
+              checked={settings.inbox.subscribedIssues}
+              onChange={(value) =>
+                updateSettings(patchFor("inbox", "subscribedIssues", value))
+              }
+            />
+            <SettingRow
+              label="Team updates"
+              description="Create inbox items for team announcements and workflow changes."
+              checked={settings.inbox.teamUpdates}
+              onChange={(value) =>
+                updateSettings(patchFor("inbox", "teamUpdates", value))
+              }
+            />
+          </div>
+        </section>
+      ) : null}
+
+      {activeChannel === "email" ? (
+        <div className="space-y-5">
+          <section>
+            <SectionTitle
+              title="Email notifications"
+              description="Choose the operational notifications that are sent as email."
+            />
             <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
-              {group.events.map((eventKey) => (
-                <SettingRow
-                  key={eventKey}
-                  label={ACCOUNT_NOTIFICATION_EVENT_LABELS[eventKey]}
-                  description={
-                    ACCOUNT_NOTIFICATION_EVENT_DESCRIPTIONS[eventKey]
-                  }
-                  checked={settings.channels[channel].events[eventKey]}
-                  onChange={(value) =>
-                    updateSettings({
-                      channels: {
-                        [channel]: {
-                          events: {
-                            [eventKey]: value,
-                          },
-                        },
-                      },
-                    })
-                  }
-                />
-              ))}
+              <SettingRow
+                label="Issue activity"
+                description="Email important issue activity such as assignments and status changes."
+                checked={settings.email.issueActivity}
+                onChange={(value) =>
+                  updateSettings(patchFor("email", "issueActivity", value))
+                }
+              />
+              <SettingRow
+                label="Mentions and replies"
+                description="Email direct mentions and replies to conversations you participate in."
+                checked={settings.email.mentionsAndReplies}
+                onChange={(value) =>
+                  updateSettings(patchFor("email", "mentionsAndReplies", value))
+                }
+              />
+              <SettingRow
+                label="Workspace invites"
+                description="Send invite and membership emails."
+                checked={settings.email.workspaceInvites}
+                onChange={(value) =>
+                  updateSettings(patchFor("email", "workspaceInvites", value))
+                }
+              />
             </div>
           </section>
-        ))}
-      </div>
+          <section>
+            <SectionTitle
+              title="Digests and product updates"
+              description="Separate digest and product update subscriptions from issue email."
+            />
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+              <SettingRow
+                label="Daily digest"
+                description="Receive a daily summary of assigned and followed work."
+                checked={settings.email.dailyDigest}
+                onChange={(value) =>
+                  updateSettings(patchFor("email", "dailyDigest", value))
+                }
+              />
+              <SettingRow
+                label="Weekly digest"
+                description="Receive a weekly summary of workspace activity."
+                checked={settings.email.weeklyDigest}
+                onChange={(value) =>
+                  updateSettings(patchFor("email", "weeklyDigest", value))
+                }
+              />
+              <SettingRow
+                label="Product updates"
+                description="Receive Linear product announcements and release notes by email."
+                checked={settings.email.productUpdates}
+                onChange={(value) =>
+                  updateSettings(patchFor("email", "productUpdates", value))
+                }
+              />
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {activeChannel === "desktop" ? (
+        <div className="space-y-5">
+          <section>
+            <SectionTitle
+              title="Browser permission"
+              description="Desktop notifications require browser permission before alerts can be shown."
+            />
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+              <SettingRow
+                label="Enable desktop notifications"
+                description={`Current browser permission: ${settings.desktop.permission}.`}
+                checked={settings.desktop.enabled}
+                onChange={(value) =>
+                  updateSettings(patchFor("desktop", "enabled", value))
+                }
+              />
+              <SettingRow
+                label="Play notification sound"
+                description="Play a short sound for desktop notifications."
+                checked={settings.desktop.sound}
+                onChange={(value) =>
+                  updateSettings(patchFor("desktop", "sound", value))
+                }
+              />
+            </div>
+          </section>
+          <section>
+            <SectionTitle
+              title="Desktop delivery"
+              description="Choose which time-sensitive events can alert on desktop."
+            />
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+              <SettingRow
+                label="Issue activity"
+                description="Notify for important issue activity in followed work."
+                checked={settings.desktop.issueActivity}
+                onChange={(value) =>
+                  updateSettings(patchFor("desktop", "issueActivity", value))
+                }
+              />
+              <SettingRow
+                label="Mentions and replies"
+                description="Notify immediately when someone needs your attention."
+                checked={settings.desktop.mentionsAndReplies}
+                onChange={(value) =>
+                  updateSettings(
+                    patchFor("desktop", "mentionsAndReplies", value),
+                  )
+                }
+              />
+              <SettingRow
+                label="Reminders"
+                description="Notify for due dates and scheduled reminders."
+                checked={settings.desktop.reminders}
+                onChange={(value) =>
+                  updateSettings(patchFor("desktop", "reminders", value))
+                }
+              />
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {activeChannel === "slack" ? (
+        <div className="space-y-5">
+          <section>
+            <SectionTitle
+              title="Slack connection"
+              description="Slack delivery depends on the workspace integration and destination."
+            />
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+              <SettingRow
+                label="Enable Slack notifications"
+                description={`Destination: ${settings.slack.destination.replaceAll("_", " ")}.`}
+                checked={settings.slack.enabled}
+                onChange={(value) =>
+                  updateSettings(patchFor("slack", "enabled", value))
+                }
+              />
+            </div>
+          </section>
+          <section>
+            <SectionTitle
+              title="Slack delivery"
+              description="Choose which Linear events are forwarded to Slack."
+            />
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+              <SettingRow
+                label="Mentions and replies"
+                description="Forward direct mentions and replies to Slack."
+                checked={settings.slack.mentionsAndReplies}
+                onChange={(value) =>
+                  updateSettings(patchFor("slack", "mentionsAndReplies", value))
+                }
+              />
+              <SettingRow
+                label="Assigned to me"
+                description="Forward new assignments to Slack."
+                checked={settings.slack.assignedToMe}
+                onChange={(value) =>
+                  updateSettings(patchFor("slack", "assignedToMe", value))
+                }
+              />
+              <SettingRow
+                label="Triage activity"
+                description="Forward new triage items and intake updates."
+                checked={settings.slack.triageActivity}
+                onChange={(value) =>
+                  updateSettings(patchFor("slack", "triageActivity", value))
+                }
+              />
+              <SettingRow
+                label="Project updates"
+                description="Forward project health and milestone updates."
+                checked={settings.slack.projectUpdates}
+                onChange={(value) =>
+                  updateSettings(patchFor("slack", "projectUpdates", value))
+                }
+              />
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

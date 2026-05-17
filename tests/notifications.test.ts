@@ -21,30 +21,54 @@ const DISABLED_USER_ID = "notif-pref-disabled-user";
 const ENABLED_USER_ID = "notif-pref-enabled-user";
 const ACTOR_USER_ID = "notif-pref-actor-user";
 
-function allEventsDisabled(): AccountNotificationSettings["channels"]["desktop"]["events"] {
-  return Object.fromEntries(
-    ACCOUNT_NOTIFICATION_EVENTS.map((eventKey) => [eventKey, false]),
-  ) as AccountNotificationSettings["channels"]["desktop"]["events"];
-}
-
 function settingsWithEventEnabled(
-  eventKey: keyof AccountNotificationSettings["channels"]["desktop"]["events"],
+  eventKey: string,
   enabled: boolean,
 ): AccountNotificationSettings {
-  return {
+  const settings: AccountNotificationSettings = {
     ...DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS,
-    channels: {
-      desktop: {
-        events: {
-          ...allEventsDisabled(),
-          [eventKey]: enabled,
-        },
-      },
-      mobile: { events: allEventsDisabled() },
-      email: { events: allEventsDisabled() },
-      slack: { events: allEventsDisabled() },
+    inbox: {
+      ...DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.inbox,
+      assignedToMe: false,
+      mentionsAndReplies: false,
+      subscribedIssues: false,
+      teamUpdates: false,
+    },
+    email: {
+      ...DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.email,
+      issueActivity: false,
+      mentionsAndReplies: false,
+      dailyDigest: false,
+      weeklyDigest: false,
+      productUpdates: false,
+      workspaceInvites: false,
+    },
+    desktop: {
+      ...DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.desktop,
+      issueActivity: false,
+      mentionsAndReplies: false,
+      reminders: false,
+    },
+    slack: {
+      ...DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack,
+      mentionsAndReplies: false,
+      assignedToMe: false,
+      triageActivity: false,
+      projectUpdates: false,
     },
   };
+
+  if (eventKey === "assignments") settings.inbox.assignedToMe = enabled;
+  if (eventKey === "mentions" || eventKey === "comments")
+    settings.inbox.mentionsAndReplies = enabled;
+  if (eventKey === "dueDates") settings.desktop.reminders = enabled;
+  if (eventKey === "projectUpdates") settings.email.weeklyDigest = enabled;
+  if (eventKey === "teamUpdates") settings.inbox.teamUpdates = enabled;
+  if (eventKey === "workspaceAdmin") settings.email.workspaceInvites = enabled;
+  if (eventKey === "statusChanges" || eventKey === "relations")
+    settings.inbox.subscribedIssues = enabled;
+
+  return settings;
 }
 
 describe("notifications helpers", () => {
@@ -274,7 +298,7 @@ describe("notification preference enforcement", () => {
 
   it("keeps delivery enabled when a different channel still allows the event", () => {
     const settings = settingsWithEventEnabled("assignments", false);
-    settings.channels.mobile.events.assignments = true;
+    settings.email.issueActivity = true;
 
     expect(shouldDeliverNotificationForSettings("assigned", settings)).toBe(
       true,
