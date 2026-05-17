@@ -33,10 +33,23 @@ type SamlDiscoveryResponse = {
 };
 
 const emptyEmailLoginError = "Please enter an email address for login.";
-const invalidEmailError = "Enter a valid email address.";
+function shouldUseNativeEmailValidation(
+  form: HTMLFormElement,
+  email: string,
+): boolean {
+  if (!email) {
+    return false;
+  }
 
-function isValidEmailAddress(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const emailInput = form.querySelector<HTMLInputElement>(
+    'input[type="email"]',
+  );
+  if (!emailInput || emailInput.validity.valid) {
+    return false;
+  }
+
+  form.reportValidity();
+  return true;
 }
 
 const authErrorMessages: Record<string, string> = {
@@ -322,8 +335,8 @@ export function AuthPage({
       return;
     }
 
-    if (!isValidEmailAddress(normalizedEmail)) {
-      setError(invalidEmailError);
+    if (shouldUseNativeEmailValidation(e.currentTarget, normalizedEmail)) {
+      setError("");
       return;
     }
 
@@ -380,12 +393,19 @@ export function AuthPage({
     window.location.assign(verifyUrl.toString());
   }
 
-  async function handleSsoSubmit(e: React.FormEvent) {
+  async function handleSsoSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const normalizedSsoIdentifier = ssoIdentifier.trim();
 
     if (!normalizedSsoIdentifier) {
       setError(emptyEmailLoginError);
+      return;
+    }
+
+    if (
+      shouldUseNativeEmailValidation(e.currentTarget, normalizedSsoIdentifier)
+    ) {
+      setError("");
       return;
     }
 

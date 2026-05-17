@@ -127,4 +127,36 @@ test.describe("Unauthenticated workspace deep links", () => {
     ).toBeVisible();
     expect(consoleErrors).toEqual([]);
   });
+
+  test("login invalid email uses native validation without inline custom text", async ({
+    page,
+  }) => {
+    await page.goto("/login");
+    await page.getByRole("button", { name: "Continue with email" }).click();
+
+    const emailInput = page.getByPlaceholder("Enter your email address…");
+    await emailInput.fill("not-an-email");
+    await page.getByRole("button", { name: "Continue with email" }).click();
+
+    await expect(
+      page.getByRole("heading", { name: "What’s your email address?" }),
+    ).toBeVisible();
+    await expect(page.getByText("Enter a valid email address.")).toHaveCount(0);
+  });
+
+  test("SAML invalid email uses native validation without inline custom text", async ({
+    page,
+  }) => {
+    await page.goto("/login");
+    await page.getByRole("button", { name: "Continue with SAML SSO" }).click();
+
+    const emailInput = page.getByPlaceholder("Enter your email address…");
+    await emailInput.fill("not-an-email");
+    await page.getByRole("button", { name: "Continue with SAML" }).click();
+
+    await expect(
+      page.getByRole("heading", { name: "What’s your email address?" }),
+    ).toBeVisible();
+    await expect(page.getByText("Enter a valid email address.")).toHaveCount(0);
+  });
 });

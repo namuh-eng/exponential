@@ -240,7 +240,7 @@ describe("Login page", () => {
     ).toBeDefined();
   });
 
-  it("shows server-backed SAML validation errors", async () => {
+  it("does not show server-backed invalid-email text for client-side malformed SAML email", async () => {
     fetchMock.mockImplementation((url: string) => {
       if (url === "/api/auth/provider-capabilities") {
         return Promise.resolve({
@@ -264,9 +264,10 @@ describe("Login page", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Continue with SAML" }));
 
-    expect(
-      await screen.findByText("Enter a valid email address."),
-    ).toBeDefined();
+    await vi.waitFor(() => {
+      expect(screen.queryByText("Enter a valid email address.")).toBeNull();
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("redirects to the discovered SAML IdP URL", async () => {
@@ -589,7 +590,7 @@ describe("Login page", () => {
     expect(signIn.magicLink).not.toHaveBeenCalled();
   });
 
-  it("shows inline validation for a non-empty invalid login email", () => {
+  it("uses native validation without inline text for a non-empty invalid login email", () => {
     render(<LoginPage />);
     fireEvent.click(screen.getByText("Continue with email"));
 
@@ -597,7 +598,7 @@ describe("Login page", () => {
     fireEvent.change(input, { target: { value: "invalid" } });
     fireEvent.submit(input.closest("form") as HTMLFormElement);
 
-    expect(screen.getByText("Enter a valid email address.")).toBeDefined();
+    expect(screen.queryByText("Enter a valid email address.")).toBeNull();
     expect(signIn.magicLink).not.toHaveBeenCalled();
   });
 
