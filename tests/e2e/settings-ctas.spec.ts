@@ -31,12 +31,8 @@ test.describe("settings empty-state CTAs", () => {
     await page.goto(`/${workspaceSlug}/settings/emojis`);
     await expect(
       page.getByRole("button", { name: "Upload emoji" }),
-    ).toBeDisabled();
-    await expect(
-      page.getByText(
-        "Custom emoji uploads are not available in this workspace yet.",
-      ),
-    ).toBeVisible();
+    ).toBeEnabled();
+    await expect(page.getByText("No custom emojis")).toBeVisible();
 
     await page.goto(`/${workspaceSlug}/settings/applications`);
     const exploreLink = page.getByRole("link", {
