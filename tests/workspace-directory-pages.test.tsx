@@ -85,8 +85,74 @@ describe("workspace directory routes", () => {
 
     expect(screen.getByRole("heading", { name: "Members" })).toBeVisible();
     expect(screen.getByText("Ada Lovelace")).toBeVisible();
-    expect(screen.getByText("Engineering")).toBeVisible();
+    expect(screen.getAllByText("Engineering").length).toBeGreaterThan(0);
     expect(getWorkspaceMembersDirectoryMock).toHaveBeenCalledWith("user-1");
+  });
+
+  it("searches, filters, and opens member profile details", async () => {
+    getWorkspaceMembersDirectoryMock.mockResolvedValue({
+      workspaceId: "workspace-1",
+      members: [
+        {
+          id: "member-1",
+          userId: "user-1",
+          name: "Ada Lovelace",
+          email: "ada@example.com",
+          image: null,
+          role: "owner",
+          joinedAt: "2026-01-01T00:00:00.000Z",
+          teams: [{ id: "team-1", name: "Engineering", key: "ENG" }],
+        },
+        {
+          id: "member-2",
+          userId: "user-2",
+          name: "Grace Hopper",
+          email: "grace@example.com",
+          image: null,
+          role: "admin",
+          joinedAt: "2026-02-01T00:00:00.000Z",
+          teams: [{ id: "team-2", name: "Platform", key: "PLT" }],
+        },
+      ],
+    });
+
+    const { default: MembersPage } = await import("@/app/(app)/members/page");
+
+    render(await MembersPage());
+
+    const search = screen.getByLabelText("Search members");
+    fireEvent.change(search, { target: { value: "grace@example.com" } });
+
+    expect(screen.getByText("Grace Hopper")).toBeVisible();
+    expect(screen.queryByText("Ada Lovelace")).toBeNull();
+    expect(screen.getByText("2 members")).toBeVisible();
+
+    fireEvent.change(search, { target: { value: "missing" } });
+    expect(
+      screen.getByText("No members match your search or filters."),
+    ).toBeVisible();
+
+    fireEvent.change(search, { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Role"), {
+      target: { value: "owner" },
+    });
+    expect(screen.getByText("Ada Lovelace")).toBeVisible();
+    expect(screen.queryByText("Grace Hopper")).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Open profile for Ada Lovelace/ }),
+    );
+
+    expect(screen.getByRole("dialog", { name: "Ada Lovelace" })).toBeVisible();
+    expect(screen.getAllByText("ada@example.com").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Owner").length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Engineering" })).toHaveAttribute(
+      "href",
+      "/team/ENG/all",
+    );
+    expect(
+      screen.getByRole("link", { name: "Manage members" }),
+    ).toHaveAttribute("href", "/settings/members");
   });
 
   it("renders the authenticated teams directory from workspace data", async () => {
