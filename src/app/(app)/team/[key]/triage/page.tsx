@@ -46,6 +46,8 @@ interface TriageIssue {
   assigneeId: string | null;
   projectId: string | null;
   projectName?: string | null;
+  projectMilestoneId?: string | null;
+  cycleId?: string | null;
   dueDate?: string | null;
   estimate?: number | null;
   updatedAt?: string;
@@ -70,6 +72,13 @@ interface TriageResponse {
   triageEnabled?: boolean;
   acceptDestinationStates?: TriageDestinationState[];
   declineDestinationStates?: TriageDestinationState[];
+  metadataOptions?: {
+    labels: { id: string; name: string; color: string }[];
+    cycles: { id: string; name: string | null; number: number }[];
+    projects: { id: string; name: string }[];
+    projectMilestones: { id: string; name: string; projectId: string }[];
+    members: { id: string; name: string | null; email: string | null }[];
+  };
 }
 
 type TriageDecisionAction = "accept" | "decline";
@@ -102,6 +111,17 @@ export default function TeamTriagePage() {
     useState<PendingTriageDecision | null>(null);
   const [decisionDestinationId, setDecisionDestinationId] = useState("");
   const [decisionReason, setDecisionReason] = useState("");
+  const [acceptMetadata, setAcceptMetadata] = useState({
+    priority: "none",
+    estimate: "",
+    labelIds: [] as string[],
+    cycleId: "",
+    projectId: "",
+    projectMilestoneId: "",
+    assigneeId: "",
+    comment: "",
+    subscribe: true,
+  });
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const [decisionSubmitting, setDecisionSubmitting] = useState(false);
 
@@ -200,7 +220,19 @@ export default function TeamTriagePage() {
 
       setPendingDecision({ action, issues, bulk });
       setDecisionDestinationId(defaultDestination?.id ?? "");
+      const issue = issues[0];
       setDecisionReason("");
+      setAcceptMetadata({
+        priority: issue.priority ?? "none",
+        estimate: issue.estimate == null ? "" : String(issue.estimate),
+        labelIds: issue.labelIds ?? [],
+        cycleId: issue.cycleId ?? "",
+        projectId: issue.projectId ?? "",
+        projectMilestoneId: issue.projectMilestoneId ?? "",
+        assigneeId: issue.assigneeId ?? "",
+        comment: "",
+        subscribe: true,
+      });
       setDecisionError(null);
     },
     [
@@ -236,6 +268,14 @@ export default function TeamTriagePage() {
       return;
     }
 
+    if (pendingDecision.action === "accept" && acceptMetadata.estimate) {
+      const estimate = Number(acceptMetadata.estimate);
+      if (!Number.isFinite(estimate) || estimate < 0) {
+        setDecisionError("Estimate must be a positive number.");
+        return;
+      }
+    }
+
     if (!decisionDestinationId) {
       setDecisionError("Choose a destination status before confirming.");
       return;
@@ -259,6 +299,21 @@ export default function TeamTriagePage() {
           destinationStateId: decisionDestinationId,
           confirmed: true,
           reason: decisionReason.trim() || undefined,
+          ...(pendingDecision.action === "accept" && !pendingDecision.bulk
+            ? {
+                priority: acceptMetadata.priority,
+                estimate: acceptMetadata.estimate
+                  ? Number(acceptMetadata.estimate)
+                  : null,
+                labelIds: acceptMetadata.labelIds,
+                cycleId: acceptMetadata.cycleId || null,
+                projectId: acceptMetadata.projectId || null,
+                projectMilestoneId: acceptMetadata.projectMilestoneId || null,
+                assigneeId: acceptMetadata.assigneeId || null,
+                comment: acceptMetadata.comment.trim() || undefined,
+                subscribe: acceptMetadata.subscribe,
+              }
+            : {}),
         }),
       });
 
@@ -306,6 +361,7 @@ export default function TeamTriagePage() {
       setDecisionSubmitting(false);
     }
   }, [
+    acceptMetadata,
     decisionDestinationId,
     decisionReason,
     fetchTriage,
@@ -518,6 +574,27 @@ export default function TeamTriagePage() {
       : "Decline issue"
     : "Confirm";
 
+  const metadataOptions = data?.metadataOptions ?? {
+    labels: [],
+    cycles: [],
+    projects: [],
+    projectMilestones: [],
+    members: [],
+  };
+  const availableMilestones = metadataOptions.projectMilestones.filter(
+    (milestone) =>
+      !acceptMetadata.projectId ||
+      milestone.projectId === acceptMetadata.projectId,
+  );
+  const toggleAcceptLabel = (labelId: string) => {
+    setAcceptMetadata((current) => ({
+      ...current,
+      labelIds: current.labelIds.includes(labelId)
+        ? current.labelIds.filter((currentId) => currentId !== labelId)
+        : [...current.labelIds, labelId],
+    }));
+  };
+
   const decisionModal = pendingDecision ? (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
@@ -525,8 +602,17 @@ export default function TeamTriagePage() {
     >
       <dialog
         aria-labelledby="triage-decision-title"
-        className="w-full max-w-[440px] rounded-lg border border-[var(--color-border)] bg-[var(--color-content-bg)] p-5 shadow-2xl"
+        className={`w-full ${pendingDecision.action === "accept" && !pendingDecision.bulk ? "max-w-[720px]" : "max-w-[440px]"} rounded-lg border border-[var(--color-border)] bg-[var(--color-content-bg)] p-5 shadow-2xl`}
         open
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            closeDecision();
+          }
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            void confirmDecision();
+          }
+        }}
       >
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
@@ -534,7 +620,9 @@ export default function TeamTriagePage() {
               className="text-[15px] font-semibold text-[var(--color-text-primary)]"
               id="triage-decision-title"
             >
-              {decisionTitle}
+              {pendingDecision.action === "accept" && !pendingDecision.bulk
+                ? `Accept: ${pendingDecision.issues[0].identifier} ${pendingDecision.issues[0].title}`
+                : decisionTitle}
             </h2>
             <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
               {pendingDecision.bulk
@@ -593,6 +681,203 @@ export default function TeamTriagePage() {
               placeholder="Add context for why this issue is being declined"
             />
           </label>
+        ) : null}
+
+        {pendingDecision.action === "accept" && !pendingDecision.bulk ? (
+          <div className="mb-4 grid gap-3 rounded-lg border border-[var(--color-border)] p-3 md:grid-cols-2">
+            <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">
+              Priority
+              <select
+                aria-label="Accept priority"
+                value={acceptMetadata.priority}
+                onChange={(event) =>
+                  setAcceptMetadata((current) => ({
+                    ...current,
+                    priority: event.target.value,
+                  }))
+                }
+                className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+              >
+                {PRIORITY_OPTIONS.map((priority) => (
+                  <option key={priority.value} value={priority.value}>
+                    {priority.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">
+              Estimate
+              <input
+                aria-label="Accept estimate"
+                type="number"
+                min="0"
+                step="0.5"
+                value={acceptMetadata.estimate}
+                onChange={(event) =>
+                  setAcceptMetadata((current) => ({
+                    ...current,
+                    estimate: event.target.value,
+                  }))
+                }
+                className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+              />
+            </label>
+            <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">
+              Team
+              <input
+                aria-label="Accept team"
+                value={data?.team.name ?? params.key}
+                disabled
+                className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-secondary)] opacity-70"
+              />
+            </label>
+            <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">
+              Assignee
+              <select
+                aria-label="Accept assignee"
+                value={acceptMetadata.assigneeId}
+                onChange={(event) =>
+                  setAcceptMetadata((current) => ({
+                    ...current,
+                    assigneeId: event.target.value,
+                  }))
+                }
+                className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+              >
+                <option value="">Unassigned</option>
+                {metadataOptions.members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name ?? member.email ?? member.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">
+              Cycle
+              <select
+                aria-label="Accept cycle"
+                value={acceptMetadata.cycleId}
+                onChange={(event) =>
+                  setAcceptMetadata((current) => ({
+                    ...current,
+                    cycleId: event.target.value,
+                  }))
+                }
+                className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+              >
+                <option value="">No cycle</option>
+                {metadataOptions.cycles.map((cycle) => (
+                  <option key={cycle.id} value={cycle.id}>
+                    {cycle.name ?? `Cycle ${cycle.number}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">
+              Project
+              <select
+                aria-label="Accept project"
+                value={acceptMetadata.projectId}
+                onChange={(event) =>
+                  setAcceptMetadata((current) => ({
+                    ...current,
+                    projectId: event.target.value,
+                    projectMilestoneId: "",
+                  }))
+                }
+                className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+              >
+                <option value="">No project</option>
+                {metadataOptions.projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">
+              Project milestone
+              <select
+                aria-label="Accept project milestone"
+                value={acceptMetadata.projectMilestoneId}
+                onChange={(event) =>
+                  setAcceptMetadata((current) => ({
+                    ...current,
+                    projectMilestoneId: event.target.value,
+                  }))
+                }
+                className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+              >
+                <option value="">No milestone</option>
+                {availableMilestones.map((milestone) => (
+                  <option key={milestone.id} value={milestone.id}>
+                    {milestone.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <fieldset className="md:col-span-2">
+              <legend className="text-[12px] font-medium text-[var(--color-text-secondary)]">
+                Labels
+              </legend>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {metadataOptions.labels.length === 0 ? (
+                  <span className="text-[12px] text-[var(--color-text-tertiary)]">
+                    No labels available
+                  </span>
+                ) : null}
+                {metadataOptions.labels.map((label) => (
+                  <label
+                    key={label.id}
+                    className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-primary)]"
+                  >
+                    <input
+                      aria-label={`Accept label ${label.name}`}
+                      type="checkbox"
+                      checked={acceptMetadata.labelIds.includes(label.id)}
+                      onChange={() => toggleAcceptLabel(label.id)}
+                    />
+                    {label.name}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <label className="md:col-span-2 block text-[12px] font-medium text-[var(--color-text-secondary)]">
+              Comment
+              <textarea
+                aria-label="Comment for accepting issue"
+                placeholder="Add a comment…"
+                value={acceptMetadata.comment}
+                onChange={(event) =>
+                  setAcceptMetadata((current) => ({
+                    ...current,
+                    comment: event.target.value,
+                  }))
+                }
+                className="mt-1 min-h-20 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+              />
+            </label>
+            <label className="flex items-center gap-2 text-[13px] text-[var(--color-text-primary)]">
+              <input
+                aria-label="Subscribe to issue updates"
+                type="checkbox"
+                checked={acceptMetadata.subscribe}
+                onChange={(event) =>
+                  setAcceptMetadata((current) => ({
+                    ...current,
+                    subscribe: event.target.checked,
+                  }))
+                }
+              />
+              Subscribe to issue updates
+            </label>
+            <button
+              type="button"
+              className="justify-self-start rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+            >
+              More actions
+            </button>
+          </div>
         ) : null}
 
         {decisionError ? (

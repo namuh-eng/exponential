@@ -308,7 +308,9 @@ describe("TeamTriagePage", () => {
     fireEvent.click(screen.getAllByLabelText("Accept issue")[1]);
 
     expect(await screen.findByRole("dialog")).toBeDefined();
-    expect(screen.getByText("Accept triage issue")).toBeDefined();
+    expect(
+      screen.getByRole("combobox", { name: "Accept priority" }),
+    ).toBeDefined();
     expect(
       screen.getByRole("combobox", { name: "Triage destination status" }),
     ).toBeDefined();
@@ -345,6 +347,14 @@ describe("TeamTriagePage", () => {
           action: "accept",
           destinationStateId: "state-ready",
           confirmed: true,
+          priority: "none",
+          estimate: null,
+          labelIds: [],
+          cycleId: null,
+          projectId: null,
+          projectMilestoneId: null,
+          assigneeId: null,
+          subscribe: true,
         }),
       }),
     );
@@ -485,7 +495,9 @@ describe("TeamTriagePage", () => {
 
     fireEvent.keyDown(list, { key: "a" });
     expect(await screen.findByRole("dialog")).toBeDefined();
-    expect(screen.getByText("Accept triage issue")).toBeDefined();
+    expect(
+      screen.getByRole("combobox", { name: "Accept priority" }),
+    ).toBeDefined();
   });
 
   it("shows disabled triage state instead of active queue controls", async () => {

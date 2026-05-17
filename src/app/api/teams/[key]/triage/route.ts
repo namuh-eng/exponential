@@ -1,10 +1,21 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { issue, project, user, workflowState } from "@/lib/db/schema";
+import {
+  cycle,
+  issue,
+  label,
+  member,
+  project,
+  projectMilestone,
+  projectTeam,
+  teamMember,
+  user,
+  workflowState,
+} from "@/lib/db/schema";
 import { getLabelsForIssues } from "@/lib/issue-labels";
 import { readTeamSettings } from "@/lib/team-settings";
 import { findAccessibleTeam } from "@/lib/teams";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -84,6 +95,8 @@ export async function GET(
       assigneeId: issue.assigneeId,
       projectId: issue.projectId,
       projectName: project.name,
+      projectMilestoneId: issue.projectMilestoneId,
+      cycleId: issue.cycleId,
       dueDate: issue.dueDate,
       estimate: issue.estimate,
       createdAt: issue.createdAt,
@@ -159,10 +172,72 @@ export async function GET(
     assigneeId: i.assigneeId,
     projectId: i.projectId,
     projectName: i.projectName,
+    projectMilestoneId: i.projectMilestoneId,
+    cycleId: i.cycleId,
     dueDate: i.dueDate,
     estimate: i.estimate,
     teamId: i.teamId,
   }));
+
+  const [labelOptions, cycleOptions, projectOptions, memberOptions] =
+    await Promise.all([
+      db
+        .select({ id: label.id, name: label.name, color: label.color })
+        .from(label)
+        .where(
+          and(
+            eq(label.workspaceId, teamRecord.workspaceId),
+            isNull(label.archivedAt),
+            or(isNull(label.teamId), eq(label.teamId, teamRecord.id)),
+          ),
+        )
+        .orderBy(asc(label.name)),
+      db
+        .select({ id: cycle.id, name: cycle.name, number: cycle.number })
+        .from(cycle)
+        .where(eq(cycle.teamId, teamRecord.id))
+        .orderBy(desc(cycle.startDate), desc(cycle.number)),
+      db
+        .select({ id: project.id, name: project.name })
+        .from(project)
+        .leftJoin(projectTeam, eq(projectTeam.projectId, project.id))
+        .where(
+          and(
+            eq(project.workspaceId, teamRecord.workspaceId),
+            or(
+              isNull(projectTeam.teamId),
+              eq(projectTeam.teamId, teamRecord.id),
+            ),
+          ),
+        )
+        .orderBy(asc(project.name)),
+      db
+        .select({ id: user.id, name: user.name, email: user.email })
+        .from(teamMember)
+        .innerJoin(user, eq(teamMember.userId, user.id))
+        .innerJoin(member, eq(member.userId, user.id))
+        .where(
+          and(
+            eq(teamMember.teamId, teamRecord.id),
+            eq(member.workspaceId, teamRecord.workspaceId),
+          ),
+        )
+        .orderBy(asc(user.name), asc(user.email)),
+    ]);
+
+  const projectIds = projectOptions.map((currentProject) => currentProject.id);
+  const projectMilestoneOptions =
+    projectIds.length === 0
+      ? []
+      : await db
+          .select({
+            id: projectMilestone.id,
+            name: projectMilestone.name,
+            projectId: projectMilestone.projectId,
+          })
+          .from(projectMilestone)
+          .where(inArray(projectMilestone.projectId, projectIds))
+          .orderBy(asc(projectMilestone.sortOrder), asc(projectMilestone.name));
 
   return NextResponse.json({
     team: teamRecord,
@@ -173,5 +248,12 @@ export async function GET(
     triageEnabled: teamRecord.triageEnabled ?? true,
     acceptDestinationStates,
     declineDestinationStates,
+    metadataOptions: {
+      labels: labelOptions,
+      cycles: cycleOptions,
+      projects: projectOptions,
+      projectMilestones: projectMilestoneOptions,
+      members: memberOptions,
+    },
   });
 }
