@@ -117,7 +117,7 @@ export async function GET() {
       region: currentWorkspace.region,
       fiscalMonth: currentWorkspace.fiscalMonth,
       welcomeMessage: currentWorkspace.welcomeMessage,
-      plan: readWorkspaceSettings(currentWorkspace.settings).plan,
+      plan: currentWorkspace.plan,
     },
   });
 }
@@ -243,7 +243,7 @@ export async function PATCH(request: Request) {
       region: currentWorkspace.region,
       fiscalMonth,
       welcomeMessage,
-      plan: readWorkspaceSettings(currentWorkspace.settings).plan,
+      plan: currentWorkspace.plan,
     },
   });
 }
