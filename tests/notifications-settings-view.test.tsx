@@ -115,16 +115,31 @@ describe("NotificationsOverviewPage UI", () => {
     render(<NotificationsOverviewPage />);
     await screen.findByText("Notifications");
 
-    // Desktop: enabled and all events true -> "Enabled for all notifications"
+    // Desktop preserves the four saved keys and defaults new granular events.
     expect(
-      screen.getByText("Enabled for all notifications"),
+      screen.getByText(
+        "Enabled for assignments, status changes, and 10 others",
+      ),
     ).toBeInTheDocument();
 
-    // Mobile: disabled -> "Disabled"
-    expect(screen.getAllByText("Disabled").length).toBeGreaterThan(0);
+    // Mobile has two saved four-key events plus the default granular set.
+    expect(
+      screen.getByText("Enabled for assignments, mentions, and 12 others"),
+    ).toBeInTheDocument();
 
-    // Email: enabled but some events false -> "Enabled for mentions" (based on mock events)
-    expect(screen.getByText("Enabled for mentions")).toBeInTheDocument();
+    // Email preserves the existing mention-only preference while defaulting new keys.
+    expect(
+      screen.getByText(
+        "Enabled for mentions, due dates and reminders, and 2 others",
+      ),
+    ).toBeInTheDocument();
+
+    // Slack preserves disabled legacy keys while defaulting new Slack granular events.
+    expect(
+      screen.getByText(
+        "Enabled for triage and intake, project updates, and 1 other",
+      ),
+    ).toBeInTheDocument();
   });
 });
 

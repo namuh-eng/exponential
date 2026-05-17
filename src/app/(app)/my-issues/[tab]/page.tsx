@@ -1,5 +1,6 @@
 "use client";
 
+import { useAppShellContext } from "@/app/(app)/app-shell";
 import {
   DisplayOptionsPanel,
   type DisplayProperties,
@@ -13,6 +14,7 @@ import {
 import { IssueRow, priorityMap } from "@/components/issue-row";
 import { IssuesGroupHeader } from "@/components/issues-group-header";
 import { useFilters } from "@/hooks/use-filters";
+import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -94,6 +96,7 @@ const defaultDisplayProps: DisplayProperties = {
 export default function MyIssuesTabPage() {
   const params = useParams<{ tab: string }>();
   const router = useRouter();
+  const workspaceSlug = useAppShellContext()?.workspaceSlug;
   const activeTab = params.tab ?? "assigned";
 
   const [data, setData] = useState<MyIssuesResponse | null>(null);
@@ -172,7 +175,11 @@ export default function MyIssuesTabPage() {
 
     return (
       <div className="flex h-full flex-col">
-        <MyIssuesHeader activeTab={activeTab} router={router} />
+        <MyIssuesHeader
+          activeTab={activeTab}
+          router={router}
+          workspaceSlug={workspaceSlug}
+        />
         <div className="flex-1">
           <EmptyState
             title={msg.title}
@@ -215,7 +222,11 @@ export default function MyIssuesTabPage() {
             <button
               key={tab.id}
               type="button"
-              onClick={() => router.push(`/my-issues/${tab.id}`)}
+              onClick={() =>
+                router.push(
+                  withWorkspaceSlug(`/my-issues/${tab.id}`, workspaceSlug),
+                )
+              }
               className={`rounded-md px-2.5 py-1 text-[13px] transition-colors ${
                 activeTab === tab.id
                   ? "bg-[var(--color-surface-active)] text-[var(--color-text-primary)]"
@@ -370,9 +381,11 @@ export default function MyIssuesTabPage() {
 function MyIssuesHeader({
   activeTab,
   router,
+  workspaceSlug,
 }: {
   activeTab: string;
   router: ReturnType<typeof useRouter>;
+  workspaceSlug?: string;
 }) {
   return (
     <div className="flex items-center gap-1 border-b border-[var(--color-border)] px-4 py-2">
@@ -384,7 +397,11 @@ function MyIssuesHeader({
           <button
             key={tab.id}
             type="button"
-            onClick={() => router.push(`/my-issues/${tab.id}`)}
+            onClick={() =>
+              router.push(
+                withWorkspaceSlug(`/my-issues/${tab.id}`, workspaceSlug),
+              )
+            }
             className={`rounded-md px-2.5 py-1 text-[13px] transition-colors ${
               activeTab === tab.id
                 ? "bg-[var(--color-surface-active)] text-[var(--color-text-primary)]"

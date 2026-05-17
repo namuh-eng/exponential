@@ -1,9 +1,14 @@
 "use client";
 
 import { Avatar } from "@/components/avatar";
+import {
+  OAUTH_SCOPE_OPTIONS,
+  validateOAuthRedirectUrl,
+} from "@/lib/api-settings";
 import type {
   ApiSettingsPayload,
   OAuthApplicationRecord,
+  OAuthScope,
   PermissionLevel,
   WebhookEventType,
   WorkspaceApiKeyRecord,
@@ -21,8 +26,11 @@ type CreateResponse = {
 };
 
 type OAuthFormState = {
+  id: string | null;
   name: string;
-  redirectUrl: string;
+  description: string;
+  redirectUrls: string;
+  scopes: OAuthScope[];
 };
 
 type WebhookFormState = {
@@ -145,7 +153,11 @@ function Modal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div className="w-full max-w-[480px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)] p-5 shadow-2xl">
+      <dialog
+        open
+        aria-label={title}
+        className="m-0 w-full max-w-[480px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)] p-5 text-[var(--color-text-primary)] shadow-2xl"
+      >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <h3 className="text-[16px] font-semibold text-[var(--color-text-primary)]">
@@ -164,7 +176,7 @@ function Modal({
           </button>
         </div>
         {children}
-      </div>
+      </dialog>
     </div>
   );
 }
@@ -183,6 +195,15 @@ function Field({
       </span>
       {children}
     </div>
+  );
+}
+
+function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      {...props}
+      className="min-h-[82px] w-full rounded-lg border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none transition-colors focus:border-[var(--color-accent)]"
+    />
   );
 }
 
@@ -211,10 +232,16 @@ function OAuthApplicationsList({
   items,
   canManage,
   onCreate,
+  onEdit,
+  onRotate,
+  onDelete,
 }: {
   items: OAuthApplicationRecord[];
   canManage: boolean;
   onCreate: () => void;
+  onEdit: (item: OAuthApplicationRecord) => void;
+  onRotate: (item: OAuthApplicationRecord) => void;
+  onDelete: (item: OAuthApplicationRecord) => void;
 }) {
   if (items.length === 0) {
     return (
@@ -249,9 +276,29 @@ function OAuthApplicationsList({
               <div className="mt-1 break-all text-[12px] text-[var(--color-text-tertiary)]">
                 Redirect URL: {item.redirectUrl}
               </div>
+              <div className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+                Scopes: {(item.scopes ?? ["read"]).join(", ")}
+              </div>
             </div>
-            <div className="shrink-0 text-right text-[12px] text-[var(--color-text-tertiary)]">
-              Created {formatDate(item.createdAt)}
+            <div className="flex shrink-0 flex-col items-end gap-2 text-right text-[12px] text-[var(--color-text-tertiary)]">
+              <div>Created {formatDate(item.createdAt)}</div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <ActionButton
+                  label="Edit OAuth application"
+                  onClick={() => onEdit(item)}
+                  disabled={!canManage}
+                />
+                <ActionButton
+                  label="Rotate client secret"
+                  onClick={() => onRotate(item)}
+                  disabled={!canManage}
+                />
+                <ActionButton
+                  label="Delete OAuth application"
+                  onClick={() => onDelete(item)}
+                  disabled={!canManage}
+                />
+              </div>
             </div>
           </div>
         </SurfaceRow>
@@ -264,10 +311,14 @@ function WebhooksList({
   items,
   canManage,
   onCreate,
+  onToggle,
+  onDelete,
 }: {
   items: WorkspaceWebhookRecord[];
   canManage: boolean;
   onCreate: () => void;
+  onToggle: (item: WorkspaceWebhookRecord) => void;
+  onDelete: (item: WorkspaceWebhookRecord) => void;
 }) {
   if (items.length === 0) {
     return (
@@ -303,9 +354,21 @@ function WebhooksList({
                 Events: {item.events.join(", ")}
               </div>
             </div>
-            <div className="shrink-0 text-right text-[12px] text-[var(--color-text-tertiary)]">
+            <div className="flex shrink-0 flex-col items-end gap-2 text-right text-[12px] text-[var(--color-text-tertiary)]">
               <div>{item.enabled ? "Enabled" : "Disabled"}</div>
-              <div className="mt-1">Created {formatDate(item.createdAt)}</div>
+              <div>Created {formatDate(item.createdAt)}</div>
+              <div className="flex gap-2">
+                <ActionButton
+                  label={item.enabled ? "Disable webhook" : "Enable webhook"}
+                  onClick={() => onToggle(item)}
+                  disabled={!canManage}
+                />
+                <ActionButton
+                  label="Delete webhook"
+                  onClick={() => onDelete(item)}
+                  disabled={!canManage}
+                />
+              </div>
             </div>
           </div>
         </SurfaceRow>
@@ -318,10 +381,12 @@ function ApiKeysList({
   items,
   canCreate,
   onCreate,
+  onDelete,
 }: {
   items: WorkspaceApiKeyRecord[];
   canCreate: boolean;
   onCreate: () => void;
+  onDelete: (item: WorkspaceApiKeyRecord) => void;
 }) {
   if (items.length === 0) {
     return (
@@ -365,6 +430,10 @@ function ApiKeysList({
                 <div>Created {formatDate(item.createdAt)}</div>
                 <div>Last used {formatDate(item.lastUsedAt)}</div>
               </div>
+              <ActionButton
+                label="Revoke API key"
+                onClick={() => onDelete(item)}
+              />
             </div>
           </div>
         </SurfaceRow>
@@ -375,8 +444,23 @@ function ApiKeysList({
 
 function buildDefaultOauthForm(): OAuthFormState {
   return {
+    id: null,
     name: "",
-    redirectUrl: "http://localhost:3015/oauth/callback",
+    description: "",
+    redirectUrls: "",
+    scopes: ["read"],
+  };
+}
+
+function buildOauthFormFromApplication(
+  item: OAuthApplicationRecord,
+): OAuthFormState {
+  return {
+    id: item.id,
+    name: item.name,
+    description: item.description ?? "",
+    redirectUrls: (item.redirectUrls ?? [item.redirectUrl]).join("\n"),
+    scopes: item.scopes ?? ["read"],
   };
 }
 
@@ -491,17 +575,53 @@ export default function ApiSettingsPage() {
   }
 
   async function submitOAuthApplication() {
+    const name = oauthForm.name.trim();
+    if (!name) {
+      setStatusMessage(null);
+      setRevealedCredential(null);
+      setErrorMessage("Application name is required.");
+      return;
+    }
+
+    const redirectUrls = oauthForm.redirectUrls
+      .split(/[\n,]+/)
+      .map((url) => url.trim())
+      .filter(Boolean);
+    const firstRedirectValidation = validateOAuthRedirectUrl(
+      redirectUrls[0] ?? "",
+    );
+    if (!firstRedirectValidation.ok) {
+      setStatusMessage(null);
+      setRevealedCredential(null);
+      setErrorMessage(firstRedirectValidation.error);
+      return;
+    }
+    if (oauthForm.scopes.length === 0) {
+      setStatusMessage(null);
+      setRevealedCredential(null);
+      setErrorMessage("At least one OAuth scope is required.");
+      return;
+    }
+
     const didPersist = await mutate(
       "/api/workspaces/current/api",
       {
         method: "POST",
         body: JSON.stringify({
-          action: "createOAuthApplication",
-          name: oauthForm.name,
-          redirectUrl: oauthForm.redirectUrl,
+          action: oauthForm.id
+            ? "updateOAuthApplication"
+            : "createOAuthApplication",
+          id: oauthForm.id ?? undefined,
+          name,
+          description: oauthForm.description,
+          redirectUrl: redirectUrls[0],
+          redirectUrls,
+          scopes: oauthForm.scopes,
         }),
       },
-      "OAuth application created.",
+      oauthForm.id
+        ? "OAuth application updated."
+        : "OAuth application created.",
     );
 
     if (didPersist) {
@@ -548,6 +668,105 @@ export default function ApiSettingsPage() {
       setApiKeyModalOpen(false);
       setApiKeyName("Workspace automation");
     }
+  }
+
+  function editOAuthApplication(item: OAuthApplicationRecord) {
+    setOauthForm(buildOauthFormFromApplication(item));
+    setOauthModalOpen(true);
+  }
+
+  async function rotateOAuthApplicationSecret(item: OAuthApplicationRecord) {
+    if (
+      !window.confirm(
+        `Rotate client secret for "${item.name}"? Existing tokens will be revoked.`,
+      )
+    ) {
+      return;
+    }
+
+    await mutate(
+      "/api/workspaces/current/api",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "rotateOAuthApplicationSecret",
+          id: item.id,
+        }),
+      },
+      "OAuth client secret rotated.",
+    );
+  }
+
+  async function deleteOAuthApplication(item: OAuthApplicationRecord) {
+    if (!window.confirm(`Delete OAuth application "${item.name}"?`)) {
+      return;
+    }
+
+    await mutate(
+      "/api/workspaces/current/api",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "deleteOAuthApplication",
+          id: item.id,
+        }),
+      },
+      "OAuth application deleted.",
+    );
+  }
+
+  async function toggleWebhook(item: WorkspaceWebhookRecord) {
+    const nextEnabled = !item.enabled;
+    await mutate(
+      "/api/workspaces/current/api",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "updateWebhook",
+          id: item.id,
+          enabled: nextEnabled,
+        }),
+      },
+      nextEnabled ? "Webhook enabled." : "Webhook disabled.",
+    );
+  }
+
+  async function deleteWebhook(item: WorkspaceWebhookRecord) {
+    if (
+      !window.confirm(`Delete webhook "${item.label?.trim() || item.url}"?`)
+    ) {
+      return;
+    }
+
+    await mutate(
+      "/api/workspaces/current/api",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "deleteWebhook",
+          id: item.id,
+        }),
+      },
+      "Webhook deleted.",
+    );
+  }
+
+  async function deleteApiKey(item: WorkspaceApiKeyRecord) {
+    if (!window.confirm(`Revoke API key "${item.name}"?`)) {
+      return;
+    }
+
+    await mutate(
+      "/api/workspaces/current/api",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "deleteApiKey",
+          id: item.id,
+        }),
+      },
+      "API key revoked.",
+    );
   }
 
   if (loading) {
@@ -623,7 +842,13 @@ export default function ApiSettingsPage() {
         <OAuthApplicationsList
           items={data.oauthApplications}
           canManage={data.canManageWorkspaceApi}
-          onCreate={() => setOauthModalOpen(true)}
+          onCreate={() => {
+            setOauthForm(buildDefaultOauthForm());
+            setOauthModalOpen(true);
+          }}
+          onEdit={editOAuthApplication}
+          onRotate={rotateOAuthApplicationSecret}
+          onDelete={deleteOAuthApplication}
         />
 
         <SectionHeader>Webhooks</SectionHeader>
@@ -638,15 +863,20 @@ export default function ApiSettingsPage() {
           items={data.webhooks}
           canManage={data.canManageWorkspaceApi}
           onCreate={() => setWebhookModalOpen(true)}
+          onToggle={toggleWebhook}
+          onDelete={deleteWebhook}
         />
 
         <SectionHeader>Member API keys</SectionHeader>
         <p className="mb-4 text-[13px] text-[var(--color-text-tertiary)]">
           Members of your workspace can create API keys to interact with the
           Linear API on their behalf. View your personal API keys from your{" "}
-          <span className="font-medium text-[var(--color-accent)]">
+          <a
+            href="/settings/account/security#personal-api-keys"
+            className="font-medium text-[var(--color-accent)] hover:underline"
+          >
             security & access settings
-          </span>
+          </a>
           .
         </p>
 
@@ -681,13 +911,16 @@ export default function ApiSettingsPage() {
           items={data.apiKeys}
           canCreate={data.canCreateApiKeys}
           onCreate={() => setApiKeyModalOpen(true)}
+          onDelete={deleteApiKey}
         />
       </div>
 
       {oauthModalOpen ? (
         <Modal
-          title="New OAuth application"
-          description="Create an OAuth application with a redirect callback URL."
+          title={
+            oauthForm.id ? "Edit OAuth application" : "New OAuth application"
+          }
+          description="Create an OAuth application with redirect callbacks and explicit permissions."
           onClose={() => setOauthModalOpen(false)}
         >
           <div className="space-y-4">
@@ -705,23 +938,76 @@ export default function ApiSettingsPage() {
               />
             </Field>
 
-            <Field label="Redirect URL">
+            <Field label="Description">
               <TextInput
-                aria-label="Redirect URL"
-                value={oauthForm.redirectUrl}
+                aria-label="Description"
+                value={oauthForm.description}
                 onChange={(event) =>
                   setOauthForm((current) => ({
                     ...current,
-                    redirectUrl: event.target.value,
+                    description: event.target.value,
+                  }))
+                }
+                placeholder="Syncs Linear issues into the partner portal"
+              />
+            </Field>
+
+            <Field label="Redirect URL">
+              <TextArea
+                aria-label="Redirect URL"
+                value={oauthForm.redirectUrls}
+                onChange={(event) =>
+                  setOauthForm((current) => ({
+                    ...current,
+                    redirectUrls: event.target.value,
                   }))
                 }
                 placeholder="https://example.com/oauth/callback"
               />
+              <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+                Add one public HTTPS callback URL per line. Localhost, private
+                network URLs, and URL fragments are not accepted.
+              </p>
             </Field>
+
+            <fieldset>
+              <legend className="mb-1.5 text-[12px] font-medium text-[var(--color-text-secondary)]">
+                Permissions
+              </legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {OAUTH_SCOPE_OPTIONS.map((scope) => {
+                  const checked = oauthForm.scopes.includes(scope);
+                  return (
+                    <label
+                      key={scope}
+                      className="flex items-center gap-2 text-[13px] text-[var(--color-text-primary)]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) =>
+                          setOauthForm((current) => ({
+                            ...current,
+                            scopes: event.target.checked
+                              ? [...current.scopes, scope]
+                              : current.scopes.filter((item) => item !== scope),
+                          }))
+                        }
+                      />
+                      {scope}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
 
             <div className="flex justify-end gap-3">
               <ActionButton
-                label="Create OAuth application"
+                label={
+                  oauthForm.id
+                    ? "Save OAuth application"
+                    : "Create OAuth application"
+                }
                 onClick={submitOAuthApplication}
                 disabled={saving}
               />

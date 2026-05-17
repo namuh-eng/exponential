@@ -1,8 +1,11 @@
 "use client";
 
+import { useAppShellContext } from "@/app/(app)/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { NotificationRow } from "@/components/notification-row";
+import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const PRIORITY_SORT_ORDER: Record<string, number> = {
@@ -18,7 +21,7 @@ interface Notification {
   type: "assigned" | "mentioned" | "status_change" | "comment" | "duplicate";
   actorName: string;
   actorImage: string | null;
-  issueIdentifier: string;
+  issueIdentifier: string | null;
   issueTitle: string;
   issuePriority: "urgent" | "high" | "medium" | "low" | "none";
   issueId: string | null;
@@ -41,6 +44,8 @@ export default function InboxPage() {
   const [loading, setLoading] = useState(true);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [sortMode, setSortMode] = useState<"latest" | "priority">("latest");
+  const workspaceSlug = useAppShellContext()?.workspaceSlug;
+  const router = useRouter();
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -85,10 +90,8 @@ export default function InboxPage() {
     };
   }, [loadNotifications]);
 
-  const handleSelect = useCallback(
+  const markNotificationRead = useCallback(
     async (id: string) => {
-      setSelectedId(id);
-
       const notification = notifications.find((item) => item.id === id);
       if (!notification || notification.readAt) {
         return;
@@ -122,6 +125,34 @@ export default function InboxPage() {
       }
     },
     [notifications, unreadCount],
+  );
+
+  const handleSelect = useCallback(
+    (id: string) => {
+      setSelectedId(id);
+      void markNotificationRead(id);
+    },
+    [markNotificationRead],
+  );
+
+  const handleActivate = useCallback(
+    (id: string) => {
+      setSelectedId(id);
+      void markNotificationRead(id);
+
+      const notification = notifications.find((item) => item.id === id);
+      if (!notification?.issueIdentifier) {
+        return;
+      }
+
+      router.push(
+        withWorkspaceSlug(
+          `/issue/${notification.issueIdentifier}`,
+          workspaceSlug,
+        ),
+      );
+    },
+    [markNotificationRead, notifications, router, workspaceSlug],
   );
 
   const visibleNotifications = useMemo(
@@ -262,11 +293,16 @@ export default function InboxPage() {
                   readAt={notification.readAt}
                   createdAt={notification.createdAt}
                   isSelected={notification.id === selectedId}
-                  onClick={(notificationId) => {
-                    void handleSelect(notificationId);
-                  }}
+                  onClick={
+                    notification.issueIdentifier ? handleActivate : handleSelect
+                  }
                 />
               ))}
+              {unreadCount === 0 && (
+                <div className="px-3 py-4 text-center text-[12px] text-[#6b6f76]">
+                  No unread notifications
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex h-full items-center justify-center px-6 text-center text-[13px] text-[#6b6f76]">
@@ -300,7 +336,10 @@ export default function InboxPage() {
               </p>
               {selected.issueIdentifier && (
                 <Link
-                  href={`/issue/${selected.issueIdentifier}`}
+                  href={withWorkspaceSlug(
+                    `/issue/${selected.issueIdentifier}`,
+                    workspaceSlug,
+                  )}
                   className="mt-4 inline-flex text-[12px] font-medium text-[#5E6AD2] hover:text-[#7a84dd]"
                 >
                   Open issue

@@ -30,7 +30,7 @@ interface NotificationRowProps {
   type: "assigned" | "mentioned" | "status_change" | "comment" | "duplicate";
   actorName: string;
   actorImage: string | null;
-  issueIdentifier: string;
+  issueIdentifier: string | null;
   issueTitle: string;
   readAt: string | null;
   createdAt: string;
@@ -54,6 +54,11 @@ export function NotificationRow({
     <button
       type="button"
       data-testid="notification-row"
+      aria-label={
+        issueIdentifier
+          ? `Open ${issueIdentifier} ${issueTitle}`
+          : `Select notification ${issueTitle}`
+      }
       onClick={() => onClick(id)}
       className={`flex w-full items-start gap-3 rounded-md px-3 py-2.5 text-left transition-colors ${
         isSelected

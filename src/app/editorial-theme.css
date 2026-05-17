@@ -1,0 +1,211 @@
+:root {
+  /* Editorial theme: warm paper, serious ink, rust accent. Canonical source: src/lib/editorial-theme-tokens.ts */
+  --editorial-bg: #faf7f2;
+  --editorial-surface: #ffffff;
+  --editorial-surface-2: #f3eee5;
+  --editorial-surface-3: #ebe5d9;
+  --editorial-hover: rgba(20, 18, 14, 0.04);
+  --editorial-pressed: rgba(20, 18, 14, 0.08);
+  --editorial-ink-1: #14120e;
+  --editorial-ink-2: #2d2a23;
+  --editorial-ink-3: #5b564a;
+  --editorial-ink-4: #8a8478;
+  --editorial-ink-5: #b6b0a3;
+  --editorial-line: #e2dccd;
+  --editorial-line-strong: #cdc5b3;
+  --editorial-line-soft: #ede7d8;
+  --editorial-accent: oklch(0.56 0.16 32);
+  --editorial-accent-hover: oklch(0.5 0.17 32);
+  --editorial-accent-soft: oklch(0.92 0.06 35);
+  --editorial-accent-ink: #ffffff;
+  --editorial-ok: oklch(0.58 0.13 145);
+  --editorial-ok-soft: oklch(0.92 0.07 145);
+  --editorial-warn: oklch(0.72 0.14 75);
+  --editorial-warn-soft: oklch(0.94 0.08 80);
+  --editorial-err: oklch(0.55 0.18 25);
+  --editorial-err-soft: oklch(0.93 0.06 25);
+  --editorial-info: oklch(0.55 0.1 250);
+  --editorial-info-soft: oklch(0.93 0.04 250);
+  --editorial-display: var(--font-fraunces), Georgia, serif;
+  --editorial-sans: var(--font-inter-tight), var(--font-inter), -apple-system,
+    BlinkMacSystemFont, system-ui, sans-serif;
+  --editorial-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", Menlo,
+    monospace;
+  --editorial-radius: 6px;
+  --editorial-radius-lg: 10px;
+  --editorial-radius-pill: 999px;
+  --editorial-shadow-sm: 0 1px 2px rgba(20, 18, 14, 0.04), 0 0 0 1px
+    rgba(20, 18, 14, 0.04);
+  --editorial-shadow-md: 0 2px 4px rgba(20, 18, 14, 0.05), 0 8px 24px
+    rgba(20, 18, 14, 0.06);
+  --editorial-shadow-lg: 0 8px 16px rgba(20, 18, 14, 0.08), 0 24px 60px
+    rgba(20, 18, 14, 0.12);
+
+  /* Legacy app aliases consume Editorial tokens so existing features keep behavior with refreshed styling. */
+  --color-sidebar-bg: var(--editorial-bg);
+  --color-content-bg: var(--editorial-bg);
+  --color-border: var(--editorial-line);
+  --color-text-primary: var(--editorial-ink-1);
+  --color-text-secondary: var(--editorial-ink-3);
+  --color-text-tertiary: var(--editorial-ink-4);
+  --color-accent: var(--editorial-accent);
+  --color-accent-hover: var(--editorial-accent-hover);
+  --color-surface: var(--editorial-surface);
+  --color-surface-hover: var(--editorial-hover);
+  --color-surface-active: var(--editorial-pressed);
+}
+
+.dark {
+  --editorial-bg: #15130f;
+  --editorial-surface: #1c1a16;
+  --editorial-surface-2: #232019;
+  --editorial-surface-3: #2c2820;
+  --editorial-hover: rgba(255, 250, 240, 0.04);
+  --editorial-pressed: rgba(255, 250, 240, 0.08);
+  --editorial-ink-1: #f3ede0;
+  --editorial-ink-2: #ddd6c5;
+  --editorial-ink-3: #9c9583;
+  --editorial-ink-4: #6e6857;
+  --editorial-ink-5: #443f33;
+  --editorial-line: #2e2a22;
+  --editorial-line-strong: #423d31;
+  --editorial-line-soft: #25221b;
+  --editorial-accent: oklch(0.68 0.15 32);
+  --editorial-accent-hover: oklch(0.74 0.16 32);
+  --editorial-accent-soft: oklch(0.3 0.08 32);
+}
+
+.ui-button {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--editorial-radius);
+  border: 1px solid var(--editorial-line-strong);
+  background: var(--editorial-surface);
+  color: var(--editorial-ink-1);
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  transition: background 120ms, border-color 120ms, transform 80ms;
+  white-space: nowrap;
+}
+.ui-button:hover {
+  background: var(--editorial-surface-2);
+  border-color: var(--editorial-ink-4);
+}
+.ui-button:active {
+  transform: translateY(0.5px);
+  background: var(--editorial-surface-3);
+}
+.ui-button-primary {
+  background: var(--editorial-ink-1);
+  border-color: var(--editorial-ink-1);
+  color: var(--editorial-bg);
+}
+.ui-button-accent {
+  background: var(--editorial-accent);
+  border-color: var(--editorial-accent);
+  color: var(--editorial-accent-ink);
+}
+.ui-button-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.ui-chip {
+  display: inline-flex;
+  height: 22px;
+  align-items: center;
+  gap: 5px;
+  border-radius: var(--editorial-radius-pill);
+  border: 1px solid var(--editorial-line-strong);
+  background: var(--editorial-surface);
+  color: var(--editorial-ink-2);
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ui-chip-accent {
+  background: var(--editorial-accent-soft);
+  border-color: transparent;
+  color: var(--editorial-accent);
+}
+.ui-card,
+.ui-menu-surface {
+  background: var(--editorial-surface);
+  border: 1px solid var(--editorial-line);
+  border-radius: var(--editorial-radius-lg);
+  box-shadow: var(--editorial-shadow-sm);
+}
+.ui-input {
+  display: flex;
+  height: 32px;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--editorial-radius);
+  border: 1px solid var(--editorial-line-strong);
+  background: var(--editorial-surface);
+  color: var(--editorial-ink-1);
+  padding: 0 12px;
+  font-size: 13px;
+  transition: border-color 120ms, box-shadow 120ms;
+}
+.ui-input:focus-within {
+  border-color: var(--editorial-ink-1);
+  box-shadow: 0 0 0 3px var(--editorial-accent-soft);
+}
+.ui-kbd {
+  border-radius: 4px;
+  border: 1px solid var(--editorial-line);
+  background: var(--editorial-surface-2);
+  color: var(--editorial-ink-3);
+  padding: 1px 5px;
+  font-family: var(--editorial-mono);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.ui-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--editorial-line);
+}
+.ui-tab {
+  position: relative;
+  padding: 10px 14px;
+  color: var(--editorial-ink-3);
+  font-size: 13px;
+  font-weight: 500;
+  transition: color 120ms;
+}
+.ui-tab:hover,
+.ui-tab-active {
+  color: var(--editorial-ink-1);
+}
+.ui-tab-active::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  bottom: -1px;
+  left: 14px;
+  height: 2px;
+  background: var(--editorial-ink-1);
+}
+.ui-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--editorial-line-soft);
+  padding: 12px 16px;
+  transition: background 100ms;
+}
+.ui-list-row:hover {
+  background: var(--editorial-hover);
+}
+.ui-palette-surface {
+  overflow: hidden;
+  border-radius: var(--editorial-radius-lg);
+  border: 1px solid var(--editorial-line-strong);
+  background: var(--editorial-surface);
+  box-shadow: var(--editorial-shadow-lg);
+}

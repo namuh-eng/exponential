@@ -1,9 +1,15 @@
-import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
+import { resolveRequestWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issue, issueHistory, team, user } from "@/lib/db/schema";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+
+function isUuidLike(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
 
 async function findAccessibleIssue(id: string, workspaceId: string) {
   const byIdentifier = await db
@@ -17,12 +23,16 @@ async function findAccessibleIssue(id: string, workspaceId: string) {
     })
     .from(issue)
     .innerJoin(team, eq(issue.teamId, team.id))
-    .where(eq(issue.identifier, id))
+    .where(and(eq(issue.identifier, id), eq(team.workspaceId, workspaceId)))
     .limit(1);
 
   const identifierMatch = byIdentifier[0];
   if (identifierMatch) {
-    return identifierMatch.workspaceId === workspaceId ? identifierMatch : null;
+    return identifierMatch;
+  }
+
+  if (!isUuidLike(id)) {
+    return null;
   }
 
   const byId = await db
@@ -36,15 +46,10 @@ async function findAccessibleIssue(id: string, workspaceId: string) {
     })
     .from(issue)
     .innerJoin(team, eq(issue.teamId, team.id))
-    .where(eq(issue.id, id))
+    .where(and(eq(issue.id, id), eq(team.workspaceId, workspaceId)))
     .limit(1);
 
-  const idMatch = byId[0];
-  if (!idMatch || idMatch.workspaceId !== workspaceId) {
-    return null;
-  }
-
-  return idMatch;
+  return byId[0] ?? null;
 }
 
 export async function GET(
@@ -56,14 +61,17 @@ export async function GET(
     return authResponse;
   }
 
-  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  const workspaceId = await resolveRequestWorkspaceId(
+    session.user.id,
+    _request,
+  );
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace found" }, { status: 400 });
   }
 
   const { id } = await params;
   const currentIssue = await findAccessibleIssue(id, workspaceId);
-  if (!currentIssue) {
+  if (!currentIssue || currentIssue.workspaceId !== workspaceId) {
     return NextResponse.json({ error: "Issue not found" }, { status: 404 });
   }
 

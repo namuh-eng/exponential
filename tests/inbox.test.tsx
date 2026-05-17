@@ -1,8 +1,10 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+const mockRouterPush = vi.hoisted(() => vi.fn());
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: mockRouterPush }),
   useParams: () => ({}),
 }));
 
@@ -20,7 +22,10 @@ vi.mock("next/link", () => ({
 
 import { NotificationRow } from "@/components/notification-row";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mockRouterPush.mockClear();
+});
 
 describe("NotificationRow", () => {
   const defaultProps = {
@@ -98,6 +103,24 @@ describe("NotificationRow", () => {
     expect(onClick).toHaveBeenCalledWith("n1");
   });
 
+  it("labels issue rows as issue-opening actions", () => {
+    render(<NotificationRow {...defaultProps} />);
+    expect(
+      screen.getByRole("button", {
+        name: "Open ENG-136 Add dark mode support",
+      }),
+    ).toBeDefined();
+  });
+
+  it("labels rows without issue identifiers as selection-only actions", () => {
+    render(<NotificationRow {...defaultProps} issueIdentifier={null} />);
+    expect(
+      screen.getByRole("button", {
+        name: "Select notification Add dark mode support",
+      }),
+    ).toBeDefined();
+  });
+
   it("applies selected style when isSelected", () => {
     render(<NotificationRow {...defaultProps} isSelected={true} />);
     const row = screen.getByTestId("notification-row");
@@ -123,6 +146,40 @@ describe("Inbox page", () => {
 
     await vi.waitFor(() => {
       expect(screen.getByText("You're all caught up")).toBeDefined();
+    });
+  });
+
+  it("shows all-read notification history with a no unread footer", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          notifications: [
+            {
+              id: "n-history-1",
+              type: "assigned",
+              actorName: "Ashley Ha",
+              actorImage: null,
+              issueIdentifier: "ENG-136",
+              issueTitle: "Improve Forever Browsing agent inbox handoff",
+              issuePriority: "medium",
+              readAt: "2026-05-02T20:00:00.000Z",
+              createdAt: "2026-05-02T19:00:00.000Z",
+            },
+          ],
+          unreadCount: 0,
+        }),
+    }) as unknown as typeof fetch;
+
+    cleanup();
+    vi.resetModules();
+    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
+    render(<InboxPage />);
+
+    await vi.waitFor(() => {
+      expect(screen.queryByText("You're all caught up")).toBeNull();
+      expect(screen.getAllByText("ENG-136").length).toBeGreaterThan(0);
+      expect(screen.getByText("No unread notifications")).toBeDefined();
     });
   });
 
@@ -387,6 +444,142 @@ describe("Inbox page", () => {
     });
     expect(global.fetch).toHaveBeenCalledWith("/api/notifications/n1/read", {
       method: "PATCH",
+    });
+  });
+
+  it("opens issue rows directly while marking them read", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            notifications: [
+              {
+                id: "n1",
+                type: "assigned",
+                actorName: "Ashley Ha",
+                actorImage: null,
+                issueIdentifier: "ENG-136",
+                issueTitle: "Fix bug",
+                issuePriority: "high",
+                readAt: null,
+                createdAt: new Date().toISOString(),
+              },
+            ],
+            unreadCount: 1,
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      }) as unknown as typeof fetch;
+
+    cleanup();
+    vi.resetModules();
+    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
+    render(<InboxPage />);
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/1 unread/)).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId("notification-row"));
+
+    await vi.waitFor(() => {
+      expect(mockRouterPush).toHaveBeenCalledWith("/issue/ENG-136");
+    });
+    expect(global.fetch).toHaveBeenCalledWith("/api/notifications/n1/read", {
+      method: "PATCH",
+    });
+  });
+
+  it("still opens issue rows when marking read fails", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            notifications: [
+              {
+                id: "n1",
+                type: "assigned",
+                actorName: "Ashley Ha",
+                actorImage: null,
+                issueIdentifier: "ENG-136",
+                issueTitle: "Fix bug",
+                issuePriority: "high",
+                readAt: null,
+                createdAt: new Date().toISOString(),
+              },
+            ],
+            unreadCount: 1,
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({ error: "failed" }),
+      }) as unknown as typeof fetch;
+
+    cleanup();
+    vi.resetModules();
+    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
+    render(<InboxPage />);
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/1 unread/)).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId("notification-row"));
+
+    await vi.waitFor(() => {
+      expect(mockRouterPush).toHaveBeenCalledWith("/issue/ENG-136");
+    });
+  });
+
+  it("keeps rows without issue identifiers selection-only", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            notifications: [
+              {
+                id: "n1",
+                type: "comment",
+                actorName: "Ashley Ha",
+                actorImage: null,
+                issueIdentifier: null,
+                issueTitle: "Workspace notice",
+                issuePriority: "none",
+                readAt: null,
+                createdAt: new Date().toISOString(),
+              },
+            ],
+            unreadCount: 1,
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      }) as unknown as typeof fetch;
+
+    cleanup();
+    vi.resetModules();
+    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
+    render(<InboxPage />);
+
+    await vi.waitFor(() => {
+      expect(screen.getAllByText("Workspace notice").length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByTestId("notification-row"));
+
+    expect(mockRouterPush).not.toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(screen.getByText(/commented on this issue/)).toBeDefined();
     });
   });
 

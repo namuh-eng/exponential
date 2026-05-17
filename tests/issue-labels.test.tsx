@@ -87,7 +87,11 @@ describe("formatRelativeTime", () => {
 
 function formatCreatedDate(dateStr: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 describe("formatCreatedDate", () => {
@@ -312,5 +316,53 @@ describe("IssueLabelsPage", () => {
     expect(fetchMock).toHaveBeenLastCalledWith("/api/labels/1", {
       method: "DELETE",
     });
+  });
+
+  it("edits label name, color, and description", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ labels: mockLabels }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ label: { id: "1" } }),
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { default: IssueLabelsPage } = await import(
+      "@/app/(app)/settings/issue-labels/page"
+    );
+    render(<IssueLabelsPage />);
+
+    await screen.findByText("bug");
+    fireEvent.click(screen.getByRole("button", { name: "Edit bug" }));
+
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "defect" },
+    });
+    fireEvent.change(screen.getByLabelText("Description"), {
+      target: { value: "User-visible defect" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Color #3b82f6" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenLastCalledWith("/api/labels/1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "defect",
+          color: "#3b82f6",
+          description: "User-visible defect",
+          parentLabelId: null,
+        }),
+      });
+    });
+
+    expect(screen.getByText("defect")).toBeDefined();
+    expect(screen.getByText("User-visible defect")).toBeDefined();
   });
 });

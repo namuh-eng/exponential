@@ -11,6 +11,7 @@ interface TeamGeneralData {
   timezone: string;
   estimateType: string;
   emailEnabled: boolean;
+  inboundEmailAddress?: string;
   detailedHistory: boolean;
   cyclesEnabled: boolean;
   cycleStartDay: number;
@@ -125,6 +126,8 @@ export default function TeamGeneralSettingsPage() {
   const [timezone, setTimezone] = useState("America/Los_Angeles");
   const [estimateType, setEstimateType] = useState("none");
   const [emailEnabled, setEmailEnabled] = useState(false);
+  const [inboundEmailAddress, setInboundEmailAddress] = useState("");
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [detailedHistory, setDetailedHistory] = useState(false);
   const [cyclesEnabled, setCyclesEnabled] = useState(false);
   const [cycleStartDay, setCycleStartDay] = useState(1);
@@ -157,6 +160,7 @@ export default function TeamGeneralSettingsPage() {
         setTimezone(t.timezone || "America/Los_Angeles");
         setEstimateType(t.estimateType || "none");
         setEmailEnabled(t.emailEnabled || false);
+        setInboundEmailAddress(t.inboundEmailAddress || "");
         setDetailedHistory(t.detailedHistory || false);
         setCyclesEnabled(t.cyclesEnabled || false);
         setCycleStartDay(t.cycleStartDay || 1);
@@ -217,6 +221,7 @@ export default function TeamGeneralSettingsPage() {
       setTimezone(data.team.timezone || "America/Los_Angeles");
       setEstimateType(data.team.estimateType || "none");
       setEmailEnabled(data.team.emailEnabled || false);
+      setInboundEmailAddress(data.team.inboundEmailAddress || "");
       setDetailedHistory(data.team.detailedHistory || false);
       setCyclesEnabled(data.team.cyclesEnabled || false);
       setCycleStartDay(data.team.cycleStartDay || 1);
@@ -234,6 +239,19 @@ export default function TeamGeneralSettingsPage() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleCopyInboundEmail() {
+    if (!inboundEmailAddress) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard?.writeText(inboundEmailAddress);
+      setCopyMessage("Copied");
+    } catch {
+      setCopyMessage("Copy unavailable");
     }
   }
 
@@ -535,7 +553,24 @@ export default function TeamGeneralSettingsPage() {
         </div>
         {emailEnabled && (
           <div className="mt-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[12px] text-[var(--color-text-tertiary)]">
-            {identifier.toLowerCase()}@team.linear.app
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-mono text-[var(--color-text-secondary)]">
+                {inboundEmailAddress ||
+                  `${identifier.toLowerCase()}@team.linear.app`}
+              </span>
+              <button
+                type="button"
+                onClick={handleCopyInboundEmail}
+                className="rounded-md border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]"
+              >
+                Copy
+              </button>
+            </div>
+            <div className="mt-2">
+              Emails sent to this address create issues in this team while the
+              setting is enabled.
+              {copyMessage && <span className="ml-2">{copyMessage}</span>}
+            </div>
           </div>
         )}
       </div>

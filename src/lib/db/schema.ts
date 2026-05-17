@@ -142,6 +142,31 @@ export const account = pgTable("account", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const authorizedApplicationGrant = pgTable(
+  "authorized_application_grant",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    appId: text("app_id").notNull(),
+    clientId: text("client_id").notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    imageUrl: text("image_url"),
+    scopes: jsonb("scopes").notNull().default([]),
+    webhooksEnabled: boolean("webhooks_enabled").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("authorized_application_grant_user_idx").on(t.userId),
+    uniqueIndex("authorized_application_grant_user_app_idx").on(
+      t.userId,
+      t.appId,
+    ),
+  ],
+);
+
 export const verification = pgTable("verification", {
   id: text("id").primaryKey(),
   identifier: text("identifier").notNull(),
@@ -150,6 +175,29 @@ export const verification = pgTable("verification", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+export const passkey = pgTable(
+  "passkey",
+  {
+    id: text("id").primaryKey(),
+    name: text("name"),
+    publicKey: text("public_key").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    credentialID: text("credential_id").notNull(),
+    counter: integer("counter").notNull(),
+    deviceType: text("device_type").notNull(),
+    backedUp: boolean("backed_up").notNull(),
+    transports: text("transports"),
+    aaguid: text("aaguid"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("passkey_user_id_idx").on(t.userId),
+    uniqueIndex("passkey_credential_id_idx").on(t.credentialID),
+  ],
+);
 
 // ─── Workspace ───────────────────────────────────────────────────────
 
@@ -237,6 +285,11 @@ export const team = pgTable(
     parentTeamId: uuid("parent_team_id"),
     issueCount: integer("issue_count").default(0),
     settings: jsonb("settings").default({}),
+    retiredAt: timestamp("retired_at"),
+    deletedAt: timestamp("deleted_at"),
+    deleteScheduledAt: timestamp("delete_scheduled_at"),
+    restorableUntil: timestamp("restorable_until"),
+    restoredAt: timestamp("restored_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -298,12 +351,34 @@ export const label = pgTable(
     }),
     teamId: uuid("team_id").references(() => team.id, { onDelete: "cascade" }),
     parentLabelId: uuid("parent_label_id"),
+    archivedAt: timestamp("archived_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [
     index("label_workspace_idx").on(t.workspaceId),
     index("label_team_idx").on(t.teamId),
+  ],
+);
+
+// ─── Project Label ───────────────────────────────────────────────────
+
+export const projectLabel = pgTable(
+  "project_label",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 255 }).notNull(),
+    color: varchar("color", { length: 7 }).notNull().default("#6b6f76"),
+    description: text("description"),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("project_label_workspace_idx").on(t.workspaceId),
+    uniqueIndex("project_label_workspace_name_idx").on(t.workspaceId, t.name),
   ],
 );
 
@@ -337,6 +412,48 @@ export const project = pgTable(
     index("project_workspace_idx").on(t.workspaceId),
     uniqueIndex("project_workspace_slug_idx").on(t.workspaceId, t.slug),
   ],
+);
+
+// ─── Project Template ────────────────────────────────────────────────
+
+export const projectTemplate = pgTable(
+  "project_template",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    createdById: text("created_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    settings: jsonb("settings").default({}),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("project_template_workspace_idx").on(t.workspaceId)],
+);
+
+// ─── Issue Template ─────────────────────────────────────────────────
+
+export const issueTemplate = pgTable(
+  "issue_template",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description").notNull(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    createdById: text("created_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    settings: jsonb("settings").default({}),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("issue_template_workspace_idx").on(t.workspaceId)],
 );
 
 // ─── Project Team (many-to-many) ─────────────────────────────────────
@@ -546,7 +663,86 @@ export const comment = pgTable(
   (t) => [index("comment_issue_idx").on(t.issueId)],
 );
 
+// ─── Issue Discussion Summary ───────────────────────────────────────
+
+export const issueDiscussionSummary = pgTable(
+  "issue_discussion_summary",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    issueId: uuid("issue_id")
+      .notNull()
+      .references(() => issue.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => team.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 24 }).notNull().default("ready"),
+    summary: text("summary"),
+    sourceCommentCount: integer("source_comment_count").notNull().default(0),
+    sourceCommentVersion: text("source_comment_version"),
+    generatedAt: timestamp("generated_at"),
+    generatedBy: text("generated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    staleAt: timestamp("stale_at"),
+    error: text("error"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("issue_discussion_summary_issue_idx").on(t.issueId),
+    index("issue_discussion_summary_team_idx").on(t.teamId),
+    index("issue_discussion_summary_workspace_idx").on(t.workspaceId),
+  ],
+);
+
 // ─── Reaction ────────────────────────────────────────────────────────
+
+export const issueSubscription = pgTable(
+  "issue_subscription",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    issueId: uuid("issue_id")
+      .notNull()
+      .references(() => issue.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    subscribed: boolean("subscribed").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("issue_subscription_issue_user_idx").on(t.issueId, t.userId),
+    index("issue_subscription_issue_idx").on(t.issueId),
+    index("issue_subscription_user_idx").on(t.userId),
+  ],
+);
+
+export const issueReaction = pgTable(
+  "issue_reaction",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    emoji: varchar("emoji", { length: 50 }).notNull(),
+    issueId: uuid("issue_id")
+      .notNull()
+      .references(() => issue.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("issue_reaction_issue_user_emoji_idx").on(
+      t.issueId,
+      t.userId,
+      t.emoji,
+    ),
+    index("issue_reaction_issue_idx").on(t.issueId),
+  ],
+);
 
 export const reaction = pgTable(
   "reaction",
@@ -597,6 +793,13 @@ export const initiative = pgTable(
     name: varchar("name", { length: 255 }).notNull(),
     description: text("description"),
     status: initiativeStatus("status").notNull().default("planned"),
+    ownerId: text("owner_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    startDate: timestamp("start_date"),
+    targetDate: timestamp("target_date"),
+    timeframe: varchar("timeframe", { length: 120 }),
+    health: varchar("health", { length: 20 }).notNull().default("unknown"),
     settings: jsonb("settings").default({}),
     workspaceId: uuid("workspace_id")
       .notNull()
@@ -606,6 +809,25 @@ export const initiative = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [index("initiative_workspace_idx").on(t.workspaceId)],
+);
+
+// ─── Initiative Team (many-to-many) ──────────────────────────────────
+
+export const initiativeTeam = pgTable(
+  "initiative_team",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    initiativeId: uuid("initiative_id")
+      .notNull()
+      .references(() => initiative.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => team.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    uniqueIndex("initiative_team_idx").on(t.initiativeId, t.teamId),
+    index("initiative_team_initiative_idx").on(t.initiativeId),
+  ],
 );
 
 // ─── Initiative Project (many-to-many) ───────────────────────────────
@@ -725,21 +947,35 @@ export const webhook = pgTable(
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
+  authorizedApplicationGrants: many(authorizedApplicationGrant),
   memberships: many(member),
   workspaceInvitations: many(workspaceInvitation),
   teamMemberships: many(teamMember),
   createdIssues: many(issue, { relationName: "creator" }),
   assignedIssues: many(issue, { relationName: "assignee" }),
+  projectTemplates: many(projectTemplate),
   comments: many(comment),
   notifications: many(notification, { relationName: "recipient" }),
 }));
+
+export const authorizedApplicationGrantRelations = relations(
+  authorizedApplicationGrant,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [authorizedApplicationGrant.userId],
+      references: [user.id],
+    }),
+  }),
+);
 
 export const workspaceRelations = relations(workspace, ({ many }) => ({
   members: many(member),
   invitations: many(workspaceInvitation),
   teams: many(team),
   labels: many(label),
+  projectLabels: many(projectLabel),
   projects: many(project),
+  projectTemplates: many(projectTemplate),
   initiatives: many(initiative),
   customViews: many(customView),
   apiKeys: many(apiKey),
@@ -835,6 +1071,9 @@ export const issueRelations = relations(issue, ({ one, many }) => ({
   subIssues: many(issue, { relationName: "parentIssue" }),
   labels: many(issueLabel),
   comments: many(comment),
+  reactions: many(issueReaction),
+  subscriptions: many(issueSubscription),
+  discussionSummary: many(issueDiscussionSummary),
   history: many(issueHistory),
   relations: many(issueRelation, { relationName: "source" }),
   relatedFrom: many(issueRelation, { relationName: "target" }),
@@ -879,6 +1118,13 @@ export const labelRelations = relations(label, ({ one, many }) => ({
   issueLabels: many(issueLabel),
 }));
 
+export const projectLabelRelations = relations(projectLabel, ({ one }) => ({
+  workspace: one(workspace, {
+    fields: [projectLabel.workspaceId],
+    references: [workspace.id],
+  }),
+}));
+
 export const projectRelations = relations(project, ({ one, many }) => ({
   workspace: one(workspace, {
     fields: [project.workspaceId],
@@ -891,6 +1137,20 @@ export const projectRelations = relations(project, ({ one, many }) => ({
   issues: many(issue),
   initiativeProjects: many(initiativeProject),
 }));
+
+export const projectTemplateRelations = relations(
+  projectTemplate,
+  ({ one }) => ({
+    workspace: one(workspace, {
+      fields: [projectTemplate.workspaceId],
+      references: [workspace.id],
+    }),
+    createdBy: one(user, {
+      fields: [projectTemplate.createdById],
+      references: [user.id],
+    }),
+  }),
+);
 
 export const projectTeamRelations = relations(projectTeam, ({ one }) => ({
   project: one(project, {
@@ -929,13 +1189,26 @@ export const initiativeRelations = relations(initiative, ({ one, many }) => ({
     fields: [initiative.workspaceId],
     references: [workspace.id],
   }),
+  owner: one(user, { fields: [initiative.ownerId], references: [user.id] }),
   parentInitiative: one(initiative, {
     fields: [initiative.parentInitiativeId],
     references: [initiative.id],
     relationName: "parentInitiative",
   }),
   childInitiatives: many(initiative, { relationName: "parentInitiative" }),
+  teams: many(initiativeTeam),
   projects: many(initiativeProject),
+}));
+
+export const initiativeTeamRelations = relations(initiativeTeam, ({ one }) => ({
+  initiative: one(initiative, {
+    fields: [initiativeTeam.initiativeId],
+    references: [initiative.id],
+  }),
+  team: one(team, {
+    fields: [initiativeTeam.teamId],
+    references: [team.id],
+  }),
 }));
 
 export const initiativeProjectRelations = relations(
@@ -966,6 +1239,50 @@ export const commentRelations = relations(comment, ({ one, many }) => ({
   user: one(user, { fields: [comment.userId], references: [user.id] }),
   reactions: many(reaction),
   attachments: many(commentAttachment),
+}));
+
+export const issueDiscussionSummaryRelations = relations(
+  issueDiscussionSummary,
+  ({ one }) => ({
+    issue: one(issue, {
+      fields: [issueDiscussionSummary.issueId],
+      references: [issue.id],
+    }),
+    team: one(team, {
+      fields: [issueDiscussionSummary.teamId],
+      references: [team.id],
+    }),
+    workspace: one(workspace, {
+      fields: [issueDiscussionSummary.workspaceId],
+      references: [workspace.id],
+    }),
+    generator: one(user, {
+      fields: [issueDiscussionSummary.generatedBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const issueSubscriptionRelations = relations(
+  issueSubscription,
+  ({ one }) => ({
+    issue: one(issue, {
+      fields: [issueSubscription.issueId],
+      references: [issue.id],
+    }),
+    user: one(user, {
+      fields: [issueSubscription.userId],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const issueReactionRelations = relations(issueReaction, ({ one }) => ({
+  issue: one(issue, {
+    fields: [issueReaction.issueId],
+    references: [issue.id],
+  }),
+  user: one(user, { fields: [issueReaction.userId], references: [user.id] }),
 }));
 
 export const reactionRelations = relations(reaction, ({ one }) => ({

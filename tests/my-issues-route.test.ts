@@ -7,6 +7,7 @@ const statesOrderByMock = vi.fn();
 const assignedOrderByMock = vi.fn();
 const createdOrderByMock = vi.fn();
 const commentedOrderByMock = vi.fn();
+const explicitSubscribedOrderByMock = vi.fn();
 const getLabelsForIssuesMock = vi.fn();
 let selectCallCount = 0;
 
@@ -85,13 +86,18 @@ vi.mock("@/lib/db", () => ({
         };
       }
 
+      const orderByMock =
+        selectCallCount === 7
+          ? explicitSubscribedOrderByMock
+          : commentedOrderByMock;
+
       return {
         from: vi.fn().mockReturnValue({
           innerJoin: vi.fn().mockReturnValue({
             leftJoin: vi.fn().mockReturnValue({
               leftJoin: vi.fn().mockReturnValue({
                 where: vi.fn().mockReturnValue({
-                  orderBy: commentedOrderByMock,
+                  orderBy: orderByMock,
                 }),
               }),
             }),
@@ -194,6 +200,7 @@ describe("my issues route", () => {
         teamId: "team-1",
       },
     ]);
+    explicitSubscribedOrderByMock.mockResolvedValue([]);
     getLabelsForIssuesMock.mockResolvedValue({
       "issue-1": [{ name: "Bug", color: "#f00" }],
       "issue-2": [{ name: "Feature", color: "#0f0" }],
@@ -374,6 +381,68 @@ describe("my issues route", () => {
           ],
         },
       ],
+    });
+  });
+
+  it("includes watched-only explicit subscriptions in the subscribed tab", async () => {
+    assignedOrderByMock.mockResolvedValue([]);
+    createdOrderByMock.mockResolvedValue([]);
+    commentedOrderByMock.mockResolvedValue([]);
+    explicitSubscribedOrderByMock.mockResolvedValue([
+      {
+        id: "issue-4",
+        number: 4,
+        identifier: "ENG-4",
+        title: "Watched-only issue",
+        priority: "medium",
+        stateId: "state-1",
+        assigneeId: null,
+        assigneeName: null,
+        assigneeImage: null,
+        projectId: null,
+        projectName: null,
+        dueDate: null,
+        createdAt: new Date("2026-04-24T08:00:00.000Z"),
+        updatedAt: new Date("2026-04-24T09:00:00.000Z"),
+        sortOrder: 4,
+        teamId: "team-1",
+      },
+    ]);
+    const { GET } = await import("@/app/api/my-issues/route");
+
+    const response = await GET(
+      new Request("http://localhost/api/my-issues?tab=subscribed"),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      totalCount: 1,
+      groups: [
+        {
+          state: { id: "unstarted:Todo" },
+          issues: [
+            {
+              id: "issue-4",
+              title: "Watched-only issue",
+              displayAt: "2026-04-24T08:00:00.000Z",
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("excludes unsubscribed explicit rows while preserving implicit subscriptions", async () => {
+    explicitSubscribedOrderByMock.mockResolvedValue([]);
+    const { GET } = await import("@/app/api/my-issues/route");
+
+    const response = await GET(
+      new Request("http://localhost/api/my-issues?tab=subscribed"),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      totalCount: 3,
     });
   });
 });

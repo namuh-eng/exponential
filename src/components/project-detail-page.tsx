@@ -8,12 +8,14 @@ import {
   ProjectProperties,
   type ProjectPropertiesSaveInput,
 } from "@/components/project-properties";
+import { SidebarFavoriteButton } from "@/components/sidebar-favorite-button";
+import { OPEN_PROJECT_UPDATE_EVENT } from "@/lib/command-palette";
 import type {
   ProjectActivityEntry,
   ProjectResource,
 } from "@/lib/project-detail";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type StatusCategory =
   | "triage"
@@ -136,7 +138,7 @@ function SectionCard({
 }
 
 export function ProjectDetailPage() {
-  const params = useParams<{ slug: string }>();
+  const params = useParams<{ slug: string; workspaceSlug?: string }>();
   const [data, setData] = useState<ProjectResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<
@@ -155,11 +157,27 @@ export function ProjectDetailPage() {
     useState<CreateIssueDefaults>({});
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const projectUpdateTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const projectApiPath = useCallback(() => {
+    const base = `/api/projects/${encodeURIComponent(params.slug)}`;
+    if (!params.workspaceSlug) {
+      return base;
+    }
+
+    return `${base}?workspaceSlug=${encodeURIComponent(params.workspaceSlug)}`;
+  }, [params.slug, params.workspaceSlug]);
+
+  const openProjectUpdateComposer = useCallback(() => {
+    setActiveTab("overview");
+    setShowUpdateComposer(true);
+    requestAnimationFrame(() => projectUpdateTextareaRef.current?.focus());
+  }, []);
 
   useEffect(() => {
     async function fetchProject() {
       try {
-        const res = await fetch(`/api/projects/${params.slug}`);
+        const res = await fetch(projectApiPath());
         if (!res.ok) {
           setData(null);
           return;
@@ -172,14 +190,37 @@ export function ProjectDetailPage() {
       }
     }
     fetchProject();
-  }, [params.slug]);
+  }, [projectApiPath]);
+
+  useEffect(() => {
+    function handleOpenProjectUpdate() {
+      openProjectUpdateComposer();
+    }
+
+    window.addEventListener(OPEN_PROJECT_UPDATE_EVENT, handleOpenProjectUpdate);
+    return () => {
+      window.removeEventListener(
+        OPEN_PROJECT_UPDATE_EVENT,
+        handleOpenProjectUpdate,
+      );
+    };
+  }, [openProjectUpdateComposer]);
+
+  useEffect(() => {
+    if (loading || !data) return;
+
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get("newUpdate") === "1") {
+      openProjectUpdateComposer();
+    }
+  }, [data, loading, openProjectUpdateComposer]);
 
   async function patchProject(payload: object) {
     setSaving(true);
     setErrorMessage(null);
 
     try {
-      const res = await fetch(`/api/projects/${params.slug}`, {
+      const res = await fetch(projectApiPath(), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -286,7 +327,7 @@ export function ProjectDetailPage() {
   }
 
   async function refreshProject() {
-    const res = await fetch(`/api/projects/${params.slug}`);
+    const res = await fetch(projectApiPath());
     if (!res.ok) {
       return;
     }
@@ -406,10 +447,17 @@ export function ProjectDetailPage() {
       <div className="border-b border-[var(--color-border)] px-6 py-4">
         <div className="mb-3 flex items-center gap-3">
           <span className="text-[24px]">{project.icon ?? "📋"}</span>
-          <div>
-            <h1 className="text-[24px] font-semibold text-[var(--color-text-primary)]">
-              {project.name}
-            </h1>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-[24px] font-semibold text-[var(--color-text-primary)]">
+                {project.name}
+              </h1>
+              <SidebarFavoriteButton
+                objectType="project"
+                objectId={project.id}
+                label={project.name}
+              />
+            </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {summaryItems.map((item) => (
                 <span
@@ -629,6 +677,8 @@ export function ProjectDetailPage() {
                   {showUpdateComposer ? (
                     <div className="space-y-3">
                       <textarea
+                        ref={projectUpdateTextareaRef}
+                        aria-label="Project update"
                         value={projectUpdate}
                         onChange={(event) =>
                           setProjectUpdate(event.target.value)

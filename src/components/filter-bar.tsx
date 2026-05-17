@@ -13,7 +13,8 @@ export type FilterType =
   | "cycle"
   | "creator"
   | "dueDate"
-  | "estimate";
+  | "estimate"
+  | "team";
 
 export type FilterOperator = "is" | "isNot";
 
@@ -72,6 +73,11 @@ interface DueDateOption {
   label: string;
 }
 
+interface TeamOption {
+  id: string;
+  name: string;
+}
+
 export interface FilterBarProps {
   filters: FilterCondition[];
   onFiltersChange: (filters: FilterCondition[]) => void;
@@ -84,6 +90,7 @@ export interface FilterBarProps {
   availableCycles?: CycleOption[];
   availableEstimates?: EstimateOption[];
   availableDueDates?: DueDateOption[];
+  availableTeams?: TeamOption[];
 }
 
 // ─── Filter Application Logic ────────────────────────────────────────
@@ -99,6 +106,7 @@ interface FilterableIssue {
   cycleId?: string | null;
   dueDate?: string | Date | null;
   estimate?: number | string | null;
+  teamId?: string | null;
 }
 
 export function applyFilters<T extends FilterableIssue>(
@@ -140,6 +148,8 @@ function matchesValue(
       return values.includes(normalizeDueDate(issue.dueDate));
     case "estimate":
       return values.includes(normalizeEstimate(issue.estimate));
+    case "team":
+      return values.includes(issue.teamId ?? "");
     default:
       return true;
   }
@@ -200,6 +210,7 @@ const filterTypeLabels: { type: FilterType; label: string }[] = [
   { type: "creator", label: "Creator" },
   { type: "dueDate", label: "Due date" },
   { type: "estimate", label: "Estimate" },
+  { type: "team", label: "Team" },
 ];
 
 // ─── Component ───────────────────────────────────────────────────────
@@ -221,6 +232,7 @@ export function FilterBar({
   availableCycles = [],
   availableEstimates = [],
   availableDueDates = [],
+  availableTeams = [],
 }: FilterBarProps) {
   const [menu, setMenu] = useState<MenuState>({ step: "closed" });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -302,6 +314,8 @@ export function FilterBar({
         return (
           availableEstimates.find((e) => e.value === valueId)?.label ?? valueId
         );
+      case "team":
+        return availableTeams.find((t) => t.id === valueId)?.name ?? valueId;
       default:
         return valueId;
     }
@@ -410,6 +424,7 @@ export function FilterBar({
               availableCycles,
               availableEstimates,
               availableDueDates,
+              availableTeams,
               handleSelectValue,
             )}
           </div>
@@ -505,6 +520,16 @@ function FilterTypeIcon({ type }: { type: FilterType }) {
           <line x1="3" x2="21" y1="10" y2="10" />
         </svg>
       );
+    case "team":
+      return (
+        <svg {...svgProps}>
+          <title>Team icon</title>
+          <rect x="3" y="4" width="7" height="7" rx="1" />
+          <rect x="14" y="4" width="7" height="7" rx="1" />
+          <rect x="3" y="15" width="7" height="7" rx="1" />
+          <rect x="14" y="15" width="7" height="7" rx="1" />
+        </svg>
+      );
     case "estimate":
       return (
         <svg {...svgProps}>
@@ -534,6 +559,7 @@ function renderValueOptions(
   cycles: CycleOption[],
   estimates: EstimateOption[],
   dueDates: DueDateOption[],
+  teams: TeamOption[],
   onSelect: (type: FilterType, value: string) => void,
 ) {
   const activeFilter = currentFilters.find((f) => f.type === filterType);
@@ -609,6 +635,8 @@ function renderValueOptions(
         filterType,
         onSelect,
       );
+    case "team":
+      return renderSelectOptions(teams, activeValues, filterType, onSelect);
     case "dueDate":
       return renderSelectOptions(
         dueDates.map((dueDate) => ({

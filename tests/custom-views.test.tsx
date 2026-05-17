@@ -11,10 +11,17 @@ import { ViewsPage } from "@/components/views-page";
 
 const push = vi.fn();
 let searchParams = new URLSearchParams();
+let mockWorkspaceSlug: string | undefined;
+
+vi.mock("@/app/(app)/app-shell", () => ({
+  useAppShellContext: () =>
+    mockWorkspaceSlug ? { workspaceSlug: mockWorkspaceSlug } : null,
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn(), back: vi.fn() }),
   useSearchParams: () => searchParams,
+  useParams: () => ({ key: "ONB" }),
 }));
 
 const mockFetch = vi.fn();
@@ -35,6 +42,7 @@ Object.defineProperty(window, "localStorage", {
     },
     clear: () => {
       storage.clear();
+      mockWorkspaceSlug = undefined;
     },
   },
   configurable: true,
@@ -106,6 +114,7 @@ describe("ViewsPage", () => {
     vi.clearAllMocks();
     searchParams = new URLSearchParams();
     storage.clear();
+    mockWorkspaceSlug = undefined;
   });
 
   afterEach(() => {
@@ -129,6 +138,24 @@ describe("ViewsPage", () => {
     expect(push).toHaveBeenCalledWith("/views/projects");
   });
 
+  it("keeps /views canonical when switching tabs on the landing route", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => buildViewsResponse(),
+    });
+
+    render(<ViewsPage initialTab="issues" keepCanonicalTabRoute />);
+    await waitForLoaded();
+
+    fireEvent.click(screen.getByRole("button", { name: "Projects" }));
+
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.getByText("Project progress")).toBeInTheDocument();
+    expect(
+      screen.queryByText("High priority onboarding"),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows the empty state when the active tab has no views", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -142,6 +169,78 @@ describe("ViewsPage", () => {
     await waitForLoaded();
 
     expect(screen.getByText("No views")).toBeInTheDocument();
+  });
+
+  it("renders only views for the team-scoped route", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => buildViewsResponse(),
+    });
+
+    render(<ViewsPage initialTab="issues" initialTeamKey="ONB" />);
+    await waitForLoaded();
+
+    expect(screen.getByText("Onboarding QA Team")).toBeInTheDocument();
+    expect(screen.getByText("High priority onboarding")).toBeInTheDocument();
+    expect(screen.queryByText("Project progress")).not.toBeInTheDocument();
+  });
+
+  it("preserves workspace slug for team view tab navigation", async () => {
+    mockWorkspaceSlug = "foreverbrowsing";
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => buildViewsResponse(),
+    });
+
+    render(<ViewsPage initialTab="issues" initialTeamKeyFromRoute />);
+    await waitForLoaded();
+
+    fireEvent.click(screen.getByRole("button", { name: "Projects" }));
+
+    expect(push).toHaveBeenCalledWith(
+      "/foreverbrowsing/team/ONB/views/projects",
+    );
+  });
+
+  it("preserves workspace slug when opening saved issue and project views", async () => {
+    mockWorkspaceSlug = "foreverbrowsing";
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => buildViewsResponse(),
+    });
+
+    render(<ViewsPage initialTab="issues" />);
+    await waitForLoaded();
+
+    fireEvent.click(await screen.findByText("High priority onboarding"));
+    expect(push).toHaveBeenCalledWith("/foreverbrowsing/team/ONB/all");
+
+    cleanup();
+    push.mockClear();
+
+    render(<ViewsPage initialTab="projects" />);
+    await waitForLoaded();
+
+    fireEvent.click(await screen.findByText("Project progress"));
+    expect(push).toHaveBeenCalledWith("/foreverbrowsing/projects");
+  });
+
+  it("shows team not found for unknown team view routes", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => buildViewsResponse(),
+    });
+
+    render(<ViewsPage initialTab="issues" initialTeamKey="NOPE" />);
+    await waitForLoaded();
+
+    expect(screen.getByText("Team not found")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The team NOPE doesn't exist or you don't have access to it.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("No views")).not.toBeInTheDocument();
   });
 
   it("creates issue views with captured team filters", async () => {

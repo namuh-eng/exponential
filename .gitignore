@@ -20,6 +20,7 @@ tsconfig.tsbuildinfo
 ONBOARDING-PLAN.md
 
 # Runtime state — generated during execution, not source files
+.scratch/
 *.lock
 build-progress.txt
 .onboard-answers.tmp

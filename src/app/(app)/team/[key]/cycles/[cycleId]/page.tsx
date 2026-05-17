@@ -1,5 +1,6 @@
 "use client";
 
+import { ContextualInsights } from "@/components/contextual-insights";
 import { CycleProgressBar } from "@/components/cycle-progress-bar";
 import { EmptyState } from "@/components/empty-state";
 import { IssueRow, priorityMap } from "@/components/issue-row";
@@ -98,6 +99,9 @@ export default function CycleDetailPage() {
 
   const cycleName = data.cycle.name ?? `Cycle ${data.cycle.number}`;
   const nonEmptyGroups = data.groups.filter((g) => g.issues.length > 0);
+  const scopedIssueIds = nonEmptyGroups.flatMap((group) =>
+    group.issues.map((issue) => issue.id),
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -137,6 +141,12 @@ export default function CycleDetailPage() {
             total={data.cycle.issueCount}
           />
         </div>
+        <div className="flex-1" />
+        <ContextualInsights
+          teamKey={data.team.key}
+          scopedIssueIds={scopedIssueIds}
+          contextLabel={cycleName}
+        />
       </div>
 
       {/* Issues grouped by status */}
@@ -158,6 +168,7 @@ export default function CycleDetailPage() {
               {group.issues.map((iss) => (
                 <IssueRow
                   key={iss.id}
+                  href={`/team/${params.key}/issue/${iss.identifier}`}
                   identifier={iss.identifier}
                   title={iss.title}
                   priority={priorityMap[iss.priority] ?? 0}

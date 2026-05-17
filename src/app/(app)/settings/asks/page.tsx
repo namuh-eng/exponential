@@ -32,7 +32,9 @@ export default function AsksSettingsPage() {
           description="Enable internal support channels to start capturing requests from your team."
           action={{
             label: "Enable Asks",
-            onClick: () => console.log("Enable"),
+            disabled: true,
+            disabledReason:
+              "Asks setup is not available in this workspace yet.",
           }}
         />
       </div>

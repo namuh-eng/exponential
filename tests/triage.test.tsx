@@ -41,6 +41,29 @@ function buildTriageResponse(overrides: Record<string, unknown> = {}) {
     count: 2,
     createStateId: "state-triage",
     createStateName: "Triage",
+    acceptDestinationStates: [
+      {
+        id: "state-backlog",
+        name: "Backlog",
+        category: "backlog",
+        color: "#6b6f76",
+        isDefault: true,
+      },
+      {
+        id: "state-ready",
+        name: "Ready",
+        category: "unstarted",
+        color: "#5e6ad2",
+      },
+    ],
+    declineDestinationStates: [
+      {
+        id: "state-canceled",
+        name: "Canceled",
+        category: "canceled",
+        color: "#95a2b3",
+      },
+    ],
     issues: [
       makeTriageIssue({
         id: "issue-1",
@@ -72,6 +95,7 @@ describe("TriageRow", () => {
     render(
       <TriageRow
         issue={makeTriageIssue()}
+        onSelect={vi.fn()}
         onAccept={vi.fn()}
         onDecline={vi.fn()}
       />,
@@ -84,6 +108,7 @@ describe("TriageRow", () => {
     render(
       <TriageRow
         issue={makeTriageIssue()}
+        onSelect={vi.fn()}
         onAccept={vi.fn()}
         onDecline={vi.fn()}
       />,
@@ -96,6 +121,7 @@ describe("TriageRow", () => {
     render(
       <TriageRow
         issue={makeTriageIssue()}
+        onSelect={vi.fn()}
         onAccept={vi.fn()}
         onDecline={vi.fn()}
       />,
@@ -110,6 +136,7 @@ describe("TriageRow", () => {
     render(
       <TriageRow
         issue={makeTriageIssue()}
+        onSelect={vi.fn()}
         onAccept={vi.fn()}
         onDecline={vi.fn()}
       />,
@@ -123,6 +150,7 @@ describe("TriageRow", () => {
     render(
       <TriageRow
         issue={makeTriageIssue()}
+        onSelect={vi.fn()}
         onAccept={onAccept}
         onDecline={vi.fn()}
       />,
@@ -137,12 +165,50 @@ describe("TriageRow", () => {
     render(
       <TriageRow
         issue={makeTriageIssue()}
+        onSelect={vi.fn()}
         onAccept={vi.fn()}
         onDecline={onDecline}
       />,
     );
     fireEvent.click(screen.getByLabelText("Decline issue"));
     expect(onDecline).toHaveBeenCalledWith("issue-1");
+  });
+
+  it("calls onSelect when row clicked or Enter is pressed", async () => {
+    const { TriageRow } = await import("@/components/triage-row");
+    const onSelect = vi.fn();
+    render(
+      <TriageRow
+        issue={makeTriageIssue()}
+        onSelect={onSelect}
+        onAccept={vi.fn()}
+        onDecline={vi.fn()}
+      />,
+    );
+
+    const row = screen.getByTestId("triage-row");
+    fireEvent.click(row);
+    fireEvent.keyDown(row, { key: "Enter" });
+
+    expect(onSelect).toHaveBeenCalledTimes(2);
+    expect(onSelect).toHaveBeenCalledWith("issue-1");
+  });
+
+  it("marks selected rows for assistive tech", async () => {
+    const { TriageRow } = await import("@/components/triage-row");
+    render(
+      <TriageRow
+        issue={makeTriageIssue()}
+        selected
+        onSelect={vi.fn()}
+        onAccept={vi.fn()}
+        onDecline={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("triage-row").getAttribute("aria-current")).toBe(
+      "true",
+    );
   });
 });
 
@@ -195,7 +261,14 @@ describe("TeamTriagePage", () => {
 
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ id: "issue-1" }),
+          json: () =>
+            Promise.resolve({
+              issue: { id: "issue-1", stateId: "state-ready" },
+              decision: {
+                action: "accept",
+                destinationState: { id: "state-ready", name: "Ready" },
+              },
+            }),
         });
       }
 
@@ -228,17 +301,231 @@ describe("TeamTriagePage", () => {
     expect(screen.getAllByText("2 issues to triage")).toHaveLength(2);
   });
 
-  it("refreshes the triage list after accepting an issue", async () => {
+  it("opens a guarded decision dialog before accepting an issue", async () => {
     render(<TeamTriagePage />);
 
-    const rows = await screen.findAllByTestId("triage-row");
-    fireEvent.click(within(rows[1]).getByLabelText("Accept issue"));
+    await screen.findAllByTestId("triage-row");
+    fireEvent.click(screen.getAllByLabelText("Accept issue")[1]);
+
+    expect(await screen.findByRole("dialog")).toBeDefined();
+    expect(screen.getByText("Accept triage issue")).toBeDefined();
+    expect(
+      screen.getByRole("combobox", { name: "Triage destination status" }),
+    ).toBeDefined();
+    expect(screen.getByText("Fix login button alignment")).toBeDefined();
+  });
+
+  it("refreshes the triage list after confirming an accept destination", async () => {
+    render(<TeamTriagePage />);
+
+    await screen.findAllByTestId("triage-row");
+    fireEvent.click(screen.getAllByLabelText("Accept issue")[1]);
+    fireEvent.change(
+      await screen.findByRole("combobox", {
+        name: "Triage destination status",
+      }),
+      { target: { value: "state-ready" } },
+    );
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Accept issue",
+      }),
+    );
 
     await waitFor(() => {
       expect(screen.queryByText("Fix login button alignment")).toBeNull();
     });
 
     expect(screen.getByText("Secondary triage state issue")).toBeDefined();
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/teams/ENG/triage/issue-1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          action: "accept",
+          destinationStateId: "state-ready",
+          confirmed: true,
+        }),
+      }),
+    );
+  });
+
+  it("keeps a failed triage decision visible with an error", async () => {
+    vi.mocked(global.fetch).mockImplementation((input, init) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/teams/ENG/triage") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(buildTriageResponse()),
+        } as Response);
+      }
+
+      if (url === "/api/teams/ENG/triage/issue-1" && init?.method === "PATCH") {
+        return Promise.resolve({
+          ok: false,
+          json: () =>
+            Promise.resolve({ error: "Destination status is not allowed" }),
+        } as Response);
+      }
+
+      return Promise.reject(new Error(`Unhandled fetch: ${url}`));
+    });
+
+    render(<TeamTriagePage />);
+
+    await screen.findAllByTestId("triage-row");
+    fireEvent.click(screen.getAllByLabelText("Accept issue")[1]);
+    fireEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", {
+        name: "Accept issue",
+      }),
+    );
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Destination status is not allowed",
+    );
+    expect(screen.getByText("Fix login button alignment")).toBeDefined();
+  });
+
+  it("requires explicit confirmation before declining an issue", async () => {
+    render(<TeamTriagePage />);
+
+    await screen.findAllByTestId("triage-row");
+    fireEvent.click(screen.getAllByLabelText("Decline issue")[1]);
+
+    expect(await screen.findByRole("dialog")).toBeDefined();
+    expect(screen.getByText("Decline triage issue")).toBeDefined();
+    expect(
+      screen.getByRole("textbox", { name: "Decline reason" }),
+    ).toBeDefined();
+    expect(screen.getByText("Fix login button alignment")).toBeDefined();
+  });
+
+  it("selects visible rows and reports guarded bulk conflicts", async () => {
+    vi.mocked(global.fetch).mockImplementation((input, init) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/teams/ENG/triage") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(buildTriageResponse()),
+        } as Response);
+      }
+
+      if (url === "/api/teams/ENG/triage/bulk" && init?.method === "PATCH") {
+        return Promise.resolve({
+          ok: true,
+          status: 207,
+          json: () =>
+            Promise.resolve({
+              updatedCount: 1,
+              conflictCount: 1,
+              results: [
+                { issueId: "issue-1", status: "updated" },
+                {
+                  issueId: "issue-2",
+                  status: "conflict",
+                  error: "Issue is not currently in triage",
+                },
+              ],
+            }),
+        } as Response);
+      }
+
+      return Promise.reject(new Error(`Unhandled fetch: ${url}`));
+    });
+
+    render(<TeamTriagePage />);
+
+    await screen.findAllByTestId("triage-row");
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "Select all visible triage issues",
+      }),
+    );
+    expect(screen.getByText("2 selected")).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Bulk accept" }));
+    expect(await screen.findByRole("dialog")).toBeDefined();
+    expect(screen.getByText("2 selected issues")).toBeDefined();
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Accept issue",
+      }),
+    );
+
+    expect(await screen.findByText("1 updated, 1 conflicts")).toBeDefined();
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/teams/ENG/triage/bulk",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          action: "accept",
+          issueIds: ["issue-2", "issue-1"],
+          destinationStateId: "state-backlog",
+          confirmed: true,
+        }),
+      }),
+    );
+  });
+
+  it("supports keyboard-first intake navigation and selection", async () => {
+    render(<TeamTriagePage />);
+
+    await screen.findAllByTestId("triage-row");
+    const list = screen.getByLabelText("Triage issues");
+    const firstRow = screen.getAllByTestId("triage-row")[0];
+    firstRow.focus();
+
+    fireEvent.keyDown(list, { key: " " });
+    expect(screen.getByText("1 selected")).toBeDefined();
+
+    fireEvent.keyDown(list, { key: "ArrowDown" });
+    fireEvent.keyDown(list, { key: " " });
+    expect(screen.getByText("2 selected")).toBeDefined();
+
+    fireEvent.keyDown(list, { key: "a" });
+    expect(await screen.findByRole("dialog")).toBeDefined();
+    expect(screen.getByText("Accept triage issue")).toBeDefined();
+  });
+
+  it("shows disabled triage state instead of active queue controls", async () => {
+    vi.mocked(global.fetch).mockImplementation((input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/teams/ENG/triage") {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve(
+              buildTriageResponse({
+                triageEnabled: false,
+                count: 0,
+                issues: [],
+                createStateId: null,
+                createStateName: null,
+              }),
+            ),
+        } as Response);
+      }
+
+      return Promise.reject(new Error(`Unhandled fetch: ${url}`));
+    });
+
+    render(<TeamTriagePage />);
+
+    expect(await screen.findByText("Triage is disabled")).toBeDefined();
+    expect(
+      screen.getByText(
+        "Incoming issues go directly to the team backlog. Enable triage in team settings to review issues here first.",
+      ),
+    ).toBeDefined();
+    expect(
+      screen
+        .getByRole("link", { name: "Open triage settings" })
+        .getAttribute("href"),
+    ).toBe("/settings/teams/ENG/triage");
+    expect(
+      screen.queryByRole("button", { name: "Create triage issue" }),
+    ).toBeNull();
   });
 });
 

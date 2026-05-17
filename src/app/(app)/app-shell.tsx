@@ -13,12 +13,18 @@ import {
   OPEN_CREATE_ISSUE_EVENT,
   OPEN_CREATE_ISSUE_FULLSCREEN_EVENT,
 } from "@/lib/command-palette";
-import { usePathname } from "next/navigation";
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  isEditableShortcutTarget,
+  isPlainKeyShortcut,
+} from "@/lib/keyboard-shortcuts";
+import { stripWorkspaceSlug, withWorkspaceSlug } from "@/lib/workspace-paths";
+import { usePathname, useRouter } from "next/navigation";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 interface AppShellProps {
   children: React.ReactNode;
   workspaceId?: string;
+  workspaceSlug?: string;
   workspaceName: string;
   workspaceInitials: string;
   teamName: string;
@@ -29,6 +35,7 @@ interface AppShellProps {
 
 interface ShellContext {
   workspaceId: string;
+  workspaceSlug: string;
   workspaceName: string;
   workspaceInitials: string;
   teamName: string;
@@ -38,6 +45,7 @@ interface ShellContext {
 }
 
 const AppShellContext = createContext<ShellContext | null>(null);
+type CreateIssueMode = "modal" | "fullscreen";
 
 export function useAppShellContext() {
   return useContext(AppShellContext);
@@ -57,23 +65,10 @@ function getActiveTeamKey(pathname: string): string | null {
   return null;
 }
 
-function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  const tagName = target.tagName.toLowerCase();
-  return (
-    target.isContentEditable ||
-    tagName === "input" ||
-    tagName === "textarea" ||
-    tagName === "select"
-  );
-}
-
 export function AppShell({
   children,
   workspaceId = "",
+  workspaceSlug = "",
   workspaceName,
   workspaceInitials,
   teamName,
@@ -81,14 +76,21 @@ export function AppShell({
   teamKey,
   teams,
 }: AppShellProps) {
-  const pathname = usePathname();
+  const pathname = stripWorkspaceSlug(usePathname(), workspaceSlug);
+  const router = useRouter();
+  const navigationShortcutRef = useRef<{
+    key: string;
+    timestamp: number;
+  } | null>(null);
   const isSettingsRoute = pathname.startsWith("/settings");
-  const [showCreateIssue, setShowCreateIssue] = useState(false);
+  const [createIssueMode, setCreateIssueMode] =
+    useState<CreateIssueMode | null>(null);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
   const [accountPreferences, setAccountPreferences] =
     useState<AccountPreferences>(DEFAULT_ACCOUNT_PREFERENCES);
   const [shellContext, setShellContext] = useState<ShellContext>({
     workspaceId,
+    workspaceSlug,
     workspaceName,
     workspaceInitials,
     teamName,
@@ -103,6 +105,7 @@ export function AppShell({
   useEffect(() => {
     const fallbackContext = {
       workspaceId,
+      workspaceSlug,
       workspaceName,
       workspaceInitials,
       teamName,
@@ -151,13 +154,15 @@ export function AppShell({
     teamName,
     teams,
     workspaceId,
+    workspaceSlug,
     workspaceInitials,
     workspaceName,
   ]);
 
   useEffect(() => {
     document.cookie = `activeWorkspaceId=${shellContext.workspaceId}; path=/; samesite=lax`;
-  }, [shellContext.workspaceId]);
+    document.cookie = `activeWorkspaceSlug=${shellContext.workspaceSlug}; path=/; samesite=lax`;
+  }, [shellContext.workspaceId, shellContext.workspaceSlug]);
 
   useEffect(() => {
     let cancelled = false;
@@ -269,30 +274,81 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
+    function canCreateIssueForActiveTeam() {
+      return !shellContext.teams.find(
+        (team) => team.key === shellContext.teamKey,
+      )?.retiredAt;
+    }
+
     function handleOpenCreateIssue() {
-      setShowCreateIssue(true);
+      if (!canCreateIssueForActiveTeam()) return;
+      setCreateIssueMode("modal");
+    }
+
+    function handleOpenCreateIssueFullscreen() {
+      if (!canCreateIssueForActiveTeam()) return;
+      setCreateIssueMode("fullscreen");
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (
-        event.key.toLowerCase() !== "c" ||
         event.metaKey ||
         event.ctrlKey ||
         event.altKey ||
         event.shiftKey ||
-        isTypingTarget(event.target)
+        isEditableShortcutTarget(event.target)
       ) {
+        navigationShortcutRef.current = null;
         return;
       }
 
-      event.preventDefault();
-      setShowCreateIssue(true);
+      const key = event.key.toLowerCase();
+      const now = Date.now();
+      const isGoSequence =
+        navigationShortcutRef.current?.key === "g" &&
+        now - navigationShortcutRef.current.timestamp < 1250;
+
+      if (isGoSequence) {
+        const navigationTargets: Record<string, string> = {
+          i: "/inbox",
+          m: "/my-issues",
+          v: "/views",
+          p: "/projects",
+        };
+        const targetPath = navigationTargets[key];
+        navigationShortcutRef.current = null;
+
+        if (targetPath) {
+          event.preventDefault();
+          router.push(withWorkspaceSlug(targetPath, workspaceSlug));
+        }
+        return;
+      }
+
+      if (isPlainKeyShortcut(event, "c")) {
+        event.preventDefault();
+        navigationShortcutRef.current = null;
+        if (!canCreateIssueForActiveTeam()) return;
+        setCreateIssueMode("modal");
+        return;
+      }
+
+      if (isPlainKeyShortcut(event, "v")) {
+        event.preventDefault();
+        navigationShortcutRef.current = null;
+        if (!canCreateIssueForActiveTeam()) return;
+        setCreateIssueMode("fullscreen");
+        return;
+      }
+
+      navigationShortcutRef.current =
+        key === "g" ? { key, timestamp: now } : null;
     }
 
     window.addEventListener(OPEN_CREATE_ISSUE_EVENT, handleOpenCreateIssue);
     window.addEventListener(
       OPEN_CREATE_ISSUE_FULLSCREEN_EVENT,
-      handleOpenCreateIssue,
+      handleOpenCreateIssueFullscreen,
     );
     document.addEventListener("keydown", handleKeyDown);
 
@@ -303,15 +359,18 @@ export function AppShell({
       );
       window.removeEventListener(
         OPEN_CREATE_ISSUE_FULLSCREEN_EVENT,
-        handleOpenCreateIssue,
+        handleOpenCreateIssueFullscreen,
       );
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [router, shellContext.teamKey, shellContext.teams, workspaceSlug]);
 
   return (
     <AppShellContext.Provider value={shellContext}>
-      <div className="flex h-screen bg-[var(--color-sidebar-bg)]">
+      <div
+        className="flex h-screen bg-[var(--color-sidebar-bg)] text-[var(--color-text-primary)]"
+        data-editorial-theme="product"
+      >
         <div
           data-testid="app-sidebar-shell"
           className={isSettingsRoute ? "hidden md:block" : "block"}
@@ -323,30 +382,38 @@ export function AppShell({
             teamKey={shellContext.teamKey}
             teams={shellContext.teams}
             inboxUnreadCount={inboxUnreadCount}
-            onCreateIssue={() => setShowCreateIssue(true)}
+            onCreateIssue={
+              shellContext.teams.find(
+                (team) => team.key === shellContext.teamKey,
+              )?.retiredAt
+                ? undefined
+                : () => setCreateIssueMode("modal")
+            }
             accountPreferences={accountPreferences}
+            workspaceSlug={shellContext.workspaceSlug}
           />
         </div>
         <main
           className={
             isSettingsRoute
               ? "flex-1 overflow-hidden p-0 md:p-2 md:pl-0"
-              : "flex-1 overflow-hidden p-2 pl-0"
+              : "flex-1 overflow-hidden p-3 pl-0"
           }
         >
           <div
             className={
               isSettingsRoute
-                ? "h-full overflow-y-auto bg-[var(--color-content-bg)] transition-colors md:rounded-xl md:border md:border-[var(--color-border)]"
-                : "h-full overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] transition-colors"
+                ? "editorial-page-surface h-full overflow-y-auto bg-[var(--color-content-bg)] transition-colors md:rounded-[10px] md:border md:border-[var(--color-border)] md:shadow-[var(--editorial-shadow-sm)]"
+                : "editorial-page-surface h-full overflow-y-auto rounded-[10px] border border-[var(--color-border)] bg-[var(--color-content-bg)] shadow-[var(--editorial-shadow-sm)] transition-colors"
             }
           >
             {children}
           </div>
         </main>
         <CreateIssueModal
-          open={showCreateIssue}
-          onClose={() => setShowCreateIssue(false)}
+          open={createIssueMode !== null}
+          onClose={() => setCreateIssueMode(null)}
+          variant={createIssueMode ?? "modal"}
           teamId={shellContext.teamId}
           teamKey={shellContext.teamKey}
           teamName={shellContext.teamName}
@@ -354,6 +421,7 @@ export function AppShell({
         <CommandPalette
           teamKey={shellContext.teamKey}
           workspaceId={shellContext.workspaceId}
+          workspaceSlug={shellContext.workspaceSlug}
         />
       </div>
     </AppShellContext.Provider>

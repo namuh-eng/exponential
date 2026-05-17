@@ -1,3 +1,4 @@
+import { resolveWorkspaceIdBySlug } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
@@ -6,6 +7,7 @@ import {
   label,
   member,
   project,
+  projectLabel,
   projectMember,
   projectMilestone,
   projectTeam,
@@ -20,6 +22,7 @@ import {
   haveSameIds,
   readProjectSettings,
 } from "@/lib/project-detail";
+import { getWorkspaceSlugFromPath } from "@/lib/workspace-paths";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -64,7 +67,7 @@ function makeActivityEntry(
   };
 }
 
-async function findWorkspaceId(userId: string) {
+async function findDefaultWorkspaceId(userId: string) {
   const memberships = await db
     .select({ workspaceId: member.workspaceId })
     .from(member)
@@ -73,6 +76,30 @@ async function findWorkspaceId(userId: string) {
     .limit(1);
 
   return memberships[0]?.workspaceId ?? null;
+}
+
+async function resolveProjectWorkspaceId(userId: string, request: Request) {
+  const workspaceSlug = new URL(request.url).searchParams.get("workspaceSlug");
+  if (workspaceSlug) {
+    return resolveWorkspaceIdBySlug(userId, workspaceSlug);
+  }
+
+  const referer = request.headers.get("referer");
+  if (referer) {
+    try {
+      const slug = getWorkspaceSlugFromPath(new URL(referer).pathname);
+      if (slug) {
+        const workspaceId = await resolveWorkspaceIdBySlug(userId, slug);
+        if (workspaceId) {
+          return workspaceId;
+        }
+      }
+    } catch {
+      // Ignore malformed referers and preserve the existing default fallback.
+    }
+  }
+
+  return findDefaultWorkspaceId(userId);
 }
 
 async function findProjectInWorkspace(workspaceId: string, slug: string) {
@@ -85,8 +112,11 @@ async function findProjectInWorkspace(workspaceId: string, slug: string) {
   return projects[0] ?? null;
 }
 
-async function buildProjectResponse(userId: string, slug: string) {
-  const workspaceId = await findWorkspaceId(userId);
+async function buildProjectResponse(
+  workspaceId: string | null,
+  slug: string,
+  workspaceSlug?: string | null,
+) {
   if (!workspaceId) {
     return { status: 404 as const, body: { error: "Not found" } };
   }
@@ -142,10 +172,14 @@ async function buildProjectResponse(userId: string, slug: string) {
       .where(eq(team.workspaceId, workspaceId))
       .orderBy(asc(team.name)),
     db
-      .select({ id: label.id, name: label.name, color: label.color })
-      .from(label)
-      .where(eq(label.workspaceId, workspaceId))
-      .orderBy(asc(label.name)),
+      .select({
+        id: projectLabel.id,
+        name: projectLabel.name,
+        color: projectLabel.color,
+      })
+      .from(projectLabel)
+      .where(eq(projectLabel.workspaceId, workspaceId))
+      .orderBy(asc(projectLabel.name)),
     db
       .select({
         id: issue.id,
@@ -250,7 +284,7 @@ async function buildProjectResponse(userId: string, slug: string) {
         : null,
       createdAt: projectIssue.createdAt,
       href: projectIssue.teamKey
-        ? `/team/${projectIssue.teamKey}/issue/${projectIssue.id}`
+        ? `${workspaceSlug ? `/${encodeURIComponent(workspaceSlug)}` : ""}/team/${projectIssue.teamKey}/issue/${projectIssue.id}`
         : null,
       labels: labelsByIssue.get(projectIssue.id) ?? [],
     });
@@ -346,7 +380,7 @@ async function buildProjectResponse(userId: string, slug: string) {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { response: authResponse, session } = await requireApiSession();
@@ -355,7 +389,9 @@ export async function GET(
   }
 
   const { slug } = await params;
-  const result = await buildProjectResponse(session.user.id, slug);
+  const workspaceId = await resolveProjectWorkspaceId(session.user.id, request);
+  const workspaceSlug = new URL(request.url).searchParams.get("workspaceSlug");
+  const result = await buildProjectResponse(workspaceId, slug, workspaceSlug);
   return NextResponse.json(result.body, { status: result.status });
 }
 
@@ -369,7 +405,8 @@ export async function PATCH(
   }
 
   const { slug } = await params;
-  const workspaceId = await findWorkspaceId(session.user.id);
+  const workspaceId = await resolveProjectWorkspaceId(session.user.id, request);
+  const workspaceSlug = new URL(request.url).searchParams.get("workspaceSlug");
   if (!workspaceId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -406,9 +443,9 @@ export async function PATCH(
       .from(team)
       .where(eq(team.workspaceId, workspaceId)),
     db
-      .select({ id: label.id })
-      .from(label)
-      .where(eq(label.workspaceId, workspaceId)),
+      .select({ id: projectLabel.id })
+      .from(projectLabel)
+      .where(eq(projectLabel.workspaceId, workspaceId)),
     db
       .select({ userId: projectMember.userId })
       .from(projectMember)
@@ -640,7 +677,7 @@ export async function PATCH(
     nextSettings.resources.length !== currentSettings.resources.length;
 
   if (!shouldUpdateProject) {
-    const unchanged = await buildProjectResponse(session.user.id, slug);
+    const unchanged = await buildProjectResponse(workspaceId, slug);
     return NextResponse.json(unchanged.body, { status: unchanged.status });
   }
 
@@ -686,12 +723,12 @@ export async function PATCH(
       .where(eq(project.id, proj.id));
   });
 
-  const updated = await buildProjectResponse(session.user.id, slug);
+  const updated = await buildProjectResponse(workspaceId, slug, workspaceSlug);
   return NextResponse.json(updated.body, { status: updated.status });
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { response: authResponse, session } = await requireApiSession();
@@ -700,7 +737,7 @@ export async function DELETE(
   }
 
   const { slug } = await params;
-  const workspaceId = await findWorkspaceId(session.user.id);
+  const workspaceId = await resolveProjectWorkspaceId(session.user.id, request);
   if (!workspaceId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

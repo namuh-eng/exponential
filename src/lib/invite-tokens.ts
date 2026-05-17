@@ -4,7 +4,8 @@ const DEFAULT_INVITE_TTL_SECONDS = 60 * 60 * 24 * 7;
 export interface InviteTokenPayload {
   workspaceId: string;
   email: string;
-  role: "admin" | "member" | "guest";
+  role: "owner" | "admin" | "member" | "guest";
+  teamKey?: string;
   expiresAt: number;
 }
 

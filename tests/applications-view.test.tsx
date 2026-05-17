@@ -1,14 +1,18 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import ApplicationsSettingsPage from "@/app/(app)/settings/applications/page";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/app/(app)/app-shell", () => ({
+  useAppShellContext: () => ({ workspaceSlug: "foreverbrowsing" }),
+}));
 
 describe("ApplicationsSettingsPage component", () => {
   afterEach(() => {
     cleanup();
   });
 
-  it("renders the applications settings page with empty state", async () => {
+  it("links the empty CTA to the slug-prefixed integrations settings page", async () => {
     render(<ApplicationsSettingsPage />);
 
     expect(screen.getByText("Loading...")).toBeInTheDocument();
@@ -23,5 +27,9 @@ describe("ApplicationsSettingsPage component", () => {
       },
       { timeout: 2000 },
     );
+
+    expect(
+      screen.getByRole("link", { name: "Explore integrations" }),
+    ).toHaveAttribute("href", "/foreverbrowsing/settings/integrations");
   });
 });

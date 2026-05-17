@@ -8,6 +8,7 @@ interface TeamAgentsData {
   name: string;
   agentGuidance: string;
   autoAssignment: boolean;
+  canModifyAgentGuidance?: boolean;
 }
 
 function Toggle({
@@ -82,12 +83,31 @@ export default function TeamAgentsSettingsPage() {
       });
 
       if (!res.ok) {
-        throw new Error("Failed to save agent settings");
+        const payload =
+          typeof res.json === "function"
+            ? ((await res.json().catch(() => null)) as {
+                error?: string;
+              } | null)
+            : null;
+        throw new Error(payload?.error ?? "Failed to update agent settings");
       }
 
+      const payload =
+        typeof res.json === "function"
+          ? ((await res.json().catch(() => null)) as {
+              team?: TeamAgentsData;
+            } | null)
+          : null;
+      if (payload?.team) {
+        setTeam(payload.team);
+      }
       setSaveMessage("Agent settings updated");
     } catch (error) {
-      setSaveMessage("Failed to update agent settings");
+      setSaveMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to update agent settings",
+      );
     } finally {
       setSaving(false);
     }
@@ -124,7 +144,7 @@ export default function TeamAgentsSettingsPage() {
         Agents
       </h1>
       <p className="mt-2 text-[13px] text-[var(--color-text-tertiary)]">
-        Manage AI agent guidance and team-specific automation behavior.
+        Manage team instructions and assignment automation behavior.
       </p>
 
       <div className="mt-8 space-y-6">
@@ -133,16 +153,24 @@ export default function TeamAgentsSettingsPage() {
             Agent guidance
           </h3>
           <p className="mb-4 text-[13px] text-[var(--color-text-secondary)]">
-            Custom instructions for AI agents when they are working on issues
-            for this team.
+            Team-specific instructions are included in agent run prompt
+            configuration when this team is selected.
           </p>
           <textarea
             value={agentGuidance}
             onChange={(e) => setAgentGuidance(e.target.value)}
             onBlur={() => handleSave({ agentGuidance })}
+            disabled={saving || team.canModifyAgentGuidance === false}
+            aria-label="Agent guidance"
             className="h-32 w-full rounded-md border border-[var(--color-border)] bg-transparent p-3 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
             placeholder="e.g. Always include a testing plan for frontend changes..."
           />
+          {team.canModifyAgentGuidance === false && (
+            <p className="mt-2 text-[12px] text-[var(--color-text-tertiary)]">
+              You do not have permission to modify agent guidance in this
+              workspace.
+            </p>
+          )}
         </div>
 
         <div className="rounded-lg border border-[var(--color-border)] p-4">
@@ -150,8 +178,8 @@ export default function TeamAgentsSettingsPage() {
             Auto-assignment
           </h3>
           <p className="text-[13px] text-[var(--color-text-secondary)]">
-            AI agents can automatically assign issues to team members based on
-            their expertise and current load.
+            When enabled, newly created unassigned issues are assigned to the
+            team member with the lightest current issue load.
           </p>
           <div className="mt-4 flex items-center justify-between">
             <span className="text-[13px] text-[var(--color-text-primary)]">

@@ -40,6 +40,7 @@ import { AppShell } from "@/app/(app)/app-shell";
 import { Sidebar } from "@/components/sidebar";
 import {
   OPEN_COMMAND_PALETTE_EVENT,
+  OPEN_CREATE_ISSUE_EVENT,
   OPEN_CREATE_ISSUE_FULLSCREEN_EVENT,
 } from "@/lib/command-palette";
 
@@ -62,6 +63,7 @@ const createIssueOptionsResponse = {
 describe("Sidebar", () => {
   afterEach(() => {
     cleanup();
+    mockPathname = "/inbox";
   });
 
   it("renders workspace name", () => {
@@ -89,6 +91,19 @@ describe("Sidebar", () => {
     render(<Sidebar />);
     expect(screen.getByText("Inbox")).toBeDefined();
     expect(screen.getByText("My Issues")).toBeDefined();
+  });
+
+  it("uses the Editorial accent discipline for active navigation", () => {
+    mockPathname = "/my-issues/assigned";
+
+    render(<Sidebar />);
+
+    const activeLink = screen.getByRole("link", { name: /My Issues/i });
+    expect(activeLink.className).toContain("border-[var(--color-accent)]");
+    expect(activeLink.className).toContain("bg-[var(--color-accent-soft)]");
+    expect(activeLink.className).toContain(
+      "shadow-[var(--shadow-editorial-sm)]",
+    );
   });
 
   it("shows the inbox unread badge when provided", () => {
@@ -130,6 +145,45 @@ describe("Sidebar", () => {
     render(<Sidebar teamKey="ENG" />);
     expect(screen.getByText("Triage")).toBeDefined();
     expect(screen.getByText("Issues")).toBeDefined();
+    expect(screen.getByText("Insights")).toBeDefined();
+  });
+
+  it("links team Projects, Views, and Insights to team-scoped pages", () => {
+    render(<Sidebar teamName="Engineering" teamKey="ENG" />);
+
+    expect(
+      screen
+        .getAllByRole("link", { name: /Projects/i })
+        .some((link) => link.getAttribute("href") === "/team/ENG/projects"),
+    ).toBe(true);
+    expect(
+      screen
+        .getAllByRole("link", { name: /Views/i })
+        .some((link) => link.getAttribute("href") === "/team/ENG/views"),
+    ).toBe(true);
+    expect(
+      screen
+        .getAllByRole("link", { name: /Insights/i })
+        .some((link) => link.getAttribute("href") === "/team/ENG/analytics"),
+    ).toBe(true);
+  });
+
+  it("preserves workspace slug for team Insights and marks it active", () => {
+    mockPathname = "/foreverbrowsing/team/ENG/analytics";
+    render(
+      <Sidebar
+        teamName="Engineering"
+        teamKey="ENG"
+        workspaceSlug="foreverbrowsing"
+      />,
+    );
+
+    const insightsLink = screen.getByRole("link", { name: /Insights/i });
+    expect(insightsLink).toHaveAttribute(
+      "href",
+      "/foreverbrowsing/team/ENG/analytics",
+    );
+    expect(insightsLink).toHaveClass("bg-[var(--color-accent-soft)]");
   });
 
   it("renders Initiatives and Cycles in Try section", () => {
@@ -185,16 +239,76 @@ describe("Sidebar", () => {
     expect(screen.getByText("More")).toBeDefined();
   });
 
-  it("toggles More menu to show Settings and Teams", () => {
+  it("toggles More menu to show Linear workspace navigation actions", () => {
     render(<Sidebar />);
-    expect(screen.queryByText("Settings")).toBeNull();
+    expect(screen.queryByText("Agent")).toBeNull();
 
     fireEvent.click(screen.getByText("More"));
-    expect(screen.getByText("Settings")).toBeDefined();
+    expect(screen.getByText("Agent")).toBeDefined();
+    expect(screen.getByText("Members")).toBeDefined();
     expect(screen.getByText("Teams")).toBeDefined();
+    expect(screen.getByText("Customize sidebar")).toBeDefined();
+    expect(screen.queryByText("Settings")).not.toBeInTheDocument();
+
+    expect(screen.getByRole("link", { name: /Agent/i })).toHaveAttribute(
+      "href",
+      "/agent",
+    );
+    expect(screen.getByRole("link", { name: /Members/i })).toHaveAttribute(
+      "href",
+      "/members",
+    );
+    expect(screen.getByRole("link", { name: /Teams/i })).toHaveAttribute(
+      "href",
+      "/teams",
+    );
 
     fireEvent.click(screen.getByText("More"));
-    expect(screen.queryByText("Settings")).toBeNull();
+    expect(screen.queryByText("Agent")).toBeNull();
+  });
+
+  it("opens Customize sidebar from More and updates visibility immediately", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input, init) => {
+        expect(String(input)).toBe("/api/account/preferences");
+        expect(init?.method).toBe("PATCH");
+        expect(JSON.parse(String(init?.body))).toEqual({
+          accountPreferences: {
+            sidebarVisibility: {
+              inbox: false,
+            },
+          },
+        });
+
+        return {
+          ok: true,
+          json: async () => ({
+            accountPreferences: {
+              sidebarVisibility: {
+                inbox: false,
+              },
+            },
+          }),
+        } as Response;
+      });
+
+    render(<Sidebar />);
+    expect(screen.getByRole("link", { name: /Inbox/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("More"));
+    fireEvent.click(screen.getByText("Customize sidebar"));
+
+    expect(
+      screen.getByRole("dialog", { name: "Customize sidebar" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("switch", { name: "Inbox visibility" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByRole("link", { name: /Inbox/i })).toBeNull();
   });
 
   it("renders Workspace section header", () => {
@@ -245,6 +359,51 @@ describe("Sidebar", () => {
 
     const issuesLink = screen.getByText("Issues").closest("a");
     expect(issuesLink?.getAttribute("href")).toBe("/team/ENG/all");
+
+    fireEvent.click(screen.getByText("More"));
+    expect(screen.getByRole("link", { name: /Agent/i })).toHaveAttribute(
+      "href",
+      "/agent",
+    );
+    expect(screen.getByRole("link", { name: /Members/i })).toHaveAttribute(
+      "href",
+      "/members",
+    );
+    expect(screen.getByRole("link", { name: /Teams/i })).toHaveAttribute(
+      "href",
+      "/teams",
+    );
+  });
+
+  it("uses workspace-prefixed directory links and active state", () => {
+    mockPathname = "/foreverbrowsing/teams";
+    render(<Sidebar workspaceSlug="foreverbrowsing" teamKey="ENG" />);
+
+    fireEvent.click(screen.getByText("More"));
+
+    expect(screen.getByRole("link", { name: /Agent/i })).toHaveAttribute(
+      "href",
+      "/foreverbrowsing/agent",
+    );
+    expect(screen.getByRole("link", { name: /Members/i })).toHaveAttribute(
+      "href",
+      "/foreverbrowsing/members",
+    );
+    const teamsLink = screen.getByRole("link", { name: /Teams/i });
+    expect(teamsLink).toHaveAttribute("href", "/foreverbrowsing/teams");
+    expect(teamsLink.className).toContain("bg-[var(--color-accent-soft)]");
+  });
+
+  it("keeps Issues highlighted on URL-addressable team issue list routes", () => {
+    for (const tab of ["all", "active", "backlog"]) {
+      cleanup();
+      mockPathname = `/team/ENG/${tab}`;
+      render(<Sidebar teamKey="ENG" />);
+
+      expect(screen.getByText("Issues").closest("a")?.className).toContain(
+        "bg-[var(--color-accent-soft)]",
+      );
+    }
   });
 
   it("keeps Issues highlighted on issue detail routes", () => {
@@ -253,7 +412,7 @@ describe("Sidebar", () => {
     render(<Sidebar teamKey="ENG" />);
 
     expect(screen.getByText("Issues").closest("a")?.className).toContain(
-      "bg-[var(--color-surface-active)]",
+      "bg-[var(--color-accent-soft)]",
     );
   });
 
@@ -264,7 +423,7 @@ describe("Sidebar", () => {
 
     expect(
       screen.getAllByText("Projects")[0].closest("a")?.className,
-    ).toContain("bg-[var(--color-surface-active)]");
+    ).toContain("bg-[var(--color-accent-soft)]");
   });
 });
 
@@ -346,8 +505,10 @@ describe("AppShell", () => {
         <div>Test</div>
       </AppShell>,
     );
-    const contentDiv = container.querySelector(".rounded-xl");
-    expect(contentDiv).not.toBeNull();
+    const contentDiv = Array.from(container.querySelectorAll("div")).find(
+      (element) => element.className.includes("rounded-[10px]"),
+    );
+    expect(contentDiv).toBeDefined();
   });
 
   it("hides the app sidebar on mobile settings routes", () => {
@@ -519,7 +680,59 @@ describe("AppShell", () => {
     });
   });
 
-  it("opens the global create issue modal when the fullscreen command event fires", async () => {
+  it("opens the compact create issue modal when the regular command event fires", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/api/notifications")) {
+        return {
+          ok: true,
+          json: async () => ({ unreadCount: 2, notifications: [] }),
+        } as Response;
+      }
+      if (url.includes("/api/account/preferences")) {
+        return {
+          ok: true,
+          json: async () => ({ accountPreferences: {} }),
+        } as Response;
+      }
+      if (url.includes("/create-issue-options")) {
+        return {
+          ok: true,
+          json: async () => createIssueOptionsResponse,
+        } as Response;
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    render(
+      <AppShell
+        workspaceName="WS"
+        workspaceInitials="WS"
+        teamName="Eng"
+        teamId="team-1"
+        teamKey="ENG"
+        teams={[{ id: "team-1", name: "Eng", key: "ENG" }]}
+      >
+        <div>Content</div>
+      </AppShell>,
+    );
+
+    window.dispatchEvent(new CustomEvent(OPEN_CREATE_ISSUE_EVENT));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Create issue for Eng")).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByLabelText("Create issue fullscreen for Eng"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("create-issue-composer")).toHaveAttribute(
+      "data-variant",
+      "modal",
+    );
+  });
+
+  it("opens the fullscreen create issue composer when the fullscreen command event fires", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
       if (url.includes("/api/notifications")) {
@@ -560,7 +773,14 @@ describe("AppShell", () => {
     window.dispatchEvent(new CustomEvent(OPEN_CREATE_ISSUE_FULLSCREEN_EVENT));
 
     await waitFor(() => {
-      expect(screen.getByText("New issue")).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("Create issue fullscreen for Eng"),
+      ).toBeInTheDocument();
     });
+    expect(screen.getByText("Fullscreen composer")).toBeInTheDocument();
+    expect(screen.getByTestId("create-issue-composer")).toHaveAttribute(
+      "data-variant",
+      "fullscreen",
+    );
   });
 });

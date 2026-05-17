@@ -73,8 +73,7 @@ vi.mock("@/lib/db", () => ({
           }),
         };
         const result = await cb(tx);
-        // FORCE the return value to be the workspace mock
-        return txInsertWorkspaceReturningMock()[0];
+        return result;
       },
     ),
   },
@@ -91,7 +90,7 @@ describe("workspaces collection route", () => {
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
     workspaceLimitMock.mockReturnValue([]);
     txInsertWorkspaceReturningMock.mockReturnValue([
-      { id: "ws-1", name: "Namuh" },
+      { id: "ws-1", name: "Namuh", urlSlug: "namuh" },
     ]);
     txSelectTeamKeysMock.mockReturnValue([]);
     txInsertTeamReturningMock.mockReturnValue([{ id: "team-1" }]);
@@ -120,7 +119,10 @@ describe("workspaces collection route", () => {
 
     expect(response.status).toBe(201);
     const payload = await response.json();
-    expect(payload.id).toBe("ws-1");
+    expect(payload.workspace.id).toBe("ws-1");
+    expect(response.headers.get("set-cookie")).toContain(
+      "activeWorkspaceId=ws-1",
+    );
   });
 
   it("rejects duplicate url slugs", async () => {

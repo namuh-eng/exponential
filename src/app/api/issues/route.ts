@@ -3,17 +3,21 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
   issue,
-  issueHistory,
   issueLabel,
   team,
+  teamMember,
   workflowState,
 } from "@/lib/db/schema";
 import { normalizeIssueDescriptionHtml } from "@/lib/issue-description";
+import { insertIssueHistoryEvent } from "@/lib/issue-history";
+import { normalizeApplicableIssueLabelIds } from "@/lib/label-application";
 import {
   buildNotificationValues,
   insertNotifications,
 } from "@/lib/notifications";
-import { and, eq, sql } from "drizzle-orm";
+import { activeTeamFilter, isTeamRetired } from "@/lib/team-lifecycle";
+import { readTeamSettings } from "@/lib/team-settings";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -51,9 +55,16 @@ export async function POST(request: Request) {
   }
 
   const teams = await db
-    .select({ id: team.id, key: team.key, workspaceId: team.workspaceId })
+    .select({
+      id: team.id,
+      key: team.key,
+      workspaceId: team.workspaceId,
+      settings: team.settings,
+      retiredAt: team.retiredAt,
+      deletedAt: team.deletedAt,
+    })
     .from(team)
-    .where(eq(team.id, teamId))
+    .where(and(eq(team.id, teamId), activeTeamFilter))
     .limit(1);
 
   if (teams.length === 0) {
@@ -63,6 +74,13 @@ export async function POST(request: Request) {
   const teamRecord = teams[0];
   if (teamRecord.workspaceId !== workspaceId) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
+  }
+
+  if (isTeamRetired(teamRecord)) {
+    return NextResponse.json(
+      { error: "Retired teams cannot accept new issues" },
+      { status: 409 },
+    );
   }
 
   // Get next issue number for this team
@@ -98,10 +116,56 @@ export async function POST(request: Request) {
     );
   }
 
+  let finalAssigneeId = assigneeId || null;
+  const teamFlags = readTeamSettings(teamRecord.settings);
+  if (!finalAssigneeId && teamFlags.autoAssignment) {
+    const candidateMembers = await db
+      .select({ userId: teamMember.userId })
+      .from(teamMember)
+      .where(eq(teamMember.teamId, teamId));
+
+    const candidateUserIds = candidateMembers.map(
+      (candidate) => candidate.userId,
+    );
+    if (candidateUserIds.length > 0) {
+      const loadRows = await db
+        .select({ assigneeId: issue.assigneeId, value: sql<number>`COUNT(*)` })
+        .from(issue)
+        .where(
+          and(
+            eq(issue.teamId, teamId),
+            inArray(issue.assigneeId, candidateUserIds),
+          ),
+        )
+        .groupBy(issue.assigneeId);
+      const loadByUserId = new Map(
+        loadRows.flatMap((row) =>
+          row.assigneeId ? [[row.assigneeId, Number(row.value)]] : [],
+        ),
+      );
+
+      finalAssigneeId =
+        [...candidateUserIds].sort((left, right) => {
+          const loadDelta =
+            (loadByUserId.get(left) ?? 0) - (loadByUserId.get(right) ?? 0);
+          return loadDelta === 0 ? left.localeCompare(right) : loadDelta;
+        })[0] ?? null;
+    }
+  }
+
   const normalizedDescription = normalizeIssueDescriptionHtml(description);
-  const uniqueLabelIds = Array.isArray(labelIds)
-    ? [...new Set(labelIds.filter((value): value is string => Boolean(value)))]
-    : [];
+  const normalizedLabels = await normalizeApplicableIssueLabelIds({
+    db,
+    labelIds,
+    workspaceId,
+    teamId,
+  });
+  if (!normalizedLabels.ok) {
+    return NextResponse.json(
+      { error: normalizedLabels.error },
+      { status: 400 },
+    );
+  }
 
   const newIssue = await db.transaction(async (tx) => {
     const [createdIssue] = await tx
@@ -115,22 +179,22 @@ export async function POST(request: Request) {
         stateId: finalStateId,
         creatorId: session.user.id,
         priority: priority || "none",
-        assigneeId: assigneeId || null,
+        assigneeId: finalAssigneeId,
         projectId: projectId || null,
         parentIssueId: parentIssueId || null,
       })
       .returning();
 
-    if (uniqueLabelIds.length > 0) {
+    if (normalizedLabels.labelIds.length > 0) {
       await tx.insert(issueLabel).values(
-        uniqueLabelIds.map((labelId) => ({
+        normalizedLabels.labelIds.map((labelId) => ({
           issueId: createdIssue.id,
           labelId,
         })),
       );
     }
 
-    await tx.insert(issueHistory).values({
+    await insertIssueHistoryEvent(tx, teamRecord, {
       issueId: createdIssue.id,
       actorId: session.user.id,
       actorName: session.user.name ?? null,

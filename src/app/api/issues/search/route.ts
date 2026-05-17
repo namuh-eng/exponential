@@ -1,7 +1,8 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issue, member, team } from "@/lib/db/schema";
-import { and, eq, ilike, inArray, or } from "drizzle-orm";
+import { activeTeamFilter } from "@/lib/team-lifecycle";
+import { and, eq, ilike, inArray, isNull, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
   const workspaceTeams = await db
     .select({ id: team.id })
     .from(team)
-    .where(eq(team.workspaceId, workspaceId));
+    .where(and(eq(team.workspaceId, workspaceId), activeTeamFilter));
 
   const teamIds = workspaceTeams.map((t) => t.id);
 
@@ -60,6 +61,7 @@ export async function GET(request: Request) {
     .where(
       and(
         inArray(issue.teamId, teamIds),
+        isNull(issue.archivedAt),
         or(
           ilike(issue.title, `%${query}%`),
           ilike(issue.identifier, `%${query}%`),

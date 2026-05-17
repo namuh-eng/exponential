@@ -2,9 +2,10 @@
 
 import {
   ACCOUNT_NOTIFICATION_CHANNELS,
+  ACCOUNT_NOTIFICATION_EVENT_DESCRIPTIONS,
+  ACCOUNT_NOTIFICATION_EVENT_GROUPS,
   ACCOUNT_NOTIFICATION_EVENT_LABELS,
   type AccountNotificationChannelKey,
-  type AccountNotificationEventKey,
   type AccountNotificationSettings,
   type AccountNotificationSettingsPatch,
   DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS,
@@ -37,13 +38,6 @@ const CHANNEL_METADATA: Record<
     name: "Slack",
     description: "Decide which Linear events get forwarded to Slack.",
   },
-};
-
-const EVENT_DESCRIPTIONS: Record<AccountNotificationEventKey, string> = {
-  assignments: "When you're assigned to an issue.",
-  statusChanges: "When an issue you follow changes status.",
-  mentions: "When someone mentions you in a comment or description.",
-  comments: "When someone comments on work you're involved in.",
 };
 
 function Toggle({
@@ -334,7 +328,7 @@ export function NotificationsOverviewPage() {
       <section className="mb-12">
         <SectionTitle
           title="Notification channels"
-          description="Choose how to be notified for workspace activity. Notifications will always go to your Linear inbox."
+          description="Choose which channels can deliver workspace activity. Notification delivery follows the event preferences configured for each channel."
         />
 
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
@@ -512,38 +506,44 @@ export function NotificationChannelPage({
           <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
             {describeNotificationChannelPreferences(settings.channels[channel])}
           </p>
+          <p className="mt-2 max-w-[620px] text-[12px] text-[var(--color-text-tertiary)]">
+            Turning off an event prevents this channel from sending
+            notifications for that activity. If all channels are disabled for an
+            event, you won't receive notifications for it.
+          </p>
         </div>
         <SaveIndicator saveState={saveState} />
       </div>
 
-      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
-        {Object.entries(ACCOUNT_NOTIFICATION_EVENT_LABELS).map(
-          ([eventKey, label]) => (
-            <SettingRow
-              key={eventKey}
-              label={label}
-              description={
-                EVENT_DESCRIPTIONS[eventKey as AccountNotificationEventKey]
-              }
-              checked={
-                settings.channels[channel].events[
-                  eventKey as AccountNotificationEventKey
-                ]
-              }
-              onChange={(value) =>
-                updateSettings({
-                  channels: {
-                    [channel]: {
-                      events: {
-                        [eventKey]: value,
+      <div className="space-y-5">
+        {ACCOUNT_NOTIFICATION_EVENT_GROUPS.map((group) => (
+          <section key={group.title}>
+            <SectionTitle title={group.title} description={group.description} />
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+              {group.events.map((eventKey) => (
+                <SettingRow
+                  key={eventKey}
+                  label={ACCOUNT_NOTIFICATION_EVENT_LABELS[eventKey]}
+                  description={
+                    ACCOUNT_NOTIFICATION_EVENT_DESCRIPTIONS[eventKey]
+                  }
+                  checked={settings.channels[channel].events[eventKey]}
+                  onChange={(value) =>
+                    updateSettings({
+                      channels: {
+                        [channel]: {
+                          events: {
+                            [eventKey]: value,
+                          },
+                        },
                       },
-                    },
-                  },
-                })
-              }
-            />
-          ),
-        )}
+                    })
+                  }
+                />
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   );

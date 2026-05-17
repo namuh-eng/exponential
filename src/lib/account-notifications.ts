@@ -10,6 +10,18 @@ export const ACCOUNT_NOTIFICATION_EVENTS = [
   "statusChanges",
   "mentions",
   "comments",
+  "priorityChanges",
+  "dueDates",
+  "relations",
+  "triage",
+  "projectUpdates",
+  "cycleUpdates",
+  "initiativeUpdates",
+  "documentActivity",
+  "teamUpdates",
+  "workspaceAdmin",
+  "customerRequests",
+  "productUpdates",
 ] as const;
 
 export type AccountNotificationChannelKey =
@@ -63,42 +75,136 @@ export const ACCOUNT_NOTIFICATION_EVENT_LABELS: Record<
   statusChanges: "Status changes",
   mentions: "Mentions",
   comments: "Comments and replies",
+  priorityChanges: "Priority changes",
+  dueDates: "Due dates and reminders",
+  relations: "Relations and blockers",
+  triage: "Triage and intake",
+  projectUpdates: "Project updates",
+  cycleUpdates: "Cycles",
+  initiativeUpdates: "Initiatives",
+  documentActivity: "Documents",
+  teamUpdates: "Team updates",
+  workspaceAdmin: "Workspace and admin",
+  customerRequests: "Customer requests and SLA",
+  productUpdates: "Product updates and digests",
 };
+
+export const ACCOUNT_NOTIFICATION_EVENT_DESCRIPTIONS: Record<
+  AccountNotificationEventKey,
+  string
+> = {
+  assignments: "When you're assigned to an issue.",
+  statusChanges: "When an issue you follow changes status.",
+  mentions: "When someone mentions you in a comment or description.",
+  comments: "When someone comments on work you're involved in.",
+  priorityChanges: "When priority changes on issues you follow.",
+  dueDates: "When due dates are added, changed, overdue, or coming up.",
+  relations: "When blockers, relations, or duplicates change on followed work.",
+  triage: "When intake or triage issues need review or change state.",
+  projectUpdates:
+    "When projects you follow get updates, milestones, or health changes.",
+  cycleUpdates: "When cycle scope, start dates, or completion status changes.",
+  initiativeUpdates:
+    "When initiatives you follow receive updates or status changes.",
+  documentActivity:
+    "When documents you own or follow are edited or commented on.",
+  teamUpdates: "When team settings, membership, or routing rules change.",
+  workspaceAdmin:
+    "When workspace-level security, billing, or admin events occur.",
+  customerRequests:
+    "When customer requests, support links, or SLA risk changes.",
+  productUpdates:
+    "When product digests, changelog items, or release notes are available.",
+};
+
+export const ACCOUNT_NOTIFICATION_EVENT_GROUPS: Array<{
+  title: string;
+  description: string;
+  events: AccountNotificationEventKey[];
+}> = [
+  {
+    title: "Issues",
+    description: "Direct issue activity and routing changes.",
+    events: [
+      "assignments",
+      "statusChanges",
+      "mentions",
+      "comments",
+      "priorityChanges",
+      "dueDates",
+      "relations",
+      "triage",
+    ],
+  },
+  {
+    title: "Projects, cycles, and initiatives",
+    description: "Higher-level planning activity and progress updates.",
+    events: ["projectUpdates", "cycleUpdates", "initiativeUpdates"],
+  },
+  {
+    title: "Documents and workspace",
+    description: "Collaboration, team, and administrative notifications.",
+    events: ["documentActivity", "teamUpdates", "workspaceAdmin"],
+  },
+  {
+    title: "Customer and product",
+    description: "Customer-request activity, SLA changes, and digest delivery.",
+    events: ["customerRequests", "productUpdates"],
+  },
+];
+
+function makeEventPreferences(
+  enabledEvents: AccountNotificationEventKey[],
+): NotificationEventPreferences {
+  const enabled = new Set(enabledEvents);
+  return Object.fromEntries(
+    ACCOUNT_NOTIFICATION_EVENTS.map((eventKey) => [
+      eventKey,
+      enabled.has(eventKey),
+    ]),
+  ) as NotificationEventPreferences;
+}
 
 export const DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS: AccountNotificationSettings =
   {
     channels: {
       desktop: {
-        events: {
-          assignments: true,
-          statusChanges: true,
-          mentions: true,
-          comments: false,
-        },
+        events: makeEventPreferences([
+          "assignments",
+          "statusChanges",
+          "mentions",
+          "comments",
+          "priorityChanges",
+          "dueDates",
+          "relations",
+          "triage",
+          "projectUpdates",
+          "cycleUpdates",
+          "initiativeUpdates",
+          "documentActivity",
+        ]),
       },
       mobile: {
-        events: {
-          assignments: true,
-          statusChanges: true,
-          mentions: true,
-          comments: true,
-        },
+        events: makeEventPreferences([...ACCOUNT_NOTIFICATION_EVENTS]),
       },
       email: {
-        events: {
-          assignments: false,
-          statusChanges: false,
-          mentions: false,
-          comments: false,
-        },
+        events: makeEventPreferences([
+          "assignments",
+          "mentions",
+          "comments",
+          "dueDates",
+          "projectUpdates",
+          "productUpdates",
+        ]),
       },
       slack: {
-        events: {
-          assignments: false,
-          statusChanges: false,
-          mentions: false,
-          comments: false,
-        },
+        events: makeEventPreferences([
+          "mentions",
+          "comments",
+          "triage",
+          "projectUpdates",
+          "customerRequests",
+        ]),
       },
     },
     updatesFromLinear: {
@@ -127,24 +233,14 @@ function normalizeEventPreferences(
   const defaults =
     DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.channels[channel].events;
 
-  return {
-    assignments:
-      typeof parsed.assignments === "boolean"
-        ? parsed.assignments
-        : defaults.assignments,
-    statusChanges:
-      typeof parsed.statusChanges === "boolean"
-        ? parsed.statusChanges
-        : defaults.statusChanges,
-    mentions:
-      typeof parsed.mentions === "boolean"
-        ? parsed.mentions
-        : defaults.mentions,
-    comments:
-      typeof parsed.comments === "boolean"
-        ? parsed.comments
-        : defaults.comments,
-  };
+  return Object.fromEntries(
+    ACCOUNT_NOTIFICATION_EVENTS.map((eventKey) => [
+      eventKey,
+      typeof parsed[eventKey] === "boolean"
+        ? parsed[eventKey]
+        : defaults[eventKey],
+    ]),
+  ) as NotificationEventPreferences;
 }
 
 export function normalizeAccountNotificationSettings(
@@ -156,32 +252,17 @@ export function normalizeAccountNotificationSettings(
   const other = asRecord(parsed.other);
 
   return {
-    channels: {
-      desktop: {
-        events: normalizeEventPreferences(
-          asRecord(channels.desktop).events,
-          "desktop",
-        ),
-      },
-      mobile: {
-        events: normalizeEventPreferences(
-          asRecord(channels.mobile).events,
-          "mobile",
-        ),
-      },
-      email: {
-        events: normalizeEventPreferences(
-          asRecord(channels.email).events,
-          "email",
-        ),
-      },
-      slack: {
-        events: normalizeEventPreferences(
-          asRecord(channels.slack).events,
-          "slack",
-        ),
-      },
-    },
+    channels: Object.fromEntries(
+      ACCOUNT_NOTIFICATION_CHANNELS.map((channel) => [
+        channel,
+        {
+          events: normalizeEventPreferences(
+            asRecord(channels[channel]).events,
+            channel,
+          ),
+        },
+      ]),
+    ) as AccountNotificationSettings["channels"],
     updatesFromLinear: {
       showInSidebar:
         typeof updatesFromLinear.showInSidebar === "boolean"
@@ -218,45 +299,24 @@ export function mergeAccountNotificationSettings(
   current: AccountNotificationSettings,
   patch: AccountNotificationSettingsPatch,
 ): AccountNotificationSettings {
+  const nextChannels = Object.fromEntries(
+    ACCOUNT_NOTIFICATION_CHANNELS.map((channel) => [
+      channel,
+      {
+        ...current.channels[channel],
+        ...patch.channels?.[channel],
+        events: {
+          ...current.channels[channel].events,
+          ...patch.channels?.[channel]?.events,
+        },
+      },
+    ]),
+  ) as AccountNotificationSettings["channels"];
+
   return normalizeAccountNotificationSettings({
     ...current,
     ...patch,
-    channels: {
-      ...current.channels,
-      ...patch.channels,
-      desktop: {
-        ...current.channels.desktop,
-        ...patch.channels?.desktop,
-        events: {
-          ...current.channels.desktop.events,
-          ...patch.channels?.desktop?.events,
-        },
-      },
-      mobile: {
-        ...current.channels.mobile,
-        ...patch.channels?.mobile,
-        events: {
-          ...current.channels.mobile.events,
-          ...patch.channels?.mobile?.events,
-        },
-      },
-      email: {
-        ...current.channels.email,
-        ...patch.channels?.email,
-        events: {
-          ...current.channels.email.events,
-          ...patch.channels?.email?.events,
-        },
-      },
-      slack: {
-        ...current.channels.slack,
-        ...patch.channels?.slack,
-        events: {
-          ...current.channels.slack.events,
-          ...patch.channels?.slack?.events,
-        },
-      },
-    },
+    channels: nextChannels,
     updatesFromLinear: {
       ...current.updatesFromLinear,
       ...patch.updatesFromLinear,

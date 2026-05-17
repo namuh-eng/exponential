@@ -56,6 +56,7 @@ export default async function AcceptInvitePage({
       email: workspaceInvitation.email,
       role: workspaceInvitation.role,
       status: workspaceInvitation.status,
+      token: workspaceInvitation.token,
     })
     .from(workspaceInvitation)
     .where(eq(workspaceInvitation.token, token))
@@ -69,6 +70,9 @@ export default async function AcceptInvitePage({
     .where(eq(workspace.inviteLinkToken, token))
     .limit(1);
 
+  const storedInvitePayload = storedInvite
+    ? verifyInviteToken(storedInvite.token)
+    : null;
   const invite =
     storedInvite && storedInvite.status === "pending"
       ? {
@@ -76,6 +80,7 @@ export default async function AcceptInvitePage({
           workspaceId: storedInvite.workspaceId,
           email: storedInvite.email,
           role: storedInvite.role,
+          teamKey: storedInvitePayload?.teamKey ?? null,
         }
       : signedInvite
         ? {
@@ -83,6 +88,7 @@ export default async function AcceptInvitePage({
             workspaceId: signedInvite.workspaceId,
             email: signedInvite.email,
             role: signedInvite.role,
+            teamKey: signedInvite.teamKey ?? null,
           }
         : workspaceInviteLink?.inviteLinkEnabled
           ? {
@@ -90,6 +96,7 @@ export default async function AcceptInvitePage({
               workspaceId: workspaceInviteLink.workspaceId,
               email: null,
               role: "member" as const,
+              teamKey: null,
             }
           : null;
 
@@ -139,7 +146,14 @@ export default async function AcceptInvitePage({
   const [defaultTeam] = await db
     .select({ id: team.id, key: team.key })
     .from(team)
-    .where(eq(team.workspaceId, invite.workspaceId))
+    .where(
+      invite.teamKey
+        ? and(
+            eq(team.workspaceId, invite.workspaceId),
+            eq(team.key, invite.teamKey),
+          )
+        : eq(team.workspaceId, invite.workspaceId),
+    )
     .orderBy(asc(team.createdAt))
     .limit(1);
 

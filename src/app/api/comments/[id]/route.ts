@@ -1,6 +1,7 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { comment, commentAttachment } from "@/lib/db/schema";
+import { markIssueDiscussionSummaryStale } from "@/lib/discussion-summary-store";
 import { deleteFile } from "@/lib/s3";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -37,6 +38,8 @@ export async function PATCH(
       { status: 404 },
     );
   }
+
+  await markIssueDiscussionSummaryStale(updated.issueId);
 
   return NextResponse.json(updated);
 }
@@ -79,6 +82,7 @@ export async function DELETE(
       .where(eq(commentAttachment.commentId, id));
     // Delete comment
     await tx.delete(comment).where(eq(comment.id, id));
+    await markIssueDiscussionSummaryStale(existingComment.issueId);
   });
 
   // Delete files from S3

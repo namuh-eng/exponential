@@ -4,11 +4,41 @@ import { EmptyState } from "@/components/empty-state";
 import { InitiativeRow } from "@/components/initiative-row";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+interface WorkspaceMember {
+  id: string;
+  name: string;
+  image: string | null;
+}
+
+interface WorkspaceTeam {
+  id: string;
+  name: string;
+  key: string;
+  icon: string | null;
+}
+
 interface InitiativeData {
   id: string;
   name: string;
   description: string | null;
   status: "active" | "planned" | "completed";
+  ownerId?: string | null;
+  owner?: WorkspaceMember | null;
+  teams?: WorkspaceTeam[];
+  targetDate?: string | null;
+  health?: "onTrack" | "atRisk" | "offTrack" | "unknown";
+  latestUpdate?: {
+    id: string;
+    body: string;
+    health: "onTrack" | "atRisk" | "offTrack";
+    createdAt: string;
+  } | null;
+  activeProjectHealthRollup?: {
+    total: number;
+    withUpdates: number;
+    withoutUpdates: number;
+    paused: number;
+  };
   projectCount: number;
   completedProjectCount: number;
   createdAt: string;
@@ -16,6 +46,8 @@ interface InitiativeData {
 
 interface InitiativesResponse {
   initiatives: InitiativeData[];
+  workspaceMembers?: WorkspaceMember[];
+  workspaceTeams?: WorkspaceTeam[];
 }
 
 export default function InitiativesPage() {
@@ -53,11 +85,28 @@ export default function InitiativesPage() {
       const formData = new FormData(e.currentTarget);
       const name = formData.get("name") as string;
       const description = (formData.get("description") as string) || undefined;
+      const ownerId = (formData.get("ownerId") as string) || undefined;
+      const targetDate = (formData.get("targetDate") as string) || undefined;
+      const health = (formData.get("health") as string) || "unknown";
+      const teamIds = formData
+        .getAll("teamIds")
+        .filter(
+          (value): value is string =>
+            typeof value === "string" && Boolean(value),
+        );
 
       const res = await fetch("/api/initiatives", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, description, status: activeTab }),
+        body: JSON.stringify({
+          name,
+          description,
+          status: activeTab,
+          ownerId,
+          teamIds,
+          targetDate,
+          health,
+        }),
       });
 
       if (res.ok) {
@@ -206,10 +255,70 @@ export default function InitiativesPage() {
             />
             <textarea
               name="description"
-              placeholder="Description (optional)"
+              placeholder="Summary or initiative document (optional)"
               rows={2}
               className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
             />
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="text-[12px] text-[var(--color-text-secondary)]">
+                Owner
+                <select
+                  name="ownerId"
+                  aria-label="Initiative owner"
+                  className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                >
+                  <option value="">No owner</option>
+                  {data?.workspaceMembers?.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-[12px] text-[var(--color-text-secondary)]">
+                Target date
+                <input
+                  name="targetDate"
+                  aria-label="Initiative target date"
+                  type="date"
+                  className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                />
+              </label>
+              <label className="text-[12px] text-[var(--color-text-secondary)]">
+                Health
+                <select
+                  name="health"
+                  aria-label="Initiative health"
+                  defaultValue="unknown"
+                  className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                >
+                  <option value="unknown">Unknown</option>
+                  <option value="onTrack">On track</option>
+                  <option value="atRisk">At risk</option>
+                  <option value="offTrack">Off track</option>
+                </select>
+              </label>
+              <fieldset className="text-[12px] text-[var(--color-text-secondary)]">
+                <legend>Teams</legend>
+                <div className="mt-1 max-h-24 overflow-y-auto rounded-md border border-[var(--color-border)] px-2 py-1">
+                  {data?.workspaceTeams?.length ? (
+                    data.workspaceTeams.map((team) => (
+                      <label
+                        key={team.id}
+                        className="flex items-center gap-2 py-1 text-[12px] text-[var(--color-text-primary)]"
+                      >
+                        <input type="checkbox" name="teamIds" value={team.id} />
+                        {team.icon ?? "#"} {team.name}
+                      </label>
+                    ))
+                  ) : (
+                    <span className="text-[12px] text-[var(--color-text-tertiary)]">
+                      No teams
+                    </span>
+                  )}
+                </div>
+              </fieldset>
+            </div>
             <div className="flex items-center gap-2">
               <button
                 type="submit"

@@ -10,6 +10,7 @@ import { IssueDetailView } from "@/components/issue-detail-view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
   useParams: vi.fn(),
 }));
 
@@ -36,6 +37,7 @@ describe("IssueDetailView interactions", () => {
     team: { id: "t-1", name: "Engineering", key: "ENG" },
     project: null,
     labels: [],
+    reactions: [],
     comments: [
       {
         id: "c-1",
@@ -147,6 +149,56 @@ describe("IssueDetailView interactions", () => {
     });
 
     expect(await screen.findByText("1")).toBeInTheDocument();
+  });
+
+  it("persists issue-level reaction toggles", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((input: string | URL | Request) => {
+        const url = input.toString();
+        if (url.includes("/history")) {
+          return Promise.resolve(emptyHistoryResponse);
+        }
+
+        if (url === "/api/issues/i-1/reactions") {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve([{ emoji: "👍", count: 1, reactedByMe: true }]),
+          });
+        }
+
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockIssueData),
+        });
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<IssueDetailView issueId="i-1" />);
+
+    await waitFor(() =>
+      expect(screen.getByText("Initial Issue")).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByLabelText("Issue reaction 👍"));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/issues/i-1/reactions",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ emoji: "👍" }),
+        }),
+      );
+    });
+
+    expect(await screen.findByText("👍 reaction saved.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Issue reaction 👍 selected")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("submits a new comment", async () => {

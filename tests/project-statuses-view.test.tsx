@@ -1,45 +1,74 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import ProjectStatusesPage from "@/app/(app)/settings/project-statuses/page";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const statusPayload = {
   statuses: [
     {
-      value: "planned",
-      label: "Planned",
+      id: "planned",
+      key: "planned",
+      name: "Planned",
       description:
         "Projects that are proposed or scheduled but not active yet.",
+      color: "#6b6f76",
+      icon: "○",
+      position: 0,
+      isDefault: true,
       projectCount: 2,
     },
     {
-      value: "in_progress",
-      label: "In progress",
+      id: "started",
+      key: "started",
+      name: "In progress",
       description: "Projects that are actively being worked on.",
+      color: "#b58900",
+      icon: "◐",
+      position: 1,
+      isDefault: true,
       projectCount: 1,
     },
     {
-      value: "paused",
-      label: "Paused",
+      id: "paused",
+      key: "paused",
+      name: "Paused",
       description: "Projects that are temporarily on hold.",
+      color: "#6b6f76",
+      icon: "Ⅱ",
+      position: 2,
+      isDefault: true,
       projectCount: 0,
     },
     {
-      value: "completed",
-      label: "Completed",
+      id: "completed",
+      key: "completed",
+      name: "Completed",
       description: "Projects that have reached their intended outcome.",
+      color: "#2e7d32",
+      icon: "✓",
+      position: 3,
+      isDefault: true,
       projectCount: 3,
     },
     {
-      value: "canceled",
-      label: "Canceled",
+      id: "canceled",
+      key: "canceled",
+      name: "Canceled",
       description: "Projects that are no longer planned to continue.",
+      color: "#6b6f76",
+      icon: "×",
+      position: 4,
+      isDefault: true,
       projectCount: 0,
     },
   ],
   totalProjects: 6,
-  readOnly: true,
-  customStatusesSupported: false,
+  readOnly: false,
+  customStatusesSupported: true,
+  canManage: true,
+  limitation:
+    "Custom project statuses are configurable in settings; project records still store the default lifecycle values.",
 };
 
 describe("ProjectStatusesPage component", () => {
@@ -49,13 +78,10 @@ describe("ProjectStatusesPage component", () => {
     vi.unstubAllGlobals();
   });
 
-  it("loads and renders default lifecycle statuses with workspace counts", async () => {
+  it("loads and renders editable lifecycle statuses with workspace counts", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => statusPayload,
-      }),
+      vi.fn().mockResolvedValue({ ok: true, json: async () => statusPayload }),
     );
 
     render(<ProjectStatusesPage />);
@@ -70,18 +96,63 @@ describe("ProjectStatusesPage component", () => {
 
     expect(fetch).toHaveBeenCalledWith("/api/project-statuses");
     expect(screen.getByText("Project statuses")).toBeInTheDocument();
-    expect(screen.getByText("Planned")).toBeInTheDocument();
-    expect(screen.getByText("In progress")).toBeInTheDocument();
-    expect(screen.getByText("in_progress")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Planned")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("In progress")).toBeInTheDocument();
+    expect(screen.getByText("started")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "6 workspace projects counted across the default lifecycle.",
+        /6 workspace projects counted across the configured lifecycle/,
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Project statuses are read-only/),
+      screen.getByRole("button", { name: "New status" }),
     ).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
+  });
+
+  it("creates, edits, saves, and renders the persisted custom status", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => statusPayload })
+      .mockImplementationOnce(async (_url, init: RequestInit) => {
+        const body = JSON.parse(`${init.body}`) as {
+          statuses: typeof statusPayload.statuses;
+        };
+        return {
+          ok: true,
+          json: async () => ({
+            ...statusPayload,
+            statuses: body.statuses.map((status, position) => ({
+              ...status,
+              position,
+              projectCount: status.projectCount ?? 0,
+            })),
+          }),
+        };
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<ProjectStatusesPage />);
+    await waitFor(() => screen.getByDisplayValue("Planned"));
+
+    await user.click(screen.getByRole("button", { name: "New status" }));
+    const newStatusInput = screen.getByDisplayValue("New status");
+    await user.clear(newStatusInput);
+    await user.type(newStatusInput, "Blocked");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => screen.getByText("Project statuses saved."));
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/project-statuses",
+      expect.objectContaining({ method: "PATCH" }),
+    );
+    const [, init] = fetchMock.mock.calls.at(-1) ?? [];
+    expect(JSON.parse(`${(init as RequestInit).body}`).statuses).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "Blocked" })]),
+    );
+    expect(screen.getByDisplayValue("Blocked")).toBeInTheDocument();
   });
 
   it("shows an honest empty-project state while still listing lifecycle statuses", async () => {
@@ -102,13 +173,31 @@ describe("ProjectStatusesPage component", () => {
 
     render(<ProjectStatusesPage />);
 
-    await waitFor(() => screen.getByText("Planned"));
+    await waitFor(() => screen.getByDisplayValue("Planned"));
 
     expect(
       screen.getByText(/No projects in this workspace yet/),
     ).toBeInTheDocument();
     expect(screen.queryByText("No custom statuses")).not.toBeInTheDocument();
-    expect(screen.getByText("Canceled")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Canceled")).toBeInTheDocument();
+  });
+
+  it("hides mutation controls for non-admin users", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ ...statusPayload, canManage: false }),
+      }),
+    );
+
+    render(<ProjectStatusesPage />);
+    await waitFor(() => screen.getByDisplayValue("Planned"));
+
+    expect(
+      screen.queryByRole("button", { name: "New status" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue("Planned")).toBeDisabled();
   });
 
   it("shows an API error without rendering stale counts", async () => {
@@ -116,7 +205,27 @@ describe("ProjectStatusesPage component", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: false,
-        json: async () => ({ error: "boom" }),
+        json: async () => ({ error: "Unauthorized" }),
+      }),
+    );
+
+    render(<ProjectStatusesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Unauthorized");
+    });
+
+    expect(screen.queryByDisplayValue("Planned")).not.toBeInTheDocument();
+  });
+
+  it("falls back to a generic API error when the server body is unreadable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => {
+          throw new Error("not json");
+        },
       }),
     );
 
@@ -127,7 +236,5 @@ describe("ProjectStatusesPage component", () => {
         "Unable to load project statuses.",
       );
     });
-
-    expect(screen.queryByText("Planned")).not.toBeInTheDocument();
   });
 });

@@ -1,11 +1,43 @@
 "use client";
 
-import { signIn } from "@/lib/auth-client";
+import {
+  browserSupportsPasskeys,
+  signIn,
+  signInWithPasskey,
+} from "@/lib/auth-client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type AuthMode = "login" | "signup";
-type LoginStep = "choose" | "email-input" | "email-code";
+type LoginStep = "choose" | "email-input" | "email-code" | "sso-input";
+type ProviderCapabilities = {
+  providers?: {
+    google?: boolean;
+    passkey?: boolean;
+  };
+};
+type SocialSignInResult = {
+  data?: {
+    url?: string;
+    redirect?: boolean;
+  } | null;
+  error?: {
+    code?: string;
+    message?: string;
+    status?: number;
+  } | null;
+};
+type SamlDiscoveryResponse = {
+  url?: string;
+  error?: string;
+};
+
+const emptyEmailLoginError = "Please enter an email address for login.";
+const invalidEmailError = "Enter a valid email address.";
+
+function isValidEmailAddress(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
 
 const authErrorMessages: Record<string, string> = {
   INVALID_TOKEN:
@@ -14,6 +46,25 @@ const authErrorMessages: Record<string, string> = {
   ATTEMPTS_EXCEEDED:
     "That sign-in code has already been used. Request a new email to continue.",
 };
+
+function isSafeLocalCallback(
+  callbackUrl: string | null,
+): callbackUrl is string {
+  return Boolean(callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//"));
+}
+
+function getCurrentPathCallback(): string {
+  const { pathname } = window.location;
+
+  if (pathname === "/login" || pathname === "/signup") {
+    return "/";
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  params.delete("error");
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
 
 function getSafeCallbackPath(): string {
   if (typeof window === "undefined") {
@@ -24,27 +75,55 @@ function getSafeCallbackPath(): string {
     "callbackUrl",
   );
 
-  if (
-    !callbackUrl ||
-    !callbackUrl.startsWith("/") ||
-    callbackUrl.startsWith("//")
-  ) {
-    return "/";
+  if (isSafeLocalCallback(callbackUrl)) {
+    return callbackUrl;
   }
 
-  return callbackUrl;
+  return getCurrentPathCallback();
 }
 
 function getAbsoluteCallbackUrl(callbackPath: string): string {
   return new URL(callbackPath, window.location.origin).toString();
 }
 
+function isWorkspaceLoginSurface(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.location.pathname !== "/login" &&
+    window.location.pathname !== "/signup"
+  );
+}
+
 function getErrorCallbackUrl(callbackPath: string): string {
+  if (isWorkspaceLoginSurface()) {
+    return getAbsoluteCallbackUrl(getCurrentPathCallback());
+  }
+
   const errorCallbackUrl = new URL("/login", window.location.origin);
   if (callbackPath !== "/") {
     errorCallbackUrl.searchParams.set("callbackUrl", callbackPath);
   }
   return errorCallbackUrl.toString();
+}
+
+function getSafeRedirectTarget(
+  redirectTo: string | undefined,
+  fallbackPath: string,
+): string {
+  if (!redirectTo) {
+    return fallbackPath;
+  }
+
+  try {
+    const redirectUrl = new URL(redirectTo, window.location.origin);
+    if (redirectUrl.origin === window.location.origin) {
+      return `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
+    }
+  } catch {
+    // Fall back to the already sanitized callback path below.
+  }
+
+  return fallbackPath;
 }
 
 function LinearLogo() {
@@ -64,6 +143,17 @@ function LinearLogo() {
       />
     </svg>
   );
+}
+
+function TurnstileField() {
+  return <input type="hidden" name="cf-turnstile-response" defaultValue="" />;
+}
+
+function getTurnstileResponse(form: HTMLFormElement): string | undefined {
+  const response = new FormData(form).get("cf-turnstile-response");
+  return typeof response === "string" && response.trim()
+    ? response.trim()
+    : undefined;
 }
 
 function FooterLinks({ mode }: { mode: AuthMode }) {
@@ -101,50 +191,50 @@ function FooterLinks({ mode }: { mode: AuthMode }) {
   }
 
   return (
-    <>
-      <p className="mt-8 text-center text-[12px] leading-5 text-[var(--auth-muted)]">
-        By continuing, you agree to our{" "}
-        <a
-          href="https://linear.app/terms"
-          className="text-[var(--auth-link)] transition-opacity hover:opacity-80"
-        >
-          Terms of Service
-        </a>{" "}
-        and{" "}
-        <a
-          href="https://linear.app/privacy"
-          className="text-[var(--auth-link)] transition-opacity hover:opacity-80"
-        >
-          Privacy Policy
-        </a>
-        .
-      </p>
-      <p className="mt-8 text-center text-[14px] text-[var(--auth-muted)]">
-        Don&apos;t have an account?{" "}
-        <Link
-          href="/signup"
-          className="font-medium text-[var(--auth-link)] transition-opacity hover:opacity-80"
-        >
-          Sign up
-        </Link>{" "}
-        or{" "}
-        <a
-          href="https://linear.app"
-          className="font-medium text-[var(--auth-link)] transition-opacity hover:opacity-80"
-        >
-          learn more
-        </a>
-      </p>
-    </>
+    <p className="mt-8 text-center text-[14px] text-[var(--auth-muted)]">
+      Don’t have an account?{" "}
+      <Link
+        href="/signup"
+        className="font-medium text-[var(--auth-link)] transition-opacity hover:opacity-80"
+      >
+        Sign up
+      </Link>{" "}
+      or{" "}
+      <a
+        href="https://linear.app/homepage"
+        className="font-medium text-[var(--auth-link)] transition-opacity hover:opacity-80"
+      >
+        learn more
+      </a>
+    </p>
   );
 }
 
-export function AuthPage({ mode }: { mode: AuthMode }) {
+export function AuthPage({
+  mode,
+  initialGoogleConfigured = false,
+}: {
+  mode: AuthMode;
+  initialGoogleConfigured?: boolean;
+}) {
   const [step, setStep] = useState<LoginStep>("choose");
   const [email, setEmail] = useState("");
+  const [ssoIdentifier, setSsoIdentifier] = useState("");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [passkeyPending, setPasskeyPending] = useState(false);
+  const [googleConfigured, setGoogleConfigured] = useState<boolean | null>(
+    initialGoogleConfigured,
+  );
+  const [passkeyConfigured, setPasskeyConfigured] = useState<boolean | null>(
+    true,
+  );
+  const [passkeySupported, setPasskeySupported] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setPasskeySupported(browserSupportsPasskeys());
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -154,29 +244,106 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     }
   }, []);
 
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadProviderCapabilities() {
+      try {
+        const response = await fetch("/api/auth/provider-capabilities", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error("Failed to load auth provider capabilities.");
+        }
+        const data = (await response.json()) as ProviderCapabilities;
+        setGoogleConfigured(data.providers?.google === true);
+        setPasskeyConfigured(data.providers?.passkey === true);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        setGoogleConfigured(false);
+        setPasskeyConfigured(true);
+      }
+    }
+
+    loadProviderCapabilities();
+
+    return () => controller.abort();
+  }, []);
+
   async function handleGoogleLogin() {
+    if (googleConfigured !== true) {
+      setError(
+        "Google sign-in is not configured. Use email or SAML SSO instead.",
+      );
+      return;
+    }
+
     setLoading(true);
     setError("");
-    const callbackPath = getSafeCallbackPath();
-    await signIn.social({
-      provider: "google",
-      callbackURL: getAbsoluteCallbackUrl(callbackPath),
-    });
+    try {
+      const callbackPath = getSafeCallbackPath();
+      const result = (await signIn.social({
+        provider: "google",
+        callbackURL: getAbsoluteCallbackUrl(callbackPath),
+      })) as SocialSignInResult | undefined;
+
+      if (result?.error) {
+        const isMissingProvider =
+          result.error.status === 404 ||
+          result.error.code === "PROVIDER_NOT_FOUND";
+        setError(
+          isMissingProvider
+            ? "Google sign-in is not configured. Use email or SAML SSO instead."
+            : (result.error.message ??
+                "Google sign-in failed. Try again or use another method."),
+        );
+        setLoading(false);
+        return;
+      }
+
+      if (result?.data?.url) {
+        window.location.assign(result.data.url);
+      }
+    } catch {
+      setError("Google sign-in failed. Try again or use another method.");
+      setLoading(false);
+    }
   }
 
-  async function handleEmailSubmit(e: React.FormEvent) {
+  async function handleEmailSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!email.trim()) return;
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail) {
+      setError(emptyEmailLoginError);
+      return;
+    }
+
+    if (!isValidEmailAddress(normalizedEmail)) {
+      setError(invalidEmailError);
+      return;
+    }
 
     setLoading(true);
     setError("");
 
     try {
       const callbackPath = getSafeCallbackPath();
+      const turnstileResponse = getTurnstileResponse(e.currentTarget);
       await signIn.magicLink({
-        email,
+        email: normalizedEmail,
         callbackURL: getAbsoluteCallbackUrl(callbackPath),
         errorCallbackURL: getErrorCallbackUrl(callbackPath),
+        ...(turnstileResponse
+          ? {
+              fetchOptions: {
+                headers: { "x-captcha-response": turnstileResponse },
+              },
+            }
+          : {}),
       });
       setCode("");
       setStep("email-code");
@@ -213,14 +380,88 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     window.location.assign(verifyUrl.toString());
   }
 
+  async function handleSsoSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const normalizedSsoIdentifier = ssoIdentifier.trim();
+
+    if (!normalizedSsoIdentifier) {
+      setError(emptyEmailLoginError);
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const callbackPath = getSafeCallbackPath();
+      const response = await fetch("/api/auth/saml/discovery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: normalizedSsoIdentifier,
+          isDesktop: false,
+          type: "login",
+          callbackURL: getAbsoluteCallbackUrl(callbackPath),
+        }),
+      });
+      const data = (await response.json()) as SamlDiscoveryResponse;
+
+      if (!response.ok || !data.url) {
+        setError(data.error ?? "No SAML SSO enabled workspace could be found.");
+        setLoading(false);
+        return;
+      }
+
+      window.location.assign(data.url);
+    } catch {
+      setError("Failed to look up SAML SSO. Please try again.");
+      setLoading(false);
+    }
+  }
+
+  async function handlePasskeyLogin() {
+    if (passkeyConfigured === false) {
+      setError(
+        "Passkey sign-in is not configured. Use email or Google to log in.",
+      );
+      return;
+    }
+    if (!passkeySupported) {
+      setError(
+        "This browser doesn't support passkeys. Use email or Google to log in.",
+      );
+      return;
+    }
+
+    setPasskeyPending(true);
+    setError("");
+
+    try {
+      const callbackPath = getSafeCallbackPath();
+      const result = await signInWithPasskey({
+        callbackURL: getAbsoluteCallbackUrl(callbackPath),
+      });
+      window.location.assign(
+        getSafeRedirectTarget(result.redirectTo, callbackPath),
+      );
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Passkey sign-in failed. Try again or use another method.",
+      );
+    } finally {
+      setPasskeyPending(false);
+    }
+  }
+
   const title =
-    mode === "signup" && step === "email-input"
+    step === "email-input" || step === "sso-input"
       ? "What’s your email address?"
       : mode === "signup"
         ? "Create your workspace"
         : "Log in to Linear";
-  const backLabel =
-    mode === "signup" ? "Back to signup" : "Back to login options";
+  const backLabel = mode === "signup" ? "Back to signup" : "Back to login";
 
   return (
     <div className="w-full max-w-[320px] px-6 py-8 sm:px-0">
@@ -264,12 +505,16 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                   fill="#EA4335"
                 />
               </svg>
-              Continue with Google
+              {googleConfigured === null
+                ? "Checking Google sign-in"
+                : "Continue with Google"}
             </button>
-
             <button
               type="button"
-              onClick={() => setStep("email-input")}
+              onClick={() => {
+                setPasskeyPending(false);
+                setStep("email-input");
+              }}
               disabled={loading}
               className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -291,6 +536,72 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               Continue with email
             </button>
 
+            <button
+              type="button"
+              onClick={() => {
+                setStep("sso-input");
+                setPasskeyPending(false);
+                setError("");
+              }}
+              disabled={loading}
+              className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                role="img"
+                aria-label="SAML"
+              >
+                <path d="M4 7h16" />
+                <path d="M7 11h10" />
+                <path d="M9 15h6" />
+                <path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" />
+              </svg>
+              Continue with SAML SSO
+            </button>
+
+            {mode === "login" && passkeyConfigured !== false && (
+              <>
+                <button
+                  type="button"
+                  onClick={handlePasskeyLogin}
+                  disabled={loading || passkeyPending || !passkeySupported}
+                  className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    role="img"
+                    aria-label="Passkey"
+                  >
+                    <path d="M10 13a5 5 0 1 1 3.54 1.46L12 16h-2v2H8v2H5v-3l4.54-4.54A5 5 0 0 1 10 13Z" />
+                    <path d="M15 9h.01" />
+                  </svg>
+                  {passkeyPending
+                    ? "Waiting for passkey"
+                    : "Log in with passkey"}
+                </button>
+                {passkeyConfigured === true && !passkeySupported ? (
+                  <p className="pt-1 text-center text-sm text-[var(--auth-error)]">
+                    This browser doesn&apos;t support passkeys. Use email or
+                    Google instead.
+                  </p>
+                ) : null}
+              </>
+            )}
+
             {error && (
               <p className="pt-1 text-center text-sm text-[var(--auth-error)]">
                 {error}
@@ -300,21 +611,22 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
         )}
 
         {step === "email-input" && (
-          <form onSubmit={handleEmailSubmit} className="space-y-3">
+          <form onSubmit={handleEmailSubmit} noValidate className="space-y-3">
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setError("");
+              }}
               placeholder="Enter your email address…"
               required
               className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none transition-colors"
             />
-            {mode === "signup" && (
-              <input type="hidden" name="cf-turnstile-response" value="" />
-            )}
+            <TurnstileField />
             <button
               type="submit"
-              disabled={loading || !email.trim()}
+              disabled={loading}
               className="auth-primary-button flex h-11 w-full items-center justify-center rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "Sending…" : "Continue with email"}
@@ -326,6 +638,46 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 setError("");
                 setCode("");
               }}
+              className="w-full pt-1 text-center text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
+            >
+              {backLabel}
+            </button>
+            {error && (
+              <p className="text-center text-sm text-[var(--auth-error)]">
+                {error}
+              </p>
+            )}
+          </form>
+        )}
+
+        {step === "sso-input" && (
+          <form onSubmit={handleSsoSubmit} noValidate className="space-y-3">
+            <input
+              type="email"
+              value={ssoIdentifier}
+              onChange={(e) => {
+                setSsoIdentifier(e.target.value);
+                setError("");
+              }}
+              placeholder="Enter your email address…"
+              required
+              className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none transition-colors"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="auth-primary-button flex h-11 w-full items-center justify-center rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? "Checking SAML…" : "Continue with SAML"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStep("choose");
+                setSsoIdentifier("");
+                setError("");
+              }}
+              disabled={loading}
               className="w-full pt-1 text-center text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
             >
               {backLabel}

@@ -8,6 +8,7 @@ const insertNotificationsMock = vi.fn();
 const insertCommentValuesMock = vi.fn();
 const insertHistoryValuesMock = vi.fn();
 const resolveActiveWorkspaceIdMock = vi.fn();
+const getIssueNotificationRecipientsMock = vi.fn();
 const randomUuidMock = vi.spyOn(crypto, "randomUUID");
 
 vi.mock("@/lib/auth", () => ({
@@ -33,6 +34,10 @@ vi.mock("@/lib/notifications", () => ({
 
 vi.mock("@/lib/active-workspace", () => ({
   resolveActiveWorkspaceId: resolveActiveWorkspaceIdMock,
+}));
+
+vi.mock("@/lib/issue-subscriptions", () => ({
+  getIssueNotificationRecipients: getIssueNotificationRecipientsMock,
 }));
 
 vi.mock("@/lib/db/schema", () => ({
@@ -117,6 +122,7 @@ describe("issue comments route", () => {
     issueLimitMock.mockReset();
     issueLimitMock.mockResolvedValue([issueRecord]);
     resolveMentionedUserIdsMock.mockResolvedValue(["user-3"]);
+    getIssueNotificationRecipientsMock.mockResolvedValue(["user-2", "user-3"]);
     buildNotificationValuesMock.mockImplementation(({ type, userIds }) =>
       userIds.map((userId: string) => ({ type, userId })),
     );
@@ -206,6 +212,17 @@ describe("issue comments route", () => {
         attachmentCount: 0,
       },
     });
+    expect(resolveMentionedUserIdsMock).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      body: "Hello @user-3",
+      userIds: [],
+    });
+    expect(getIssueNotificationRecipientsMock).toHaveBeenCalledWith({
+      actorId: "user-1",
+      issueId: "issue-1",
+      baseUserIds: ["user-2", "user-3"],
+      mentionedUserIds: ["user-3"],
+    });
     expect(insertNotificationsMock).toHaveBeenCalledWith([
       { type: "mentioned", userId: "user-3" },
       { type: "comment", userId: "user-2" },
@@ -221,5 +238,34 @@ describe("issue comments route", () => {
       reactions: [],
       attachments: [],
     });
+  });
+
+  it("passes canonical selected mention ids to notification resolution", async () => {
+    resolveMentionedUserIdsMock.mockResolvedValue(["sam-2"]);
+    getIssueNotificationRecipientsMock.mockResolvedValue(["sam-2", "user-2"]);
+    const { POST } = await import("@/app/api/issues/[id]/comments/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/issues/ISS-1/comments", {
+        method: "POST",
+        body: JSON.stringify({
+          body: "Hi @[Sam Lee](user:sam-2)",
+          mentionedUserIds: ["sam-2"],
+        }),
+        headers: { "content-type": "application/json" },
+      }),
+      { params: Promise.resolve({ id: "ISS-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(resolveMentionedUserIdsMock).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      body: "Hi @[Sam Lee](user:sam-2)",
+      userIds: ["sam-2"],
+    });
+    expect(insertNotificationsMock).toHaveBeenCalledWith([
+      { type: "mentioned", userId: "sam-2" },
+      { type: "comment", userId: "user-2" },
+    ]);
   });
 });

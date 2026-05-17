@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getSessionMock = vi.fn();
-const getTeamByKeyMock = vi.fn();
+const findAccessibleTeamMock = vi.fn();
 const triageStatesWhereMock = vi.fn();
 const issuesOrderByMock = vi.fn();
 const getLabelsForIssuesMock = vi.fn();
@@ -15,7 +15,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/teams", () => ({
-  getTeamByKey: getTeamByKeyMock,
+  findAccessibleTeam: findAccessibleTeamMock,
 }));
 
 vi.mock("@/lib/issue-labels", () => ({
@@ -40,15 +40,15 @@ vi.mock("@/lib/db", () => ({
 
       // Get issues in triage state
       if (selection && "identifier" in selection) {
+        const issueQuery = {
+          leftJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnValue({
+            orderBy: vi.fn().mockResolvedValue(issuesOrderByMock()),
+          }),
+        };
         return {
           from: vi.fn().mockReturnValue({
-            innerJoin: vi.fn().mockReturnValue({
-              leftJoin: vi.fn().mockReturnValue({
-                where: vi.fn().mockReturnValue({
-                  orderBy: vi.fn().mockResolvedValue(issuesOrderByMock()),
-                }),
-              }),
-            }),
+            innerJoin: vi.fn().mockReturnValue(issueQuery),
           }),
         };
       }
@@ -76,10 +76,11 @@ describe("team triage route", () => {
     vi.resetModules();
     vi.clearAllMocks();
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
-    getTeamByKeyMock.mockResolvedValue({
+    findAccessibleTeamMock.mockResolvedValue({
       id: "team-1",
       name: "Engineering",
       key: "ENG",
+      triageEnabled: true,
     });
     triageStatesWhereMock.mockReturnValue([
       { id: "state-triage", name: "Triage", color: "#f00" },
@@ -95,7 +96,14 @@ describe("team triage route", () => {
         stateColor: "#f00",
         creatorId: "user-2",
         creatorName: "Bob",
+        assigneeId: "user-assignee",
+        projectId: "project-1",
+        projectName: "Inbox cleanup",
+        dueDate: new Date("2026-05-01T00:00:00.000Z"),
+        estimate: 2,
         createdAt: new Date("2026-04-26T00:00:00.000Z"),
+        updatedAt: new Date("2026-04-27T00:00:00.000Z"),
+        teamId: "team-1",
       },
     ]);
     getLabelsForIssuesMock.mockResolvedValue({ "issue-1": [] });
@@ -113,7 +121,7 @@ describe("team triage route", () => {
   });
 
   it("returns 404 when team is missing", async () => {
-    getTeamByKeyMock.mockResolvedValue(null);
+    findAccessibleTeamMock.mockResolvedValue(null);
     const { GET } = await import("@/app/api/teams/[key]/triage/route");
 
     const response = await GET(new Request("http://localhost"), {
@@ -134,5 +142,76 @@ describe("team triage route", () => {
     const payload = await response.json();
     expect(payload.issues.length).toBe(1);
     expect(payload.issues[0].creatorName).toBe("Bob");
+    expect(payload.issues[0]).toMatchObject({
+      assigneeId: "user-assignee",
+      projectId: "project-1",
+      projectName: "Inbox cleanup",
+      estimate: 2,
+    });
+  });
+
+  it("returns triage issues from a parent hierarchy child team", async () => {
+    findAccessibleTeamMock.mockResolvedValue({
+      id: "team-1",
+      name: "Engineering",
+      key: "ENG",
+      triageEnabled: true,
+      hierarchyTeamIds: ["team-1", "team-child"],
+      childTeamIds: ["team-child"],
+    });
+    issuesOrderByMock.mockReturnValue([
+      {
+        id: "issue-child",
+        identifier: "PLAT-1",
+        title: "Child triage",
+        priority: "high",
+        stateId: "state-triage",
+        stateName: "Triage",
+        stateColor: "#f00",
+        creatorId: "user-2",
+        creatorName: "Bob",
+        assigneeId: null,
+        projectId: null,
+        projectName: null,
+        dueDate: null,
+        estimate: null,
+        createdAt: new Date("2026-04-26T00:00:00.000Z"),
+        updatedAt: new Date("2026-04-27T00:00:00.000Z"),
+        teamId: "team-child",
+      },
+    ]);
+    const { GET } = await import("@/app/api/teams/[key]/triage/route");
+
+    const response = await GET(new Request("http://localhost"), {
+      params: Promise.resolve({ key: "ENG" }),
+    });
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.issues[0]).toMatchObject({
+      identifier: "PLAT-1",
+      teamId: "team-child",
+    });
+  });
+
+  it("returns a disabled triage queue without querying triage issues", async () => {
+    findAccessibleTeamMock.mockResolvedValue({
+      id: "team-1",
+      name: "Engineering",
+      key: "ENG",
+      triageEnabled: false,
+    });
+    const { GET } = await import("@/app/api/teams/[key]/triage/route");
+
+    const response = await GET(new Request("http://localhost"), {
+      params: Promise.resolve({ key: "ENG" }),
+    });
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.triageEnabled).toBe(false);
+    expect(payload.issues).toEqual([]);
+    expect(payload.createStateId).toBeNull();
+    expect(triageStatesWhereMock).not.toHaveBeenCalled();
   });
 });

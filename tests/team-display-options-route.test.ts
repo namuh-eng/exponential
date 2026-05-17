@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getSessionMock = vi.fn();
-const teamLimitMock = vi.fn();
+const findAccessibleTeamMock = vi.fn();
 const updateSetMock = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
@@ -12,15 +12,12 @@ vi.mock("@/lib/auth", () => ({
   },
 }));
 
+vi.mock("@/lib/teams", () => ({
+  findAccessibleTeam: findAccessibleTeamMock,
+}));
+
 vi.mock("@/lib/db", () => ({
   db: {
-    select: vi.fn((_selection?: Record<string, unknown>) => ({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue(teamLimitMock()),
-        }),
-      }),
-    })),
     update: vi.fn(() => ({
       set: vi.fn((...setArgs: unknown[]) => {
         updateSetMock(...setArgs);
@@ -41,9 +38,10 @@ describe("team display options route", () => {
     vi.resetModules();
     vi.clearAllMocks();
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
-    teamLimitMock.mockReturnValue([
-      { id: "team-1", settings: { displayOptions: { showCompleted: true } } },
-    ]);
+    findAccessibleTeamMock.mockResolvedValue({
+      id: "team-1",
+      settings: { displayOptions: { showCompleted: true } },
+    });
   });
 
   it("returns 401 without a session", async () => {
@@ -58,7 +56,7 @@ describe("team display options route", () => {
   });
 
   it("returns 404 when team is missing", async () => {
-    teamLimitMock.mockReturnValue([]);
+    findAccessibleTeamMock.mockResolvedValue(null);
     const { GET } = await import("@/app/api/teams/[key]/display-options/route");
 
     const response = await GET(new Request("http://localhost"), {

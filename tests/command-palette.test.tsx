@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock next/navigation
 const pushMock = vi.fn();
+const pathnameMock = vi.fn(() => "/");
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: pushMock,
@@ -24,7 +25,7 @@ vi.mock("next/navigation", () => ({
     forward: vi.fn(),
     refresh: vi.fn(),
   }),
-  usePathname: () => "/",
+  usePathname: () => pathnameMock(),
 }));
 
 // Must import after mocks
@@ -33,6 +34,7 @@ import { CommandPalette } from "@/components/command-palette";
 describe("CommandPalette", () => {
   beforeEach(() => {
     pushMock.mockReset();
+    pathnameMock.mockReturnValue("/");
     vi.restoreAllMocks();
   });
 
@@ -63,6 +65,58 @@ describe("CommandPalette", () => {
     fireEvent.keyDown(document, { key: "k", ctrlKey: true });
 
     expect(screen.getByRole("dialog")).toBeDefined();
+  });
+
+  it("opens on uppercase Cmd+K keyboard shortcut", () => {
+    render(<CommandPalette teamKey="ENG" />);
+
+    fireEvent.keyDown(document, { key: "K", metaKey: true });
+
+    expect(screen.getByRole("dialog")).toBeDefined();
+  });
+
+  it("opens on physical KeyK shortcut when key casing varies", () => {
+    render(<CommandPalette teamKey="ENG" />);
+
+    fireEvent.keyDown(document, { key: "Dead", code: "KeyK", ctrlKey: true });
+
+    expect(screen.getByRole("dialog")).toBeDefined();
+  });
+
+  it("does not open from Cmd/Ctrl+K while typing in editable fields", () => {
+    render(
+      <>
+        <input aria-label="Name input" />
+        <textarea aria-label="Description textarea" />
+        <select aria-label="Status select">
+          <option>Open</option>
+        </select>
+        <div contentEditable aria-label="Rich editor">
+          Rich editor content
+          <span data-testid="rich-editor-child">child</span>
+        </div>
+        <CommandPalette teamKey="ENG" />
+      </>,
+    );
+
+    fireEvent.keyDown(screen.getByLabelText("Name input"), {
+      key: "k",
+      ctrlKey: true,
+    });
+    fireEvent.keyDown(screen.getByLabelText("Description textarea"), {
+      key: "k",
+      metaKey: true,
+    });
+    fireEvent.keyDown(screen.getByLabelText("Status select"), {
+      key: "K",
+      ctrlKey: true,
+    });
+    fireEvent.keyDown(screen.getByTestId("rich-editor-child"), {
+      key: "k",
+      metaKey: true,
+    });
+
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("closes on Escape key", () => {
@@ -135,6 +189,94 @@ describe("CommandPalette", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect(pushMock).toHaveBeenCalledWith("/inbox");
+  });
+
+  it("opens a project picker from New project update outside a project", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        projects: [
+          {
+            id: "project-1",
+            name: "Agent Speed",
+            slug: "agent-speed",
+            status: "started",
+            teams: [{ id: "team-1", key: "ENG", name: "Engineering" }],
+          },
+        ],
+      }),
+    } as Response);
+
+    render(<CommandPalette teamKey="ENG" workspaceSlug="foreverbrowsing" />);
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /New project update/i }),
+    );
+
+    expect(
+      await screen.findByRole("dialog", {
+        name: "Choose a project for update",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Search projects for update")).toHaveFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: /Agent Speed/i }));
+
+    expect(pushMock).toHaveBeenCalledWith(
+      "/foreverbrowsing/project/agent-speed/overview?newUpdate=1",
+    );
+  });
+
+  it("opens the current project composer from New project update on project detail", () => {
+    const dispatchSpy = vi.spyOn(window, "dispatchEvent");
+    pathnameMock.mockReturnValue(
+      "/foreverbrowsing/project/agent-speed/overview",
+    );
+
+    render(<CommandPalette teamKey="ENG" workspaceSlug="foreverbrowsing" />);
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /New project update/i }),
+    );
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "open-project-update" }),
+    );
+    expect(pushMock).toHaveBeenCalledWith(
+      "/foreverbrowsing/project/agent-speed/overview?newUpdate=1",
+    );
+  });
+
+  it("supports the N then U shortcut for new project updates", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ projects: [] }),
+    } as Response);
+
+    render(<CommandPalette teamKey="ENG" />);
+
+    fireEvent.keyDown(document, { key: "n" });
+    fireEvent.keyDown(document, { key: "u" });
+
+    expect(
+      await screen.findByRole("dialog", {
+        name: "Choose a project for update",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens issue label settings from the Create label command", () => {
+    render(<CommandPalette teamKey="ENG" />);
+
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+
+    const input = screen.getByPlaceholderText("Type a command or search...");
+    fireEvent.change(input, { target: { value: "create label" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(pushMock).toHaveBeenCalledWith("/settings/issue-labels");
   });
 
   it("shows keyboard shortcuts for commands", () => {

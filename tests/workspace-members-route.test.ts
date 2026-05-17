@@ -26,14 +26,10 @@ vi.mock("@/lib/db", () => ({
     select: vi.fn((selection?: Record<string, unknown>) => {
       // selection matches: { id: member.id, role: member.role } (for loadAuthenticatedAccess)
       // OR { userId: member.userId, role: member.role } (for PATCH target check)
-      if (
-        selection &&
-        "role" in selection &&
-        Object.keys(selection).length === 2 &&
-        !("userId" in selection)
-      ) {
+      if (selection && "role" in selection && "settings" in selection) {
         const chain = {
           from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
           limit: vi.fn().mockResolvedValue(membershipLimitMock()),
         };
@@ -142,6 +138,7 @@ vi.mock("next/headers", () => ({
 vi.mock("@/lib/db/schema", () => ({
   memberRole: { enumValues: ["owner", "admin", "member"] },
   member: { __name: "member" },
+  workspace: { __name: "workspace" },
   workspaceInvitation: { __name: "workspaceInvitation" },
   user: { __name: "user" },
   team: { __name: "team" },
@@ -156,7 +153,7 @@ describe("workspace members route", () => {
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
     resolveActiveWorkspaceIdMock.mockResolvedValue("workspace-1");
     membershipLimitMock.mockReturnValue([
-      { id: "member-1", role: "owner", userId: "user-1" },
+      { id: "member-1", role: "owner", userId: "user-1", settings: {} },
     ]);
     activeMembersInnerJoinMock.mockReturnValue([
       {
@@ -200,6 +197,27 @@ describe("workspace members route", () => {
     expect(payload.members.length).toBe(1);
     expect(payload.members[0].name).toBe("Ashley");
     expect(payload.members[0].teams).toEqual(["Engineering"]);
+    expect(payload.canInviteMembers).toBe(true);
+  });
+
+  it("returns invite capability from workspace security permissions", async () => {
+    membershipLimitMock.mockReturnValue([
+      {
+        id: "member-1",
+        role: "member",
+        userId: "user-1",
+        settings: { security: { permissions: { invitationsRole: "admins" } } },
+      },
+    ]);
+    const { GET } = await import("@/app/api/workspaces/members/route");
+
+    const response = await GET();
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      viewerRole: "member",
+      canInviteMembers: false,
+    });
   });
 
   it("updates member role", async () => {

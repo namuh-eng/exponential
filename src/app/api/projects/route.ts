@@ -1,8 +1,19 @@
-import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
+import {
+  resolveActiveWorkspaceId,
+  resolveRequestWorkspaceId,
+} from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { issue, project, projectTeam, team, user } from "@/lib/db/schema";
-import { count, desc, eq, inArray, sql } from "drizzle-orm";
+import {
+  issue,
+  project,
+  projectLabel,
+  projectTeam,
+  team,
+  user,
+} from "@/lib/db/schema";
+import { readProjectSettings } from "@/lib/project-detail";
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 function sanitizeProjectSlug(value: string) {
@@ -15,13 +26,22 @@ function sanitizeProjectSlug(value: string) {
     .replace(/-+$/g, "");
 }
 
-export async function GET() {
+async function resolveProjectsWorkspaceId(userId: string, request?: Request) {
+  return request
+    ? resolveRequestWorkspaceId(userId, request)
+    : resolveActiveWorkspaceId(userId);
+}
+
+export async function GET(request?: Request) {
   const { response: authResponse, session } = await requireApiSession();
   if (authResponse) {
     return authResponse;
   }
 
-  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  const workspaceId = await resolveProjectsWorkspaceId(
+    session.user.id,
+    request,
+  );
   if (!workspaceId) {
     return NextResponse.json({ projects: [] });
   }
@@ -41,6 +61,7 @@ export async function GET() {
       leadImage: user.image,
       startDate: project.startDate,
       targetDate: project.targetDate,
+      settings: project.settings,
       createdAt: project.createdAt,
     })
     .from(project)
@@ -54,6 +75,10 @@ export async function GET() {
   const projectTeamsMap: Record<
     string,
     { id: string; key: string; name: string }[]
+  > = {};
+  const projectLabelsMap: Record<
+    string,
+    { id: string; name: string; color: string }[]
   > = {};
 
   if (projectIds.length > 0) {
@@ -98,6 +123,39 @@ export async function GET() {
         name: row.teamName,
       });
     }
+
+    const selectedProjectLabelIds = [
+      ...new Set(
+        projects.flatMap((p) => readProjectSettings(p.settings).labelIds),
+      ),
+    ];
+    if (selectedProjectLabelIds.length > 0) {
+      const projectLabelRows = await db
+        .select({
+          id: projectLabel.id,
+          name: projectLabel.name,
+          color: projectLabel.color,
+        })
+        .from(projectLabel)
+        .where(
+          and(
+            eq(projectLabel.workspaceId, workspaceId),
+            inArray(projectLabel.id, selectedProjectLabelIds),
+          ),
+        );
+      const labelsById = new Map(
+        projectLabelRows.map((label) => [label.id, label]),
+      );
+
+      for (const p of projects) {
+        projectLabelsMap[p.id] = readProjectSettings(p.settings)
+          .labelIds.map((labelId) => labelsById.get(labelId))
+          .filter(
+            (label): label is { id: string; name: string; color: string } =>
+              Boolean(label),
+          );
+      }
+    }
   }
 
   const result = projects.map((p) => {
@@ -118,6 +176,7 @@ export async function GET() {
       health: "No updates",
       lead: p.leadName ? { name: p.leadName, image: p.leadImage } : null,
       teams: projectTeamsMap[p.id] ?? [],
+      labels: projectLabelsMap[p.id] ?? [],
       startDate: p.startDate,
       targetDate: p.targetDate,
       progress,
@@ -134,7 +193,7 @@ export async function POST(request: Request) {
     return authResponse;
   }
 
-  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  const workspaceId = await resolveRequestWorkspaceId(session.user.id, request);
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
   }
@@ -162,6 +221,97 @@ export async function POST(request: Request) {
     );
   }
 
+  const requestedTeamKeys = [
+    typeof body.teamKey === "string" ? body.teamKey.trim() : null,
+    ...(Array.isArray(body.teamKeys)
+      ? body.teamKeys.map((value: unknown) =>
+          typeof value === "string" ? value.trim() : null,
+        )
+      : []),
+  ].filter((value): value is string => Boolean(value));
+  const requestedTeamIds = [
+    typeof body.teamId === "string" ? body.teamId.trim() : null,
+    ...(Array.isArray(body.teamIds)
+      ? body.teamIds.map((value: unknown) =>
+          typeof value === "string" ? value.trim() : null,
+        )
+      : []),
+  ].filter((value): value is string => Boolean(value));
+  const requestedLabelIds: string[] = Array.isArray(body.labelIds)
+    ? Array.from(
+        new Set(
+          (body.labelIds as unknown[]).filter(
+            (value): value is string => typeof value === "string",
+          ),
+        ),
+      )
+    : [];
+
+  const linkedTeamsById = new Map<
+    string,
+    { id: string; key: string; name: string }
+  >();
+
+  for (const teamKey of new Set(requestedTeamKeys)) {
+    const teamRows = await db
+      .select({ id: team.id, key: team.key, name: team.name })
+      .from(team)
+      .where(and(eq(team.workspaceId, workspaceId), eq(team.key, teamKey)))
+      .limit(1);
+
+    const teamRecord = teamRows[0] ?? null;
+    if (!teamRecord) {
+      return NextResponse.json(
+        { error: "Team not found in active workspace" },
+        { status: 400 },
+      );
+    }
+
+    linkedTeamsById.set(teamRecord.id, teamRecord);
+  }
+
+  for (const teamId of new Set(requestedTeamIds)) {
+    const teamRows = await db
+      .select({ id: team.id, key: team.key, name: team.name })
+      .from(team)
+      .where(and(eq(team.workspaceId, workspaceId), eq(team.id, teamId)))
+      .limit(1);
+
+    const teamRecord = teamRows[0] ?? null;
+    if (!teamRecord) {
+      return NextResponse.json(
+        { error: "Team not found in active workspace" },
+        { status: 400 },
+      );
+    }
+
+    linkedTeamsById.set(teamRecord.id, teamRecord);
+  }
+
+  const linkedLabelIds = new Set<string>();
+  if (requestedLabelIds.length > 0) {
+    const labelRows = await db
+      .select({ id: projectLabel.id })
+      .from(projectLabel)
+      .where(
+        and(
+          eq(projectLabel.workspaceId, workspaceId),
+          inArray(projectLabel.id, requestedLabelIds),
+        ),
+      );
+
+    for (const labelRow of labelRows) {
+      linkedLabelIds.add(labelRow.id);
+    }
+
+    if (linkedLabelIds.size !== requestedLabelIds.length) {
+      return NextResponse.json(
+        { error: "Project label not found in active workspace" },
+        { status: 400 },
+      );
+    }
+  }
+
   let finalSlug = slug;
   let suffix = 2;
   const takenSlugs = new Set(
@@ -178,16 +328,37 @@ export async function POST(request: Request) {
     suffix += 1;
   }
 
-  const [newProject] = await db
-    .insert(project)
-    .values({
-      name,
-      description,
-      slug: finalSlug,
-      workspaceId,
-      leadId: session.user.id,
-    })
-    .returning();
+  const linkedTeams = Array.from(linkedTeamsById.values());
+  const newProject = await db.transaction(async (tx) => {
+    const [createdProject] = await tx
+      .insert(project)
+      .values({
+        name,
+        description,
+        slug: finalSlug,
+        workspaceId,
+        leadId: session.user.id,
+        settings:
+          linkedLabelIds.size > 0
+            ? { labelIds: Array.from(linkedLabelIds) }
+            : undefined,
+      })
+      .returning();
 
-  return NextResponse.json(newProject, { status: 201 });
+    if (linkedTeams.length > 0) {
+      await tx.insert(projectTeam).values(
+        linkedTeams.map((linkedTeam) => ({
+          projectId: createdProject.id,
+          teamId: linkedTeam.id,
+        })),
+      );
+    }
+
+    return createdProject;
+  });
+
+  return NextResponse.json(
+    { ...newProject, teams: linkedTeams },
+    { status: 201 },
+  );
 }

@@ -13,6 +13,12 @@ interface TeamData {
   statusCount: number;
   triageEnabled: boolean;
   cyclesEnabled: boolean;
+  autoAssignment?: boolean;
+  discussionSummariesEnabled?: boolean;
+  parentTeam?: { name: string; key: string } | null;
+  retiredAt?: string | null;
+  deletedAt?: string | null;
+  restorableUntil?: string | null;
 }
 
 function SettingsCard({
@@ -180,7 +186,7 @@ const PLACEHOLDER_ROUTES = {
   hierarchy: "hierarchy",
 } as const;
 
-type DangerAction = "leave" | "retire" | "delete" | null;
+type DangerAction = "leave" | "retire" | "delete" | "restore" | null;
 
 export default function TeamSettingsHubPage() {
   const params = useParams();
@@ -236,16 +242,23 @@ export default function TeamSettingsHubPage() {
     retire: {
       title: "Retire team?",
       description:
-        "Retiring preserves the team data while marking the team as inactive for future work.",
+        "Retiring preserves historical work while marking the team inactive and preventing new issue creation.",
       confirmLabel: "Retire team",
       pendingLabel: "Retiring...",
     },
     delete: {
       title: "Delete team?",
       description:
-        "Deleting a team permanently removes its team-scoped data from this clone.",
+        "Deleting hides the team from normal navigation and schedules it for removal after a 30-day restoration window.",
       confirmLabel: "Delete team",
       pendingLabel: "Deleting...",
+    },
+    restore: {
+      title: "Restore team?",
+      description:
+        "Restoring cancels scheduled deletion and returns the team to normal navigation if the 30-day window has not expired.",
+      confirmLabel: "Restore team",
+      pendingLabel: "Restoring...",
     },
   };
 
@@ -303,9 +316,28 @@ export default function TeamSettingsHubPage() {
       {/* Team header */}
       <div className="mb-8 flex items-center gap-3">
         <span className="text-[28px]">{team.icon}</span>
-        <h1 className="text-[20px] font-semibold text-[var(--color-text-primary)]">
-          {team.name}
-        </h1>
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-[20px] font-semibold text-[var(--color-text-primary)]">
+              {team.name}
+            </h1>
+            {team.retiredAt ? (
+              <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-300">
+                Retired
+              </span>
+            ) : null}
+            {team.deletedAt ? (
+              <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[11px] font-medium text-red-300">
+                Scheduled for deletion
+              </span>
+            ) : null}
+          </div>
+          {team.retiredAt ? (
+            <p className="mt-1 text-[12px] text-amber-200">
+              Historical work remains visible; new issue creation is disabled.
+            </p>
+          ) : null}
+        </div>
       </div>
 
       {/* General settings cards */}
@@ -386,11 +418,15 @@ export default function TeamSettingsHubPage() {
           title="Agents"
           description="AI agent guidance for this team"
           href={`${teamPath}/${PLACEHOLDER_ROUTES.agents}`}
+          badge={team.autoAssignment ? "Auto-assign on" : "Auto-assign off"}
         />
         <SettingsCard
           title="Discussion summaries"
           description="Auto-generate AI summaries of discussions"
           href={`${teamPath}/${PLACEHOLDER_ROUTES.discussionSummaries}`}
+          badge={
+            team.discussionSummariesEnabled ? "Summaries on" : "Summaries off"
+          }
         />
       </div>
 
@@ -401,7 +437,7 @@ export default function TeamSettingsHubPage() {
           title="Parent team"
           description="Set this team as a sub-team of another team"
           href={`${teamPath}/${PLACEHOLDER_ROUTES.hierarchy}`}
-          badge="None"
+          badge={team.parentTeam ? team.parentTeam.name : "None"}
         />
       </div>
 
@@ -417,6 +453,11 @@ export default function TeamSettingsHubPage() {
         <DangerButton onClick={() => setDangerAction("delete")}>
           Delete team
         </DangerButton>
+        {team.deletedAt ? (
+          <DangerButton onClick={() => setDangerAction("restore")}>
+            Restore team
+          </DangerButton>
+        ) : null}
       </div>
       {statusMessage ? (
         <p className="mt-4 text-[12px] text-[var(--color-text-secondary)]">

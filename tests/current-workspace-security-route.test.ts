@@ -73,11 +73,20 @@ describe("current workspace security route", () => {
             improveAi: true,
             webSearch: true,
             hipaa: false,
+            ipRestrictions: [
+              {
+                range: "203.0.113.0/24",
+                description: "Office network",
+                enabled: true,
+                type: "allow",
+              },
+            ],
           },
         },
         inviteLinkEnabled: true,
         inviteLinkToken: "invite-token-1",
         approvedEmailDomains: ["TEAM@EXAMPLE.COM", "bad domain"],
+        role: "admin",
       },
     ]);
   });
@@ -132,10 +141,26 @@ describe("current workspace security route", () => {
           apiKeyCreationRole: "admins",
           agentGuidanceRole: "admins",
         },
+        capabilities: {
+          canInviteMembers: true,
+          canCreateTeams: true,
+          canManageWorkspaceLabels: false,
+          canManageWorkspaceTemplates: false,
+          canCreateApiKeys: true,
+          canModifyAgentGuidance: false,
+        },
         restrictFileUploads: false,
         improveAi: true,
         webSearch: true,
         hipaa: false,
+        ipRestrictions: [
+          {
+            range: "203.0.113.0/24",
+            description: "Office network",
+            enabled: true,
+            type: "allow",
+          },
+        ],
       },
     });
   });
@@ -148,6 +173,7 @@ describe("current workspace security route", () => {
         inviteLinkEnabled: true,
         inviteLinkToken: null,
         approvedEmailDomains: [],
+        role: "admin",
       },
     ]);
     const { GET } = await import("@/app/api/workspaces/current/security/route");
@@ -203,6 +229,27 @@ describe("current workspace security route", () => {
     });
   });
 
+  it("rejects invalid IP restriction ranges", async () => {
+    const { PATCH } = await import(
+      "@/app/api/workspaces/current/security/route"
+    );
+
+    const response = await PATCH(
+      new Request("https://app.test/settings/security", {
+        method: "PATCH",
+        body: JSON.stringify({
+          ipRestrictions: [{ range: "999.0.0.1/33", enabled: true }],
+        }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "IP restrictions must use valid IP addresses or CIDR ranges",
+    });
+  });
+
   it("updates and normalizes security settings", async () => {
     const { PATCH } = await import(
       "@/app/api/workspaces/current/security/route"
@@ -224,6 +271,14 @@ describe("current workspace security route", () => {
           improveAi: false,
           webSearch: false,
           hipaa: true,
+          ipRestrictions: [
+            {
+              range: "198.51.100.10/32",
+              description: "VPN",
+              enabled: true,
+              type: "allow",
+            },
+          ],
         }),
         headers: { "content-type": "application/json" },
       }),
@@ -250,6 +305,14 @@ describe("current workspace security route", () => {
             improveAi: false,
             webSearch: false,
             hipaa: true,
+            ipRestrictions: [
+              {
+                range: "198.51.100.10/32",
+                description: "VPN",
+                enabled: true,
+                type: "allow",
+              },
+            ],
           },
         },
         updatedAt: expect.any(Date),
@@ -265,11 +328,57 @@ describe("current workspace security route", () => {
           teamCreationRole: "admins",
           apiKeyCreationRole: "admins",
         },
+        capabilities: {
+          canInviteMembers: true,
+          canCreateTeams: true,
+          canManageWorkspaceLabels: false,
+          canManageWorkspaceTemplates: false,
+          canCreateApiKeys: true,
+          canModifyAgentGuidance: false,
+        },
         restrictFileUploads: true,
         improveAi: false,
         webSearch: false,
         hipaa: true,
+        ipRestrictions: [
+          {
+            range: "198.51.100.10/32",
+            description: "VPN",
+            enabled: true,
+            type: "allow",
+          },
+        ],
       },
+    });
+  });
+
+  it("blocks non-admin members from mutating workspace security policy", async () => {
+    currentWorkspaceLimitMock.mockResolvedValue([
+      {
+        id: "workspace-1",
+        settings: {},
+        inviteLinkEnabled: true,
+        inviteLinkToken: "invite-token-1",
+        approvedEmailDomains: [],
+        role: "member",
+      },
+    ]);
+    const { PATCH } = await import(
+      "@/app/api/workspaces/current/security/route"
+    );
+
+    const response = await PATCH(
+      new Request("https://app.test/settings/security", {
+        method: "PATCH",
+        body: JSON.stringify({ permissions: { invitationsRole: "anyone" } }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(updateSetMock).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual({
+      error: "You do not have permission to manage workspace security",
     });
   });
 });

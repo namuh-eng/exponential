@@ -10,8 +10,15 @@ const projectWhereMock = vi.fn();
 const labelsWhereMock = vi.fn();
 const commentsOrderByMock = vi.fn();
 const subIssuesOrderByMock = vi.fn();
+const parentIssueWhereMock = vi.fn();
+const cycleWhereMock = vi.fn();
+const sourceRelationsWhereMock = vi.fn();
+const targetRelationsWhereMock = vi.fn();
+const relatedIssuesWhereMock = vi.fn();
+const issueReactionsWhereMock = vi.fn();
 const reactionsWhereMock = vi.fn();
 const attachmentsOrderByMock = vi.fn();
+const discussionSummaryLimitMock = vi.fn();
 const stateLookupLimitMock = vi.fn();
 const lastIssueLimitMock = vi.fn();
 const updateSetMock = vi.fn();
@@ -22,7 +29,8 @@ const getDownloadUrlMock = vi.fn();
 const normalizeIssueDescriptionHtmlMock = vi.fn();
 const buildNotificationValuesMock = vi.fn();
 const insertNotificationsMock = vi.fn();
-const resolveActiveWorkspaceIdMock = vi.fn();
+const resolveRequestWorkspaceIdMock = vi.fn();
+const getIssueSubscriptionSummaryMock = vi.fn();
 let selectCallCount = 0;
 
 vi.mock("@/lib/auth", () => ({
@@ -35,10 +43,16 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/issue-description", () => ({
   normalizeIssueDescriptionHtml: normalizeIssueDescriptionHtmlMock,
+  richTextHtmlToPlainText: (value: string | null | undefined) =>
+    value?.replace(/<[^>]+>/g, "").trim() ?? "",
 }));
 
 vi.mock("@/lib/active-workspace", () => ({
-  resolveActiveWorkspaceId: resolveActiveWorkspaceIdMock,
+  resolveRequestWorkspaceId: resolveRequestWorkspaceIdMock,
+}));
+
+vi.mock("@/lib/issue-subscriptions", () => ({
+  getIssueSubscriptionSummary: getIssueSubscriptionSummaryMock,
 }));
 
 vi.mock("@/lib/notifications", () => ({
@@ -141,10 +155,67 @@ vi.mock("@/lib/db", () => ({
         };
       }
 
+      if (
+        selection &&
+        "identifier" in selection &&
+        "title" in selection &&
+        !("number" in selection)
+      ) {
+        const mock =
+          selectCallCount > 10 ? relatedIssuesWhereMock : parentIssueWhereMock;
+        return {
+          from: vi.fn().mockReturnValue({
+            where: mock,
+          }),
+        };
+      }
+
+      if (selection && "number" in selection && !("identifier" in selection)) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: cycleWhereMock,
+          }),
+        };
+      }
+
+      if (selection && "relatedIssueId" in selection) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: sourceRelationsWhereMock,
+          }),
+        };
+      }
+
+      if (selection && "issueId" in selection && "type" in selection) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: targetRelationsWhereMock,
+          }),
+        };
+      }
+
+      if (selection && "emoji" in selection && !("commentId" in selection)) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: issueReactionsWhereMock,
+          }),
+        };
+      }
+
       if (selection && "emoji" in selection && "commentId" in selection) {
         return {
           from: vi.fn().mockReturnValue({
             where: reactionsWhereMock,
+          }),
+        };
+      }
+
+      if (selection && "summary" in selection && "generatedAt" in selection) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: discussionSummaryLimitMock,
+            }),
           }),
         };
       }
@@ -216,7 +287,7 @@ describe("issue detail route", () => {
     getSessionMock.mockResolvedValue({
       user: { id: "user-1", name: "Ashley", email: "ashley@example.com" },
     });
-    resolveActiveWorkspaceIdMock.mockResolvedValue("workspace-1");
+    resolveRequestWorkspaceIdMock.mockResolvedValue("workspace-1");
     issueLimitMock.mockResolvedValue([
       {
         id: "issue-1",
@@ -229,6 +300,8 @@ describe("issue detail route", () => {
         assigneeId: "user-2",
         creatorId: "user-3",
         projectId: "project-1",
+        parentIssueId: "issue-parent",
+        cycleId: "cycle-1",
         dueDate: new Date("2026-04-30T00:00:00.000Z"),
         estimate: 3,
         sortOrder: 2,
@@ -236,6 +309,8 @@ describe("issue detail route", () => {
         updatedAt: new Date("2026-04-23T10:00:00.000Z"),
         teamId: "team-1",
         workspaceId: "workspace-1",
+        teamSettings: { discussionSummariesEnabled: false },
+        archivedAt: null,
         canceledAt: null,
         completedAt: null,
       },
@@ -280,6 +355,27 @@ describe("issue detail route", () => {
         stateColor: "#00f",
       },
     ]);
+    parentIssueWhereMock.mockResolvedValue([
+      { id: "issue-parent", identifier: "ENG-0", title: "Parent issue" },
+    ]);
+    cycleWhereMock.mockResolvedValue([
+      { id: "cycle-1", name: "Cycle 42", number: 42 },
+    ]);
+    sourceRelationsWhereMock.mockResolvedValue([
+      { id: "rel-1", type: "blocks", relatedIssueId: "issue-3" },
+    ]);
+    targetRelationsWhereMock.mockResolvedValue([
+      { id: "rel-2", type: "blocks", issueId: "issue-4" },
+    ]);
+    relatedIssuesWhereMock.mockResolvedValue([
+      { id: "issue-3", identifier: "ENG-3", title: "Blocked issue" },
+      { id: "issue-4", identifier: "ENG-4", title: "Blocking issue" },
+    ]);
+    issueReactionsWhereMock.mockResolvedValue([
+      { emoji: "👍", userId: "user-1" },
+      { emoji: "👍", userId: "user-5" },
+      { emoji: "🚀", userId: "user-5" },
+    ]);
     reactionsWhereMock.mockResolvedValue([
       { commentId: "comment-1", emoji: "🔥", userId: "user-1" },
       { commentId: "comment-1", emoji: "🔥", userId: "user-5" },
@@ -307,6 +403,7 @@ describe("issue detail route", () => {
         updatedAt: new Date("2026-04-23T12:00:00.000Z"),
         stateId: "state-2",
         sortOrder: 8,
+        archivedAt: null,
       },
     ]);
     getDownloadUrlMock.mockResolvedValue("https://files.test/spec.pdf");
@@ -315,6 +412,11 @@ describe("issue detail route", () => {
       { type: "status_change", userId: "user-2" },
     ]);
     insertNotificationsMock.mockResolvedValue(undefined);
+    getIssueSubscriptionSummaryMock.mockResolvedValue({
+      subscribed: true,
+      watcherCount: 2,
+    });
+    discussionSummaryLimitMock.mockResolvedValue([]);
   });
 
   it("returns 401 without a session", async () => {
@@ -342,6 +444,17 @@ describe("issue detail route", () => {
       identifier: "ENG-1",
       title: "Broken route",
       description: "<p>Hello</p>",
+      discussionSummary: {
+        enabled: false,
+        status: "disabled",
+        text: null,
+        generatedAt: null,
+        generatedBy: null,
+        sourceCommentCount: 0,
+        sourceCommentVersion: null,
+        staleAt: null,
+        error: null,
+      },
       priority: "high",
       estimate: 3,
       dueDate: "2026-04-30T00:00:00.000Z",
@@ -361,7 +474,34 @@ describe("issue detail route", () => {
       },
       team: { id: "team-1", name: "Engineering", key: "ENG" },
       project: { id: "project-1", name: "Ever", icon: "rocket" },
+      cycle: { id: "cycle-1", name: "Cycle 42", number: 42 },
+      parentIssue: {
+        id: "issue-parent",
+        identifier: "ENG-0",
+        title: "Parent issue",
+      },
+      relations: [
+        {
+          id: "rel-1",
+          type: "blocks",
+          issue: { id: "issue-3", identifier: "ENG-3", title: "Blocked issue" },
+        },
+        {
+          id: "rel-2",
+          type: "blocked_by",
+          issue: {
+            id: "issue-4",
+            identifier: "ENG-4",
+            title: "Blocking issue",
+          },
+        },
+      ],
       labels: [{ name: "Bug", color: "#f00" }],
+      subscription: { subscribed: true, watcherCount: 2 },
+      reactions: [
+        { emoji: "👍", count: 2, reactedByMe: true },
+        { emoji: "🚀", count: 1, reactedByMe: false },
+      ],
       comments: [
         {
           id: "comment-1",
@@ -394,6 +534,136 @@ describe("issue detail route", () => {
           },
         },
       ],
+    });
+  });
+
+  it("returns a persisted discussion summary when enabled", async () => {
+    issueLimitMock.mockResolvedValueOnce([
+      {
+        id: "issue-1",
+        number: 1,
+        identifier: "ENG-1",
+        title: "Broken route",
+        description: "<p>Hello</p>",
+        priority: "high",
+        stateId: "state-1",
+        assigneeId: "user-2",
+        creatorId: "user-3",
+        projectId: "project-1",
+        parentIssueId: "issue-parent",
+        cycleId: "cycle-1",
+        dueDate: new Date("2026-04-30T00:00:00.000Z"),
+        estimate: 3,
+        sortOrder: 2,
+        createdAt: new Date("2026-04-23T09:00:00.000Z"),
+        updatedAt: new Date("2026-04-23T10:00:00.000Z"),
+        teamId: "team-1",
+        workspaceId: "workspace-1",
+        teamSettings: { discussionSummariesEnabled: true },
+        archivedAt: null,
+        canceledAt: null,
+        completedAt: null,
+      },
+    ]);
+    commentsOrderByMock.mockResolvedValueOnce([
+      {
+        id: "comment-1",
+        body: "We decided to ship the API path first. Billing is blocking rollout.",
+        userId: "user-4",
+        userName: "Commenter",
+        userImage: null,
+        createdAt: new Date("2026-04-23T11:00:00.000Z"),
+      },
+      {
+        id: "comment-2",
+        body: "Next Morgan will verify the migration and follow up with support.",
+        userId: "user-5",
+        userName: "Morgan",
+        userImage: null,
+        createdAt: new Date("2026-04-23T11:05:00.000Z"),
+      },
+    ]);
+    reactionsWhereMock.mockResolvedValueOnce([]);
+    attachmentsOrderByMock.mockResolvedValueOnce([]);
+    discussionSummaryLimitMock.mockResolvedValueOnce([
+      {
+        status: "generated",
+        summary: "Stored AI summary from the full discussion",
+        generatedAt: new Date("2026-04-23T12:00:00.000Z"),
+        generatedBy: "user-1",
+        sourceCommentCount: 2,
+        sourceCommentVersion: "2026-04-23T11:05:00.000Z",
+        error: null,
+        staleAt: null,
+      },
+    ]);
+
+    const { GET } = await import("@/app/api/issues/[id]/route");
+    const response = await GET(new Request("http://localhost"), {
+      params: Promise.resolve({ id: "ENG-1" }),
+    });
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json.discussionSummary).toMatchObject({
+      enabled: true,
+      status: "generated",
+      text: "Stored AI summary from the full discussion",
+      sourceCommentCount: 2,
+      sourceCommentVersion: "2026-04-23T11:05:00.000Z",
+      generatedAt: "2026-04-23T12:00:00.000Z",
+    });
+  });
+
+  it("returns an enabled empty summary state for no comments", async () => {
+    issueLimitMock.mockResolvedValueOnce([
+      {
+        id: "issue-1",
+        number: 1,
+        identifier: "ENG-1",
+        title: "Broken route",
+        description: "<p>Hello</p>",
+        priority: "high",
+        stateId: "state-1",
+        assigneeId: "user-2",
+        creatorId: "user-3",
+        projectId: "project-1",
+        parentIssueId: "issue-parent",
+        cycleId: "cycle-1",
+        dueDate: new Date("2026-04-30T00:00:00.000Z"),
+        estimate: 3,
+        sortOrder: 2,
+        createdAt: new Date("2026-04-23T09:00:00.000Z"),
+        updatedAt: new Date("2026-04-23T10:00:00.000Z"),
+        teamId: "team-1",
+        workspaceId: "workspace-1",
+        teamSettings: { discussionSummariesEnabled: true },
+        archivedAt: null,
+        canceledAt: null,
+        completedAt: null,
+      },
+    ]);
+    commentsOrderByMock.mockResolvedValueOnce([]);
+    reactionsWhereMock.mockResolvedValueOnce([]);
+    attachmentsOrderByMock.mockResolvedValueOnce([]);
+
+    const { GET } = await import("@/app/api/issues/[id]/route");
+    const response = await GET(new Request("http://localhost"), {
+      params: Promise.resolve({ id: "ENG-1" }),
+    });
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json.discussionSummary).toEqual({
+      enabled: true,
+      status: "ineligible",
+      text: null,
+      generatedAt: null,
+      generatedBy: null,
+      sourceCommentCount: 0,
+      sourceCommentVersion: null,
+      staleAt: null,
+      error: null,
     });
   });
 
@@ -484,6 +754,55 @@ describe("issue detail route", () => {
       updatedAt: "2026-04-23T12:00:00.000Z",
       stateId: "state-2",
       sortOrder: 8,
+      archivedAt: null,
+    });
+  });
+
+  it("archives an issue with workspace-scoped patch mutation", async () => {
+    updateReturningMock.mockResolvedValue([
+      {
+        id: "issue-1",
+        title: "Broken route",
+        description: "<p>Hello</p>",
+        updatedAt: new Date("2026-04-23T12:00:00.000Z"),
+        stateId: "state-1",
+        sortOrder: 2,
+        archivedAt: new Date("2026-04-23T12:00:00.000Z"),
+      },
+    ]);
+    const { PATCH } = await import("@/app/api/issues/[id]/route");
+
+    const response = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({ archive: true }),
+        headers: { "content-type": "application/json" },
+      }),
+      { params: Promise.resolve({ id: "ENG-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(resolveRequestWorkspaceIdMock).toHaveBeenCalled();
+    expect(updateSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        archivedAt: expect.any(Date),
+        updatedAt: expect.any(Date),
+      }),
+    );
+    expect(insertHistoryValuesMock).toHaveBeenCalledWith({
+      issueId: "issue-1",
+      actorId: "user-1",
+      actorName: "Ashley",
+      actorEmail: "ashley@example.com",
+      eventType: "updated",
+      metadata: {
+        changedFields: ["archivedAt"],
+        identifier: "ENG-1",
+      },
+    });
+    await expect(response.json()).resolves.toMatchObject({
+      id: "issue-1",
+      archivedAt: "2026-04-23T12:00:00.000Z",
     });
   });
 

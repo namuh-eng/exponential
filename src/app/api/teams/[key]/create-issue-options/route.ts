@@ -2,18 +2,18 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
   label,
-  member,
   project,
-  team,
   teamMember,
   user,
   workflowState,
 } from "@/lib/db/schema";
+import { isTeamRetired } from "@/lib/team-lifecycle";
+import { findAccessibleTeam } from "@/lib/teams";
 import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ key: string }> },
 ) {
   const { response: authResponse, session } = await requireApiSession();
@@ -23,26 +23,17 @@ export async function GET(
 
   const { key } = await params;
 
-  const [teamContext] = await db
-    .select({
-      id: team.id,
-      name: team.name,
-      key: team.key,
-      workspaceId: team.workspaceId,
-    })
-    .from(team)
-    .innerJoin(
-      member,
-      and(
-        eq(member.workspaceId, team.workspaceId),
-        eq(member.userId, session.user.id),
-      ),
-    )
-    .where(eq(team.key, key))
-    .limit(1);
-
+  const teamContext = await findAccessibleTeam(key, session.user.id, {
+    request,
+  });
   if (!teamContext) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
+  }
+  if (isTeamRetired(teamContext)) {
+    return NextResponse.json(
+      { error: "Retired teams cannot accept new issues" },
+      { status: 409 },
+    );
   }
 
   const [statuses, assigneeRows, labels, projects] = await Promise.all([
@@ -77,6 +68,7 @@ export async function GET(
         and(
           eq(label.workspaceId, teamContext.workspaceId),
           or(isNull(label.teamId), eq(label.teamId, teamContext.id)),
+          isNull(label.archivedAt),
         ),
       )
       .orderBy(asc(label.name)),

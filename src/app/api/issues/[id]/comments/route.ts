@@ -1,13 +1,10 @@
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import {
-  comment,
-  commentAttachment,
-  issue,
-  issueHistory,
-  team,
-} from "@/lib/db/schema";
+import { comment, commentAttachment, issue, team } from "@/lib/db/schema";
+import { markIssueDiscussionSummaryStale } from "@/lib/discussion-summary-store";
+import { insertIssueHistoryEvent } from "@/lib/issue-history";
+import { getIssueNotificationRecipients } from "@/lib/issue-subscriptions";
 import {
   buildNotificationValues,
   insertNotifications,
@@ -24,6 +21,7 @@ async function findIssueRecord(id: string) {
       workspaceId: team.workspaceId,
       assigneeId: issue.assigneeId,
       creatorId: issue.creatorId,
+      teamSettings: team.settings,
     })
     .from(issue)
     .innerJoin(team, eq(issue.teamId, team.id))
@@ -40,6 +38,7 @@ async function findIssueRecord(id: string) {
       workspaceId: team.workspaceId,
       assigneeId: issue.assigneeId,
       creatorId: issue.creatorId,
+      teamSettings: team.settings,
     })
     .from(issue)
     .innerJoin(team, eq(issue.teamId, team.id))
@@ -55,6 +54,25 @@ function sanitizeFilename(value: string): string {
 
 function isFileLike(value: FormDataEntryValue): value is File {
   return value instanceof File;
+}
+
+function parseMentionedUserIds(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((entry): entry is string => typeof entry === "string");
+  }
+
+  if (typeof value !== "string" || !value.trim()) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((entry): entry is string => typeof entry === "string")
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function POST(
@@ -80,14 +98,22 @@ export async function POST(
   const contentType = request.headers.get("content-type") ?? "";
   let nextBody = "";
   let attachments: File[] = [];
+  let canonicalMentionedUserIds: string[] = [];
 
   if (contentType.includes("multipart/form-data")) {
     const formData = await request.formData();
     nextBody = formData.get("body")?.toString().trim() ?? "";
+    canonicalMentionedUserIds = parseMentionedUserIds(
+      formData.get("mentionedUserIds")?.toString(),
+    );
     attachments = formData.getAll("attachments").filter(isFileLike);
   } else {
-    const body = (await request.json()) as { body?: string };
+    const body = (await request.json()) as {
+      body?: string;
+      mentionedUserIds?: unknown;
+    };
     nextBody = body.body?.trim() ?? "";
+    canonicalMentionedUserIds = parseMentionedUserIds(body.mentionedUserIds);
   }
 
   if (!nextBody && attachments.length === 0) {
@@ -121,6 +147,7 @@ export async function POST(
   const mentionedUserIds = await resolveMentionedUserIds({
     workspaceId: currentIssue.workspaceId,
     body: nextBody,
+    userIds: canonicalMentionedUserIds,
   });
 
   try {
@@ -171,17 +198,23 @@ export async function POST(
         await tx.insert(commentAttachment).values(attachmentRows);
       }
 
-      await tx.insert(issueHistory).values({
-        issueId: currentIssue.id,
-        actorId: session.user.id,
-        actorName: session.user.name ?? null,
-        actorEmail: session.user.email ?? null,
-        eventType: "comment_created",
-        metadata: {
-          commentId,
-          attachmentCount: attachmentRows.length,
+      await markIssueDiscussionSummaryStale(currentIssue.id);
+
+      await insertIssueHistoryEvent(
+        tx,
+        { settings: currentIssue.teamSettings },
+        {
+          issueId: currentIssue.id,
+          actorId: session.user.id,
+          actorName: session.user.name ?? null,
+          actorEmail: session.user.email ?? null,
+          eventType: "comment_created",
+          metadata: {
+            commentId,
+            attachmentCount: attachmentRows.length,
+          },
         },
-      });
+      );
 
       return insertedComment[0];
     });
@@ -196,30 +229,30 @@ export async function POST(
       })),
     );
 
-    const mentionedSet = new Set(mentionedUserIds);
-    const genericRecipients = [
-      currentIssue.assigneeId,
-      currentIssue.creatorId,
-    ].filter((userId): userId is string => {
-      if (!userId) {
-        return false;
-      }
-
-      return !mentionedSet.has(userId);
+    const notifiedRecipients = await getIssueNotificationRecipients({
+      actorId: session.user.id,
+      issueId: currentIssue.id,
+      baseUserIds: [currentIssue.assigneeId, currentIssue.creatorId],
+      mentionedUserIds,
     });
+    const mentionedSet = new Set(mentionedUserIds);
 
     await insertNotifications([
       ...buildNotificationValues({
         type: "mentioned",
         actorId: session.user.id,
         issueId: currentIssue.id,
-        userIds: mentionedUserIds,
+        userIds: notifiedRecipients.filter((userId) =>
+          mentionedSet.has(userId),
+        ),
       }),
       ...buildNotificationValues({
         type: "comment",
         actorId: session.user.id,
         issueId: currentIssue.id,
-        userIds: genericRecipients,
+        userIds: notifiedRecipients.filter(
+          (userId) => !mentionedSet.has(userId),
+        ),
       }),
     ]);
 

@@ -1,5 +1,13 @@
+import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+let mockedWorkspaceSlug: string | undefined;
+
+vi.mock("@/app/(app)/app-shell", () => ({
+  useAppShellContext: () =>
+    mockedWorkspaceSlug ? { workspaceSlug: mockedWorkspaceSlug } : null,
+}));
 
 function makeInitiative(overrides: Record<string, unknown> = {}) {
   return {
@@ -37,7 +45,10 @@ function makeInitiative(overrides: Record<string, unknown> = {}) {
 // ─── InitiativeRow ──────────────────────────────────────────────────
 
 describe("InitiativeRow", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    mockedWorkspaceSlug = undefined;
+    cleanup();
+  });
 
   it("renders initiative name", async () => {
     const { InitiativeRow } = await import("@/components/initiative-row");
@@ -78,6 +89,17 @@ describe("InitiativeRow", () => {
       />,
     );
     expect(screen.getByText("1 / 3 projects")).toBeTruthy();
+  });
+
+  it("emits workspace-prefixed detail href when rendered inside a workspace shell", async () => {
+    mockedWorkspaceSlug = "foreverbrowsing";
+    const { InitiativeRow } = await import("@/components/initiative-row");
+    render(<InitiativeRow initiative={makeInitiative()} />);
+
+    expect(screen.getByTestId("initiative-row")).toHaveAttribute(
+      "href",
+      "/foreverbrowsing/initiatives/init-1",
+    );
   });
 });
 
@@ -173,7 +195,7 @@ describe("InitiativeProjectList", () => {
     expect(screen.getByText("50%")).toBeTruthy();
   });
 
-  it("links to the project slug", async () => {
+  it("links to the valid project overview route", async () => {
     const { InitiativeProjectList } = await import(
       "@/components/initiative-project-list"
     );
@@ -193,6 +215,6 @@ describe("InitiativeProjectList", () => {
       screen
         .getByRole("link", { name: /Slugged Project/i })
         .getAttribute("href"),
-    ).toBe("/project/slugged-project");
+    ).toBe("/project/slugged-project/overview");
   });
 });

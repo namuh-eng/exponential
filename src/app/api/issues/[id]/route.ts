@@ -1,12 +1,15 @@
-import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
+import { resolveRequestWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
   comment,
   commentAttachment,
+  cycle,
   issue,
-  issueHistory,
+  issueDiscussionSummary,
   issueLabel,
+  issueReaction,
+  issueRelation,
   label,
   project,
   reaction,
@@ -14,16 +17,29 @@ import {
   user,
   workflowState,
 } from "@/lib/db/schema";
+import {
+  type DiscussionSummaryStatus,
+  buildDiscussionSummaryState,
+} from "@/lib/discussion-summary";
 import { normalizeIssueDescriptionHtml } from "@/lib/issue-description";
+import { insertIssueHistoryEvent } from "@/lib/issue-history";
+import { getIssueSubscriptionSummary } from "@/lib/issue-subscriptions";
 import {
   buildNotificationValues,
   insertNotifications,
 } from "@/lib/notifications";
 import { getDownloadUrl } from "@/lib/s3";
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { readTeamSettings } from "@/lib/team-settings";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
-async function findIssueRecord(id: string) {
+function isUuidLike(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
+async function findIssueRecord(id: string, workspaceId: string) {
   const issues = await db
     .select({
       id: issue.id,
@@ -36,6 +52,8 @@ async function findIssueRecord(id: string) {
       assigneeId: issue.assigneeId,
       creatorId: issue.creatorId,
       projectId: issue.projectId,
+      parentIssueId: issue.parentIssueId,
+      cycleId: issue.cycleId,
       dueDate: issue.dueDate,
       estimate: issue.estimate,
       sortOrder: issue.sortOrder,
@@ -43,16 +61,22 @@ async function findIssueRecord(id: string) {
       updatedAt: issue.updatedAt,
       teamId: issue.teamId,
       workspaceId: team.workspaceId,
+      teamSettings: team.settings,
+      archivedAt: issue.archivedAt,
       canceledAt: issue.canceledAt,
       completedAt: issue.completedAt,
     })
     .from(issue)
     .innerJoin(team, eq(issue.teamId, team.id))
-    .where(eq(issue.identifier, id))
+    .where(and(eq(issue.identifier, id), eq(team.workspaceId, workspaceId)))
     .limit(1);
 
   if (issues.length > 0) {
     return issues[0];
+  }
+
+  if (!isUuidLike(id)) {
+    return null;
   }
 
   const byId = await db
@@ -67,6 +91,8 @@ async function findIssueRecord(id: string) {
       assigneeId: issue.assigneeId,
       creatorId: issue.creatorId,
       projectId: issue.projectId,
+      parentIssueId: issue.parentIssueId,
+      cycleId: issue.cycleId,
       dueDate: issue.dueDate,
       estimate: issue.estimate,
       sortOrder: issue.sortOrder,
@@ -74,12 +100,14 @@ async function findIssueRecord(id: string) {
       updatedAt: issue.updatedAt,
       teamId: issue.teamId,
       workspaceId: team.workspaceId,
+      teamSettings: team.settings,
+      archivedAt: issue.archivedAt,
       canceledAt: issue.canceledAt,
       completedAt: issue.completedAt,
     })
     .from(issue)
     .innerJoin(team, eq(issue.teamId, team.id))
-    .where(eq(issue.id, id))
+    .where(and(eq(issue.id, id), eq(team.workspaceId, workspaceId)))
     .limit(1);
 
   return byId[0] ?? null;
@@ -95,12 +123,15 @@ export async function GET(
   }
 
   const { id } = await params;
-  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  const workspaceId = await resolveRequestWorkspaceId(
+    session.user.id,
+    _request,
+  );
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace found" }, { status: 400 });
   }
 
-  const iss = await findIssueRecord(id);
+  const iss = await findIssueRecord(id, workspaceId);
   if (!iss || iss.workspaceId !== workspaceId) {
     return NextResponse.json({ error: "Issue not found" }, { status: 404 });
   }
@@ -115,6 +146,13 @@ export async function GET(
     labelRows,
     commentRows,
     subIssueRows,
+    parentIssueRows,
+    cycleRows,
+    sourceRelationRows,
+    targetRelationRows,
+    issueReactionRows,
+    subscriptionSummary,
+    discussionSummaryRows,
   ] = await Promise.all([
     db.select().from(workflowState).where(eq(workflowState.id, iss.stateId)),
     iss.assigneeId
@@ -150,6 +188,7 @@ export async function GET(
         userName: user.name,
         userImage: user.image,
         createdAt: comment.createdAt,
+        updatedAt: comment.updatedAt,
       })
       .from(comment)
       .leftJoin(user, eq(comment.userId, user.id))
@@ -170,7 +209,85 @@ export async function GET(
       .leftJoin(workflowState, eq(issue.stateId, workflowState.id))
       .where(eq(issue.parentIssueId, iss.id))
       .orderBy(asc(issue.createdAt)),
+    iss.parentIssueId
+      ? db
+          .select({
+            id: issue.id,
+            identifier: issue.identifier,
+            title: issue.title,
+          })
+          .from(issue)
+          .where(eq(issue.id, iss.parentIssueId))
+      : Promise.resolve([]),
+    iss.cycleId
+      ? db
+          .select({ id: cycle.id, name: cycle.name, number: cycle.number })
+          .from(cycle)
+          .where(eq(cycle.id, iss.cycleId))
+      : Promise.resolve([]),
+    db
+      .select({
+        id: issueRelation.id,
+        type: issueRelation.type,
+        relatedIssueId: issueRelation.relatedIssueId,
+      })
+      .from(issueRelation)
+      .where(eq(issueRelation.issueId, iss.id)),
+    db
+      .select({
+        id: issueRelation.id,
+        type: issueRelation.type,
+        issueId: issueRelation.issueId,
+      })
+      .from(issueRelation)
+      .where(eq(issueRelation.relatedIssueId, iss.id)),
+    db
+      .select({
+        emoji: issueReaction.emoji,
+        userId: issueReaction.userId,
+      })
+      .from(issueReaction)
+      .where(eq(issueReaction.issueId, iss.id)),
+    getIssueSubscriptionSummary({
+      issueId: iss.id,
+      userId: session.user.id,
+    }),
+    db
+      .select({
+        status: issueDiscussionSummary.status,
+        summary: issueDiscussionSummary.summary,
+        generatedAt: issueDiscussionSummary.generatedAt,
+        generatedBy: issueDiscussionSummary.generatedBy,
+        sourceCommentCount: issueDiscussionSummary.sourceCommentCount,
+        sourceCommentVersion: issueDiscussionSummary.sourceCommentVersion,
+        error: issueDiscussionSummary.error,
+        staleAt: issueDiscussionSummary.staleAt,
+      })
+      .from(issueDiscussionSummary)
+      .where(eq(issueDiscussionSummary.issueId, iss.id))
+      .limit(1),
   ]);
+
+  const relatedIssueIds = [
+    ...new Set([
+      ...sourceRelationRows.map((relationRow) => relationRow.relatedIssueId),
+      ...targetRelationRows.map((relationRow) => relationRow.issueId),
+    ]),
+  ];
+  const relatedIssueRows =
+    relatedIssueIds.length > 0
+      ? await db
+          .select({
+            id: issue.id,
+            identifier: issue.identifier,
+            title: issue.title,
+          })
+          .from(issue)
+          .where(inArray(issue.id, relatedIssueIds))
+      : [];
+  const relatedIssueById = new Map(
+    relatedIssueRows.map((relatedIssue) => [relatedIssue.id, relatedIssue]),
+  );
 
   const commentIds = commentRows.map((currentComment) => currentComment.id);
   const reactionRows =
@@ -201,6 +318,10 @@ export async function GET(
           .orderBy(asc(commentAttachment.createdAt))
       : [];
 
+  const issueReactionsByEmoji = new Map<
+    string,
+    { count: number; reactedByMe: boolean }
+  >();
   const reactionsByComment = new Map<
     string,
     Map<string, { count: number; reacted: boolean }>
@@ -215,6 +336,19 @@ export async function GET(
       downloadUrl: string | null;
     }[]
   >();
+
+  for (const currentReaction of issueReactionRows) {
+    const existing = issueReactionsByEmoji.get(currentReaction.emoji) ?? {
+      count: 0,
+      reactedByMe: false,
+    };
+
+    issueReactionsByEmoji.set(currentReaction.emoji, {
+      count: existing.count + 1,
+      reactedByMe:
+        existing.reactedByMe || currentReaction.userId === session.user.id,
+    });
+  }
 
   for (const currentReaction of reactionRows) {
     const byEmoji =
@@ -255,11 +389,48 @@ export async function GET(
     }),
   );
 
+  const discussionSummariesEnabled = readTeamSettings(
+    iss.teamSettings,
+  ).discussionSummariesEnabled;
   const state = stateRows[0];
   const assignee = assigneeRows[0] ?? null;
   const creator = creatorRows[0] ?? null;
   const teamData = teamRows[0];
   const projectData = projectRows[0] ?? null;
+  const parentIssueData = parentIssueRows[0] ?? null;
+  const cycleData = cycleRows[0] ?? null;
+  const inverseRelationType = {
+    blocks: "blocked_by",
+    blocked_by: "blocks",
+    duplicate: "duplicate",
+    related: "related",
+  } as const;
+  const relationData = [
+    ...sourceRelationRows.flatMap((relationRow) => {
+      const relatedIssue = relatedIssueById.get(relationRow.relatedIssueId);
+      return relatedIssue
+        ? [
+            {
+              id: relationRow.id,
+              type: relationRow.type,
+              issue: relatedIssue,
+            },
+          ]
+        : [];
+    }),
+    ...targetRelationRows.flatMap((relationRow) => {
+      const relatedIssue = relatedIssueById.get(relationRow.issueId);
+      return relatedIssue
+        ? [
+            {
+              id: relationRow.id,
+              type: inverseRelationType[relationRow.type],
+              issue: relatedIssue,
+            },
+          ]
+        : [];
+    }),
+  ];
 
   return NextResponse.json({
     id: iss.id,
@@ -284,7 +455,34 @@ export async function GET(
     creator,
     team: teamData,
     project: projectData,
+    cycle: cycleData,
+    parentIssue: parentIssueData,
+    relations: relationData,
     labels: labelRows.map((l) => ({ name: l.labelName, color: l.labelColor })),
+    subscription: subscriptionSummary,
+    reactions: Array.from(issueReactionsByEmoji.entries()).map(
+      ([emoji, data]) => ({
+        emoji,
+        count: data.count,
+        reactedByMe: data.reactedByMe,
+      }),
+    ),
+    discussionSummary: buildDiscussionSummaryState({
+      enabled: discussionSummariesEnabled,
+      comments: commentRows,
+      persisted: discussionSummaryRows[0]
+        ? {
+            status: discussionSummaryRows[0].status as DiscussionSummaryStatus,
+            summary: discussionSummaryRows[0].summary,
+            generatedAt: discussionSummaryRows[0].generatedAt,
+            generatedBy: discussionSummaryRows[0].generatedBy,
+            sourceCommentCount: discussionSummaryRows[0].sourceCommentCount,
+            sourceCommentVersion: discussionSummaryRows[0].sourceCommentVersion,
+            error: discussionSummaryRows[0].error,
+            staleAt: discussionSummaryRows[0].staleAt,
+          }
+        : null,
+    }),
     comments: commentRows.map((c) => ({
       id: c.id,
       body: c.body,
@@ -326,7 +524,7 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  const workspaceId = await resolveRequestWorkspaceId(session.user.id, request);
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace found" }, { status: 400 });
   }
@@ -336,9 +534,10 @@ export async function PATCH(
     description?: string | null;
     stateId?: string;
     sortOrder?: number;
+    archive?: boolean;
   };
 
-  const existingIssue = await findIssueRecord(id);
+  const existingIssue = await findIssueRecord(id, workspaceId);
   if (!existingIssue || existingIssue.workspaceId !== workspaceId) {
     return NextResponse.json({ error: "Issue not found" }, { status: 404 });
   }
@@ -414,6 +613,13 @@ export async function PATCH(
     }
   }
 
+  if (body.archive !== undefined) {
+    updateData.archivedAt = body.archive ? new Date() : null;
+    if (Boolean(existingIssue.archivedAt) !== body.archive) {
+      changedFields.push("archivedAt");
+    }
+  }
+
   if (body.sortOrder !== undefined) {
     updateData.sortOrder = body.sortOrder;
     if (body.sortOrder !== existingIssue.sortOrder) {
@@ -432,20 +638,25 @@ export async function PATCH(
       updatedAt: issue.updatedAt,
       stateId: issue.stateId,
       sortOrder: issue.sortOrder,
+      archivedAt: issue.archivedAt,
     });
 
   if (updated[0] && changedFields.length > 0) {
-    await db.insert(issueHistory).values({
-      issueId: existingIssue.id,
-      actorId: session.user.id,
-      actorName: session.user.name ?? null,
-      actorEmail: session.user.email ?? null,
-      eventType: "updated",
-      metadata: {
-        changedFields,
-        identifier: existingIssue.identifier,
+    await insertIssueHistoryEvent(
+      db,
+      { settings: existingIssue.teamSettings },
+      {
+        issueId: existingIssue.id,
+        actorId: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email ?? null,
+        eventType: "updated",
+        metadata: {
+          changedFields,
+          identifier: existingIssue.identifier,
+        },
       },
-    });
+    );
   }
 
   if (
@@ -476,12 +687,15 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  const workspaceId = await resolveRequestWorkspaceId(
+    session.user.id,
+    _request,
+  );
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace found" }, { status: 400 });
   }
 
-  const existingIssue = await findIssueRecord(id);
+  const existingIssue = await findIssueRecord(id, workspaceId);
   if (!existingIssue || existingIssue.workspaceId !== workspaceId) {
     return NextResponse.json({ error: "Issue not found" }, { status: 404 });
   }

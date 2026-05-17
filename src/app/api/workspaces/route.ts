@@ -105,7 +105,16 @@ export async function POST(request: Request) {
     return { workspace: newWorkspace, team: newTeam };
   });
 
-  return NextResponse.json(result, { status: 201 });
+  const response = NextResponse.json(result, { status: 201 });
+  response.cookies.set("activeWorkspaceId", result.workspace.id, {
+    path: "/",
+    sameSite: "lax",
+  });
+  response.cookies.set("activeWorkspaceSlug", result.workspace.urlSlug, {
+    path: "/",
+    sameSite: "lax",
+  });
+  return response;
 }
 
 export async function GET() {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getSessionMock = vi.fn();
-const resolveActiveWorkspaceIdMock = vi.fn();
+const resolveRequestWorkspaceIdMock = vi.fn();
 const issueLimitMock = vi.fn();
 const historyOrderByMock = vi.fn();
 const historyFromMock = vi.fn();
@@ -15,7 +15,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/active-workspace", () => ({
-  resolveActiveWorkspaceId: resolveActiveWorkspaceIdMock,
+  resolveRequestWorkspaceId: resolveRequestWorkspaceIdMock,
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -67,7 +67,7 @@ describe("issue history route", () => {
     vi.resetModules();
     vi.clearAllMocks();
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
-    resolveActiveWorkspaceIdMock.mockResolvedValue("workspace-1");
+    resolveRequestWorkspaceIdMock.mockResolvedValue("workspace-1");
     issueLimitMock.mockResolvedValue([issueRecord]);
     historyOrderByMock.mockResolvedValue([
       {

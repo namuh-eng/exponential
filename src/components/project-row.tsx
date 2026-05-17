@@ -1,7 +1,10 @@
 "use client";
 
+import { useAppShellContext } from "@/app/(app)/app-shell";
 import { Avatar } from "@/components/avatar";
 import { PriorityIcon } from "@/components/icons/priority-icon";
+import { LabelChip } from "@/components/label-chip";
+import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import Link from "next/link";
 
 type ProjectStatus =
@@ -36,7 +39,7 @@ function formatDate(dateStr: string): string {
     "Nov",
     "Dec",
   ];
-  return `${months[date.getMonth()]} ${date.getDate()}`;
+  return `${months[date.getUTCMonth()]} ${date.getUTCDate()}`;
 }
 
 function ProgressRing({
@@ -53,7 +56,11 @@ function ProgressRing({
   const offset = circumference - (progress / 100) * circumference;
 
   const color =
-    status === "completed" ? "#4caf50" : progress > 0 ? "#5E6AD2" : "#6b6f76";
+    status === "completed"
+      ? "var(--color-status-completed)"
+      : progress > 0
+        ? "var(--color-accent)"
+        : "var(--color-text-tertiary)";
 
   return (
     <svg width={size} height={size} className="shrink-0">
@@ -90,6 +97,7 @@ export interface ProjectRowProps {
   priority: ProjectPriority;
   health: string;
   lead: { name: string; image?: string } | null;
+  labels?: { id: string; name: string; color: string }[];
   targetDate: string | null;
   progress: number;
 }
@@ -102,26 +110,38 @@ export function ProjectRow({
   priority,
   health,
   lead,
+  labels = [],
   targetDate,
   progress,
 }: ProjectRowProps) {
+  const workspaceSlug = useAppShellContext()?.workspaceSlug;
+  const href = withWorkspaceSlug(`/project/${slug}/overview`, workspaceSlug);
+
   return (
     <Link
-      href={`/project/${slug}/overview`}
+      href={href}
       data-testid="project-row"
-      className="group flex h-[44px] items-center border-b border-[var(--color-border)] px-4 text-[13px] transition-colors hover:bg-[var(--color-surface-hover)]"
+      className="group flex h-[46px] items-center border-b border-[var(--color-border)] bg-[color-mix(in_oklab,var(--color-surface)_72%,transparent)] px-4 text-[13px] transition-colors hover:bg-[var(--color-surface-hover)]"
     >
       {/* Icon + Name */}
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <span className="shrink-0 text-[14px]">{icon ?? "📋"}</span>
-        <span className="truncate text-[var(--color-text-primary)]">
+        <span className="truncate font-medium text-[var(--color-text-primary)]">
           {name}
         </span>
       </div>
 
       {/* Health */}
       <div className="w-[120px] shrink-0 text-[12px] text-[var(--color-text-secondary)]">
-        {health}
+        {labels.length > 0 ? (
+          <div className="flex min-w-0 flex-wrap gap-1">
+            {labels.slice(0, 2).map((label) => (
+              <LabelChip key={label.id} name={label.name} color={label.color} />
+            ))}
+          </div>
+        ) : (
+          health
+        )}
       </div>
 
       {/* Priority */}

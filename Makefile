@@ -79,7 +79,7 @@ clean:
 
 # Start Postgres + Redis for local development (run alongside npm run dev)
 dev-services:
-	docker compose -f docker-compose.yml up postgres redis -d
+	node scripts/dev-services.mjs
 
 # Stop development services
 dev-services-down:

@@ -1,13 +1,20 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { cycle, issue, project, user, workflowState } from "@/lib/db/schema";
+import {
+  cycle,
+  issue,
+  project,
+  team,
+  user,
+  workflowState,
+} from "@/lib/db/schema";
 import { getLabelsForIssues } from "@/lib/issue-labels";
-import { getTeamByKey } from "@/lib/teams";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { findAccessibleTeam } from "@/lib/teams";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ key: string }> },
 ) {
   const { response: authResponse, session } = await requireApiSession();
@@ -17,16 +24,20 @@ export async function GET(
 
   const { key } = await params;
 
-  const teamRecord = await getTeamByKey(key);
+  const teamRecord = await findAccessibleTeam(key, session.user.id, {
+    request,
+  });
   if (!teamRecord) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
-  // Get workflow states for this team
+  const hierarchyTeamIds = teamRecord.hierarchyTeamIds ?? [teamRecord.id];
+
+  // Get workflow states for this team hierarchy
   const states = await db
     .select()
     .from(workflowState)
-    .where(eq(workflowState.teamId, teamRecord.id))
+    .where(inArray(workflowState.teamId, hierarchyTeamIds))
     .orderBy(asc(workflowState.position));
 
   // Get issues with assignee info
@@ -49,11 +60,14 @@ export async function GET(
       dueDate: issue.dueDate,
       createdAt: issue.createdAt,
       sortOrder: issue.sortOrder,
+      teamId: issue.teamId,
     })
     .from(issue)
     .leftJoin(user, eq(issue.assigneeId, user.id))
     .leftJoin(project, eq(issue.projectId, project.id))
-    .where(eq(issue.teamId, teamRecord.id))
+    .where(
+      and(inArray(issue.teamId, hierarchyTeamIds), isNull(issue.archivedAt)),
+    )
     .orderBy(asc(issue.sortOrder), desc(issue.createdAt));
 
   // Get labels for all issues
@@ -118,7 +132,7 @@ export async function GET(
         creatorId: i.creatorId,
         creatorName: creatorMap.get(i.creatorId) ?? null,
         labels: labelsMap[i.id] ?? [],
-        labelIds: (labelsMap[i.id] ?? []).map((l) => l.name),
+        labelIds: (labelsMap[i.id] ?? []).map((l) => l.id),
         projectId: i.projectId,
         projectName: i.projectName,
         cycleId: i.cycleId,
@@ -126,6 +140,7 @@ export async function GET(
         estimate: i.estimate,
         dueDate: i.dueDate,
         createdAt: i.createdAt,
+        teamId: i.teamId,
       })),
   }));
 
@@ -148,9 +163,9 @@ export async function GET(
   const seenLabels = new Set<string>();
   for (const labelList of Object.values(labelsMap)) {
     for (const l of labelList) {
-      if (!seenLabels.has(l.name)) {
-        seenLabels.add(l.name);
-        uniqueLabels.push({ id: l.name, name: l.name, color: l.color });
+      if (!seenLabels.has(l.id)) {
+        seenLabels.add(l.id);
+        uniqueLabels.push({ id: l.id, name: l.name, color: l.color });
       }
     }
   }
@@ -232,6 +247,13 @@ export async function GET(
       cycles: uniqueCycles,
       estimates: uniqueEstimates,
       dueDates: uniqueDueDates,
+      teams:
+        hierarchyTeamIds.length > 1
+          ? await db
+              .select({ id: team.id, name: team.name })
+              .from(team)
+              .where(inArray(team.id, hierarchyTeamIds))
+          : [{ id: teamRecord.id, name: teamRecord.name }],
       priorities: [
         { value: "urgent", label: "Urgent" },
         { value: "high", label: "High" },

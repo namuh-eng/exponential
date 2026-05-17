@@ -112,9 +112,15 @@ describe("Account Notifications Page", () => {
 
     await waitFor(() => {
       expect(
+        screen.getByText(
+          "Choose which channels can deliver workspace activity. Notification delivery follows the event preferences configured for each channel.",
+        ),
+      ).toBeInTheDocument();
+      expect(
         screen.getByRole("link", { name: "Desktop notification settings" }),
       ).toBeInTheDocument();
     });
+    expect(document.body).not.toHaveTextContent(/\b(clone|demo)\b/i);
     expect(
       screen.getByRole("link", { name: "Mobile notification settings" }),
     ).toHaveAttribute("href", "/settings/account/notifications/mobile");
@@ -173,14 +179,21 @@ describe("Account Notifications Page", () => {
     await waitFor(() => {
       expect(
         screen.getByText(
-          "Enabled for assignments, status changes, and 1 other",
+          "Enabled for assignments, status changes, and 9 others",
         ),
       ).toBeInTheDocument();
     });
     expect(
       screen.getByText("Enabled for all notifications"),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("Disabled")).toHaveLength(2);
+    expect(
+      screen.getByText("Enabled for assignments, mentions, and 4 others"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Enabled for mentions, comments and replies, and 3 others",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("renders Updates from Linear section", async () => {
@@ -361,6 +374,12 @@ describe("Account Notifications Page", () => {
     expect(screen.getByText("Status changes")).toBeInTheDocument();
     expect(screen.getByText("Mentions")).toBeInTheDocument();
     expect(screen.getByText("Comments and replies")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Turning off an event prevents this channel from sending notifications for that activity. If all channels are disabled for an event, you won't receive notifications for it.",
+      ),
+    ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/\b(clone|demo)\b/i);
 
     fireEvent.click(
       screen.getByRole("switch", { name: "Comments and replies" }),
@@ -376,4 +395,41 @@ describe("Account Notifications Page", () => {
       );
     });
   });
+
+  it.each(["desktop", "mobile", "email", "slack"] as const)(
+    "renders production channel explanation copy for %s notifications",
+    async (channel) => {
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+        const url = String(input);
+
+        if (url === "/api/account/notifications" && !init?.method) {
+          return {
+            ok: true,
+            json: async () => ({ accountNotifications: {} }),
+          } as Response;
+        }
+
+        if (url === "/api/account/notifications" && init?.method === "PATCH") {
+          return {
+            ok: true,
+            json: async () => JSON.parse(String(init.body)),
+          } as Response;
+        }
+
+        throw new Error(`Unhandled fetch: ${url}`);
+      });
+
+      render(<NotificationChannelPage channel={channel} />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(
+            "Turning off an event prevents this channel from sending notifications for that activity. If all channels are disabled for an event, you won't receive notifications for it.",
+          ),
+        ).toBeInTheDocument();
+      });
+      expect(document.body).not.toHaveTextContent(/\b(clone|demo)\b/i);
+      expect(document.body).not.toHaveTextContent(/suppresses/i);
+    },
+  );
 });

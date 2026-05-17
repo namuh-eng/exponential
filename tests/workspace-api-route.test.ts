@@ -10,6 +10,9 @@ const updateWhereMock = vi.fn();
 const workspaceInsertValuesMock = vi.fn();
 const apiKeyInsertValuesMock = vi.fn();
 const webhookInsertValuesMock = vi.fn();
+const updateReturningMock = vi.fn();
+const deleteWhereMock = vi.fn();
+const deleteReturningMock = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: {
@@ -74,7 +77,23 @@ vi.mock("@/lib/db", async () => {
           return {
             where: (...whereArgs: unknown[]) => {
               updateWhereMock(...whereArgs);
-              return Promise.resolve();
+              return Object.assign(Promise.resolve(), {
+                returning: (...returningArgs: unknown[]) => {
+                  updateReturningMock(...returningArgs);
+                  return Promise.resolve([{ id: "updated-1" }]);
+                },
+              });
+            },
+          };
+        },
+      })),
+      delete: vi.fn(() => ({
+        where: (...whereArgs: unknown[]) => {
+          deleteWhereMock(...whereArgs);
+          return {
+            returning: (...returningArgs: unknown[]) => {
+              deleteReturningMock(...returningArgs);
+              return Promise.resolve([{ id: "deleted-1" }]);
             },
           };
         },
@@ -254,5 +273,124 @@ describe("workspace api route", () => {
       error: "A webhook URL and at least one event are required.",
     });
     expect(webhookInsertValuesMock).not.toHaveBeenCalled();
+  });
+
+  it("deletes an OAuth application from workspace settings", async () => {
+    workspaceAccessLimitMock.mockResolvedValue([
+      buildAccess({
+        settings: {
+          security: { permissions: { apiKeyCreationRole: "admins" } },
+          api: {
+            oauthApplications: [
+              {
+                id: "oauth_1",
+                name: "Old app",
+                clientId: "lin_1",
+                clientSecretPreview: "linsec_1…",
+                redirectUrl: "https://example.com/callback",
+                createdAt: "2026-04-08T10:00:00.000Z",
+              },
+            ],
+          },
+        },
+      }),
+    ]);
+    const { POST } = await import("@/app/api/workspaces/current/api/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/workspaces/current/api", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "deleteOAuthApplication",
+          id: "oauth_1",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        settings: expect.objectContaining({
+          api: { oauthApplications: [] },
+        }),
+      }),
+    );
+  });
+
+  it("updates a webhook only within the current workspace", async () => {
+    const { POST } = await import("@/app/api/workspaces/current/api/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/workspaces/current/api", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "updateWebhook",
+          id: "webhook-1",
+          enabled: false,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({ enabled: false }),
+    );
+    expect(updateWhereMock).toHaveBeenCalled();
+    expect(updateReturningMock).toHaveBeenCalled();
+  });
+
+  it("deletes a webhook only within the current workspace", async () => {
+    const { POST } = await import("@/app/api/workspaces/current/api/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/workspaces/current/api", {
+        method: "POST",
+        body: JSON.stringify({ action: "deleteWebhook", id: "webhook-1" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(deleteWhereMock).toHaveBeenCalled();
+    expect(deleteReturningMock).toHaveBeenCalled();
+  });
+
+  it("lets members revoke their own API keys", async () => {
+    workspaceAccessLimitMock.mockResolvedValue([
+      buildAccess({
+        memberRole: "member",
+        settings: {
+          security: { permissions: { apiKeyCreationRole: "members" } },
+          api: { oauthApplications: [] },
+        },
+      }),
+    ]);
+    const { POST } = await import("@/app/api/workspaces/current/api/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/workspaces/current/api", {
+        method: "POST",
+        body: JSON.stringify({ action: "deleteApiKey", id: "api-key-1" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(deleteWhereMock).toHaveBeenCalled();
+  });
+
+  it("blocks lifecycle mutations for non-managers when required", async () => {
+    workspaceAccessLimitMock.mockResolvedValue([
+      buildAccess({ memberRole: "member" }),
+    ]);
+    const { POST } = await import("@/app/api/workspaces/current/api/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/workspaces/current/api", {
+        method: "POST",
+        body: JSON.stringify({ action: "deleteWebhook", id: "webhook-1" }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(deleteWhereMock).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,19 @@
 import { randomInt } from "node:crypto";
+import { getConfiguredAppUrl } from "@/lib/app-url";
+import {
+  getGitHubOAuthConfig,
+  getGitLabOAuthConfig,
+  getGoogleOAuthConfig,
+  getSlackOAuthConfig,
+} from "@/lib/auth-providers";
 import { db } from "@/lib/db";
 import { sendMagicLinkEmail } from "@/lib/email";
+import {
+  getPasskeyOrigin,
+  getPasskeyRpID,
+  isPasskeyAuthEnabled,
+} from "@/lib/passkeys";
+import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins";
@@ -8,11 +21,7 @@ import { magicLink } from "better-auth/plugins";
 const PRODUCTION_BUILD_PHASE = "phase-production-build";
 
 function getBetterAuthUrl() {
-  return (
-    process.env.BETTER_AUTH_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000"
-  );
+  return getConfiguredAppUrl();
 }
 
 function getBetterAuthSecret() {
@@ -31,16 +40,27 @@ function getBetterAuthSecret() {
 }
 
 function getSocialProviders() {
-  if (!process.env.AUTH_GOOGLE_ID || !process.env.AUTH_GOOGLE_SECRET) {
-    return {};
+  const providers: Record<string, { clientId: string; clientSecret: string }> =
+    {};
+  const google = getGoogleOAuthConfig();
+  const github = getGitHubOAuthConfig();
+  const gitlab = getGitLabOAuthConfig();
+  const slack = getSlackOAuthConfig();
+
+  if (google) {
+    providers.google = google;
+  }
+  if (github) {
+    providers.github = github;
+  }
+  if (gitlab) {
+    providers.gitlab = gitlab;
+  }
+  if (slack) {
+    providers.slack = slack;
   }
 
-  return {
-    google: {
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
-    },
-  };
+  return providers;
 }
 
 export const auth = betterAuth({
@@ -58,6 +78,15 @@ export const auth = betterAuth({
       },
       expiresIn: 600, // 10 minutes
     }),
+    ...(isPasskeyAuthEnabled()
+      ? [
+          passkey({
+            rpID: getPasskeyRpID(),
+            rpName: "Whetline",
+            origin: getPasskeyOrigin(),
+          }),
+        ]
+      : []),
   ],
   session: {
     cookieCache: {

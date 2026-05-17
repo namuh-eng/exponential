@@ -1,7 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { auth } from "@/lib/auth";
+import { ensureCanonicalWorkspaceForUser } from "@/lib/canonical-workspace";
 import { db } from "@/lib/db";
 import { user } from "@/lib/db/schema";
+import {
+  DATABASE_BOOTSTRAP_MESSAGE,
+  DATABASE_BOOTSTRAP_SETUP_COMMANDS,
+  DATABASE_BOOTSTRAP_TITLE,
+  shouldRenderDatabaseBootstrapError,
+} from "@/lib/dev-database-error";
 import { makeSignature } from "better-auth/crypto";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -41,6 +48,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Email is required" }, { status: 400 });
   }
 
+  try {
+    return await createTestSession(email, body?.name, request);
+  } catch (error) {
+    if (shouldRenderDatabaseBootstrapError(error)) {
+      return NextResponse.json(
+        {
+          error: DATABASE_BOOTSTRAP_TITLE,
+          message: DATABASE_BOOTSTRAP_MESSAGE,
+          setup: DATABASE_BOOTSTRAP_SETUP_COMMANDS,
+        },
+        { status: 503 },
+      );
+    }
+
+    throw error;
+  }
+}
+
+async function createTestSession(
+  email: string,
+  name: string | undefined,
+  request: Request,
+) {
   const existingUser = await db
     .select({
       id: user.id,
@@ -62,7 +92,7 @@ export async function POST(request: Request) {
           id: randomToken(24),
           email,
           name:
-            body?.name?.trim() ||
+            name?.trim() ||
             email.split("@")[0]?.replaceAll(/[._-]+/g, " ") ||
             "Playwright User",
           emailVerified: true,
@@ -76,22 +106,55 @@ export async function POST(request: Request) {
         })
     )[0];
 
+  const canonicalContext = await ensureCanonicalWorkspaceForUser(
+    resolvedUser.id,
+  );
+
   const authContext = await auth.$context;
   const createdSession = await authContext.internalAdapter.createSession(
     resolvedUser.id,
+    false,
+    {
+      userAgent:
+        request.headers.get("user-agent")?.trim() ||
+        "Playwright test browser session",
+      ipAddress:
+        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+        request.headers.get("x-real-ip")?.trim() ||
+        "",
+    },
   );
   const signedToken = `${createdSession.token}.${await makeSignature(
     createdSession.token,
     authContext.secret,
   )}`;
   const sessionCookie = authContext.authCookies.sessionToken;
+  const shouldSecureActiveWorkspaceCookie =
+    new URL(request.url).protocol === "https:";
 
   const response = NextResponse.json({
     success: true,
     user: resolvedUser,
     sessionToken: signedToken,
     expiresAt: createdSession.expiresAt.toISOString(),
+    workspace: canonicalContext.workspace,
+    team: canonicalContext.team,
   });
+
+  response.cookies.set("activeWorkspaceId", canonicalContext.workspace.id, {
+    path: "/",
+    sameSite: "lax",
+    secure: shouldSecureActiveWorkspaceCookie,
+  });
+  response.cookies.set(
+    "activeWorkspaceSlug",
+    canonicalContext.workspace.urlSlug,
+    {
+      path: "/",
+      sameSite: "lax",
+      secure: shouldSecureActiveWorkspaceCookie,
+    },
+  );
 
   response.cookies.set(sessionCookie.name, signedToken, {
     expires: createdSession.expiresAt,

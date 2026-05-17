@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { ViewsPage } from "@/components/views-page";
 
 export default function Page() {
-  redirect("/views/issues");
+  return <ViewsPage initialTab="issues" keepCanonicalTabRoute />;
 }

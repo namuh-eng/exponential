@@ -33,7 +33,9 @@ export default function SLAPage() {
           description="Configure your first SLA to start monitoring response times."
           action={{
             label: "Create SLA",
-            onClick: () => console.log("Create SLA"),
+            disabled: true,
+            disabledReason:
+              "SLA configuration is not available in this workspace yet.",
           }}
         />
       </div>

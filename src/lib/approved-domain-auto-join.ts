@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { member, team, teamMember, workspace } from "@/lib/db/schema";
+import { activeTeamFilter } from "@/lib/team-lifecycle";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 function extractEmailDomain(email: string | null | undefined) {
@@ -55,7 +56,7 @@ export async function autoJoinWorkspaceForApprovedDomain(input: {
   const [defaultTeam] = await db
     .select({ id: team.id })
     .from(team)
-    .where(eq(team.workspaceId, matchedWorkspace.id))
+    .where(and(eq(team.workspaceId, matchedWorkspace.id), activeTeamFilter))
     .orderBy(asc(team.createdAt))
     .limit(1);
 

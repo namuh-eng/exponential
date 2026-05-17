@@ -69,11 +69,13 @@ describe("workspace security route", () => {
             improveAi: false,
             webSearch: false,
             hipaa: true,
+            ipRestrictions: [],
           },
         },
         inviteLinkEnabled: true,
         inviteLinkToken: null,
         approvedEmailDomains: ["EXAMPLE.com", " example.com "],
+        role: "member",
       },
     ]);
 
@@ -107,10 +109,19 @@ describe("workspace security route", () => {
           apiKeyCreationRole: "admins",
           agentGuidanceRole: "admins",
         },
+        capabilities: {
+          canInviteMembers: true,
+          canCreateTeams: true,
+          canManageWorkspaceLabels: false,
+          canManageWorkspaceTemplates: false,
+          canCreateApiKeys: false,
+          canModifyAgentGuidance: false,
+        },
         restrictFileUploads: true,
         improveAi: false,
         webSearch: false,
         hipaa: true,
+        ipRestrictions: [],
       },
     });
   });
@@ -125,6 +136,7 @@ describe("workspace security route", () => {
         inviteLinkEnabled: true,
         inviteLinkToken: "saved-token",
         approvedEmailDomains: [],
+        role: "admin",
       },
     ]);
 
@@ -178,6 +190,7 @@ describe("workspace security route", () => {
             improveAi: false,
             webSearch: false,
             hipaa: true,
+            ipRestrictions: [],
           },
         },
       }),
@@ -199,10 +212,19 @@ describe("workspace security route", () => {
           apiKeyCreationRole: "admins",
           agentGuidanceRole: "admins",
         },
+        capabilities: {
+          canInviteMembers: true,
+          canCreateTeams: true,
+          canManageWorkspaceLabels: false,
+          canManageWorkspaceTemplates: false,
+          canCreateApiKeys: true,
+          canModifyAgentGuidance: false,
+        },
         restrictFileUploads: true,
         improveAi: false,
         webSearch: false,
         hipaa: true,
+        ipRestrictions: [],
       },
     });
   });

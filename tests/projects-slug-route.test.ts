@@ -9,6 +9,7 @@ const teamLinksInnerJoinMock = vi.fn();
 const memberLinksInnerJoinMock = vi.fn();
 const projectIssuesWhereMock = vi.fn();
 const updateSetMock = vi.fn();
+const resolveWorkspaceIdBySlugMock = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: {
@@ -28,6 +29,10 @@ vi.mock("@/lib/project-detail", () => ({
   haveSameIds: vi.fn(
     (a: string[], b: string[]) => a.sort().join(",") === b.sort().join(","),
   ),
+}));
+
+vi.mock("@/lib/active-workspace", () => ({
+  resolveWorkspaceIdBySlug: resolveWorkspaceIdBySlugMock,
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -207,6 +212,7 @@ describe("project detail route", () => {
       user: { id: "user-1", name: "Ashley", image: null },
     });
     membershipsLimitMock.mockResolvedValue([{ workspaceId: "workspace-1" }]);
+    resolveWorkspaceIdBySlugMock.mockResolvedValue("workspace-from-slug");
     projectsWhereMock.mockResolvedValue([
       {
         id: "proj-1",
@@ -251,6 +257,26 @@ describe("project detail route", () => {
     expect(response.status).toBe(200);
     const payload = await response.json();
     expect(payload.project.id).toBe("proj-1");
+  });
+
+  it("uses workspaceSlug query param before default workspace fallback", async () => {
+    const { GET } = await import("@/app/api/projects/[slug]/route");
+
+    const response = await GET(
+      new Request(
+        "http://localhost/api/projects/ever?workspaceSlug=foreverbrowsing",
+      ),
+      {
+        params: Promise.resolve({ slug: "ever" }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(resolveWorkspaceIdBySlugMock).toHaveBeenCalledWith(
+      "user-1",
+      "foreverbrowsing",
+    );
+    expect(membershipsLimitMock).not.toHaveBeenCalled();
   });
 
   it("updates project metadata", async () => {

@@ -10,7 +10,14 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-inter)", "Inter", "system-ui", "sans-serif"],
+        sans: [
+          "var(--editorial-sans)",
+          "var(--font-inter-tight)",
+          "system-ui",
+          "sans-serif",
+        ],
+        display: ["var(--editorial-display)", "Georgia", "serif"],
+        mono: ["var(--editorial-mono)", "ui-monospace", "monospace"],
       },
     },
   },

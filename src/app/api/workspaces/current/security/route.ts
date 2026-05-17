@@ -1,12 +1,19 @@
 import { randomBytes } from "node:crypto";
+import { isIP } from "node:net";
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
+import {
+  DEFAULT_WORKSPACE_PERMISSION_SETTINGS,
+  type PermissionLevel,
+  asRecord,
+  canPerformWorkspacePermission,
+  isWorkspaceAdminRole,
+  readPermissionLevel,
+} from "@/lib/workspace-permissions";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-
-type PermissionLevel = "admins" | "members" | "anyone";
 
 type AuthenticationSettings = {
   google: boolean;
@@ -22,6 +29,13 @@ type WorkspacePermissionSettings = {
   agentGuidanceRole: PermissionLevel;
 };
 
+type IpRestriction = {
+  range: string;
+  description: string;
+  enabled: boolean;
+  type: "allow";
+};
+
 type WorkspaceSecurityState = {
   authentication: AuthenticationSettings;
   permissions: WorkspacePermissionSettings;
@@ -29,6 +43,7 @@ type WorkspaceSecurityState = {
   improveAi: boolean;
   webSearch: boolean;
   hipaa: boolean;
+  ipRestrictions: IpRestriction[];
 };
 
 type CurrentWorkspaceRecord = {
@@ -37,13 +52,8 @@ type CurrentWorkspaceRecord = {
   inviteLinkEnabled: boolean | null;
   inviteLinkToken: string | null;
   approvedEmailDomains: unknown;
+  role: string;
 };
-
-const PERMISSION_LEVELS = new Set<PermissionLevel>([
-  "admins",
-  "members",
-  "anyone",
-]);
 
 const DEFAULT_SECURITY_STATE: WorkspaceSecurityState = {
   authentication: {
@@ -51,24 +61,14 @@ const DEFAULT_SECURITY_STATE: WorkspaceSecurityState = {
     emailPasskey: true,
   },
   permissions: {
-    invitationsRole: "members",
-    teamCreationRole: "members",
-    labelManagementRole: "members",
-    templateManagementRole: "members",
-    apiKeyCreationRole: "admins",
-    agentGuidanceRole: "admins",
+    ...DEFAULT_WORKSPACE_PERMISSION_SETTINGS,
   },
   restrictFileUploads: false,
   improveAi: true,
   webSearch: true,
   hipaa: false,
+  ipRestrictions: [],
 };
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
 
 function normalizeDomain(value: string) {
   return value.trim().toLowerCase().replace(/^@+/, "");
@@ -89,14 +89,94 @@ function normalizeDomains(value: unknown) {
   );
 }
 
-function readPermissionLevel(
-  value: unknown,
-  fallback: PermissionLevel,
-): PermissionLevel {
-  return typeof value === "string" &&
-    PERMISSION_LEVELS.has(value as PermissionLevel)
-    ? (value as PermissionLevel)
-    : fallback;
+function isValidCidrRange(value: string) {
+  const trimmed = value.trim();
+  const [address, prefix, extra] = trimmed.split("/");
+  if (!address || extra !== undefined) {
+    return false;
+  }
+
+  const version = isIP(address);
+  if (version === 0) {
+    return false;
+  }
+
+  if (prefix === undefined) {
+    return true;
+  }
+
+  if (!/^\d+$/.test(prefix)) {
+    return false;
+  }
+
+  const prefixNumber = Number(prefix);
+  return version === 4
+    ? prefixNumber >= 0 && prefixNumber <= 32
+    : prefixNumber >= 0 && prefixNumber <= 128;
+}
+
+function normalizeIpRange(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function normalizeIpRestrictions(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const seenRanges = new Set<string>();
+  const restrictions: IpRestriction[] = [];
+
+  for (const item of value) {
+    const record = asRecord(item);
+    const rawRange = typeof record.range === "string" ? record.range : "";
+    const range = normalizeIpRange(rawRange);
+    if (!range || !isValidCidrRange(range) || seenRanges.has(range)) {
+      continue;
+    }
+
+    seenRanges.add(range);
+    restrictions.push({
+      range,
+      description:
+        typeof record.description === "string"
+          ? record.description.trim().slice(0, 120)
+          : "",
+      enabled: typeof record.enabled === "boolean" ? record.enabled : true,
+      type: "allow",
+    });
+  }
+
+  return restrictions;
+}
+
+function validateIpRestrictions(value: unknown) {
+  if (!Array.isArray(value)) {
+    return "IP restrictions must be a list";
+  }
+
+  for (const item of value) {
+    if (!isPlainObject(item)) {
+      return "IP restrictions must contain valid entries";
+    }
+
+    if (typeof item.range !== "string" || !isValidCidrRange(item.range)) {
+      return "IP restrictions must use valid IP addresses or CIDR ranges";
+    }
+
+    if (item.enabled !== undefined && typeof item.enabled !== "boolean") {
+      return "IP restriction status must be a boolean";
+    }
+
+    if (
+      item.description !== undefined &&
+      typeof item.description !== "string"
+    ) {
+      return "IP restriction descriptions must be strings";
+    }
+  }
+
+  return null;
 }
 
 function readWorkspaceSecurityState(settings: unknown): WorkspaceSecurityState {
@@ -157,6 +237,7 @@ function readWorkspaceSecurityState(settings: unknown): WorkspaceSecurityState {
       typeof security.hipaa === "boolean"
         ? security.hipaa
         : DEFAULT_SECURITY_STATE.hipaa,
+    ipRestrictions: normalizeIpRestrictions(security.ipRestrictions),
   };
 }
 
@@ -168,6 +249,7 @@ function serializeSecurityState(security: WorkspaceSecurityState) {
     improveAi: security.improveAi,
     webSearch: security.webSearch,
     hipaa: security.hipaa,
+    ipRestrictions: security.ipRestrictions,
   };
 }
 
@@ -184,6 +266,7 @@ async function findCurrentWorkspace(userId: string) {
       inviteLinkEnabled: workspace.inviteLinkEnabled,
       inviteLinkToken: workspace.inviteLinkToken,
       approvedEmailDomains: workspace.approvedEmailDomains,
+      role: member.role,
     })
     .from(workspace)
     .innerJoin(
@@ -232,6 +315,9 @@ function buildResponse(
   currentWorkspace: CurrentWorkspaceRecord,
   inviteLinkToken: string,
 ) {
+  const securityState = readWorkspaceSecurityState(currentWorkspace.settings);
+  const { permissions } = securityState;
+
   return {
     security: {
       inviteLinkEnabled: currentWorkspace.inviteLinkEnabled ?? true,
@@ -239,7 +325,25 @@ function buildResponse(
       approvedEmailDomains: normalizeDomains(
         currentWorkspace.approvedEmailDomains,
       ),
-      ...readWorkspaceSecurityState(currentWorkspace.settings),
+      ...securityState,
+      capabilities: {
+        canInviteMembers: canPerformWorkspacePermission(
+          currentWorkspace.role,
+          permissions.invitationsRole,
+        ),
+        canCreateTeams: canPerformWorkspacePermission(
+          currentWorkspace.role,
+          permissions.teamCreationRole,
+        ),
+        canManageWorkspaceLabels: false,
+        canManageWorkspaceTemplates: false,
+        canCreateApiKeys: canPerformWorkspacePermission(
+          currentWorkspace.role,
+          permissions.apiKeyCreationRole,
+          { includeGuestsForAnyone: false },
+        ),
+        canModifyAgentGuidance: false,
+      },
     },
   };
 }
@@ -289,6 +393,13 @@ export async function PATCH(request: Request) {
     );
   }
 
+  if (!isWorkspaceAdminRole(currentWorkspace.role)) {
+    return NextResponse.json(
+      { error: "You do not have permission to manage workspace security" },
+      { status: 403 },
+    );
+  }
+
   const body = (await request.json().catch(() => null)) as {
     inviteLinkEnabled?: unknown;
     approvedEmailDomains?: unknown;
@@ -298,6 +409,7 @@ export async function PATCH(request: Request) {
     improveAi?: unknown;
     webSearch?: unknown;
     hipaa?: unknown;
+    ipRestrictions?: unknown;
   } | null;
 
   if (!body) {
@@ -343,6 +455,13 @@ export async function PATCH(request: Request) {
       { error: "HIPAA compliance must be a boolean" },
       { status: 400 },
     );
+  }
+
+  if (body.ipRestrictions !== undefined) {
+    const ipRestrictionsError = validateIpRestrictions(body.ipRestrictions);
+    if (ipRestrictionsError) {
+      return NextResponse.json({ error: ipRestrictionsError }, { status: 400 });
+    }
   }
 
   if (
@@ -423,6 +542,10 @@ export async function PATCH(request: Request) {
         ? body.webSearch
         : currentSecurity.webSearch,
     hipaa: typeof body.hipaa === "boolean" ? body.hipaa : currentSecurity.hipaa,
+    ipRestrictions:
+      body.ipRestrictions === undefined
+        ? currentSecurity.ipRestrictions
+        : normalizeIpRestrictions(body.ipRestrictions),
   };
 
   const approvedEmailDomains =

@@ -17,6 +17,16 @@ vi.mock("next/navigation", () => ({
 const mockTeam = {
   name: "Team Name",
   triageEnabled: true,
+  triageAcceptDestinationStateId: "state-backlog",
+  triageDeclineDestinationStateId: "state-canceled",
+  acceptDestinationStates: [
+    { id: "state-backlog", name: "Backlog", category: "backlog" },
+    { id: "state-ready", name: "Ready", category: "unstarted" },
+  ],
+  declineDestinationStates: [
+    { id: "state-canceled", name: "Canceled", category: "canceled" },
+    { id: "state-duplicate", name: "Duplicate", category: "canceled" },
+  ],
 };
 
 describe("TeamTriageSettingsPage", () => {
@@ -35,7 +45,7 @@ describe("TeamTriageSettingsPage", () => {
             ok: true,
             json: () =>
               Promise.resolve({
-                team: { ...mockTeam, ...JSON.parse(options.body) },
+                team: { ...mockTeam, ...JSON.parse(options.body as string) },
               }),
           });
         }
@@ -58,6 +68,12 @@ describe("TeamTriageSettingsPage", () => {
     });
 
     expect(screen.getByLabelText("Enable triage")).toBeInTheDocument();
+    expect(screen.getByLabelText("Default accept destination")).toHaveValue(
+      "state-backlog",
+    );
+    expect(screen.getByLabelText("Default decline destination")).toHaveValue(
+      "state-canceled",
+    );
   });
 
   it("handles toggling triage and saving", async () => {
@@ -81,6 +97,43 @@ describe("TeamTriageSettingsPage", () => {
         body: JSON.stringify({ triageEnabled: false }),
       }),
     );
+  });
+
+  it("saves accept and decline destination defaults", async () => {
+    render(<TeamTriageSettingsPage />);
+    await waitFor(() => screen.getByLabelText("Default accept destination"));
+
+    fireEvent.change(screen.getByLabelText("Default accept destination"), {
+      target: { value: "state-ready" },
+    });
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/teams/TEAM/settings",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({
+            triageAcceptDestinationStateId: "state-ready",
+          }),
+        }),
+      );
+    });
+
+    fireEvent.change(screen.getByLabelText("Default decline destination"), {
+      target: { value: "state-duplicate" },
+    });
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/teams/TEAM/settings",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({
+            triageDeclineDestinationStateId: "state-duplicate",
+          }),
+        }),
+      );
+    });
   });
 
   it("shows error message when save fails", async () => {

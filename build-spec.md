@@ -264,7 +264,7 @@ REST API routes (Next.js App Router API routes):
 - Updates from Linear: Changelog (show in sidebar toggle, newsletter toggle), Marketing toggle
 - Other: Invite accepted, Privacy/legal updates, DPA toggles
 
-**Security & access**: Passkeys, active sessions, API keys
+**Security & access**: Passkeys, active sessions, authorized applications; account page links to workspace-scoped API key management under `/settings/api`
 **Connected accounts**: OAuth connections (Google, etc.)
 **Agent personalization**: AI agent behavior customization
 

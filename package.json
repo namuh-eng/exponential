@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/check-dev-db.mjs && next dev",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
@@ -21,6 +21,7 @@
     "@aws-sdk/client-sesv2": "^3.1024.0",
     "@aws-sdk/client-sqs": "^3.1024.0",
     "@aws-sdk/s3-request-presigner": "^3.1024.0",
+    "@better-auth/passkey": "^1.6.0",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-context-menu": "^2.2.16",
     "@radix-ui/react-dialog": "^1.1.15",

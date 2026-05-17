@@ -1,8 +1,11 @@
 "use client";
 
+import { useAppShellContext } from "@/app/(app)/app-shell";
 import { Avatar } from "@/components/avatar";
 import { EmptyState } from "@/components/empty-state";
 import type { FilterCondition } from "@/components/filter-bar";
+import { SidebarFavoriteButton } from "@/components/sidebar-favorite-button";
+import { TeamRouteErrorState } from "@/components/team-route-error-state";
 import {
   type ProjectViewSortOption,
   type ProjectViewStatusFilter,
@@ -12,7 +15,8 @@ import {
   projectViewSortOptions,
   projectViewStatusOptions,
 } from "@/lib/views";
-import { useRouter, useSearchParams } from "next/navigation";
+import { withWorkspaceSlug } from "@/lib/workspace-paths";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface ViewTeam {
@@ -191,6 +195,12 @@ function ViewRow({
       </div>
 
       <div className="ml-2 flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+        <SidebarFavoriteButton
+          objectType="view"
+          objectId={view.id}
+          label={view.name}
+          className="rounded-md px-2 py-1 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-active)] hover:text-[var(--color-text-primary)] disabled:opacity-50"
+        />
         <button
           type="button"
           onClick={() => onEdit(view)}
@@ -535,9 +545,21 @@ function CreateViewModal({
   );
 }
 
-export function ViewsPage({ initialTab }: { initialTab: ViewEntityType }) {
+export function ViewsPage({
+  initialTab,
+  initialTeamKey,
+  initialTeamKeyFromRoute = false,
+  keepCanonicalTabRoute = false,
+}: {
+  initialTab: ViewEntityType;
+  initialTeamKey?: string;
+  initialTeamKeyFromRoute?: boolean;
+  keepCanonicalTabRoute?: boolean;
+}) {
   const router = useRouter();
+  const params = useParams<{ key?: string }>();
   const searchParams = useSearchParams();
+  const workspaceSlug = useAppShellContext()?.workspaceSlug;
   const [views, setViews] = useState<ViewSummary[]>([]);
   const [teams, setTeams] = useState<ViewTeam[]>([]);
   const [loading, setLoading] = useState(true);
@@ -545,7 +567,9 @@ export function ViewsPage({ initialTab }: { initialTab: ViewEntityType }) {
   const [editingView, setEditingView] = useState<ViewSummary | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
-  const activeTeamKey = searchParams.get("team");
+  const routeTeamKey = initialTeamKeyFromRoute ? params.key : undefined;
+  const activeTeamKey =
+    initialTeamKey ?? routeTeamKey ?? searchParams.get("team");
 
   const fetchViews = useCallback(async () => {
     try {
@@ -587,14 +611,29 @@ export function ViewsPage({ initialTab }: { initialTab: ViewEntityType }) {
   const personalViews = filteredViews.filter((view) => view.isPersonal);
   const sharedViews = filteredViews.filter((view) => !view.isPersonal);
   const activeTeam = teams.find((team) => team.key === activeTeamKey) ?? null;
+  const teamRouteNotFound = Boolean(activeTeamKey && !activeTeam);
 
   const handleTabChange = (tab: ViewEntityType) => {
     setActiveTab(tab);
+    if (keepCanonicalTabRoute && !initialTeamKey && !routeTeamKey) {
+      return;
+    }
+
+    if (initialTeamKey || routeTeamKey) {
+      router.push(
+        withWorkspaceSlug(
+          `/team/${encodeURIComponent(activeTeamKey ?? "")}/views/${tab}`,
+          workspaceSlug,
+        ),
+      );
+      return;
+    }
+
     const basePath = tab === "issues" ? "/views/issues" : "/views/projects";
     const query = activeTeamKey
       ? `?team=${encodeURIComponent(activeTeamKey)}`
       : "";
-    router.push(`${basePath}${query}`);
+    router.push(withWorkspaceSlug(`${basePath}${query}`, workspaceSlug));
   };
 
   const handleOpenView = (view: ViewSummary) => {
@@ -605,9 +644,12 @@ export function ViewsPage({ initialTab }: { initialTab: ViewEntityType }) {
 
       writeStoredIssueFilters(view.teamKey, view.filterState.issueFilters);
       router.push(
-        view.layout === "board"
-          ? `/team/${view.teamKey}/board`
-          : `/team/${view.teamKey}/all`,
+        withWorkspaceSlug(
+          view.layout === "board"
+            ? `/team/${view.teamKey}/board`
+            : `/team/${view.teamKey}/all`,
+          workspaceSlug,
+        ),
       );
       return;
     }
@@ -617,7 +659,7 @@ export function ViewsPage({ initialTab }: { initialTab: ViewEntityType }) {
       sortBy: view.filterState.projectSortBy,
       teamId: view.teamId,
     });
-    router.push("/projects");
+    router.push(withWorkspaceSlug("/projects", workspaceSlug));
   };
 
   const handleDeleteView = async (view: ViewSummary) => {
@@ -651,6 +693,10 @@ export function ViewsPage({ initialTab }: { initialTab: ViewEntityType }) {
         Loading...
       </div>
     );
+  }
+
+  if (teamRouteNotFound) {
+    return <TeamRouteErrorState teamKey={activeTeamKey ?? ""} />;
   }
 
   return (
@@ -690,7 +736,10 @@ export function ViewsPage({ initialTab }: { initialTab: ViewEntityType }) {
             type="button"
             onClick={() =>
               router.push(
-                activeTab === "issues" ? "/views/issues" : "/views/projects",
+                withWorkspaceSlug(
+                  activeTab === "issues" ? "/views/issues" : "/views/projects",
+                  workspaceSlug,
+                ),
               )
             }
             className="rounded-md border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)]"
@@ -765,7 +814,7 @@ export function ViewsPage({ initialTab }: { initialTab: ViewEntityType }) {
             <div className="hidden w-[180px] shrink-0 text-right sm:block">
               Owner
             </div>
-            <div className="w-[92px] shrink-0 text-right">Actions</div>
+            <div className="w-[150px] shrink-0 text-right">Actions</div>
           </div>
 
           {personalViews.length > 0 && (

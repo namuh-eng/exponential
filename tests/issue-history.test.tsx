@@ -4,6 +4,7 @@ import { IssueDetailView } from "@/components/issue-detail-view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
   useParams: vi.fn(),
 }));
 
@@ -26,6 +27,7 @@ describe("Issue History and Audit Logging", () => {
     team: { id: "t-1", name: "Engineering", key: "ENG" },
     project: null,
     labels: [],
+    reactions: [],
     comments: [
       {
         id: "c-1",

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
-import { requireApiSession } from "@/lib/api-auth";
+import { createApiKeyHash, requireApiSession } from "@/lib/api-auth";
 import {
   GRAPHQL_DOCS_URL,
   OAUTH_APPLICATIONS_DOCS_URL,
@@ -10,11 +10,15 @@ import {
   asRecord,
   canManageWorkspaceApi,
   canMemberCreateApiKeys,
+  hasUnsupportedOAuthScopes,
   isPermissionLevel,
+  normalizeOAuthScopes,
   normalizeWebhookEvents,
   readPermissionLevel,
   readWorkspaceApiSettings,
   serializeWorkspaceApiSettings,
+  validateOAuthRedirectUrl,
+  validateOAuthRedirectUrls,
 } from "@/lib/api-settings";
 import { db } from "@/lib/db";
 import { apiKey, member, user, webhook, workspace } from "@/lib/db/schema";
@@ -40,7 +44,7 @@ function createSecret(prefix: string) {
   return `${prefix}_${randomBytes(24).toString("hex")}`;
 }
 
-function createKeyHash(secret: string) {
+function createOAuthSecretHash(secret: string) {
   return createHash("sha256").update(secret).digest("hex");
 }
 
@@ -63,8 +67,10 @@ function normalizeAbsoluteUrl(value: unknown) {
 
 async function getWorkspaceAccess(
   userId: string,
+  workspaceIdOverride?: string,
 ): Promise<WorkspaceAccess | null> {
-  const workspaceId = await resolveActiveWorkspaceId(userId);
+  const workspaceId =
+    workspaceIdOverride ?? (await resolveActiveWorkspaceId(userId));
   if (!workspaceId) {
     return null;
   }
@@ -185,7 +191,10 @@ async function loadAuthenticatedAccess() {
     };
   }
 
-  const access = await getWorkspaceAccess(session.user.id);
+  const access = await getWorkspaceAccess(
+    session.user.id,
+    "apiKey" in session ? session.apiKey.workspaceId : undefined,
+  );
   if (!access) {
     return {
       error: NextResponse.json(
@@ -224,7 +233,7 @@ export async function PATCH(request: Request) {
     permissionLevel?: unknown;
   } | null;
 
-  if (!isPermissionLevel(body?.permissionLevel)) {
+  if (!body || !isPermissionLevel(body.permissionLevel)) {
     return NextResponse.json(
       { error: "A valid permission level is required." },
       { status: 400 },
@@ -280,7 +289,27 @@ export async function POST(request: Request) {
     | {
         action?: "createOAuthApplication";
         name?: unknown;
+        description?: unknown;
         redirectUrl?: unknown;
+        redirectUrls?: unknown;
+        scopes?: unknown;
+      }
+    | {
+        action?: "updateOAuthApplication";
+        id?: unknown;
+        name?: unknown;
+        description?: unknown;
+        redirectUrl?: unknown;
+        redirectUrls?: unknown;
+        scopes?: unknown;
+      }
+    | {
+        action?: "rotateOAuthApplicationSecret";
+        id?: unknown;
+      }
+    | {
+        action?: "deleteOAuthApplication";
+        id?: unknown;
       }
     | {
         action?: "createWebhook";
@@ -289,8 +318,21 @@ export async function POST(request: Request) {
         events?: unknown;
       }
     | {
+        action?: "updateWebhook";
+        id?: unknown;
+        enabled?: unknown;
+      }
+    | {
+        action?: "deleteWebhook";
+        id?: unknown;
+      }
+    | {
         action?: "createApiKey";
         name?: unknown;
+      }
+    | {
+        action?: "deleteApiKey";
+        id?: unknown;
       }
     | null;
 
@@ -310,30 +352,72 @@ export async function POST(request: Request) {
     }
 
     const name = typeof body.name === "string" ? body.name.trim() : "";
-    const redirectUrl = normalizeAbsoluteUrl(body.redirectUrl);
-
-    if (!name || !redirectUrl) {
+    if (!name) {
       return NextResponse.json(
-        { error: "Application name and redirect URL are required." },
+        { error: "Application name is required." },
+        { status: 400 },
+      );
+    }
+
+    const redirectUrlsValidation =
+      "redirectUrls" in body && body.redirectUrls !== undefined
+        ? validateOAuthRedirectUrls(body.redirectUrls)
+        : (() => {
+            const validation = validateOAuthRedirectUrl(body.redirectUrl);
+            return validation.ok
+              ? { ok: true as const, urls: [validation.url] }
+              : validation;
+          })();
+    if (!redirectUrlsValidation.ok) {
+      return NextResponse.json(
+        { error: redirectUrlsValidation.error },
+        { status: 400 },
+      );
+    }
+
+    if (body.scopes !== undefined && hasUnsupportedOAuthScopes(body.scopes)) {
+      return NextResponse.json(
+        { error: "One or more OAuth scopes are not supported." },
+        { status: 400 },
+      );
+    }
+    const scopes =
+      body.scopes === undefined
+        ? ["read" as const]
+        : normalizeOAuthScopes(body.scopes);
+    if (scopes.length === 0) {
+      return NextResponse.json(
+        { error: "At least one OAuth scope is required." },
         { status: 400 },
       );
     }
 
     const clientId = createOAuthClientId();
     const clientSecret = createSecret("linsec");
+    const now = new Date().toISOString();
     const currentSettings = asRecord(access.settings);
     const currentApiSettings = readWorkspaceApiSettings(currentSettings);
     const nextSettings = {
       ...currentSettings,
       api: serializeWorkspaceApiSettings({
+        ...currentApiSettings,
         oauthApplications: [
           {
             id: createId("oauth"),
             name,
+            description:
+              typeof body.description === "string" && body.description.trim()
+                ? body.description.trim()
+                : null,
             clientId,
             clientSecretPreview: `${clientSecret.slice(0, 12)}…`,
-            redirectUrl,
-            createdAt: new Date().toISOString(),
+            clientSecretHash: createOAuthSecretHash(clientSecret),
+            redirectUrl: redirectUrlsValidation.urls[0],
+            redirectUrls: redirectUrlsValidation.urls,
+            scopes,
+            createdByUserId: access.userId,
+            createdAt: now,
+            updatedAt: now,
           },
           ...currentApiSettings.oauthApplications,
         ],
@@ -355,6 +439,216 @@ export async function POST(request: Request) {
         label: `${name} client secret`,
         secret: clientSecret,
       },
+    });
+  }
+
+  if (body.action === "updateOAuthApplication") {
+    if (!canManageWorkspaceApi(access.memberRole)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const id = typeof body.id === "string" ? body.id : "";
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!id || !name) {
+      return NextResponse.json(
+        { error: "OAuth application id and name are required." },
+        { status: 400 },
+      );
+    }
+    const redirectUrlsValidation =
+      "redirectUrls" in body && body.redirectUrls !== undefined
+        ? validateOAuthRedirectUrls(body.redirectUrls)
+        : (() => {
+            const validation = validateOAuthRedirectUrl(body.redirectUrl);
+            return validation.ok
+              ? { ok: true as const, urls: [validation.url] }
+              : validation;
+          })();
+    if (!redirectUrlsValidation.ok) {
+      return NextResponse.json(
+        { error: redirectUrlsValidation.error },
+        { status: 400 },
+      );
+    }
+    if (body.scopes !== undefined && hasUnsupportedOAuthScopes(body.scopes)) {
+      return NextResponse.json(
+        { error: "One or more OAuth scopes are not supported." },
+        { status: 400 },
+      );
+    }
+    const scopes =
+      body.scopes === undefined
+        ? ["read" as const]
+        : normalizeOAuthScopes(body.scopes);
+    if (scopes.length === 0) {
+      return NextResponse.json(
+        { error: "At least one OAuth scope is required." },
+        { status: 400 },
+      );
+    }
+    const currentSettings = asRecord(access.settings);
+    const currentApiSettings = readWorkspaceApiSettings(currentSettings);
+    let found = false;
+    const nextApplications = currentApiSettings.oauthApplications.map(
+      (application) => {
+        if (application.id !== id) {
+          return application;
+        }
+        found = true;
+        return {
+          ...application,
+          name,
+          description:
+            typeof body.description === "string" && body.description.trim()
+              ? body.description.trim()
+              : null,
+          redirectUrl: redirectUrlsValidation.urls[0],
+          redirectUrls: redirectUrlsValidation.urls,
+          scopes,
+          updatedAt: new Date().toISOString(),
+        };
+      },
+    );
+    if (!found) {
+      return NextResponse.json(
+        { error: "OAuth application not found." },
+        { status: 404 },
+      );
+    }
+    const nextSettings = {
+      ...currentSettings,
+      api: serializeWorkspaceApiSettings({
+        ...currentApiSettings,
+        oauthApplications: nextApplications,
+      }),
+    };
+    await db
+      .update(workspace)
+      .set({ settings: nextSettings, updatedAt: new Date() })
+      .where(eq(workspace.id, access.workspaceId));
+    return NextResponse.json({
+      api: await buildApiPayload({ ...access, settings: nextSettings }),
+    });
+  }
+
+  if (body.action === "rotateOAuthApplicationSecret") {
+    if (!canManageWorkspaceApi(access.memberRole)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const id = typeof body.id === "string" ? body.id : "";
+    if (!id) {
+      return NextResponse.json(
+        { error: "OAuth application id is required." },
+        { status: 400 },
+      );
+    }
+    const clientSecret = createSecret("linsec");
+    const currentSettings = asRecord(access.settings);
+    const currentApiSettings = readWorkspaceApiSettings(currentSettings);
+    let rotatedName = "OAuth application";
+    let found = false;
+    const nextApplications = currentApiSettings.oauthApplications.map(
+      (application) => {
+        if (application.id !== id) {
+          return application;
+        }
+        found = true;
+        rotatedName = application.name;
+        return {
+          ...application,
+          clientSecretPreview: `${clientSecret.slice(0, 12)}…`,
+          clientSecretHash: createOAuthSecretHash(clientSecret),
+          updatedAt: new Date().toISOString(),
+        };
+      },
+    );
+    if (!found) {
+      return NextResponse.json(
+        { error: "OAuth application not found." },
+        { status: 404 },
+      );
+    }
+    const nextSettings = {
+      ...currentSettings,
+      api: serializeWorkspaceApiSettings({
+        ...currentApiSettings,
+        oauthApplications: nextApplications,
+        oauthTokens: currentApiSettings.oauthTokens.map((token) =>
+          token.applicationId === id
+            ? { ...token, revokedAt: new Date().toISOString() }
+            : token,
+        ),
+      }),
+    };
+    await db
+      .update(workspace)
+      .set({ settings: nextSettings, updatedAt: new Date() })
+      .where(eq(workspace.id, access.workspaceId));
+    return NextResponse.json({
+      api: await buildApiPayload({ ...access, settings: nextSettings }),
+      createdCredential: {
+        kind: "oauthApplication",
+        label: `${rotatedName} client secret`,
+        secret: clientSecret,
+      },
+    });
+  }
+
+  if (body.action === "deleteOAuthApplication") {
+    if (!canManageWorkspaceApi(access.memberRole)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const id = typeof body.id === "string" ? body.id : "";
+    if (!id) {
+      return NextResponse.json(
+        { error: "OAuth application id is required." },
+        { status: 400 },
+      );
+    }
+
+    const currentSettings = asRecord(access.settings);
+    const currentApiSettings = readWorkspaceApiSettings(currentSettings);
+    const nextOauthApplications = currentApiSettings.oauthApplications.filter(
+      (application) => application.id !== id,
+    );
+
+    if (
+      nextOauthApplications.length ===
+      currentApiSettings.oauthApplications.length
+    ) {
+      return NextResponse.json(
+        { error: "OAuth application not found." },
+        { status: 404 },
+      );
+    }
+
+    const nextSettings = {
+      ...currentSettings,
+      api: serializeWorkspaceApiSettings({
+        ...currentApiSettings,
+        oauthApplications: nextOauthApplications,
+        oauthAuthorizationCodes:
+          currentApiSettings.oauthAuthorizationCodes.filter(
+            (code) => code.applicationId !== id,
+          ),
+        oauthTokens: currentApiSettings.oauthTokens.map((token) =>
+          token.applicationId === id
+            ? { ...token, revokedAt: new Date().toISOString() }
+            : token,
+        ),
+      }),
+    };
+
+    await db
+      .update(workspace)
+      .set({
+        settings: nextSettings,
+        updatedAt: new Date(),
+      })
+      .where(eq(workspace.id, access.workspaceId));
+
+    return NextResponse.json({
+      api: await buildApiPayload({ ...access, settings: nextSettings }),
     });
   }
 
@@ -388,6 +682,104 @@ export async function POST(request: Request) {
     });
   }
 
+  if (body.action === "updateWebhook") {
+    if (!canManageWorkspaceApi(access.memberRole)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const id = typeof body.id === "string" ? body.id : "";
+    if (!id || typeof body.enabled !== "boolean") {
+      return NextResponse.json(
+        { error: "Webhook id and enabled state are required." },
+        { status: 400 },
+      );
+    }
+
+    const updated = await db
+      .update(webhook)
+      .set({ enabled: body.enabled, updatedAt: new Date() })
+      .where(
+        and(eq(webhook.id, id), eq(webhook.workspaceId, access.workspaceId)),
+      )
+      .returning({ id: webhook.id });
+
+    if (updated.length === 0) {
+      return NextResponse.json(
+        { error: "Webhook not found." },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({ api: await buildApiPayload(access) });
+  }
+
+  if (body.action === "deleteWebhook") {
+    if (!canManageWorkspaceApi(access.memberRole)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const id = typeof body.id === "string" ? body.id : "";
+    if (!id) {
+      return NextResponse.json(
+        { error: "Webhook id is required." },
+        { status: 400 },
+      );
+    }
+
+    const deleted = await db
+      .delete(webhook)
+      .where(
+        and(eq(webhook.id, id), eq(webhook.workspaceId, access.workspaceId)),
+      )
+      .returning({ id: webhook.id });
+
+    if (deleted.length === 0) {
+      return NextResponse.json(
+        { error: "Webhook not found." },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({ api: await buildApiPayload(access) });
+  }
+
+  if (body.action === "deleteApiKey") {
+    const id = typeof body.id === "string" ? body.id : "";
+    if (!id) {
+      return NextResponse.json(
+        { error: "API key id is required." },
+        { status: 400 },
+      );
+    }
+
+    const canDeleteAnyKey = canManageWorkspaceApi(access.memberRole);
+    if (!canDeleteAnyKey && access.memberRole === "guest") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const deleted = await db
+      .delete(apiKey)
+      .where(
+        canDeleteAnyKey
+          ? and(eq(apiKey.id, id), eq(apiKey.workspaceId, access.workspaceId))
+          : and(
+              eq(apiKey.id, id),
+              eq(apiKey.workspaceId, access.workspaceId),
+              eq(apiKey.userId, access.userId),
+            ),
+      )
+      .returning({ id: apiKey.id });
+
+    if (deleted.length === 0) {
+      return NextResponse.json(
+        { error: "API key not found." },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({ api: await buildApiPayload(access) });
+  }
+
   if (body.action !== "createApiKey") {
     return NextResponse.json({ error: "Unsupported action." }, { status: 400 });
   }
@@ -410,7 +802,7 @@ export async function POST(request: Request) {
   const secret = createSecret("lin_api");
   await db.insert(apiKey).values({
     name,
-    keyHash: createKeyHash(secret),
+    keyHash: createApiKeyHash(secret),
     keyPrefix: `${secret.slice(0, 12)}…`,
     userId: access.userId,
     workspaceId: access.workspaceId,

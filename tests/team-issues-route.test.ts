@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getSessionMock = vi.fn();
-const getTeamByKeyMock = vi.fn();
+const findAccessibleTeamMock = vi.fn();
 const statesOrderByMock = vi.fn();
 const issuesOrderByMock = vi.fn();
 const getLabelsForIssuesMock = vi.fn();
 const creatorsWhereMock = vi.fn();
 const cyclesWhereMock = vi.fn();
+const teamOptionsWhereMock = vi.fn();
 let selectCallCount = 0;
 
 vi.mock("@/lib/auth", () => ({
@@ -18,7 +19,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/teams", () => ({
-  getTeamByKey: getTeamByKeyMock,
+  findAccessibleTeam: findAccessibleTeamMock,
 }));
 
 vi.mock("@/lib/issue-labels", () => ({
@@ -52,6 +53,20 @@ vi.mock("@/lib/db", () => ({
                 }),
               }),
             }),
+          }),
+        };
+      }
+
+      // hierarchy team filter options lookup
+      if (
+        selection &&
+        "id" in selection &&
+        "name" in selection &&
+        selectCallCount > 4
+      ) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockResolvedValue(teamOptionsWhereMock()),
           }),
         };
       }
@@ -103,7 +118,7 @@ describe("team issues route", () => {
     vi.clearAllMocks();
     selectCallCount = 0;
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
-    getTeamByKeyMock.mockResolvedValue({
+    findAccessibleTeamMock.mockResolvedValue({
       id: "team-1",
       name: "Engineering",
       key: "ENG",
@@ -133,6 +148,10 @@ describe("team issues route", () => {
     cyclesWhereMock.mockReturnValue([
       { id: "cycle-1", name: "Cycle 1", number: 1 },
     ]);
+    teamOptionsWhereMock.mockReturnValue([
+      { id: "team-1", name: "Engineering" },
+      { id: "team-child", name: "Platform" },
+    ]);
   });
 
   it("returns 401 without a session", async () => {
@@ -147,7 +166,7 @@ describe("team issues route", () => {
   });
 
   it("returns 404 when team is missing", async () => {
-    getTeamByKeyMock.mockResolvedValue(null);
+    findAccessibleTeamMock.mockResolvedValue(null);
     const { GET } = await import("@/app/api/teams/[key]/issues/route");
 
     const response = await GET(new Request("http://localhost"), {
@@ -170,5 +189,44 @@ describe("team issues route", () => {
     expect(payload.groups[0].issues.length).toBe(1);
     expect(payload.groups[0].issues[0].creatorName).toBe("Bob");
     expect(payload.groups[0].issues[0].cycleName).toBe("Cycle 1");
+  });
+
+  it("returns parent hierarchy issue scope and team filter options", async () => {
+    findAccessibleTeamMock.mockResolvedValue({
+      id: "team-1",
+      name: "Engineering",
+      key: "ENG",
+      hierarchyTeamIds: ["team-1", "team-child"],
+      childTeamIds: ["team-child"],
+    });
+    issuesOrderByMock.mockReturnValue([
+      {
+        id: "issue-child",
+        number: 2,
+        identifier: "PLAT-2",
+        title: "Child issue",
+        priority: "medium",
+        stateId: "state-1",
+        creatorId: "user-2",
+        cycleId: "cycle-1",
+        teamId: "team-child",
+      },
+    ]);
+    const { GET } = await import("@/app/api/teams/[key]/issues/route");
+
+    const response = await GET(new Request("http://localhost"), {
+      params: Promise.resolve({ key: "ENG" }),
+    });
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.groups[0].issues[0]).toMatchObject({
+      identifier: "PLAT-2",
+      teamId: "team-child",
+    });
+    expect(payload.filterOptions.teams).toEqual([
+      { id: "team-1", name: "Engineering" },
+      { id: "team-child", name: "Platform" },
+    ]);
   });
 });

@@ -1,5 +1,8 @@
 "use client";
 
+import { useAppShellContext } from "@/app/(app)/app-shell";
+import { withWorkspaceSlug } from "@/lib/workspace-paths";
+
 interface LinkedProject {
   id: string;
   name: string;
@@ -21,6 +24,8 @@ export function InitiativeProjectList({
   onUnlink,
   unlinkingProjectId,
 }: InitiativeProjectListProps) {
+  const workspaceSlug = useAppShellContext()?.workspaceSlug;
+
   if (projects.length === 0) {
     return (
       <p className="px-4 py-6 text-center text-[13px] text-[var(--color-text-tertiary)]">
@@ -53,7 +58,10 @@ export function InitiativeProjectList({
             className="flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-2.5"
           >
             <a
-              href={`/project/${project.slug}`}
+              href={withWorkspaceSlug(
+                `/project/${project.slug}/overview`,
+                workspaceSlug,
+              )}
               className="flex min-w-0 flex-1 items-center gap-3 transition-colors hover:text-[var(--color-text-primary)]"
             >
               <span className="text-[14px]">{project.icon ?? "📦"}</span>

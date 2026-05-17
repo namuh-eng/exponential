@@ -2,7 +2,7 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { label } from "@/lib/db/schema";
 import { findAccessibleTeam } from "@/lib/teams";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -26,9 +26,11 @@ export async function GET(
       id: label.id,
       name: label.name,
       color: label.color,
+      description: label.description,
+      parentLabelId: label.parentLabelId,
     })
     .from(label)
-    .where(eq(label.teamId, teamRecord.id));
+    .where(and(eq(label.teamId, teamRecord.id), isNull(label.archivedAt)));
 
   return NextResponse.json({ labels });
 }

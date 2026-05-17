@@ -288,12 +288,31 @@ export default function PreferencesPage() {
   const [isSidebarModalOpen, setIsSidebarModalOpen] = useState(false);
   const saveRequestId = useRef(0);
   const saveStateTimeout = useRef<number | null>(null);
+  const preferencesRef = useRef<AccountPreferences>(
+    DEFAULT_ACCOUNT_PREFERENCES,
+  );
+  const pendingPersistPreferences = useRef<AccountPreferences | null>(null);
+
+  useEffect(() => {
+    preferencesRef.current = preferences;
+    setThemePreference(preferences.theme);
+    applyFontSizePreference(preferences.fontSize);
+    applyPointerCursorPreference(preferences.pointerCursors);
+    dispatchAccountPreferencesChanged(preferences);
+
+    if (pendingPersistPreferences.current === preferences) {
+      pendingPersistPreferences.current = null;
+      void persistPreferences(preferences);
+    }
+  }, [preferences]);
 
   useEffect(() => {
     const initialTheme = getStoredTheme();
-    setPreferences((current) =>
-      mergeAccountPreferences(current, { theme: initialTheme }),
-    );
+    const initialPreferences = mergeAccountPreferences(preferencesRef.current, {
+      theme: initialTheme,
+    });
+    preferencesRef.current = initialPreferences;
+    setPreferences(initialPreferences);
     applyFontSizePreference(DEFAULT_ACCOUNT_PREFERENCES.fontSize);
     applyPointerCursorPreference(DEFAULT_ACCOUNT_PREFERENCES.pointerCursors);
 
@@ -318,11 +337,8 @@ export default function PreferencesPage() {
           DEFAULT_ACCOUNT_PREFERENCES,
           data.accountPreferences,
         );
+        preferencesRef.current = nextPreferences;
         setPreferences(nextPreferences);
-        setThemePreference(nextPreferences.theme);
-        applyFontSizePreference(nextPreferences.fontSize);
-        applyPointerCursorPreference(nextPreferences.pointerCursors);
-        dispatchAccountPreferencesChanged(nextPreferences);
       })
       .catch(() => {
         setThemePreference(initialTheme);
@@ -377,8 +393,8 @@ export default function PreferencesPage() {
         DEFAULT_ACCOUNT_PREFERENCES,
         data.accountPreferences,
       );
+      preferencesRef.current = savedPreferences;
       setPreferences(savedPreferences);
-      dispatchAccountPreferencesChanged(savedPreferences);
       setSaveState("saved");
       updateSavedIndicator();
     } catch {
@@ -389,15 +405,14 @@ export default function PreferencesPage() {
   }
 
   function updatePreferences(patch: AccountPreferencesPatch) {
-    setPreferences((current) => {
-      const nextPreferences = mergeAccountPreferences(current, patch);
-      setThemePreference(nextPreferences.theme);
-      applyFontSizePreference(nextPreferences.fontSize);
-      applyPointerCursorPreference(nextPreferences.pointerCursors);
-      dispatchAccountPreferencesChanged(nextPreferences);
-      void persistPreferences(nextPreferences);
-      return nextPreferences;
-    });
+    const nextPreferences = mergeAccountPreferences(
+      preferencesRef.current,
+      patch,
+    );
+
+    preferencesRef.current = nextPreferences;
+    pendingPersistPreferences.current = nextPreferences;
+    setPreferences(nextPreferences);
   }
 
   return (

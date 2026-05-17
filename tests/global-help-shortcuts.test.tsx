@@ -56,8 +56,47 @@ describe("Global Help and Shortcuts logic", () => {
     expect(
       await screen.findByRole("heading", { name: "Keyboard shortcuts" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Cmd+K")).toBeInTheDocument();
-    expect(screen.getByText("Search")).toBeInTheDocument();
+    expect(screen.getByText("Cmd/Ctrl K")).toBeInTheDocument();
+    expect(screen.getByText("Open command menu / search")).toBeInTheDocument();
+    expect(screen.getByText("Create issue fullscreen")).toBeInTheDocument();
+    expect(screen.getByText("Create initiative")).toBeInTheDocument();
+  });
+
+  it("opens keyboard shortcuts with / outside editable fields and ignores / while typing", async () => {
+    render(
+      <>
+        <input aria-label="Issue title" />
+        <Sidebar {...baseProps} />
+      </>,
+    );
+
+    fireEvent.keyDown(screen.getByLabelText("Issue title"), { key: "/" });
+    expect(
+      screen.queryByRole("heading", { name: "Keyboard shortcuts" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "/" });
+
+    expect(
+      await screen.findByRole("heading", { name: "Keyboard shortcuts" }),
+    ).toBeInTheDocument();
+  });
+
+  it("closes the shortcuts dialog with Escape because that shortcut is advertised", async () => {
+    render(<Sidebar {...baseProps} />);
+
+    fireEvent.keyDown(document, { key: "/" });
+    expect(
+      await screen.findByRole("heading", { name: "Keyboard shortcuts" }),
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("heading", { name: "Keyboard shortcuts" }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("closes the shortcuts dialog when clicking the close button", async () => {
@@ -124,5 +163,44 @@ describe("Global Help and Shortcuts logic", () => {
       await screen.findByRole("dialog", { name: /create issue for Team A/i }),
     ).toBeInTheDocument();
     expect(screen.getByText("New issue")).toBeInTheDocument();
+  });
+
+  it("opens the fullscreen create issue composer when global 'v' key is pressed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            team: { id: "t-a", name: "Team A", key: "TA" },
+            statuses: [
+              {
+                id: "s-1",
+                name: "Backlog",
+                category: "backlog",
+                color: "#6b6f76",
+              },
+            ],
+            priorities: [],
+            assignees: [],
+            labels: [],
+            projects: [],
+          }),
+      }),
+    );
+
+    render(
+      <AppShell {...baseProps} workspaceId="ws-1">
+        <div>Content</div>
+      </AppShell>,
+    );
+
+    fireEvent.keyDown(document, { key: "v" });
+
+    expect(
+      await screen.findByRole("dialog", {
+        name: /create issue fullscreen for Team A/i,
+      }),
+    ).toBeInTheDocument();
   });
 });

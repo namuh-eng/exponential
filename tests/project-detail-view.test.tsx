@@ -9,10 +9,14 @@ import {
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+let mockParams: { slug: string; workspaceSlug?: string } = {
+  slug: "agent-speed",
+};
+
 // Mock next/navigation
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
-  useParams: () => ({ slug: "agent-speed" }),
+  useParams: () => mockParams,
 }));
 
 import { ProjectDetailPage } from "@/components/project-detail-page";
@@ -99,6 +103,8 @@ const mockProjectData = {
 describe("ProjectDetailPage UI", () => {
   afterEach(() => {
     cleanup();
+    mockParams = { slug: "agent-speed" };
+    window.history.pushState(null, "", "/");
     vi.clearAllMocks();
   });
 
@@ -118,6 +124,21 @@ describe("ProjectDetailPage UI", () => {
     expect(screen.getByText("3 of 10 issues completed")).toBeInTheDocument();
     expect(screen.getByText("Phase 1")).toBeInTheDocument();
     expect(screen.getByText("Spec")).toBeInTheDocument();
+  });
+
+  it("uses the workspace slug route param for deterministic project API lookup", async () => {
+    mockParams = { slug: "agent-speed", workspaceSlug: "foreverbrowsing" };
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => mockProjectData,
+    } as Response);
+
+    render(<ProjectDetailPage />);
+
+    expect(await screen.findByText("Agent Speed")).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/projects/agent-speed?workspaceSlug=foreverbrowsing",
+    );
   });
 
   it("switches to activity tab", async () => {
@@ -237,6 +258,27 @@ describe("ProjectDetailPage UI", () => {
         }),
       );
     });
+  });
+
+  it("opens and focuses the project update composer from the newUpdate query", async () => {
+    window.history.pushState(
+      null,
+      "",
+      "/project/agent-speed/overview?newUpdate=1",
+    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => mockProjectData,
+    } as Response);
+
+    render(<ProjectDetailPage />);
+
+    const textarea = await screen.findByLabelText("Project update");
+    await waitFor(() => expect(textarea).toHaveFocus());
+    expect(textarea).toHaveAttribute(
+      "placeholder",
+      "Share a concise update with progress, blockers, or the next checkpoint.",
+    );
   });
 
   it("posts a project update", async () => {

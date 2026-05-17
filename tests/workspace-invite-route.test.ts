@@ -37,12 +37,14 @@ vi.mock("@/lib/invite-tokens", () => ({
 vi.mock("@/lib/db", () => ({
   db: {
     select: vi.fn((selection: Record<string, unknown>) => {
-      // workspace name lookup
-      if (selection && "name" in selection) {
+      // membership + workspace policy lookup
+      if (selection && "workspaceName" in selection) {
         return {
           from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue(workspaceLimitMock()),
+            innerJoin: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue(membershipLimitMock()),
+              }),
             }),
           }),
         };
@@ -86,11 +88,14 @@ describe("workspace invite route", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
     getSessionMock.mockResolvedValue({
       user: { id: "user-1", name: "Ashley" },
     });
     resolveActiveWorkspaceIdMock.mockResolvedValue("workspace-1");
-    membershipLimitMock.mockReturnValue([{ role: "admin" }]);
+    membershipLimitMock.mockReturnValue([
+      { role: "admin", workspaceName: "Namuh", settings: {} },
+    ]);
     workspaceLimitMock.mockReturnValue([{ name: "Namuh" }]);
     existingMemberInnerJoinMock.mockReturnValue([]);
     createInviteTokenMock.mockReturnValue("token-123");
@@ -109,7 +114,61 @@ describe("workspace invite route", () => {
     expect(response.status).toBe(401);
   });
 
-  it("sends invitations to valid emails", async () => {
+  it("sends invitations using the current request origin by default", async () => {
+    const { POST } = await import("@/app/api/workspaces/invite/route");
+
+    const response = await POST(
+      new Request("http://localhost:3015/api/workspaces/invite", {
+        method: "POST",
+        body: JSON.stringify({
+          invites: [{ email: "new@test.com", role: "member" }],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.results[0].status).toBe("sent");
+    expect(sendInvitationEmailMock).toHaveBeenCalledWith(
+      "new@test.com",
+      "Namuh",
+      "Ashley",
+      "http://localhost:3015/accept-invite?token=token-123",
+    );
+  });
+
+  it("uses configured app URL override for invitation links", async () => {
+    vi.stubEnv("BETTER_AUTH_URL", "https://whetline.example");
+    const { POST } = await import("@/app/api/workspaces/invite/route");
+
+    const response = await POST(
+      new Request("http://localhost:3015/api/workspaces/invite", {
+        method: "POST",
+        body: JSON.stringify({
+          invites: [{ email: "new@test.com", role: "member" }],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(sendInvitationEmailMock).toHaveBeenCalledWith(
+      "new@test.com",
+      "Namuh",
+      "Ashley",
+      "https://whetline.example/accept-invite?token=token-123",
+    );
+  });
+
+  it("allows regular members to invite when the workspace policy allows members", async () => {
+    membershipLimitMock.mockReturnValue([
+      {
+        role: "member",
+        workspaceName: "Namuh",
+        settings: {
+          security: { permissions: { invitationsRole: "members" } },
+        },
+      },
+    ]);
     const { POST } = await import("@/app/api/workspaces/invite/route");
 
     const response = await POST(
@@ -124,11 +183,16 @@ describe("workspace invite route", () => {
     expect(response.status).toBe(200);
     const payload = await response.json();
     expect(payload.results[0].status).toBe("sent");
-    expect(sendInvitationEmailMock).toHaveBeenCalled();
   });
 
-  it("blocks invites from non-admins", async () => {
-    membershipLimitMock.mockReturnValue([{ role: "member" }]);
+  it("blocks invites from members when the workspace policy is admins only", async () => {
+    membershipLimitMock.mockReturnValue([
+      {
+        role: "member",
+        workspaceName: "Namuh",
+        settings: { security: { permissions: { invitationsRole: "admins" } } },
+      },
+    ]);
     const { POST } = await import("@/app/api/workspaces/invite/route");
 
     const response = await POST(

@@ -72,7 +72,8 @@ describe("TeamSettingsHubPage component", () => {
             json: async () => ({
               success: true,
               redirectTo: "/settings",
-              message: "Engineering was deleted.",
+              message:
+                "Engineering was scheduled for deletion and can be restored for 30 days.",
             }),
           });
         }
@@ -91,7 +92,7 @@ describe("TeamSettingsHubPage component", () => {
     expect(screen.getByText("Delete team?")).toBeDefined();
     expect(
       screen.getByText(
-        /Deleting a team permanently removes its team-scoped data/i,
+        /schedules it for removal after a 30-day restoration window/i,
       ),
     ).toBeDefined();
 
@@ -108,7 +109,11 @@ describe("TeamSettingsHubPage component", () => {
           body: JSON.stringify({ action: "delete" }),
         }),
       );
-      expect(screen.getByText("Engineering was deleted.")).toBeDefined();
+      expect(
+        screen.getByText(
+          "Engineering was scheduled for deletion and can be restored for 30 days.",
+        ),
+      ).toBeDefined();
     });
   });
 

@@ -27,6 +27,9 @@ interface IssueRowProps {
   createdAt: string;
   href?: string;
   displayProperties?: DisplayProperties;
+  selected?: boolean;
+  selectionMode?: boolean;
+  onToggleSelected?: (event: { shiftKey: boolean }) => void;
 }
 
 const priorityMap: Record<string, 0 | 1 | 2 | 3 | 4> = {
@@ -72,9 +75,31 @@ export function IssueRow({
   createdAt,
   href,
   displayProperties,
+  selected = false,
+  selectionMode = false,
+  onToggleSelected,
 }: IssueRowProps) {
   const showProp = (key: keyof DisplayProperties) =>
     !displayProperties || displayProperties[key];
+
+  const selectionControl = onToggleSelected ? (
+    <input
+      type="checkbox"
+      checked={selected}
+      aria-label={`Select ${identifier}`}
+      data-testid="issue-row-checkbox"
+      className={`h-3.5 w-3.5 shrink-0 rounded accent-[var(--color-accent)] ${
+        selectionMode || selected
+          ? ""
+          : "md:opacity-0 md:group-hover:opacity-100"
+      }`}
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggleSelected({ shiftKey: event.shiftKey });
+      }}
+      onChange={() => undefined}
+    />
+  ) : null;
 
   const content = (
     <>
@@ -88,13 +113,13 @@ export function IssueRow({
 
       {/* Identifier */}
       {showProp("id") && (
-        <span className="shrink-0 text-[var(--color-text-secondary)]">
+        <span className="t-mono-sm shrink-0 text-[var(--color-text-secondary)]">
           {identifier}
         </span>
       )}
 
       {/* Title */}
-      <span className="min-w-0 flex-1 truncate text-[var(--color-text-primary)]">
+      <span className="min-w-0 flex-1 truncate font-medium text-[var(--color-text-primary)]">
         {title}
       </span>
 
@@ -141,8 +166,46 @@ export function IssueRow({
     </>
   );
 
-  const className =
-    "group flex h-[40px] items-center gap-2 border-b border-[var(--color-border)] px-4 text-[13px] transition-colors hover:bg-[var(--color-surface-hover)]";
+  const className = `group flex h-[42px] items-center gap-2 border-b border-[var(--color-border)] bg-[color-mix(in_oklab,var(--color-surface)_72%,transparent)] px-4 text-[13px] transition-colors hover:bg-[var(--color-surface-hover)] ${
+    selected ? "bg-[var(--color-surface-active)]" : ""
+  }`;
+
+  if (onToggleSelected) {
+    const linkedContent = href ? (
+      <Link
+        href={href}
+        aria-label={`${identifier} ${title}`}
+        className="flex min-w-0 flex-1 items-center gap-2"
+        onClick={(event) => {
+          if (event.shiftKey || selectionMode) {
+            event.preventDefault();
+            onToggleSelected({ shiftKey: event.shiftKey });
+          }
+        }}
+      >
+        {content}
+      </Link>
+    ) : (
+      content
+    );
+
+    return (
+      <div
+        data-testid="issue-row"
+        aria-label={`${identifier} ${title}`}
+        data-selected={selected ? "true" : "false"}
+        className={className}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && selectionMode) {
+            onToggleSelected({ shiftKey: false });
+          }
+        }}
+      >
+        {selectionControl}
+        {linkedContent}
+      </div>
+    );
+  }
 
   if (href) {
     return (

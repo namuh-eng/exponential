@@ -11,6 +11,10 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+vi.mock("@/app/(app)/app-shell", () => ({
+  useAppShellContext: () => ({ workspaceSlug: "foreverbrowsing" }),
+}));
+
 // Must import after mocks
 import MyIssuesTabPage from "@/app/(app)/my-issues/[tab]/page";
 
@@ -199,7 +203,7 @@ describe("MyIssuesTabPage", () => {
     await screen.findByText("ENG-1");
     const createdTab = screen.getByText("Created");
     createdTab.click();
-    expect(pushMock).toHaveBeenCalledWith("/my-issues/created");
+    expect(pushMock).toHaveBeenCalledWith("/foreverbrowsing/my-issues/created");
   });
 
   it("shows assignee avatars on issues", async () => {
