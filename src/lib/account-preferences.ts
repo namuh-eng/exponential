@@ -9,6 +9,15 @@ export type FirstDayOfWeekPreference = "sunday" | "monday";
 export type SendCommentShortcutPreference = "cmd-enter" | "enter";
 export type FontSizePreference = "default" | "small" | "large";
 export type SidebarBadgeStyle = "count" | "dot";
+export type AutoAssignmentPreference = "off" | "assign-to-me";
+export type GitBranchFormatPreference =
+  | "team-id-title"
+  | "team-id-lowercase-title"
+  | "owner/team-id-title";
+export type StatusTransitionPreference =
+  | "manual"
+  | "started"
+  | "started-and-completed";
 
 export type SidebarVisibilitySettings = {
   inbox: boolean;
@@ -35,14 +44,20 @@ export type AccountPreferences = {
     instructions: string;
     autoFix: boolean;
   };
+  automations: {
+    autoAssignment: AutoAssignmentPreference;
+    gitBranchFormat: GitBranchFormatPreference;
+    statusTransitions: StatusTransitionPreference;
+  };
 };
 
 export type AccountPreferencesPatch = Omit<
   Partial<AccountPreferences>,
-  "sidebarVisibility" | "agentPersonalization"
+  "sidebarVisibility" | "agentPersonalization" | "automations"
 > & {
   sidebarVisibility?: Partial<SidebarVisibilitySettings>;
   agentPersonalization?: Partial<AccountPreferences["agentPersonalization"]>;
+  automations?: Partial<AccountPreferences["automations"]>;
 };
 
 export const DEFAULT_ACCOUNT_PREFERENCES: AccountPreferences = {
@@ -67,6 +82,11 @@ export const DEFAULT_ACCOUNT_PREFERENCES: AccountPreferences = {
   agentPersonalization: {
     instructions: "",
     autoFix: false,
+  },
+  automations: {
+    autoAssignment: "off",
+    gitBranchFormat: "team-id-title",
+    statusTransitions: "manual",
   },
 };
 
@@ -108,12 +128,39 @@ function isSidebarBadgeStyle(value: unknown): value is SidebarBadgeStyle {
   return value === "count" || value === "dot";
 }
 
+function isAutoAssignmentPreference(
+  value: unknown,
+): value is AutoAssignmentPreference {
+  return value === "off" || value === "assign-to-me";
+}
+
+function isGitBranchFormatPreference(
+  value: unknown,
+): value is GitBranchFormatPreference {
+  return (
+    value === "team-id-title" ||
+    value === "team-id-lowercase-title" ||
+    value === "owner/team-id-title"
+  );
+}
+
+function isStatusTransitionPreference(
+  value: unknown,
+): value is StatusTransitionPreference {
+  return (
+    value === "manual" ||
+    value === "started" ||
+    value === "started-and-completed"
+  );
+}
+
 export function normalizeAccountPreferences(
   value: unknown,
 ): AccountPreferences {
   const parsed = asRecord(value);
   const sidebarVisibility = asRecord(parsed.sidebarVisibility);
   const agentPersonalization = asRecord(parsed.agentPersonalization);
+  const automations = asRecord(parsed.automations);
 
   return {
     defaultHomeView: isDefaultHomeView(parsed.defaultHomeView)
@@ -187,6 +234,19 @@ export function normalizeAccountPreferences(
           ? agentPersonalization.autoFix
           : DEFAULT_ACCOUNT_PREFERENCES.agentPersonalization.autoFix,
     },
+    automations: {
+      autoAssignment: isAutoAssignmentPreference(automations.autoAssignment)
+        ? automations.autoAssignment
+        : DEFAULT_ACCOUNT_PREFERENCES.automations.autoAssignment,
+      gitBranchFormat: isGitBranchFormatPreference(automations.gitBranchFormat)
+        ? automations.gitBranchFormat
+        : DEFAULT_ACCOUNT_PREFERENCES.automations.gitBranchFormat,
+      statusTransitions: isStatusTransitionPreference(
+        automations.statusTransitions,
+      )
+        ? automations.statusTransitions
+        : DEFAULT_ACCOUNT_PREFERENCES.automations.statusTransitions,
+    },
   };
 }
 
@@ -204,6 +264,10 @@ export function mergeAccountPreferences(
     agentPersonalization: {
       ...current.agentPersonalization,
       ...patch.agentPersonalization,
+    },
+    automations: {
+      ...current.automations,
+      ...patch.automations,
     },
   });
 }

@@ -1,3 +1,4 @@
+import { readAccountPreferencesFromUserSettings } from "@/lib/account-preferences";
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
@@ -6,6 +7,7 @@ import {
   issueLabel,
   team,
   teamMember,
+  user,
   workflowState,
 } from "@/lib/db/schema";
 import { normalizeIssueDescriptionHtml } from "@/lib/issue-description";
@@ -117,6 +119,20 @@ export async function POST(request: Request) {
   }
 
   let finalAssigneeId = assigneeId || null;
+  if (!finalAssigneeId) {
+    const [currentUser] = await db
+      .select({ settings: user.settings })
+      .from(user)
+      .where(eq(user.id, session.user.id))
+      .limit(1);
+    const accountPreferences = readAccountPreferencesFromUserSettings(
+      currentUser?.settings,
+    );
+    if (accountPreferences.automations.autoAssignment === "assign-to-me") {
+      finalAssigneeId = session.user.id;
+    }
+  }
+
   const teamFlags = readTeamSettings(teamRecord.settings);
   if (!finalAssigneeId && teamFlags.autoAssignment) {
     const candidateMembers = await db

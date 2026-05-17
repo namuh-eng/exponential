@@ -4,6 +4,7 @@ const getSessionMock = vi.fn();
 const teamLimitMock = vi.fn();
 const maxWhereMock = vi.fn();
 const defaultStateLimitMock = vi.fn();
+const currentUserLimitMock = vi.fn();
 const teamMemberWhereMock = vi.fn();
 const loadGroupByMock = vi.fn();
 const insertIssueValuesMock = vi.fn();
@@ -46,6 +47,16 @@ vi.mock("@/lib/db", () => ({
           from: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
               limit: teamLimitMock,
+            }),
+          }),
+        };
+      }
+
+      if ("settings" in selection) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: currentUserLimitMock,
             }),
           }),
         };
@@ -168,6 +179,7 @@ vi.mock("@/lib/db/schema", () => ({
   },
   team: {},
   teamMember: {},
+  user: { id: "user.id", settings: "user.settings" },
   workflowState: {},
 }));
 
@@ -189,6 +201,7 @@ describe("issues route", () => {
     ]);
     maxWhereMock.mockResolvedValue([{ maxNum: 7 }]);
     defaultStateLimitMock.mockResolvedValue([{ id: "state-backlog" }]);
+    currentUserLimitMock.mockResolvedValue([{ settings: {} }]);
     teamMemberWhereMock.mockResolvedValue([]);
     loadGroupByMock.mockResolvedValue([]);
     normalizeIssueDescriptionHtmlMock.mockReturnValue("<p>normalized</p>");
@@ -333,6 +346,45 @@ describe("issues route", () => {
       projectId: "project-1",
       parentIssueId: null,
     });
+  });
+
+  it("uses account auto-assignment preference before team load balancing", async () => {
+    currentUserLimitMock.mockResolvedValue([
+      {
+        settings: {
+          accountPreferences: {
+            automations: { autoAssignment: "assign-to-me" },
+          },
+        },
+      },
+    ]);
+    teamLimitMock.mockResolvedValue([
+      {
+        id: "team-1",
+        key: "ENG",
+        workspaceId: "workspace-1",
+        settings: { autoAssignment: true },
+      },
+    ]);
+
+    const { POST } = await import("@/app/api/issues/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/issues", {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Assign me",
+          teamId: "team-1",
+        }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(teamMemberWhereMock).not.toHaveBeenCalled();
+    expect(insertIssueValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ assigneeId: "user-1" }),
+    );
   });
 
   it("auto-assigns new unassigned issues to the lightest-loaded team member", async () => {

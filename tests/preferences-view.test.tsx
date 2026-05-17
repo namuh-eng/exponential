@@ -38,6 +38,11 @@ const mockPreferencesData = {
     },
     openInDesktopApp: true,
     sendCommentShortcut: "cmd-enter",
+    automations: {
+      autoAssignment: "off",
+      gitBranchFormat: "team-id-title",
+      statusTransitions: "manual",
+    },
   },
 };
 
@@ -198,6 +203,49 @@ describe("PreferencesPage UI", () => {
 
     fireEvent.click(screen.getByLabelText("Close modal dialog"));
     expect(screen.queryByText("Customize sidebar")).not.toBeInTheDocument();
+  });
+
+  it("renders and persists automation preferences", async () => {
+    const fetchSpy = mockPreferencesFetch();
+
+    render(<PreferencesPage />);
+    await screen.findByText("Automations");
+
+    fireEvent.change(screen.getByLabelText("Auto-assignment"), {
+      target: { value: "assign-to-me" },
+    });
+    fireEvent.change(screen.getByLabelText("Git branch format"), {
+      target: { value: "owner/team-id-title" },
+    });
+    fireEvent.change(screen.getByLabelText("Status transitions"), {
+      target: { value: "started" },
+    });
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/account/preferences",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining('"autoAssignment":"assign-to-me"'),
+        }),
+      );
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/account/preferences",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining(
+            '"gitBranchFormat":"owner/team-id-title"',
+          ),
+        }),
+      );
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/account/preferences",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining('"statusTransitions":"started"'),
+        }),
+      );
+    });
   });
 
   it("changes theme", async () => {
