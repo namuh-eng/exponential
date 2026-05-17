@@ -32,24 +32,40 @@ test.describe("Connected accounts", () => {
     );
     expect(capabilities.ok()).toBeTruthy();
     const data = (await capabilities.json()) as {
-      providers?: { github?: boolean; google?: boolean };
+      providers?: {
+        github?: boolean | { configured?: boolean; devLinking?: boolean };
+        google?: boolean | { configured?: boolean; devLinking?: boolean };
+      };
     };
 
     const connectButton = page.getByRole("button", { name: "Connect account" });
-    if (data.providers?.github) {
+    const githubCapability = data.providers?.github;
+    const googleCapability = data.providers?.google;
+    const githubActionable =
+      githubCapability === true ||
+      (typeof githubCapability === "object" &&
+        (githubCapability.configured || githubCapability.devLinking));
+    const googleActionable =
+      googleCapability === true ||
+      (typeof googleCapability === "object" &&
+        (googleCapability.configured || googleCapability.devLinking));
+
+    if (githubActionable) {
       await expect(connectButton).toBeEnabled();
       await connectButton.click();
       await expect(
         page.getByText("Choose an account to connect"),
       ).toBeVisible();
-      await expect(page.getByRole("button", { name: "GitHub" })).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "GitHub", exact: true }),
+      ).toBeVisible();
     } else {
       await expect(
         page.getByText("GitHub account linking is not configured"),
       ).toBeVisible();
     }
 
-    if (!data.providers?.github && !data.providers?.google) {
+    if (!githubActionable && !googleActionable) {
       await expect(connectButton).toHaveCount(0);
       await expect(page.getByText("Choose an account to connect")).toHaveCount(
         0,
