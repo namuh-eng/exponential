@@ -25,6 +25,8 @@ describe("Editorial theme tokens", () => {
     expect(css).toContain("--editorial-bg: #faf7f2");
     expect(css).toContain("--editorial-accent: oklch(0.56 0.16 32)");
     expect(css).toContain("--editorial-sans: var(--font-inter-tight)");
+    expect(css).toContain("--shadow-editorial-sm: var(--editorial-shadow-sm)");
+    expect(editorialThemeTokens.shadow.md).toBe("var(--editorial-shadow-md)");
     expect(globalsCss).toContain('@import "./editorial-theme.css"');
   });
 

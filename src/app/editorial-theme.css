@@ -40,6 +40,9 @@
     rgba(20, 18, 14, 0.06);
   --editorial-shadow-lg: 0 8px 16px rgba(20, 18, 14, 0.08), 0 24px 60px
     rgba(20, 18, 14, 0.12);
+  --shadow-editorial-sm: var(--editorial-shadow-sm);
+  --shadow-editorial-md: var(--editorial-shadow-md);
+  --shadow-editorial-lg: var(--editorial-shadow-lg);
 
   /* Legacy app aliases consume Editorial tokens so existing features keep behavior with refreshed styling. */
   --color-sidebar-bg: var(--editorial-bg);

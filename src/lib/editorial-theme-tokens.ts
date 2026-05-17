@@ -70,6 +70,11 @@ export const editorialThemeTokens = {
     radiusLg: "10px",
     radiusPill: "999px",
   },
+  shadow: {
+    sm: "var(--editorial-shadow-sm)",
+    md: "var(--editorial-shadow-md)",
+    lg: "var(--editorial-shadow-lg)",
+  },
 } as const;
 
 export const editorialPrimitiveClasses = [
