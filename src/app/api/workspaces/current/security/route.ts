@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { isIP } from "node:net";
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
@@ -36,6 +36,29 @@ type IpRestriction = {
   type: "allow";
 };
 
+type SamlSecuritySettings = {
+  enabled: boolean;
+  domains: string[];
+  idpSsoUrl: string;
+  issuer: string;
+  certificate: string;
+  metadataUrl: string;
+  status: "not_configured" | "configured" | "tested" | "error";
+  lastTestedAt: string | null;
+  lastError: string | null;
+};
+
+type ScimSecuritySettings = {
+  enabled: boolean;
+  baseUrl: string;
+  tokenPrefix: string | null;
+  tokenCreatedAt: string | null;
+  tokenRevokedAt: string | null;
+  lastSyncAt: string | null;
+  status: "not_configured" | "active" | "disabled" | "revoked";
+  oneTimeToken?: string;
+};
+
 type WorkspaceSecurityState = {
   authentication: AuthenticationSettings;
   permissions: WorkspacePermissionSettings;
@@ -44,6 +67,8 @@ type WorkspaceSecurityState = {
   webSearch: boolean;
   hipaa: boolean;
   ipRestrictions: IpRestriction[];
+  saml: SamlSecuritySettings;
+  scim: ScimSecuritySettings;
 };
 
 type CurrentWorkspaceRecord = {
@@ -68,6 +93,26 @@ const DEFAULT_SECURITY_STATE: WorkspaceSecurityState = {
   webSearch: true,
   hipaa: false,
   ipRestrictions: [],
+  saml: {
+    enabled: false,
+    domains: [],
+    idpSsoUrl: "",
+    issuer: "",
+    certificate: "",
+    metadataUrl: "",
+    status: "not_configured",
+    lastTestedAt: null,
+    lastError: null,
+  },
+  scim: {
+    enabled: false,
+    baseUrl: "",
+    tokenPrefix: null,
+    tokenCreatedAt: null,
+    tokenRevokedAt: null,
+    lastSyncAt: null,
+    status: "not_configured",
+  },
 };
 
 function normalizeDomain(value: string) {
@@ -179,6 +224,150 @@ function validateIpRestrictions(value: unknown) {
   return null;
 }
 
+function readString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readOptionalDateString(value: unknown) {
+  return typeof value === "string" && value ? value : null;
+}
+
+function isValidHttpUrl(value: string, { allowEmpty = true } = {}) {
+  if (!value) {
+    return allowEmpty;
+  }
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function readSamlSecuritySettings(settings: unknown): SamlSecuritySettings {
+  const root = asRecord(settings);
+  const security = asRecord(root.security);
+  const saml = asRecord(security.saml ?? root.saml ?? root.sso);
+  const idpSsoUrl = readString(saml.idpSsoUrl ?? saml.ssoUrl ?? saml.url);
+  const domains = normalizeDomains(saml.domains ?? saml.emailDomains);
+  const configured = Boolean(idpSsoUrl && domains.length > 0);
+  const rawStatus = readString(saml.status);
+  const status = ["not_configured", "configured", "tested", "error"].includes(
+    rawStatus,
+  )
+    ? (rawStatus as SamlSecuritySettings["status"])
+    : configured
+      ? "configured"
+      : "not_configured";
+
+  return {
+    enabled: typeof saml.enabled === "boolean" ? saml.enabled : false,
+    domains,
+    idpSsoUrl,
+    issuer: readString(saml.issuer ?? saml.entityId),
+    certificate: readString(saml.certificate),
+    metadataUrl: readString(saml.metadataUrl),
+    status,
+    lastTestedAt: readOptionalDateString(saml.lastTestedAt),
+    lastError: typeof saml.lastError === "string" ? saml.lastError : null,
+  };
+}
+
+function readScimSecuritySettings(
+  settings: unknown,
+  request?: Request,
+): ScimSecuritySettings {
+  const root = asRecord(settings);
+  const security = asRecord(root.security);
+  const scim = asRecord(security.scim);
+  const enabled = typeof scim.enabled === "boolean" ? scim.enabled : false;
+  const tokenPrefix =
+    typeof scim.tokenPrefix === "string" && scim.tokenPrefix
+      ? scim.tokenPrefix
+      : null;
+  const tokenRevokedAt = readOptionalDateString(scim.tokenRevokedAt);
+  const baseUrl = request
+    ? new URL("/api/scim/v2", request.url).toString()
+    : readString(scim.baseUrl);
+  const rawStatus = readString(scim.status);
+  const status = ["not_configured", "active", "disabled", "revoked"].includes(
+    rawStatus,
+  )
+    ? (rawStatus as ScimSecuritySettings["status"])
+    : tokenRevokedAt
+      ? "revoked"
+      : enabled && tokenPrefix
+        ? "active"
+        : enabled
+          ? "not_configured"
+          : "disabled";
+
+  return {
+    enabled,
+    baseUrl,
+    tokenPrefix,
+    tokenCreatedAt: readOptionalDateString(scim.tokenCreatedAt),
+    tokenRevokedAt,
+    lastSyncAt: readOptionalDateString(scim.lastSyncAt),
+    status,
+  };
+}
+
+function validateSamlSettings(value: unknown) {
+  if (value === undefined) return null;
+  if (!isPlainObject(value)) return "SAML settings are invalid";
+  if (value.enabled !== undefined && typeof value.enabled !== "boolean") {
+    return "SAML enabled status must be a boolean";
+  }
+  if (value.domains !== undefined && !Array.isArray(value.domains)) {
+    return "SAML domains must be a list";
+  }
+  for (const key of [
+    "idpSsoUrl",
+    "issuer",
+    "certificate",
+    "metadataUrl",
+  ] as const) {
+    if (value[key] !== undefined && typeof value[key] !== "string") {
+      return "SAML settings must use text values";
+    }
+  }
+  if (typeof value.idpSsoUrl === "string" && !isValidHttpUrl(value.idpSsoUrl)) {
+    return "SAML IdP SSO URL must be a valid URL";
+  }
+  if (
+    typeof value.metadataUrl === "string" &&
+    !isValidHttpUrl(value.metadataUrl)
+  ) {
+    return "SAML metadata URL must be a valid URL";
+  }
+  return null;
+}
+
+function validateScimSettings(value: unknown) {
+  if (value === undefined) return null;
+  if (!isPlainObject(value)) return "SCIM settings are invalid";
+  if (value.enabled !== undefined && typeof value.enabled !== "boolean") {
+    return "SCIM enabled status must be a boolean";
+  }
+  if (
+    value.action !== undefined &&
+    value.action !== "generate_token" &&
+    value.action !== "revoke_token"
+  ) {
+    return "SCIM action is invalid";
+  }
+  return null;
+}
+
+function createScimToken() {
+  return `scim_${randomBytes(24).toString("base64url")}`;
+}
+
+function hashScimToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
 function readWorkspaceSecurityState(settings: unknown): WorkspaceSecurityState {
   const security = asRecord(asRecord(settings).security);
   const authentication = asRecord(security.authentication);
@@ -238,6 +427,8 @@ function readWorkspaceSecurityState(settings: unknown): WorkspaceSecurityState {
         ? security.hipaa
         : DEFAULT_SECURITY_STATE.hipaa,
     ipRestrictions: normalizeIpRestrictions(security.ipRestrictions),
+    saml: readSamlSecuritySettings(settings),
+    scim: readScimSecuritySettings(settings),
   };
 }
 
@@ -250,6 +441,16 @@ function serializeSecurityState(security: WorkspaceSecurityState) {
     webSearch: security.webSearch,
     hipaa: security.hipaa,
     ipRestrictions: security.ipRestrictions,
+    saml: security.saml,
+    scim: {
+      enabled: security.scim.enabled,
+      baseUrl: security.scim.baseUrl,
+      tokenPrefix: security.scim.tokenPrefix,
+      tokenCreatedAt: security.scim.tokenCreatedAt,
+      tokenRevokedAt: security.scim.tokenRevokedAt,
+      lastSyncAt: security.scim.lastSyncAt,
+      status: security.scim.status,
+    },
   };
 }
 
@@ -315,7 +516,10 @@ function buildResponse(
   currentWorkspace: CurrentWorkspaceRecord,
   inviteLinkToken: string,
 ) {
-  const securityState = readWorkspaceSecurityState(currentWorkspace.settings);
+  const securityState = {
+    ...readWorkspaceSecurityState(currentWorkspace.settings),
+    scim: readScimSecuritySettings(currentWorkspace.settings, request),
+  };
   const { permissions } = securityState;
 
   return {
@@ -410,6 +614,8 @@ export async function PATCH(request: Request) {
     webSearch?: unknown;
     hipaa?: unknown;
     ipRestrictions?: unknown;
+    saml?: unknown;
+    scim?: unknown;
   } | null;
 
   if (!body) {
@@ -457,6 +663,16 @@ export async function PATCH(request: Request) {
     );
   }
 
+  const samlError = validateSamlSettings(body.saml);
+  if (samlError) {
+    return NextResponse.json({ error: samlError }, { status: 400 });
+  }
+
+  const scimError = validateScimSettings(body.scim);
+  if (scimError) {
+    return NextResponse.json({ error: scimError }, { status: 400 });
+  }
+
   if (body.ipRestrictions !== undefined) {
     const ipRestrictionsError = validateIpRestrictions(body.ipRestrictions);
     if (ipRestrictionsError) {
@@ -492,6 +708,93 @@ export async function PATCH(request: Request) {
   }
 
   const currentSecurity = readWorkspaceSecurityState(currentWorkspace.settings);
+  const samlBody = asRecord(body.saml);
+  const scimBody = asRecord(body.scim);
+  const nextSaml: SamlSecuritySettings = {
+    enabled:
+      typeof samlBody.enabled === "boolean"
+        ? samlBody.enabled
+        : currentSecurity.saml.enabled,
+    domains:
+      samlBody.domains === undefined
+        ? currentSecurity.saml.domains
+        : normalizeDomains(samlBody.domains),
+    idpSsoUrl:
+      typeof samlBody.idpSsoUrl === "string"
+        ? samlBody.idpSsoUrl.trim()
+        : currentSecurity.saml.idpSsoUrl,
+    issuer:
+      typeof samlBody.issuer === "string"
+        ? samlBody.issuer.trim()
+        : currentSecurity.saml.issuer,
+    certificate:
+      typeof samlBody.certificate === "string"
+        ? samlBody.certificate.trim()
+        : currentSecurity.saml.certificate,
+    metadataUrl:
+      typeof samlBody.metadataUrl === "string"
+        ? samlBody.metadataUrl.trim()
+        : currentSecurity.saml.metadataUrl,
+    status: currentSecurity.saml.status,
+    lastTestedAt: currentSecurity.saml.lastTestedAt,
+    lastError: null,
+  };
+
+  if (body.saml !== undefined) {
+    const configured =
+      nextSaml.domains.length > 0 && Boolean(nextSaml.idpSsoUrl);
+    if (nextSaml.enabled && !configured) {
+      nextSaml.status = "error";
+      nextSaml.lastError =
+        "Add at least one domain and an IdP SSO URL before enabling SAML.";
+    } else if (configured) {
+      nextSaml.status = "tested";
+      nextSaml.lastTestedAt = new Date().toISOString();
+    } else {
+      nextSaml.status = "not_configured";
+    }
+  }
+
+  let nextScim: ScimSecuritySettings = {
+    ...currentSecurity.scim,
+    enabled:
+      typeof scimBody.enabled === "boolean"
+        ? scimBody.enabled
+        : currentSecurity.scim.enabled,
+  };
+  let scimTokenHash = asRecord(asRecord(currentWorkspace.settings).security)
+    .scim
+    ? asRecord(asRecord(asRecord(currentWorkspace.settings).security).scim)
+        .tokenHash
+    : undefined;
+  if (scimBody.action === "generate_token") {
+    const token = createScimToken();
+    nextScim = {
+      ...nextScim,
+      enabled: true,
+      tokenPrefix: token.slice(0, 12),
+      tokenCreatedAt: new Date().toISOString(),
+      tokenRevokedAt: null,
+      status: "active",
+      oneTimeToken: token,
+    };
+    scimTokenHash = hashScimToken(token);
+  } else if (scimBody.action === "revoke_token") {
+    nextScim = {
+      ...nextScim,
+      enabled: false,
+      tokenRevokedAt: new Date().toISOString(),
+      status: "revoked",
+    };
+    scimTokenHash = null;
+  } else if (body.scim !== undefined) {
+    nextScim.status = nextScim.enabled
+      ? nextScim.tokenPrefix
+        ? "active"
+        : "not_configured"
+      : "disabled";
+  }
+
   const nextSecurity: WorkspaceSecurityState = {
     authentication: {
       google:
@@ -546,6 +849,8 @@ export async function PATCH(request: Request) {
       body.ipRestrictions === undefined
         ? currentSecurity.ipRestrictions
         : normalizeIpRestrictions(body.ipRestrictions),
+    saml: nextSaml,
+    scim: nextScim,
   };
 
   const approvedEmailDomains =
@@ -560,7 +865,19 @@ export async function PATCH(request: Request) {
     currentWorkspace.inviteLinkToken ?? createInviteToken();
   const settings = {
     ...asRecord(currentWorkspace.settings),
-    security: serializeSecurityState(nextSecurity),
+    security: {
+      ...serializeSecurityState(nextSecurity),
+      scim: {
+        ...serializeSecurityState(nextSecurity).scim,
+        tokenHash: scimTokenHash ?? null,
+      },
+    },
+    saml: nextSaml,
+    sso: {
+      enabled: nextSaml.enabled,
+      domains: nextSaml.domains,
+      ssoUrl: nextSaml.idpSsoUrl,
+    },
   };
 
   await db
@@ -574,17 +891,21 @@ export async function PATCH(request: Request) {
     })
     .where(eq(workspace.id, currentWorkspace.id));
 
-  return NextResponse.json(
-    buildResponse(
-      request,
-      {
-        ...currentWorkspace,
-        inviteLinkEnabled,
-        inviteLinkToken,
-        approvedEmailDomains,
-        settings,
-      },
+  const responseBody = buildResponse(
+    request,
+    {
+      ...currentWorkspace,
+      inviteLinkEnabled,
       inviteLinkToken,
-    ),
+      approvedEmailDomains,
+      settings,
+    },
+    inviteLinkToken,
   );
+
+  if (nextScim.oneTimeToken) {
+    responseBody.security.scim.oneTimeToken = nextScim.oneTimeToken;
+  }
+
+  return NextResponse.json(responseBody);
 }

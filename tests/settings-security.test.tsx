@@ -26,6 +26,14 @@ function buildSecurity(
       ...defaultSecurity().permissions,
       ...overrides.permissions,
     },
+    saml: {
+      ...defaultSecurity().saml,
+      ...overrides.saml,
+    },
+    scim: {
+      ...defaultSecurity().scim,
+      ...overrides.scim,
+    },
   };
 }
 
@@ -49,6 +57,33 @@ type TestSecurity = {
   improveAi: boolean;
   webSearch: boolean;
   hipaa: boolean;
+  ipRestrictions: Array<{
+    range: string;
+    description: string;
+    enabled: boolean;
+    type: "allow";
+  }>;
+  saml: {
+    enabled: boolean;
+    domains: string[];
+    idpSsoUrl: string;
+    issuer: string;
+    certificate: string;
+    metadataUrl: string;
+    status: string;
+    lastTestedAt: string | null;
+    lastError: string | null;
+  };
+  scim: {
+    enabled: boolean;
+    baseUrl: string;
+    tokenPrefix: string | null;
+    tokenCreatedAt: string | null;
+    tokenRevokedAt: string | null;
+    lastSyncAt: string | null;
+    status: string;
+    oneTimeToken?: string;
+  };
 };
 
 function defaultSecurity(): TestSecurity {
@@ -72,6 +107,27 @@ function defaultSecurity(): TestSecurity {
     improveAi: true,
     webSearch: true,
     hipaa: false,
+    ipRestrictions: [],
+    saml: {
+      enabled: false,
+      domains: [],
+      idpSsoUrl: "",
+      issuer: "",
+      certificate: "",
+      metadataUrl: "",
+      status: "not_configured",
+      lastTestedAt: null,
+      lastError: null,
+    },
+    scim: {
+      enabled: false,
+      baseUrl: "http://localhost:3015/api/scim/v2",
+      tokenPrefix: null,
+      tokenCreatedAt: null,
+      tokenRevokedAt: null,
+      lastSyncAt: null,
+      status: "not_configured",
+    },
   };
 }
 
@@ -128,10 +184,10 @@ describe("Security settings page", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("acme.com")).toBeInTheDocument();
     expect(screen.getByText(defaultSecurity().inviteUrl)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "SAML & SCIM ↗" })).toHaveAttribute(
-      "href",
-      "https://linear.app/docs/saml-and-access-control",
-    );
+    expect(screen.getByText("SAML & SCIM")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Generate SCIM token" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("switch", { name: "Google authentication" }),
     ).toHaveAttribute("aria-checked", "false");
@@ -213,5 +269,62 @@ describe("Security settings page", () => {
         invitationsRole: "anyone",
       }),
     });
+  });
+  it("saves SAML settings through the security API", async () => {
+    mockSecurityLoad();
+    mockPatchResponse({
+      saml: {
+        ...defaultSecurity().saml,
+        enabled: true,
+        domains: ["example.com"],
+        idpSsoUrl: "https://idp.example.com/saml",
+        status: "tested",
+      },
+    });
+
+    render(<SecurityPage />);
+    await waitForLoaded();
+
+    fireEvent.change(screen.getByLabelText("SAML domains"), {
+      target: { value: "Example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("IdP SSO URL"), {
+      target: { value: "https://idp.example.com/saml" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save and test SAML" }));
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String(mockFetch.mock.calls[1][1]?.body))).toMatchObject({
+      saml: expect.objectContaining({
+        domains: ["example.com"],
+        idpSsoUrl: "https://idp.example.com/saml",
+      }),
+    });
+  });
+
+  it("generates and revokes SCIM tokens through the security API", async () => {
+    mockSecurityLoad();
+    mockPatchResponse({
+      scim: {
+        ...defaultSecurity().scim,
+        enabled: true,
+        tokenPrefix: "scim_abc123",
+        status: "active",
+        oneTimeToken: "scim_abc123secret",
+      },
+    });
+
+    render(<SecurityPage />);
+    await waitForLoaded();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Generate SCIM token" }),
+    );
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String(mockFetch.mock.calls[1][1]?.body))).toMatchObject({
+      scim: expect.objectContaining({ action: "generate_token" }),
+    });
+    expect(screen.getByText(/Copy this SCIM token now/)).toBeInTheDocument();
   });
 });

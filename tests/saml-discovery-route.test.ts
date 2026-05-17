@@ -28,10 +28,12 @@ describe("SAML discovery API route", () => {
         name: "SAML Workspace",
         urlSlug: "saml-workspace-133",
         settings: {
-          saml: {
-            enabled: true,
-            domains: ["example.com"],
-            ssoUrl: SAML_URL,
+          security: {
+            saml: {
+              enabled: true,
+              domains: ["example.com"],
+              idpSsoUrl: SAML_URL,
+            },
           },
         },
       },

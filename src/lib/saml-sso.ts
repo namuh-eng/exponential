@@ -11,6 +11,7 @@ type SamlSettings = {
   emailDomains?: string[];
   ssoUrl?: string;
   ssoURL?: string;
+  idpSsoUrl?: string;
   url?: string;
 };
 
@@ -38,12 +39,15 @@ function readSamlSettings(settings: unknown): SamlSettings | null {
     return null;
   }
 
-  const candidate = settings as WorkspaceSettings;
-  return candidate.saml ?? candidate.sso ?? null;
+  const candidate = settings as WorkspaceSettings & {
+    security?: WorkspaceSettings;
+  };
+  return candidate.security?.saml ?? candidate.saml ?? candidate.sso ?? null;
 }
 
 function getConfiguredSamlUrl(settings: SamlSettings): string | null {
-  const configuredUrl = settings.ssoUrl ?? settings.ssoURL ?? settings.url;
+  const configuredUrl =
+    settings.idpSsoUrl ?? settings.ssoUrl ?? settings.ssoURL ?? settings.url;
   if (!configuredUrl || typeof configuredUrl !== "string") {
     return null;
   }
