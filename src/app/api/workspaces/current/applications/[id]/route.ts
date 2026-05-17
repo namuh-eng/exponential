@@ -1,0 +1,82 @@
+import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
+import { requireApiSession } from "@/lib/api-auth";
+import { db } from "@/lib/db";
+import { authorizedApplicationGrant, member, workspace } from "@/lib/db/schema";
+import { and, eq } from "drizzle-orm";
+import { NextResponse } from "next/server";
+
+type WorkspaceMemberRole = "owner" | "admin" | "member" | "guest";
+
+type Params = { params: Promise<{ id: string }> | { id: string } };
+
+function canManageApplications(role: WorkspaceMemberRole) {
+  return role === "owner" || role === "admin";
+}
+
+async function getAccess(userId: string, workspaceIdOverride?: string) {
+  const workspaceId =
+    workspaceIdOverride ?? (await resolveActiveWorkspaceId(userId));
+  if (!workspaceId) return null;
+  const [access] = await db
+    .select({ workspaceId: workspace.id, memberRole: member.role })
+    .from(workspace)
+    .innerJoin(
+      member,
+      and(
+        eq(member.workspaceId, workspace.id),
+        eq(member.workspaceId, workspaceId),
+        eq(member.userId, userId),
+      ),
+    )
+    .limit(1);
+  return access ?? null;
+}
+
+export async function DELETE(_request: Request, context: Params) {
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) return authResponse;
+
+  const access = await getAccess(
+    session.user.id,
+    "apiKey" in session ? session.apiKey.workspaceId : undefined,
+  );
+  if (!access)
+    return NextResponse.json(
+      { error: "No active workspace found" },
+      { status: 404 },
+    );
+  if (!canManageApplications(access.memberRole)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { id } = await context.params;
+  if (!id)
+    return NextResponse.json(
+      { error: "Application id is required." },
+      { status: 400 },
+    );
+
+  const [grant] = await db
+    .select({ id: authorizedApplicationGrant.id })
+    .from(authorizedApplicationGrant)
+    .innerJoin(
+      member,
+      and(
+        eq(member.userId, authorizedApplicationGrant.userId),
+        eq(member.workspaceId, access.workspaceId),
+      ),
+    )
+    .where(eq(authorizedApplicationGrant.id, id))
+    .limit(1);
+
+  if (!grant)
+    return NextResponse.json(
+      { error: "Application not found" },
+      { status: 404 },
+    );
+
+  await db
+    .delete(authorizedApplicationGrant)
+    .where(eq(authorizedApplicationGrant.id, id));
+  return NextResponse.json({ success: true });
+}
