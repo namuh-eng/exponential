@@ -602,7 +602,13 @@ describe("Login page", () => {
     expect(signIn.magicLink).not.toHaveBeenCalled();
   });
 
-  it("shows email-sent step after submitting email", async () => {
+  it("shows the Linear-like verification step before email-sent after submitting email", async () => {
+    let resolveMagicLink: (() => void) | undefined;
+    vi.mocked(signIn.magicLink).mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveMagicLink = resolve;
+      }),
+    );
     render(<LoginPage />);
     fireEvent.click(screen.getByText("Continue with email"));
 
@@ -611,6 +617,16 @@ describe("Login page", () => {
 
     const form = input.closest("form") as HTMLFormElement;
     fireEvent.submit(form);
+
+    expect(
+      await screen.findByRole("heading", { name: "Verifying it’s you" }),
+    ).toBeDefined();
+    expect(screen.getByRole("button", { name: "Back to login" })).toBeDefined();
+    expect(screen.queryByText("Check your email")).toBeNull();
+    expect(screen.queryByPlaceholderText("Enter 6-digit code")).toBeNull();
+    expect(screen.queryByText("Continue with code")).toBeNull();
+
+    resolveMagicLink?.();
 
     await vi.waitFor(() => {
       expect(screen.getByText("Check your email")).toBeDefined();
@@ -621,6 +637,36 @@ describe("Login page", () => {
       email: "test@example.com",
       callbackURL: "http://localhost:3015/",
       errorCallbackURL: "http://localhost:3015/login",
+    });
+  });
+
+  it("returns from email verification to the login chooser without showing the eventual email-sent state", async () => {
+    let resolveMagicLink: (() => void) | undefined;
+    vi.mocked(signIn.magicLink).mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveMagicLink = resolve;
+      }),
+    );
+    render(<LoginPage />);
+    fireEvent.click(screen.getByText("Continue with email"));
+
+    const input = screen.getByPlaceholderText("Enter your email address…");
+    fireEvent.change(input, { target: { value: "test@example.com" } });
+    fireEvent.submit(input.closest("form") as HTMLFormElement);
+
+    expect(
+      await screen.findByRole("heading", { name: "Verifying it’s you" }),
+    ).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to login" }));
+    expect(
+      await screen.findByRole("button", { name: /Continue with Google/i }),
+    ).toBeDefined();
+
+    resolveMagicLink?.();
+
+    await vi.waitFor(() => {
+      expect(screen.queryByText("Check your email")).toBeNull();
     });
   });
 

@@ -6,10 +6,15 @@ import {
   signInWithPasskey,
 } from "@/lib/auth-client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type AuthMode = "login" | "signup";
-type LoginStep = "choose" | "email-input" | "email-code" | "sso-input";
+type LoginStep =
+  | "choose"
+  | "email-input"
+  | "email-verifying"
+  | "email-code"
+  | "sso-input";
 type ProviderCapabilities = {
   providers?: {
     google?: boolean;
@@ -244,6 +249,7 @@ export function AuthPage({
   );
   const [passkeySupported, setPasskeySupported] = useState(false);
   const [error, setError] = useState("");
+  const emailSubmitAttemptRef = useRef(0);
 
   useEffect(() => {
     setPasskeySupported(browserSupportsPasskeys());
@@ -340,6 +346,11 @@ export function AuthPage({
       return;
     }
 
+    const submitAttempt = emailSubmitAttemptRef.current + 1;
+    emailSubmitAttemptRef.current = submitAttempt;
+    setEmail(normalizedEmail);
+    setCode("");
+    setStep("email-verifying");
     setLoading(true);
     setError("");
 
@@ -358,10 +369,14 @@ export function AuthPage({
             }
           : {}),
       });
-      setCode("");
-      setStep("email-code");
+      if (emailSubmitAttemptRef.current === submitAttempt) {
+        setStep("email-code");
+      }
     } catch {
-      setError("Failed to send magic link. Please try again.");
+      if (emailSubmitAttemptRef.current === submitAttempt) {
+        setStep("email-input");
+        setError("Failed to send magic link. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -476,11 +491,13 @@ export function AuthPage({
   }
 
   const title =
-    step === "email-input" || step === "sso-input"
-      ? "What’s your email address?"
-      : mode === "signup"
-        ? "Create your workspace"
-        : "Log in to Linear";
+    step === "email-verifying"
+      ? "Verifying it’s you"
+      : step === "email-input" || step === "sso-input"
+        ? "What’s your email address?"
+        : mode === "signup"
+          ? "Create your workspace"
+          : "Log in to Linear";
   const backLabel = mode === "signup" ? "Back to signup" : "Back to login";
 
   return (
@@ -654,6 +671,8 @@ export function AuthPage({
             <button
               type="button"
               onClick={() => {
+                emailSubmitAttemptRef.current += 1;
+                setLoading(false);
                 setStep("choose");
                 setError("");
                 setCode("");
@@ -668,6 +687,47 @@ export function AuthPage({
               </p>
             )}
           </form>
+        )}
+
+        {step === "email-verifying" && (
+          <div className="space-y-5 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-[var(--auth-secondary-border)] bg-[var(--auth-secondary-bg)]">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--auth-accent)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                role="img"
+                aria-label="Verification in progress"
+              >
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+                <path d="m9 12 2 2 4-4" />
+              </svg>
+            </div>
+            <div>
+              <p className="mt-2 text-[14px] leading-6 text-[var(--auth-muted)]">
+                This helps us confirm this sign-in request before sending your
+                email link and code.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                emailSubmitAttemptRef.current += 1;
+                setLoading(false);
+                setStep("choose");
+                setError("");
+                setCode("");
+              }}
+              className="w-full pt-1 text-center text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
+            >
+              {backLabel}
+            </button>
+          </div>
         )}
 
         {step === "sso-input" && (

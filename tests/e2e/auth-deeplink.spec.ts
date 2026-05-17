@@ -34,11 +34,15 @@ test.describe("Unauthenticated workspace deep links", () => {
     page,
   }) => {
     let magicLinkPayload: Record<string, unknown> | undefined;
+    let finishMagicLink: (() => void) | undefined;
 
     await page.route("**/api/auth/**", async (route) => {
       const request = route.request();
       if (request.method() === "POST") {
         magicLinkPayload = request.postDataJSON() as Record<string, unknown>;
+        await new Promise<void>((resolve) => {
+          finishMagicLink = resolve;
+        });
       }
 
       await route.fulfill({
@@ -65,12 +69,24 @@ test.describe("Unauthenticated workspace deep links", () => {
     await page.getByRole("button", { name: "Continue with email" }).click();
 
     await expect(
+      page.getByRole("heading", { name: "Verifying it’s you" }),
+    ).toBeVisible();
+    await expect(page.getByText("Check your email")).toHaveCount(0);
+    await expect(page.getByText("Continue with code")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Back to login" }),
+    ).toBeVisible();
+
+    finishMagicLink?.();
+
+    await expect(
       page.getByRole("heading", { name: "Check your email" }),
     ).toBeVisible();
+    const expectedCallbackURL = new URL("/foreverbrowsing", page.url()).href;
     expect(magicLinkPayload).toMatchObject({
       email: "test@example.com",
-      callbackURL: "http://localhost:3000/foreverbrowsing",
-      errorCallbackURL: "http://localhost:3000/foreverbrowsing",
+      callbackURL: expectedCallbackURL,
+      errorCallbackURL: expectedCallbackURL,
     });
   });
 
