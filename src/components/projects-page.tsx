@@ -139,6 +139,7 @@ export function ProjectsPage({
         body: JSON.stringify({
           name: formData.get("name"),
           description: formData.get("description"),
+          labelIds: formData.getAll("labelIds"),
           ...(teamKey ? { teamKey } : {}),
         }),
       });
@@ -197,6 +198,24 @@ export function ProjectsPage({
                 rows={2}
                 className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
               />
+
+              {availableLabels.length > 0 && (
+                <label className="flex flex-col gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                  Project labels
+                  <select
+                    name="labelIds"
+                    multiple
+                    aria-label="Apply project labels"
+                    className="min-h-[72px] rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                  >
+                    {availableLabels.map((label) => (
+                      <option key={label.id} value={label.id}>
+                        {label.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <div className="flex items-center gap-2">
                 <button
                   type="submit"
@@ -404,6 +423,24 @@ export function ProjectsPage({
               rows={2}
               className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
             />
+
+            {availableLabels.length > 0 && (
+              <label className="flex flex-col gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                Project labels
+                <select
+                  name="labelIds"
+                  multiple
+                  aria-label="Apply project labels"
+                  className="min-h-[72px] rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                >
+                  {availableLabels.map((label) => (
+                    <option key={label.id} value={label.id}>
+                      {label.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <div className="flex items-center gap-2">
               <button
                 type="submit"
