@@ -119,6 +119,34 @@ function serializeDate(value: Date | string | null) {
     : new Date(value).toISOString();
 }
 
+function providerDisplayName(providerId: string, accountId: string) {
+  if (providerId === "google" && accountId.includes("@")) {
+    return accountId.split("@")[0];
+  }
+  return accountId;
+}
+
+function serializeAccountProvider(item: {
+  id: string;
+  providerId: string;
+  accountId: string;
+  createdAt: Date | string | null;
+  updatedAt: Date | string | null;
+}) {
+  const isEmail = item.accountId.includes("@");
+  return {
+    id: item.id,
+    providerId: item.providerId,
+    accountId: item.accountId,
+    displayName: providerDisplayName(item.providerId, item.accountId),
+    handle: isEmail ? null : item.accountId,
+    email: isEmail ? item.accountId : null,
+    avatarUrl: null,
+    createdAt: serializeDate(item.createdAt),
+    updatedAt: serializeDate(item.updatedAt),
+  };
+}
+
 function normalizeScopes(value: unknown) {
   if (Array.isArray(value)) {
     return value.filter(
@@ -447,7 +475,7 @@ async function buildSecurityPayload(authSession: AuthSession) {
           apiKeyCreationPermission,
         )
       : false,
-    providers,
+    providers: providers.map(serializeAccountProvider),
     passkeyEnabled: isPasskeyAuthEnabled(),
   };
 }

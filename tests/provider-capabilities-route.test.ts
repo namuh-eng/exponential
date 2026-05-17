@@ -33,10 +33,33 @@ describe("provider capabilities route", () => {
 
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(data.providers).toEqual({
-      google: false,
-      github: true,
-      gitlab: false,
-      slack: false,
+      google: {
+        supported: true,
+        configured: false,
+        devLinking: true,
+        unavailableReason:
+          "Google OAuth is not configured. Dev and e2e can still exercise the linking surface.",
+      },
+      github: {
+        supported: true,
+        configured: true,
+        devLinking: true,
+        unavailableReason: null,
+      },
+      gitlab: {
+        supported: true,
+        configured: false,
+        devLinking: true,
+        unavailableReason:
+          "GitLab OAuth is not configured. Dev and e2e can still exercise the linking surface.",
+      },
+      slack: {
+        supported: true,
+        configured: false,
+        devLinking: true,
+        unavailableReason:
+          "Slack OAuth is not configured. Dev and e2e can still exercise the linking surface.",
+      },
       passkey: false,
     });
   });
