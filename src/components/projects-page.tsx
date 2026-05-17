@@ -7,6 +7,18 @@ import { useProjectViewState } from "@/hooks/use-project-view-state";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+interface ProjectTemplateOption {
+  id: string;
+  name: string;
+  description: string;
+  settings: {
+    defaults?: { status?: string; priority?: string };
+    milestones?: { name: string }[];
+    starterIssues?: { title: string }[];
+    archived?: boolean;
+  };
+}
+
 interface ProjectData {
   id: string;
   name: string;
@@ -58,6 +70,9 @@ export function ProjectsPage({
   const [availableLabels, setAvailableLabels] = useState<
     { id: string; name: string; color: string }[]
   >([]);
+  const [projectTemplates, setProjectTemplates] = useState<
+    ProjectTemplateOption[]
+  >([]);
   const [labelFilterId, setLabelFilterId] = useState("all");
   const [loading, setLoading] = useState(true);
   const [loadState, setLoadState] = useState<"ready" | "not-found" | "error">(
@@ -107,6 +122,17 @@ export function ProjectsPage({
         } else {
           setAvailableLabels([]);
         }
+        const templatesRes = await fetch("/api/project-templates");
+        if (templatesRes.ok) {
+          const templatesData = await templatesRes.json();
+          setProjectTemplates(
+            (templatesData.templates ?? []).filter(
+              (template: ProjectTemplateOption) => !template.settings?.archived,
+            ),
+          );
+        } else {
+          setProjectTemplates([]);
+        }
         setActiveTeam(teamRecord);
         setLoadState("ready");
         return;
@@ -139,7 +165,12 @@ export function ProjectsPage({
         body: JSON.stringify({
           name: formData.get("name"),
           description: formData.get("description"),
-          labelIds: formData.getAll("labelIds"),
+          ...(formData.getAll("labelIds").length > 0
+            ? { labelIds: formData.getAll("labelIds") }
+            : {}),
+          ...(formData.get("templateId")
+            ? { templateId: formData.get("templateId") }
+            : {}),
           ...(teamKey ? { teamKey } : {}),
         }),
       });
@@ -198,6 +229,54 @@ export function ProjectsPage({
                 rows={2}
                 className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
               />
+
+              {projectTemplates.length > 0 && (
+                <label className="flex flex-col gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                  Project template
+                  <select
+                    name="templateId"
+                    aria-label="Apply project template"
+                    className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                  >
+                    <option value="">No template</option>
+                    {projectTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name} (
+                        {template.settings?.milestones?.length ?? 0} milestones,{" "}
+                        {template.settings?.starterIssues?.length ?? 0} issues)
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[11px] text-[var(--color-text-tertiary)]">
+                    Template defaults, milestones, and starter issues will be
+                    applied on create.
+                  </span>
+                </label>
+              )}
+
+              {projectTemplates.length > 0 && (
+                <label className="flex flex-col gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                  Project template
+                  <select
+                    name="templateId"
+                    aria-label="Apply project template"
+                    className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                  >
+                    <option value="">No template</option>
+                    {projectTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name} (
+                        {template.settings?.milestones?.length ?? 0} milestones,{" "}
+                        {template.settings?.starterIssues?.length ?? 0} issues)
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[11px] text-[var(--color-text-tertiary)]">
+                    Template defaults, milestones, and starter issues will be
+                    applied on create.
+                  </span>
+                </label>
+              )}
 
               {availableLabels.length > 0 && (
                 <label className="flex flex-col gap-1 text-[12px] text-[var(--color-text-secondary)]">
@@ -423,6 +502,30 @@ export function ProjectsPage({
               rows={2}
               className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
             />
+
+            {projectTemplates.length > 0 && (
+              <label className="flex flex-col gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                Project template
+                <select
+                  name="templateId"
+                  aria-label="Apply project template"
+                  className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                >
+                  <option value="">No template</option>
+                  {projectTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name} (
+                      {template.settings?.milestones?.length ?? 0} milestones,{" "}
+                      {template.settings?.starterIssues?.length ?? 0} issues)
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[11px] text-[var(--color-text-tertiary)]">
+                  Template defaults, milestones, and starter issues will be
+                  applied on create.
+                </span>
+              </label>
+            )}
 
             {availableLabels.length > 0 && (
               <label className="flex flex-col gap-1 text-[12px] text-[var(--color-text-secondary)]">

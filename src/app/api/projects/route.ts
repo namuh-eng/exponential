@@ -8,11 +8,18 @@ import {
   issue,
   project,
   projectLabel,
+  projectMilestone,
   projectTeam,
+  projectTemplate,
   team,
   user,
+  workflowState,
 } from "@/lib/db/schema";
 import { readProjectSettings } from "@/lib/project-detail";
+import {
+  projectDatesFromTemplate,
+  readProjectTemplateSettings,
+} from "@/lib/project-template-settings";
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -288,6 +295,39 @@ export async function POST(request: Request) {
     linkedTeamsById.set(teamRecord.id, teamRecord);
   }
 
+  const templateId =
+    typeof body.templateId === "string" && body.templateId.trim()
+      ? body.templateId.trim()
+      : null;
+  let selectedTemplate: typeof projectTemplate.$inferSelect | null = null;
+  let templateSettings = readProjectTemplateSettings(null);
+  if (templateId) {
+    const templateRows = await db
+      .select()
+      .from(projectTemplate)
+      .where(
+        and(
+          eq(projectTemplate.workspaceId, workspaceId),
+          eq(projectTemplate.id, templateId),
+        ),
+      )
+      .limit(1);
+    selectedTemplate = templateRows[0] ?? null;
+    if (!selectedTemplate) {
+      return NextResponse.json(
+        { error: "Project template not found in active workspace" },
+        { status: 400 },
+      );
+    }
+    templateSettings = readProjectTemplateSettings(selectedTemplate.settings);
+    if (templateSettings.archived) {
+      return NextResponse.json(
+        { error: "Project template is archived" },
+        { status: 400 },
+      );
+    }
+  }
+
   const linkedLabelIds = new Set<string>();
   if (requestedLabelIds.length > 0) {
     const labelRows = await db
@@ -328,7 +368,27 @@ export async function POST(request: Request) {
     suffix += 1;
   }
 
+  if (linkedTeamsById.size === 0 && templateSettings.starterIssues.length > 0) {
+    const fallbackTeamRows = await db
+      .select({ id: team.id, key: team.key, name: team.name })
+      .from(team)
+      .where(eq(team.workspaceId, workspaceId))
+      .limit(1);
+    const fallbackTeam = fallbackTeamRows[0] ?? null;
+    if (!fallbackTeam) {
+      return NextResponse.json(
+        {
+          error:
+            "A team is required to create starter issues from this template",
+        },
+        { status: 400 },
+      );
+    }
+    linkedTeamsById.set(fallbackTeam.id, fallbackTeam);
+  }
+
   const linkedTeams = Array.from(linkedTeamsById.values());
+  const templateDates = projectDatesFromTemplate(templateSettings);
   const newProject = await db.transaction(async (tx) => {
     const [createdProject] = await tx
       .insert(project)
@@ -337,11 +397,23 @@ export async function POST(request: Request) {
         description,
         slug: finalSlug,
         workspaceId,
+        icon: templateSettings.defaults.icon ?? undefined,
+        status: templateSettings.defaults.status,
+        priority: templateSettings.defaults.priority,
         leadId: session.user.id,
-        settings:
-          linkedLabelIds.size > 0
+        startDate: templateDates.startDate ?? undefined,
+        targetDate: templateDates.targetDate ?? undefined,
+        settings: {
+          ...(linkedLabelIds.size > 0
             ? { labelIds: Array.from(linkedLabelIds) }
-            : undefined,
+            : {}),
+          ...(selectedTemplate
+            ? {
+                templateId: selectedTemplate.id,
+                templateName: selectedTemplate.name,
+              }
+            : {}),
+        },
       })
       .returning();
 
@@ -354,7 +426,73 @@ export async function POST(request: Request) {
       );
     }
 
-    return createdProject;
+    const createdMilestones = new Map<string, string>();
+    if (templateSettings.milestones.length > 0) {
+      const milestoneRows = await tx
+        .insert(projectMilestone)
+        .values(
+          templateSettings.milestones.map((milestone) => ({
+            name: milestone.name,
+            sortOrder: milestone.sortOrder,
+            projectId: createdProject.id,
+          })),
+        )
+        .returning({ id: projectMilestone.id, name: projectMilestone.name });
+      for (const milestone of milestoneRows)
+        createdMilestones.set(milestone.name, milestone.id);
+    }
+
+    if (templateSettings.starterIssues.length > 0) {
+      const issueTeam = linkedTeams[0];
+      const defaultState = await tx
+        .select({ id: workflowState.id })
+        .from(workflowState)
+        .where(
+          and(
+            eq(workflowState.teamId, issueTeam.id),
+            eq(workflowState.category, "backlog"),
+          ),
+        )
+        .limit(1);
+      if (!defaultState[0])
+        throw new Error(
+          "No default workflow state found for template starter issues",
+        );
+      const maxResult = await tx
+        .select({ maxNum: sql<number>`COALESCE(MAX(${issue.number}), 0)` })
+        .from(issue)
+        .where(eq(issue.teamId, issueTeam.id));
+      const startNumber = Number(maxResult[0]?.maxNum ?? 0) + 1;
+      await tx.insert(issue).values(
+        templateSettings.starterIssues.map((starterIssue, index) => {
+          const number = startNumber + index;
+          return {
+            number,
+            identifier: `${issueTeam.key}-${number}`,
+            title: starterIssue.title,
+            description: starterIssue.description ?? null,
+            teamId: issueTeam.id,
+            stateId: defaultState[0].id,
+            creatorId: session.user.id,
+            priority: starterIssue.priority,
+            estimate: starterIssue.estimate ?? null,
+            projectId: createdProject.id,
+            projectMilestoneId: starterIssue.milestoneName
+              ? (createdMilestones.get(starterIssue.milestoneName) ?? null)
+              : null,
+          };
+        }),
+      );
+    }
+
+    return {
+      ...createdProject,
+      template: selectedTemplate
+        ? { id: selectedTemplate.id, name: selectedTemplate.name }
+        : null,
+      milestonesCreated: templateSettings.milestones.length,
+      starterIssuesCreated: templateSettings.starterIssues.length,
+    };
   });
 
   return NextResponse.json(

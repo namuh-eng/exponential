@@ -2,6 +2,10 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { projectTemplate } from "@/lib/db/schema";
+import {
+  normalizeProjectTemplateSettings,
+  readProjectTemplateSettings,
+} from "@/lib/project-template-settings";
 import { desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -19,7 +23,7 @@ function serializeTemplate(template: ProjectTemplatePayload) {
     id: template.id,
     name: template.name,
     description: template.description ?? "",
-    settings: template.settings ?? {},
+    settings: readProjectTemplateSettings(template.settings),
     createdAt: template.createdAt,
     updatedAt: template.updatedAt,
   };
@@ -63,7 +67,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
   }
 
-  let body: { name?: unknown; description?: unknown };
+  let body: { name?: unknown; description?: unknown; settings?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -90,7 +94,7 @@ export async function POST(request: Request) {
       description,
       workspaceId,
       createdById: session.user.id,
-      settings: {},
+      settings: normalizeProjectTemplateSettings(body.settings),
     })
     .returning();
 
