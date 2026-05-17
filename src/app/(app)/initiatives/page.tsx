@@ -2,7 +2,73 @@
 
 import { EmptyState } from "@/components/empty-state";
 import { InitiativeRow } from "@/components/initiative-row";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+type InitiativeStatus = "active" | "planned" | "completed";
+type InitiativeHealth = "onTrack" | "atRisk" | "offTrack" | "unknown";
+type TargetFilter = "any" | "set" | "unset" | "past" | "next90";
+type ActiveProjectFilter = "any" | "withActive" | "needsUpdate" | "paused";
+type SortKey = "targetDate" | "health" | "status" | "createdAt";
+type GroupKey = "none" | "status" | "health" | "targetDate";
+
+const statusLabels: Record<InitiativeStatus, string> = {
+  active: "Active",
+  planned: "Planned",
+  completed: "Completed",
+};
+
+const healthLabels: Record<InitiativeHealth, string> = {
+  onTrack: "On track",
+  atRisk: "At risk",
+  offTrack: "Off track",
+  unknown: "Unknown",
+};
+
+const healthRank: Record<InitiativeHealth, number> = {
+  offTrack: 0,
+  atRisk: 1,
+  unknown: 2,
+  onTrack: 3,
+};
+
+function readQueryParam(name: string) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+function isStatus(value: string | null): value is InitiativeStatus {
+  return value === "active" || value === "planned" || value === "completed";
+}
+
+function isHealth(value: string | null): value is InitiativeHealth {
+  return (
+    value === "onTrack" ||
+    value === "atRisk" ||
+    value === "offTrack" ||
+    value === "unknown"
+  );
+}
+
+function formatTargetBucket(value?: string | null) {
+  if (!value) {
+    return "No target";
+  }
+
+  const target = new Date(value);
+  const now = new Date();
+  const days = Math.ceil((target.getTime() - now.getTime()) / 86_400_000);
+
+  if (days < 0) {
+    return "Past target";
+  }
+  if (days <= 90) {
+    return "Next 90 days";
+  }
+  return "Later";
+}
 
 interface WorkspaceMember {
   id: string;
@@ -21,16 +87,16 @@ interface InitiativeData {
   id: string;
   name: string;
   description: string | null;
-  status: "active" | "planned" | "completed";
+  status: InitiativeStatus;
   ownerId?: string | null;
   owner?: WorkspaceMember | null;
   teams?: WorkspaceTeam[];
   targetDate?: string | null;
-  health?: "onTrack" | "atRisk" | "offTrack" | "unknown";
+  health?: InitiativeHealth;
   latestUpdate?: {
     id: string;
     body: string;
-    health: "onTrack" | "atRisk" | "offTrack";
+    health: Exclude<InitiativeHealth, "unknown">;
     createdAt: string;
   } | null;
   activeProjectHealthRollup?: {
@@ -53,9 +119,53 @@ interface InitiativesResponse {
 export default function InitiativesPage() {
   const [data, setData] = useState<InitiativesResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<
-    "active" | "planned" | "completed"
-  >("active");
+  const [activeTab, setActiveTab] = useState<InitiativeStatus>(() => {
+    const value = readQueryParam("status");
+    return isStatus(value) ? value : "active";
+  });
+  const [search, setSearch] = useState(() => readQueryParam("q") ?? "");
+  const [ownerFilter, setOwnerFilter] = useState(
+    () => readQueryParam("owner") ?? "any",
+  );
+  const [teamFilter, setTeamFilter] = useState(
+    () => readQueryParam("team") ?? "any",
+  );
+  const [healthFilter, setHealthFilter] = useState<InitiativeHealth | "any">(
+    () => {
+      const value = readQueryParam("health");
+      return isHealth(value) ? value : "any";
+    },
+  );
+  const [targetFilter, setTargetFilter] = useState<TargetFilter>(() => {
+    const value = readQueryParam("target");
+    return value === "set" ||
+      value === "unset" ||
+      value === "past" ||
+      value === "next90"
+      ? value
+      : "any";
+  });
+  const [activeProjectFilter, setActiveProjectFilter] =
+    useState<ActiveProjectFilter>(() => {
+      const value = readQueryParam("projects");
+      return value === "withActive" ||
+        value === "needsUpdate" ||
+        value === "paused"
+        ? value
+        : "any";
+    });
+  const [sortKey, setSortKey] = useState<SortKey>(() => {
+    const value = readQueryParam("sort");
+    return value === "health" || value === "status" || value === "createdAt"
+      ? value
+      : "targetDate";
+  });
+  const [groupKey, setGroupKey] = useState<GroupKey>(() => {
+    const value = readQueryParam("group");
+    return value === "status" || value === "health" || value === "targetDate"
+      ? value
+      : "none";
+  });
   const [showCreateForm, setShowCreateForm] = useState(false);
   const shortcutRef = useRef<{ key: string; timestamp: number } | null>(null);
 
@@ -184,6 +294,208 @@ export default function InitiativesPage() {
     };
   }, [openCreateForm]);
 
+  const tabs: { id: InitiativeStatus; label: string }[] = [
+    { id: "active", label: "Active" },
+    { id: "planned", label: "Planned" },
+    { id: "completed", label: "Completed" },
+  ];
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (activeTab !== "active") {
+      params.set("status", activeTab);
+    }
+    if (search.trim()) {
+      params.set("q", search.trim());
+    }
+    if (ownerFilter !== "any") {
+      params.set("owner", ownerFilter);
+    }
+    if (teamFilter !== "any") {
+      params.set("team", teamFilter);
+    }
+    if (healthFilter !== "any") {
+      params.set("health", healthFilter);
+    }
+    if (targetFilter !== "any") {
+      params.set("target", targetFilter);
+    }
+    if (activeProjectFilter !== "any") {
+      params.set("projects", activeProjectFilter);
+    }
+    if (sortKey !== "targetDate") {
+      params.set("sort", sortKey);
+    }
+    if (groupKey !== "none") {
+      params.set("group", groupKey);
+    }
+
+    const nextQuery = params.toString();
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`;
+    if (nextUrl !== `${window.location.pathname}${window.location.search}`) {
+      window.history.replaceState(null, "", nextUrl);
+    }
+  }, [
+    activeProjectFilter,
+    activeTab,
+    groupKey,
+    healthFilter,
+    ownerFilter,
+    search,
+    sortKey,
+    targetFilter,
+    teamFilter,
+  ]);
+
+  const filteredInitiatives = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const now = new Date();
+    const next90 = new Date(now);
+    next90.setDate(now.getDate() + 90);
+
+    return [...(data?.initiatives ?? [])]
+      .filter((initiative) => {
+        if (initiative.status !== activeTab) {
+          return false;
+        }
+        if (
+          query &&
+          ![
+            initiative.name,
+            initiative.description,
+            initiative.owner?.name,
+            ...(initiative.teams ?? []).flatMap((team) => [
+              team.name,
+              team.key,
+            ]),
+          ]
+            .filter(Boolean)
+            .some((value) => value?.toLowerCase().includes(query))
+        ) {
+          return false;
+        }
+        if (
+          ownerFilter !== "any" &&
+          (initiative.owner?.id ?? "unassigned") !== ownerFilter
+        ) {
+          return false;
+        }
+        if (
+          teamFilter !== "any" &&
+          !(initiative.teams ?? []).some((team) => team.id === teamFilter)
+        ) {
+          return false;
+        }
+        if (
+          healthFilter !== "any" &&
+          (initiative.health ?? "unknown") !== healthFilter
+        ) {
+          return false;
+        }
+
+        const targetDate = initiative.targetDate
+          ? new Date(initiative.targetDate)
+          : null;
+        if (targetFilter === "set" && !targetDate) {
+          return false;
+        }
+        if (targetFilter === "unset" && targetDate) {
+          return false;
+        }
+        if (targetFilter === "past" && (!targetDate || targetDate >= now)) {
+          return false;
+        }
+        if (
+          targetFilter === "next90" &&
+          (!targetDate || targetDate < now || targetDate > next90)
+        ) {
+          return false;
+        }
+
+        const rollup = initiative.activeProjectHealthRollup;
+        if (
+          activeProjectFilter === "withActive" &&
+          !(rollup?.total && rollup.total > 0)
+        ) {
+          return false;
+        }
+        if (
+          activeProjectFilter === "needsUpdate" &&
+          !(rollup?.withoutUpdates && rollup.withoutUpdates > 0)
+        ) {
+          return false;
+        }
+        if (
+          activeProjectFilter === "paused" &&
+          !(rollup?.paused && rollup.paused > 0)
+        ) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortKey === "health") {
+          return (
+            healthRank[a.health ?? "unknown"] -
+            healthRank[b.health ?? "unknown"]
+          );
+        }
+        if (sortKey === "status") {
+          return a.status.localeCompare(b.status);
+        }
+        const aTime = new Date(
+          sortKey === "createdAt"
+            ? a.createdAt
+            : (a.targetDate ?? "9999-12-31"),
+        ).getTime();
+        const bTime = new Date(
+          sortKey === "createdAt"
+            ? b.createdAt
+            : (b.targetDate ?? "9999-12-31"),
+        ).getTime();
+        return aTime - bTime;
+      });
+  }, [
+    activeProjectFilter,
+    activeTab,
+    data?.initiatives,
+    healthFilter,
+    ownerFilter,
+    search,
+    sortKey,
+    targetFilter,
+    teamFilter,
+  ]);
+
+  const groupedInitiatives = useMemo(() => {
+    return filteredInitiatives.reduce<Record<string, InitiativeData[]>>(
+      (groups, initiative) => {
+        const label =
+          groupKey === "status"
+            ? statusLabels[initiative.status]
+            : groupKey === "health"
+              ? healthLabels[initiative.health ?? "unknown"]
+              : groupKey === "targetDate"
+                ? formatTargetBucket(initiative.targetDate)
+                : "All initiatives";
+        groups[label] = [...(groups[label] ?? []), initiative];
+        return groups;
+      },
+      {},
+    );
+  }, [filteredInitiatives, groupKey]);
+
+  const hasActiveFilters =
+    search.trim() ||
+    ownerFilter !== "any" ||
+    teamFilter !== "any" ||
+    healthFilter !== "any" ||
+    targetFilter !== "any" ||
+    activeProjectFilter !== "any" ||
+    sortKey !== "targetDate" ||
+    groupKey !== "none";
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center text-[var(--color-text-secondary)]">
@@ -191,15 +503,6 @@ export default function InitiativesPage() {
       </div>
     );
   }
-
-  const tabs: { id: "active" | "planned" | "completed"; label: string }[] = [
-    { id: "active", label: "Active" },
-    { id: "planned", label: "Planned" },
-    { id: "completed", label: "Completed" },
-  ];
-
-  const filteredInitiatives =
-    data?.initiatives.filter((i) => i.status === activeTab) ?? [];
 
   return (
     <div className="flex h-full flex-col">
@@ -238,6 +541,129 @@ export default function InitiativesPage() {
             <kbd className="font-medium not-italic">I</kbd>
           </span>
         </button>
+      </div>
+
+      <div
+        className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-2"
+        aria-label="Initiatives list controls"
+      >
+        <input
+          aria-label="Search initiatives"
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search initiatives..."
+          className="min-w-56 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-hover)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
+        />
+        <select
+          aria-label="Filter by owner"
+          value={ownerFilter}
+          onChange={(event) => setOwnerFilter(event.target.value)}
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-hover)] px-2 py-1.5 text-[13px] text-[var(--color-text-primary)]"
+        >
+          <option value="any">Any owner</option>
+          <option value="unassigned">Unassigned</option>
+          {data?.workspaceMembers?.map((member) => (
+            <option key={member.id} value={member.id}>
+              {member.name}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Filter by team"
+          value={teamFilter}
+          onChange={(event) => setTeamFilter(event.target.value)}
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-hover)] px-2 py-1.5 text-[13px] text-[var(--color-text-primary)]"
+        >
+          <option value="any">Any team</option>
+          {data?.workspaceTeams?.map((team) => (
+            <option key={team.id} value={team.id}>
+              {team.key} · {team.name}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Filter by health"
+          value={healthFilter}
+          onChange={(event) =>
+            setHealthFilter(event.target.value as InitiativeHealth | "any")
+          }
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-hover)] px-2 py-1.5 text-[13px] text-[var(--color-text-primary)]"
+        >
+          <option value="any">Any health</option>
+          {Object.entries(healthLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Filter by target date"
+          value={targetFilter}
+          onChange={(event) =>
+            setTargetFilter(event.target.value as TargetFilter)
+          }
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-hover)] px-2 py-1.5 text-[13px] text-[var(--color-text-primary)]"
+        >
+          <option value="any">Any target</option>
+          <option value="set">Has target</option>
+          <option value="unset">No target</option>
+          <option value="past">Past target</option>
+          <option value="next90">Next 90 days</option>
+        </select>
+        <select
+          aria-label="Filter by active project state"
+          value={activeProjectFilter}
+          onChange={(event) =>
+            setActiveProjectFilter(event.target.value as ActiveProjectFilter)
+          }
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-hover)] px-2 py-1.5 text-[13px] text-[var(--color-text-primary)]"
+        >
+          <option value="any">Any projects</option>
+          <option value="withActive">Has active projects</option>
+          <option value="needsUpdate">Needs project update</option>
+          <option value="paused">Has paused projects</option>
+        </select>
+        <select
+          aria-label="Sort initiatives"
+          value={sortKey}
+          onChange={(event) => setSortKey(event.target.value as SortKey)}
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-hover)] px-2 py-1.5 text-[13px] text-[var(--color-text-primary)]"
+        >
+          <option value="targetDate">Sort: target date</option>
+          <option value="health">Sort: health</option>
+          <option value="status">Sort: status</option>
+          <option value="createdAt">Sort: created</option>
+        </select>
+        <select
+          aria-label="Group initiatives"
+          value={groupKey}
+          onChange={(event) => setGroupKey(event.target.value as GroupKey)}
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-hover)] px-2 py-1.5 text-[13px] text-[var(--color-text-primary)]"
+        >
+          <option value="none">No grouping</option>
+          <option value="status">Group: status</option>
+          <option value="health">Group: health</option>
+          <option value="targetDate">Group: target window</option>
+        </select>
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearch("");
+              setOwnerFilter("any");
+              setTeamFilter("any");
+              setHealthFilter("any");
+              setTargetFilter("any");
+              setActiveProjectFilter("any");
+              setSortKey("targetDate");
+              setGroupKey("none");
+            }}
+            className="rounded-md px-2 py-1.5 text-[13px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+          >
+            Clear view
+          </button>
+        )}
       </div>
 
       {showCreateForm && (
@@ -347,7 +773,11 @@ export default function InitiativesPage() {
                 ? "No initiatives"
                 : `No ${activeTab} initiatives`
             }
-            description="Initiatives are larger, strategic product efforts that organize multiple projects toward a common goal."
+            description={
+              hasActiveFilters
+                ? "No initiatives match the current search, filters, and display options."
+                : "Initiatives are larger, strategic product efforts that organize multiple projects toward a common goal."
+            }
             icon={
               <svg
                 width="22"
@@ -374,9 +804,20 @@ export default function InitiativesPage() {
               onClick: openCreateForm,
             }}
           />
-        ) : (
+        ) : groupKey === "none" ? (
           filteredInitiatives.map((init) => (
             <InitiativeRow key={init.id} initiative={init} />
+          ))
+        ) : (
+          Object.entries(groupedInitiatives).map(([label, initiatives]) => (
+            <section key={label} aria-label={`${label} initiatives group`}>
+              <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-hover)] px-4 py-1.5 text-[12px] font-medium text-[var(--color-text-secondary)]">
+                {label} · {initiatives.length}
+              </div>
+              {initiatives.map((init) => (
+                <InitiativeRow key={init.id} initiative={init} />
+              ))}
+            </section>
           ))
         )}
       </div>
