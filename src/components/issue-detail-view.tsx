@@ -54,6 +54,9 @@ interface IssueComment {
   body: string;
   user: { name: string; image: string | null };
   createdAt: string;
+  ownedByMe?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
   reactions: IssueReaction[];
   attachments: IssueCommentAttachment[];
 }
@@ -1855,29 +1858,33 @@ export function IssueDetailView({
                               >
                                 Copy link
                               </button>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
-                                onClick={() => {
-                                  setCommentActionMenuId(null);
-                                  setEditingCommentId(comment.id);
-                                  setCommentEditBody(comment.body);
-                                }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-red-500 hover:bg-[var(--color-surface-hover)]"
-                                onClick={() => {
-                                  setCommentActionMenuId(null);
-                                  void handleCommentDelete(comment.id);
-                                }}
-                              >
-                                Delete
-                              </button>
+                              {comment.canEdit ? (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                                  onClick={() => {
+                                    setCommentActionMenuId(null);
+                                    setEditingCommentId(comment.id);
+                                    setCommentEditBody(comment.body);
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                              ) : null}
+                              {comment.canDelete ? (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-red-500 hover:bg-[var(--color-surface-hover)]"
+                                  onClick={() => {
+                                    setCommentActionMenuId(null);
+                                    void handleCommentDelete(comment.id);
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              ) : null}
                             </div>
                           ) : null}
                         </div>

@@ -70,6 +70,9 @@ const mockIssueDetail = {
       body: "First comment",
       user: { name: "Ashley", image: null },
       createdAt: "2026-04-25T10:00:00Z",
+      ownedByMe: true,
+      canEdit: true,
+      canDelete: true,
       reactions: [],
       attachments: [],
     },
@@ -793,6 +796,38 @@ describe("IssueDetailView collaboration controls", () => {
     expect(
       screen.getByRole("menuitem", { name: "Delete" }),
     ).toBeInTheDocument();
+  });
+
+  it("hides owner-only comment actions when capabilities are false", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...mockIssueDetail,
+        comments: [
+          {
+            ...mockIssueDetail.comments[0],
+            ownedByMe: false,
+            canEdit: false,
+            canDelete: false,
+          },
+        ],
+      }),
+    } as Response);
+
+    render(<IssueDetailView issueId="iss-1" />);
+    await screen.findByText("First comment");
+
+    fireEvent.click(screen.getByLabelText("More actions"));
+
+    expect(
+      screen.getByRole("menuitem", { name: "Copy link" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Edit" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Delete" }),
+    ).not.toBeInTheDocument();
   });
 
   it("supports issue reactions outside the quick four via picker", async () => {

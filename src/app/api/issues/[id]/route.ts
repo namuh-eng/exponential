@@ -488,6 +488,9 @@ export async function GET(
       body: c.body,
       user: { name: c.userName ?? "Unknown user", image: c.userImage },
       createdAt: c.createdAt,
+      ownedByMe: c.userId === session.user.id,
+      canEdit: c.userId === session.user.id,
+      canDelete: c.userId === session.user.id,
       reactions: Array.from(reactionsByComment.get(c.id)?.entries() ?? []).map(
         ([emoji, data]) => ({
           emoji,

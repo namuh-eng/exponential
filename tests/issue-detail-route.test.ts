@@ -508,6 +508,9 @@ describe("issue detail route", () => {
           body: "first",
           user: { name: "Commenter", image: null },
           createdAt: "2026-04-23T11:00:00.000Z",
+          ownedByMe: false,
+          canEdit: false,
+          canDelete: false,
           reactions: [{ emoji: "🔥", count: 2, reacted: true }],
           attachments: [
             {
