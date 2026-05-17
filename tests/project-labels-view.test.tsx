@@ -139,6 +139,56 @@ describe("ProjectLabelsPage component", () => {
     expect(await screen.findByText("Customer facing")).toBeInTheDocument();
   });
 
+  it("filters labels by search query", async () => {
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => mockLabelsData,
+    });
+
+    render(<ProjectLabelsPage />);
+    await waitFor(() => screen.getByText("Roadmap"));
+
+    fireEvent.change(screen.getByLabelText("Search project labels"), {
+      target: { value: "internal" },
+    });
+
+    expect(screen.queryByText("Roadmap")).not.toBeInTheDocument();
+    expect(screen.getByText("Internal")).toBeInTheDocument();
+  });
+
+  it("keeps create modal open and shows duplicate name errors inline", async () => {
+    (fetch as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockLabelsData,
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({
+          error: "A project label with this name already exists",
+        }),
+      });
+
+    render(<ProjectLabelsPage />);
+    await waitFor(() => screen.getByText("Roadmap"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Create label" }));
+    fireEvent.change(screen.getByPlaceholderText("Project label name"), {
+      target: { value: "Roadmap" },
+    });
+    const createButtons = screen.getAllByRole("button", {
+      name: "Create label",
+    });
+    fireEvent.click(createButtons[createButtons.length - 1]);
+
+    expect(
+      await screen.findByText("A project label with this name already exists"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Create project label" }),
+    ).toBeInTheDocument();
+  });
+
   it("opens create modal from empty state action", async () => {
     (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,

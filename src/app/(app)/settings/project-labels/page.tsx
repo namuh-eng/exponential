@@ -38,11 +38,13 @@ function ProjectLabelModal({
     name: string;
     color: string;
     description: string;
-  }) => void;
+  }) => Promise<string | null> | string | null | undefined;
 }) {
   const [name, setName] = useState(label?.name ?? "");
   const [description, setDescription] = useState(label?.description ?? "");
   const [color, setColor] = useState(label?.color ?? LABEL_COLORS[0]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const isEditing = Boolean(label);
 
@@ -53,17 +55,27 @@ function ProjectLabelModal({
     }
   }, [isEditing]);
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    setSubmitError(null);
     if (!name.trim()) {
+      setSubmitError("Name is required.");
       return;
     }
-    onSubmit({
-      id: label?.id,
-      name: name.trim(),
-      color,
-      description: description.trim(),
-    });
+    setSubmitting(true);
+    try {
+      const error = await onSubmit({
+        id: label?.id,
+        name: name.trim(),
+        color,
+        description: description.trim(),
+      });
+      if (error) {
+        setSubmitError(error);
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -85,11 +97,24 @@ function ProjectLabelModal({
               id="project-label-name"
               type="text"
               value={name}
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) => {
+                setName(event.target.value);
+                setSubmitError(null);
+              }}
+              aria-invalid={Boolean(submitError)}
+              aria-describedby={submitError ? "project-label-error" : undefined}
               className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
               placeholder="Project label name"
             />
           </div>
+          {submitError && (
+            <p
+              id="project-label-error"
+              className="-mt-2 mb-4 text-[12px] text-red-400"
+            >
+              {submitError}
+            </p>
+          )}
           <div className="mb-4">
             <label
               htmlFor="project-label-description"
@@ -137,10 +162,14 @@ function ProjectLabelModal({
             </button>
             <button
               type="submit"
-              disabled={!name.trim()}
+              disabled={!name.trim() || submitting}
               className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              {isEditing ? "Save changes" : "Create label"}
+              {submitting
+                ? "Saving..."
+                : isEditing
+                  ? "Save changes"
+                  : "Create label"}
             </button>
           </div>
         </form>
@@ -214,6 +243,7 @@ export default function ProjectLabelsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingLabel, setEditingLabel] = useState<ProjectLabel | null>(null);
   const [deletingLabel, setDeletingLabel] = useState<ProjectLabel | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchLabels = useCallback(() => {
     setErrorMessage(null);
@@ -255,12 +285,19 @@ export default function ProjectLabelsPage() {
     });
 
     if (!res.ok) {
-      setErrorMessage("Unable to create project label.");
-      return;
+      let detail = "Unable to create project label.";
+      try {
+        const payload = await res.json();
+        detail = typeof payload.error === "string" ? payload.error : detail;
+      } catch {
+        // Keep generic error.
+      }
+      return detail;
     }
 
     setShowCreateModal(false);
     fetchLabels();
+    return null;
   };
 
   const handleEdit = async ({
@@ -275,7 +312,7 @@ export default function ProjectLabelsPage() {
     description: string;
   }) => {
     if (!id) {
-      return;
+      return "Project label not found.";
     }
 
     const res = await fetch(`/api/project-labels/${id}`, {
@@ -285,8 +322,14 @@ export default function ProjectLabelsPage() {
     });
 
     if (!res.ok) {
-      setErrorMessage("Unable to update project label.");
-      return;
+      let detail = "Unable to update project label.";
+      try {
+        const payload = await res.json();
+        detail = typeof payload.error === "string" ? payload.error : detail;
+      } catch {
+        // Keep generic error.
+      }
+      return detail;
     }
 
     setLabels((currentLabels) =>
@@ -297,6 +340,7 @@ export default function ProjectLabelsPage() {
       ),
     );
     setEditingLabel(null);
+    return null;
   };
 
   const handleDelete = async (label: ProjectLabel) => {
@@ -326,6 +370,16 @@ export default function ProjectLabelsPage() {
     }
   };
 
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const filteredLabels = normalizedSearchQuery
+    ? labels.filter((label) =>
+        [label.name, label.description ?? ""]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedSearchQuery),
+      )
+    : labels;
+
   if (loading) {
     return (
       <div className="p-8 text-[var(--color-text-tertiary)]">Loading...</div>
@@ -347,9 +401,31 @@ export default function ProjectLabelsPage() {
         </button>
       </div>
       <p className="mt-3 text-[14px] text-[var(--color-text-secondary)]">
-        Create and manage labels specifically for projects to help with
-        categorization and reporting.
+        Create reusable workspace project labels, inspect usage, and use them in
+        project creation, detail properties, and Projects list filters.
       </p>
+
+      <div className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] p-4">
+        <label
+          htmlFor="project-label-search"
+          className="mb-2 block text-[12px] font-medium text-[var(--color-text-secondary)]"
+        >
+          Search project labels
+        </label>
+        <input
+          id="project-label-search"
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search by name or description..."
+          className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)]"
+        />
+        <p className="mt-2 text-[12px] text-[var(--color-text-tertiary)]">
+          {labels.length} reusable labels ·{" "}
+          {labels.reduce((total, label) => total + label.projectCount, 0)}{" "}
+          project assignments
+        </p>
+      </div>
 
       {errorMessage && (
         <p className="mt-4 text-[13px] text-red-400">{errorMessage}</p>
@@ -367,51 +443,57 @@ export default function ProjectLabelsPage() {
           />
         ) : (
           <div className="flex flex-col gap-1">
-            {labels.map((label) => (
-              <div
-                key={label.id}
-                className="flex items-center justify-between rounded-lg border border-[var(--color-border)] px-4 py-3 transition-colors hover:bg-[var(--color-surface-hover)]"
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className="h-3 w-3 rounded-full"
-                    style={{ backgroundColor: label.color }}
-                  />
-                  <div>
-                    <div className="text-[14px] font-medium text-[var(--color-text-primary)]">
-                      {label.name}
-                    </div>
-                    {label.description && (
-                      <div className="text-[12px] text-[var(--color-text-tertiary)]">
-                        {label.description}
+            {filteredLabels.length === 0 ? (
+              <div className="rounded-lg border border-[var(--color-border)] px-4 py-6 text-center text-[13px] text-[var(--color-text-secondary)]">
+                No project labels match your search.
+              </div>
+            ) : (
+              filteredLabels.map((label) => (
+                <div
+                  key={label.id}
+                  className="flex items-center justify-between rounded-lg border border-[var(--color-border)] px-4 py-3 transition-colors hover:bg-[var(--color-surface-hover)]"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="h-3 w-3 rounded-full"
+                      style={{ backgroundColor: label.color }}
+                    />
+                    <div>
+                      <div className="text-[14px] font-medium text-[var(--color-text-primary)]">
+                        {label.name}
                       </div>
-                    )}
+                      {label.description && (
+                        <div className="text-[12px] text-[var(--color-text-tertiary)]">
+                          {label.description}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-[12px] text-[var(--color-text-tertiary)]">
+                      {label.projectCount}{" "}
+                      {label.projectCount === 1 ? "project" : "projects"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setDeletingLabel(label)}
+                      className="text-[13px] text-red-400 hover:text-red-300"
+                      aria-label={`Delete ${label.name}`}
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingLabel(label)}
+                      className="text-[13px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                      aria-label={`Edit ${label.name}`}
+                    >
+                      Edit
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-[12px] text-[var(--color-text-tertiary)]">
-                    {label.projectCount}{" "}
-                    {label.projectCount === 1 ? "project" : "projects"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setDeletingLabel(label)}
-                    className="text-[13px] text-red-400 hover:text-red-300"
-                    aria-label={`Delete ${label.name}`}
-                  >
-                    Delete
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditingLabel(label)}
-                    className="text-[13px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                    aria-label={`Edit ${label.name}`}
-                  >
-                    Edit
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
       </div>
