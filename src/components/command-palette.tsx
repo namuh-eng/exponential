@@ -2,6 +2,7 @@
 
 import {
   LAST_ISSUE_STORAGE_KEY,
+  OPEN_ASK_LINEAR_EVENT,
   OPEN_COMMAND_PALETTE_EVENT,
   OPEN_CREATE_ISSUE_EVENT,
   OPEN_CREATE_ISSUE_FULLSCREEN_EVENT,
@@ -152,6 +153,15 @@ export function CommandPalette({
 
   // Commands
   const commands: CommandItem[] = [
+    {
+      id: "ask-linear",
+      label: "Ask Linear",
+      shortcut: "A",
+      group: "Ask",
+      action: () => {
+        window.dispatchEvent(new CustomEvent(OPEN_ASK_LINEAR_EVENT));
+      },
+    },
     {
       id: "create-view",
       label: "Create view",
