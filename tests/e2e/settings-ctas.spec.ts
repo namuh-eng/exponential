@@ -21,12 +21,20 @@ test.describe("settings empty-state CTAs", () => {
     await expect(page.getByRole("heading", { name: "Slack" })).toBeVisible();
 
     await page.goto(`/${workspaceSlug}/settings/asks`);
+    const asksToggle = page.getByRole("checkbox", { name: "Enable Asks" });
+    await expect(asksToggle).toBeVisible();
+    await asksToggle.check();
+    await expect(page.getByText("Asks settings saved.")).toBeVisible();
+    await expect(page.getByLabel("Intake email")).toBeEnabled();
+
+    await page.goto(`/${workspaceSlug}/settings/pulse`);
     await expect(
-      page.getByRole("button", { name: "Enable Asks" }),
-    ).toBeDisabled();
-    await expect(
-      page.getByText("Asks setup is not available in this workspace yet."),
-    ).toBeVisible();
+      page.getByRole("checkbox", { name: "Enable Pulse insights" }),
+    ).toBeChecked();
+    await page
+      .getByRole("combobox", { name: "Digest frequency" })
+      .selectOption("daily");
+    await expect(page.getByText("Pulse settings saved.")).toBeVisible();
 
     await page.goto(`/${workspaceSlug}/settings/emojis`);
     await expect(
