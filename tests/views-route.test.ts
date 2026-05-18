@@ -72,9 +72,12 @@ vi.mock("@/lib/db", () => ({
       };
     }),
     insert: vi.fn(() => ({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue([{ id: "view-2" }]),
-      }),
+      values: (...valuesArgs: unknown[]) => {
+        insertValuesMock(...valuesArgs);
+        return {
+          returning: vi.fn().mockResolvedValue([{ id: "view-2" }]),
+        };
+      },
     })),
   },
 }));
@@ -162,18 +165,80 @@ describe("views collection route", () => {
     expect(payload.teams.length).toBe(1);
   });
 
-  it("creates a view", async () => {
+  it("creates a timeline issue view with filters and display options", async () => {
+    normalizeViewFilterStateMock.mockReturnValue({
+      entityType: "issues",
+      scope: "team",
+      issueFilters: [{ type: "priority", operator: "is", values: ["urgent"] }],
+      issueDisplayOptions: {
+        groupBy: "assignee",
+        orderBy: "updated",
+        visibleProperties: { id: true },
+        timelineBy: "dueDate",
+      },
+      projectStatusFilter: "all",
+      projectSortBy: "created-desc",
+      projectGroupBy: "none",
+      projectVisibleProperties: { lead: true },
+    });
+    insertedViewLimitMock.mockReturnValue([
+      {
+        id: "view-2",
+        name: "Timeline issues",
+        layout: "timeline",
+        isPersonal: true,
+        filterState: {},
+        teamId: "team-1",
+        teamKey: "ENG",
+        teamName: "Engineering",
+        ownerName: "Ashley",
+        ownerImage: null,
+        createdAt: new Date("2026-04-23T11:00:00.000Z"),
+        updatedAt: new Date("2026-04-23T11:00:00.000Z"),
+      },
+    ]);
     const { POST } = await import("@/app/api/views/route");
 
     const response = await POST(
       new Request("http://localhost", {
         method: "POST",
-        body: JSON.stringify({ name: "Projects", layout: "list" }),
+        body: JSON.stringify({
+          name: "Timeline issues",
+          layout: "timeline",
+          teamId: "team-1",
+          filterState: {
+            entityType: "issues",
+            issueFilters: [
+              { type: "priority", operator: "is", values: ["urgent"] },
+            ],
+            issueDisplayOptions: {
+              groupBy: "assignee",
+              orderBy: "updated",
+              visibleProperties: { id: true },
+              timelineBy: "dueDate",
+            },
+          },
+        }),
       }),
     );
 
     expect(response.status).toBe(201);
-    const payload = await response.json();
-    expect(payload.view.id).toBe("view-2");
+    expect(normalizeViewFilterStateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issueDisplayOptions: expect.objectContaining({ timelineBy: "dueDate" }),
+      }),
+      "team-1",
+    );
+    expect(insertValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        layout: "timeline",
+        filterState: expect.objectContaining({
+          issueDisplayOptions: expect.objectContaining({
+            groupBy: "assignee",
+            orderBy: "updated",
+          }),
+        }),
+      }),
+    );
   });
 });

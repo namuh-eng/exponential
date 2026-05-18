@@ -3,15 +3,23 @@
 import { useAppShellContext } from "@/app/(app)/app-shell";
 import { Avatar } from "@/components/avatar";
 import { EmptyState } from "@/components/empty-state";
-import type { FilterCondition } from "@/components/filter-bar";
+import type {
+  FilterCondition,
+  FilterOperator,
+  FilterType,
+} from "@/components/filter-bar";
 import { SidebarFavoriteButton } from "@/components/sidebar-favorite-button";
 import { TeamRouteErrorState } from "@/components/team-route-error-state";
 import {
   type ProjectViewSortOption,
   type ProjectViewStatusFilter,
+  type TimelineByOption,
   type ViewEntityType,
   type ViewScope,
   type ViewSummary,
+  defaultIssueViewDisplayOptions,
+  defaultProjectViewVisibleProperties,
+  projectViewGroupOptions,
   projectViewSortOptions,
   projectViewStatusOptions,
 } from "@/lib/views";
@@ -26,7 +34,19 @@ interface ViewTeam {
 }
 
 const ISSUE_FILTER_STORAGE_PREFIX = "exponential-filters:team:";
+const ISSUE_DISPLAY_STORAGE_PREFIX = "exponential-display-options:team:";
 const PROJECT_VIEW_STORAGE_KEY = "exponential-project-view:workspace";
+const filterTypeOptions: Array<{ value: FilterType; label: string }> = [
+  { value: "status", label: "Status" },
+  { value: "priority", label: "Priority" },
+  { value: "assignee", label: "Assignee" },
+  { value: "label", label: "Label" },
+  { value: "project", label: "Project" },
+  { value: "cycle", label: "Cycle" },
+  { value: "creator", label: "Creator" },
+  { value: "dueDate", label: "Due date" },
+  { value: "estimate", label: "Estimate" },
+];
 
 function getStorage(): Pick<
   Storage,
@@ -85,6 +105,22 @@ function writeStoredIssueFilters(teamKey: string, filters: FilterCondition[]) {
   );
 }
 
+function writeStoredIssueDisplayOptions(
+  teamKey: string,
+  displayOptions: ViewSummary["filterState"]["issueDisplayOptions"],
+  layout: "list" | "board" | "timeline",
+) {
+  const storage = getStorage();
+  if (!storage) {
+    return;
+  }
+
+  storage.setItem(
+    `${ISSUE_DISPLAY_STORAGE_PREFIX}${teamKey}`,
+    JSON.stringify({ ...displayOptions, layout }),
+  );
+}
+
 function writeStoredProjectViewState(options: {
   statusFilter: ProjectViewStatusFilter;
   sortBy: ProjectViewSortOption;
@@ -103,6 +139,30 @@ function LayoutIcon({
 }: {
   layout: "list" | "board" | "timeline";
 }) {
+  if (layout === "timeline") {
+    return (
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        role="img"
+        aria-label="Timeline layout"
+      >
+        <path d="M4 6h16" />
+        <path d="M4 12h10" />
+        <path d="M4 18h16" />
+        <circle cx="8" cy="6" r="2" />
+        <circle cx="14" cy="12" r="2" />
+        <circle cx="18" cy="18" r="2" />
+      </svg>
+    );
+  }
+
   if (layout === "board") {
     return (
       <svg
@@ -238,8 +298,8 @@ function CreateViewModal({
   onSaved: (view: ViewSummary) => void;
 }) {
   const [name, setName] = useState(view?.name ?? "");
-  const [layout, setLayout] = useState<"list" | "board">(
-    view?.layout === "board" ? "board" : "list",
+  const [layout, setLayout] = useState<"list" | "board" | "timeline">(
+    view?.layout ?? "list",
   );
   const [isPersonal, setIsPersonal] = useState(view?.isPersonal ?? true);
   const [scope, setScope] = useState<ViewScope>(view?.scope ?? "workspace");
@@ -256,6 +316,39 @@ function CreateViewModal({
   const [projectSortBy, setProjectSortBy] = useState<ProjectViewSortOption>(
     view?.filterState.projectSortBy ?? "created-desc",
   );
+  const [issueFilters, setIssueFilters] = useState<FilterCondition[]>(
+    view?.filterState.issueFilters ?? [],
+  );
+  const [newFilter, setNewFilter] = useState<FilterCondition>({
+    type: "status",
+    operator: "is",
+    values: [""],
+  });
+  const [issueGroupBy, setIssueGroupBy] = useState(
+    view?.filterState.issueDisplayOptions?.groupBy ??
+      defaultIssueViewDisplayOptions.groupBy,
+  );
+  const [issueOrderBy, setIssueOrderBy] = useState(
+    view?.filterState.issueDisplayOptions?.orderBy ??
+      defaultIssueViewDisplayOptions.orderBy,
+  );
+  const [timelineBy, setTimelineBy] = useState<TimelineByOption>(
+    view?.filterState.issueDisplayOptions?.timelineBy ??
+      defaultIssueViewDisplayOptions.timelineBy,
+  );
+  const [visibleProperties, setVisibleProperties] = useState(
+    view?.filterState.issueDisplayOptions?.visibleProperties ?? {
+      ...defaultIssueViewDisplayOptions.visibleProperties,
+    },
+  );
+  const [projectGroupBy, setProjectGroupBy] = useState(
+    view?.filterState.projectGroupBy ?? "none",
+  );
+  const [projectVisibleProperties, setProjectVisibleProperties] = useState(
+    view?.filterState.projectVisibleProperties ?? {
+      ...defaultProjectViewVisibleProperties,
+    },
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -266,10 +359,23 @@ function CreateViewModal({
   }, [activeTab]);
 
   const selectedTeam = teams.find((team) => team.id === teamId) ?? null;
-  const capturedFilters =
-    activeTab === "issues" && selectedTeam
-      ? readStoredIssueFilters(selectedTeam.key)
-      : [];
+  useEffect(() => {
+    if (!view && activeTab === "issues" && selectedTeam) {
+      setIssueFilters(readStoredIssueFilters(selectedTeam.key));
+    }
+  }, [activeTab, selectedTeam, view]);
+
+  const addFilter = () => {
+    const value = newFilter.values[0]?.trim();
+    if (!value) {
+      return;
+    }
+    setIssueFilters((current) => [
+      ...current,
+      { ...newFilter, values: [value] },
+    ]);
+    setNewFilter((current) => ({ ...current, values: [""] }));
+  };
 
   const handleSubmit = async () => {
     if (!name.trim() || submitting) {
@@ -292,9 +398,17 @@ function CreateViewModal({
       filterState: {
         entityType: activeTab,
         scope: activeTab === "issues" ? "team" : scope,
-        issueFilters: activeTab === "issues" ? capturedFilters : [],
+        issueFilters: activeTab === "issues" ? issueFilters : [],
+        issueDisplayOptions: {
+          groupBy: issueGroupBy,
+          orderBy: issueOrderBy,
+          visibleProperties,
+          timelineBy,
+        },
         projectStatusFilter,
         projectSortBy,
+        projectGroupBy,
+        projectVisibleProperties,
       },
     };
 
@@ -323,7 +437,7 @@ function CreateViewModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="w-full max-w-[440px] rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-4 shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-[560px] overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-4 shadow-xl">
         <h2 className="mb-3 text-[14px] font-medium text-[var(--color-text-primary)]">
           {view ? "Edit view" : "Create view"}
         </h2>
@@ -355,10 +469,90 @@ function CreateViewModal({
               </select>
             </div>
 
-            <div className="mb-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-hover)] px-3 py-2 text-[12px] text-[var(--color-text-secondary)]">
-              Uses {capturedFilters.length} saved filter
-              {capturedFilters.length === 1 ? "" : "s"} from{" "}
-              {selectedTeam?.name ?? "this team"}.
+            <div className="mb-3 rounded-md border border-[var(--color-border)] p-3">
+              <div className="mb-2 text-[12px] font-medium text-[var(--color-text-primary)]">
+                Filters
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[1fr_110px_1fr_auto]">
+                <select
+                  aria-label="Filter field"
+                  value={newFilter.type}
+                  onChange={(event) =>
+                    setNewFilter((current) => ({
+                      ...current,
+                      type: event.target.value as FilterType,
+                    }))
+                  }
+                  className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-2 py-1.5 text-[12px]"
+                >
+                  {filterTypeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label="Filter operator"
+                  value={newFilter.operator}
+                  onChange={(event) =>
+                    setNewFilter((current) => ({
+                      ...current,
+                      operator: event.target.value as FilterOperator,
+                    }))
+                  }
+                  className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-2 py-1.5 text-[12px]"
+                >
+                  <option value="is">is</option>
+                  <option value="isNot">is not</option>
+                </select>
+                <input
+                  aria-label="Filter value"
+                  value={newFilter.values[0] ?? ""}
+                  onChange={(event) =>
+                    setNewFilter((current) => ({
+                      ...current,
+                      values: [event.target.value],
+                    }))
+                  }
+                  placeholder="Value or ID"
+                  className="rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 text-[12px]"
+                />
+                <button
+                  type="button"
+                  onClick={addFilter}
+                  className="rounded-md bg-[var(--color-surface-active)] px-2 py-1.5 text-[12px]"
+                >
+                  Add filter
+                </button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {issueFilters.length === 0 ? (
+                  <span className="text-[12px] text-[var(--color-text-secondary)]">
+                    No filters. This view will include all{" "}
+                    {selectedTeam?.name ?? "team"} issues.
+                  </span>
+                ) : (
+                  issueFilters.map((filter, index) => (
+                    <button
+                      key={`${filter.type}-${filter.operator}-${filter.values.join(",")}-${index}`}
+                      type="button"
+                      onClick={() =>
+                        setIssueFilters((current) =>
+                          current.filter(
+                            (_, entryIndex) => entryIndex !== index,
+                          ),
+                        )
+                      }
+                      className="rounded-full border border-[var(--color-border)] px-2 py-1 text-[11px]"
+                      aria-label={`Remove ${filter.type} filter`}
+                    >
+                      {filter.type}{" "}
+                      {filter.operator === "isNot" ? "is not" : "is"}{" "}
+                      {filter.values.join(", ")} ×
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
           </>
         )}
@@ -456,6 +650,55 @@ function CreateViewModal({
                 </select>
               </label>
             </div>
+
+            <div className="mb-3 grid gap-3 sm:grid-cols-2">
+              <label className="text-[12px] text-[var(--color-text-secondary)]">
+                <span className="mb-1 block">Group projects by</span>
+                <select
+                  aria-label="Select project grouping"
+                  value={projectGroupBy}
+                  onChange={(event) =>
+                    setProjectGroupBy(
+                      event.target.value as typeof projectGroupBy,
+                    )
+                  }
+                  className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                >
+                  {projectViewGroupOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="text-[12px] text-[var(--color-text-secondary)]">
+                <span className="mb-1 block">Project properties</span>
+                <div className="flex flex-wrap gap-1">
+                  {Object.keys(projectVisibleProperties).map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() =>
+                        setProjectVisibleProperties((current) => ({
+                          ...current,
+                          [key]: !current[key as keyof typeof current],
+                        }))
+                      }
+                      className={`rounded-full border border-[var(--color-border)] px-2 py-1 text-[11px] ${
+                        projectVisibleProperties[
+                          key as keyof typeof projectVisibleProperties
+                        ]
+                          ? "text-[var(--color-text-primary)]"
+                          : "text-[var(--color-text-tertiary)]"
+                      }`}
+                    >
+                      {key}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </>
         )}
 
@@ -487,9 +730,117 @@ function CreateViewModal({
               >
                 Board
               </button>
+              <button
+                type="button"
+                onClick={() => setLayout("timeline")}
+                className={`rounded-md px-3 py-1.5 text-[12px] ${
+                  layout === "timeline"
+                    ? "bg-[var(--color-surface-active)] text-[var(--color-text-primary)]"
+                    : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                }`}
+              >
+                Timeline
+              </button>
             </div>
           </div>
         )}
+
+        {activeTab === "issues" && (
+          <div className="mb-3 rounded-md border border-[var(--color-border)] p-3">
+            <div className="mb-2 text-[12px] font-medium text-[var(--color-text-primary)]">
+              Display options
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="text-[12px] text-[var(--color-text-secondary)]">
+                <span className="mb-1 block">Group by</span>
+                <select
+                  aria-label="Group issues by"
+                  value={issueGroupBy}
+                  onChange={(event) =>
+                    setIssueGroupBy(event.target.value as typeof issueGroupBy)
+                  }
+                  className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-2 py-1.5"
+                >
+                  {[
+                    "status",
+                    "priority",
+                    "assignee",
+                    "label",
+                    "project",
+                    "none",
+                  ].map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-[12px] text-[var(--color-text-secondary)]">
+                <span className="mb-1 block">Order by</span>
+                <select
+                  aria-label="Order issues by"
+                  value={issueOrderBy}
+                  onChange={(event) =>
+                    setIssueOrderBy(event.target.value as typeof issueOrderBy)
+                  }
+                  className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-2 py-1.5"
+                >
+                  {["priority", "created", "updated", "manual"].map(
+                    (option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+              <label className="text-[12px] text-[var(--color-text-secondary)]">
+                <span className="mb-1 block">Timeline by</span>
+                <select
+                  aria-label="Timeline date field"
+                  value={timelineBy}
+                  onChange={(event) =>
+                    setTimelineBy(event.target.value as TimelineByOption)
+                  }
+                  className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-2 py-1.5"
+                >
+                  <option value="created">Created</option>
+                  <option value="updated">Updated</option>
+                  <option value="dueDate">Due date</option>
+                </select>
+              </label>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1">
+              {Object.keys(visibleProperties).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() =>
+                    setVisibleProperties((current) => ({
+                      ...current,
+                      [key]: !current[key as keyof typeof current],
+                    }))
+                  }
+                  className={`rounded-full border border-[var(--color-border)] px-2 py-1 text-[11px] ${
+                    visibleProperties[key as keyof typeof visibleProperties]
+                      ? "text-[var(--color-text-primary)]"
+                      : "text-[var(--color-text-tertiary)]"
+                  }`}
+                >
+                  {key}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mb-3 rounded-md bg-[var(--color-surface-hover)] px-3 py-2 text-[12px] text-[var(--color-text-secondary)]">
+          Preview:{" "}
+          {activeTab === "issues"
+            ? `${issueFilters.length} filter${issueFilters.length === 1 ? "" : "s"}, ${layout} layout, grouped by ${issueGroupBy}`
+            : `${projectStatusFilter} projects, sorted by ${projectSortBy}, grouped by ${projectGroupBy}`}
+          .
+        </div>
 
         <div className="mb-4">
           <span className="mb-1 block text-[12px] text-[var(--color-text-secondary)]">
@@ -643,9 +994,14 @@ export function ViewsPage({
       }
 
       writeStoredIssueFilters(view.teamKey, view.filterState.issueFilters);
+      writeStoredIssueDisplayOptions(
+        view.teamKey,
+        view.filterState.issueDisplayOptions,
+        view.layout,
+      );
       router.push(
         withWorkspaceSlug(
-          view.layout === "board"
+          view.layout === "board" || view.layout === "timeline"
             ? `/team/${view.teamKey}/board`
             : `/team/${view.teamKey}/all`,
           workspaceSlug,

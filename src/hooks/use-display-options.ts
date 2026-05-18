@@ -54,6 +54,25 @@ export function useDisplayOptions(
             }));
           }
         }
+        try {
+          const rawSavedViewOptions = window.localStorage.getItem(
+            `exponential-display-options:team:${teamKey}`,
+          );
+          if (rawSavedViewOptions) {
+            const savedViewOptions = JSON.parse(rawSavedViewOptions);
+            setOptions((prev) => ({
+              ...prev,
+              groupBy: savedViewOptions.groupBy ?? prev.groupBy,
+              orderBy: savedViewOptions.orderBy ?? prev.orderBy,
+              displayProperties:
+                savedViewOptions.visibleProperties ?? prev.displayProperties,
+              layout:
+                savedViewOptions.layout === "board" ? "board" : initialLayout,
+            }));
+          }
+        } catch {
+          // Ignore malformed saved view display options.
+        }
       } finally {
         setLoaded(true);
       }

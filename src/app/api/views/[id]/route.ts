@@ -172,7 +172,10 @@ export async function PATCH(
       layout:
         filterState.entityType === "projects"
           ? "list"
-          : body.layout === "board" || existing.layout === "board"
+          : body.layout === "board" ||
+              body.layout === "timeline" ||
+              existing.layout === "board" ||
+              existing.layout === "timeline"
             ? (body.layout ?? existing.layout)
             : "list",
       isPersonal:

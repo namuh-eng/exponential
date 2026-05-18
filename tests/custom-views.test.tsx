@@ -72,8 +72,36 @@ function buildViewsResponse() {
           issueFilters: [
             { type: "priority", operator: "is", values: ["high"] },
           ],
+          issueDisplayOptions: {
+            groupBy: "status",
+            orderBy: "priority",
+            visibleProperties: {
+              id: true,
+              status: true,
+              assignee: true,
+              priority: true,
+              project: true,
+              dueDate: true,
+              milestone: false,
+              labels: true,
+              links: false,
+              timeInStatus: false,
+              created: true,
+              updated: false,
+              pullRequests: false,
+            },
+            timelineBy: "created",
+          },
           projectStatusFilter: "all",
           projectSortBy: "created-desc",
+          projectGroupBy: "none",
+          projectVisibleProperties: {
+            lead: true,
+            team: true,
+            status: true,
+            progress: true,
+            targetDate: true,
+          },
         },
         createdAt: "2026-01-01T00:00:00Z",
         updatedAt: "2026-01-01T00:00:00Z",
@@ -93,8 +121,36 @@ function buildViewsResponse() {
           entityType: "projects",
           scope: "workspace",
           issueFilters: [],
+          issueDisplayOptions: {
+            groupBy: "status",
+            orderBy: "priority",
+            visibleProperties: {
+              id: true,
+              status: true,
+              assignee: true,
+              priority: true,
+              project: true,
+              dueDate: true,
+              milestone: false,
+              labels: true,
+              links: false,
+              timeInStatus: false,
+              created: true,
+              updated: false,
+              pullRequests: false,
+            },
+            timelineBy: "created",
+          },
           projectStatusFilter: "started",
           projectSortBy: "progress-desc",
+          projectGroupBy: "none",
+          projectVisibleProperties: {
+            lead: true,
+            team: true,
+            status: true,
+            progress: true,
+            targetDate: true,
+          },
         },
         createdAt: "2026-01-02T00:00:00Z",
         updatedAt: "2026-01-02T00:00:00Z",
@@ -243,7 +299,7 @@ describe("ViewsPage", () => {
     expect(screen.queryByText("No views")).not.toBeInTheDocument();
   });
 
-  it("creates issue views with captured team filters", async () => {
+  it("creates issue views with editable filters, display options, and timeline layout", async () => {
     window.localStorage.setItem(
       "exponential-filters:team:ONB",
       JSON.stringify([{ type: "status", operator: "is", values: ["started"] }]),
@@ -268,6 +324,23 @@ describe("ViewsPage", () => {
     fireEvent.change(screen.getByPlaceholderText(/view name/i), {
       target: { value: "Filtered Issues" },
     });
+    fireEvent.change(screen.getByLabelText("Filter field"), {
+      target: { value: "priority" },
+    });
+    fireEvent.change(screen.getByLabelText("Filter value"), {
+      target: { value: "urgent" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add filter" }));
+    fireEvent.click(screen.getByRole("button", { name: "Timeline" }));
+    fireEvent.change(screen.getByLabelText("Group issues by"), {
+      target: { value: "assignee" },
+    });
+    fireEvent.change(screen.getByLabelText("Order issues by"), {
+      target: { value: "updated" },
+    });
+    fireEvent.change(screen.getByLabelText("Timeline date field"), {
+      target: { value: "dueDate" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
 
     await waitFor(() => {
@@ -275,10 +348,25 @@ describe("ViewsPage", () => {
         "/api/views",
         expect.objectContaining({
           method: "POST",
-          body: expect.stringContaining('"issueFilters":[{"type":"status"'),
+          body: expect.stringContaining('"layout":"timeline"'),
         }),
       );
     });
+    const createCall = mockFetch.mock.calls.find(
+      (call) => call[0] === "/api/views" && call[1]?.method === "POST",
+    );
+    const payload = JSON.parse(String(createCall?.[1]?.body));
+    expect(payload.filterState.issueFilters).toEqual([
+      { type: "status", operator: "is", values: ["started"] },
+      { type: "priority", operator: "is", values: ["urgent"] },
+    ]);
+    expect(payload.filterState.issueDisplayOptions).toEqual(
+      expect.objectContaining({
+        groupBy: "assignee",
+        orderBy: "updated",
+        timelineBy: "dueDate",
+      }),
+    );
   });
 
   it("opens issue views by restoring filters and navigating to the team route", async () => {
@@ -295,6 +383,9 @@ describe("ViewsPage", () => {
     expect(window.localStorage.getItem("exponential-filters:team:ONB")).toBe(
       JSON.stringify([{ type: "priority", operator: "is", values: ["high"] }]),
     );
+    expect(
+      window.localStorage.getItem("exponential-display-options:team:ONB"),
+    ).toContain('"groupBy":"status"');
     expect(push).toHaveBeenCalledWith("/team/ONB/all");
   });
 

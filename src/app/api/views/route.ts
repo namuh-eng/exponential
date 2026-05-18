@@ -159,8 +159,8 @@ export async function POST(request: Request) {
   const nextLayout =
     filterState.entityType === "projects"
       ? "list"
-      : layout === "board"
-        ? "board"
+      : layout === "board" || layout === "timeline"
+        ? layout
         : "list";
 
   const [newView] = await db

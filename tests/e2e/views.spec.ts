@@ -36,9 +36,31 @@ test.describe("Workspace Views canonical route", () => {
 
     await page.getByLabel("Create view").first().click();
     await page.getByPlaceholder("View name").fill(issueViewName);
+    await expect(page.getByText("Filters", { exact: true })).toBeVisible();
+    await page.getByLabel("Filter field").selectOption("priority");
+    await page.getByLabel("Filter value").fill("urgent");
+    await page.getByRole("button", { name: "Add filter" }).click();
+    await page.getByRole("button", { name: "Timeline", exact: true }).click();
+    await page.getByLabel("Group issues by").selectOption("assignee");
+    await page.getByLabel("Order issues by").selectOption("updated");
+    await page.getByLabel("Timeline date field").selectOption("dueDate");
+    await expect(
+      page.getByText(/1 filter, timeline layout, grouped by assignee/),
+    ).toBeVisible();
     await page.getByRole("button", { name: /^Create$/ }).click();
     await expect(page.getByText(issueViewName)).toBeVisible();
     await expect(page).toHaveURL(/\/foreverbrowsing\/views$/);
+
+    await page.reload();
+    await expect(page.getByText(issueViewName)).toBeVisible();
+    await page.getByRole("button", { name: `Edit ${issueViewName}` }).click();
+    await expect(
+      page.getByRole("button", { name: "Timeline", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Group issues by")).toHaveValue("assignee");
+    await expect(page.getByLabel("Order issues by")).toHaveValue("updated");
+    await expect(page.getByLabel("Timeline date field")).toHaveValue("dueDate");
+    await page.getByRole("button", { name: "Cancel" }).click();
 
     await page.getByRole("button", { name: "Projects" }).click();
     await expect(page).toHaveURL(/\/foreverbrowsing\/views$/);
@@ -48,6 +70,7 @@ test.describe("Workspace Views canonical route", () => {
 
     await page.getByLabel("Create view").first().click();
     await page.getByPlaceholder("View name").fill(projectViewName);
+    await page.getByLabel("Select project grouping").selectOption("status");
     await page.getByRole("button", { name: /^Create$/ }).click();
     await expect(page.getByText(projectViewName)).toBeVisible();
     await expect(page).toHaveURL(/\/foreverbrowsing\/views$/);
