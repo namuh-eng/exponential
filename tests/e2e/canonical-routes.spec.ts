@@ -66,6 +66,78 @@ test.describe("Canonical Forever Browsing routes", () => {
     }
   });
 
+  test("opens an assigned My Issues row with normal link navigation", async ({
+    page,
+  }) => {
+    await page.route("**/api/my-issues?tab=assigned", async (route) => {
+      await route.fulfill({
+        json: {
+          groups: [
+            {
+              state: {
+                id: "backlog:Backlog",
+                name: "Backlog",
+                category: "backlog",
+                color: "#6b6f76",
+                position: 1,
+              },
+              issues: [
+                {
+                  id: "issue-row-e2e",
+                  number: 1,
+                  identifier: "ENG-E2E",
+                  title: "Open from My Issues",
+                  priority: "high",
+                  stateId: "backlog:Backlog",
+                  assigneeId: "playwright-user",
+                  assignee: { name: "Playwright User", image: null },
+                  labels: [],
+                  labelIds: [],
+                  projectId: null,
+                  projectName: null,
+                  dueDate: null,
+                  createdAt: "2026-05-18T00:00:00.000Z",
+                  updatedAt: "2026-05-18T00:00:00.000Z",
+                  displayAt: "2026-05-18T00:00:00.000Z",
+                  teamKey: "ENG",
+                },
+              ],
+            },
+          ],
+          totalCount: 1,
+          filterOptions: {
+            statuses: [
+              {
+                id: "backlog:Backlog",
+                name: "Backlog",
+                category: "backlog",
+                color: "#6b6f76",
+              },
+            ],
+            assignees: [
+              { id: "playwright-user", name: "Playwright User", image: null },
+            ],
+            labels: [],
+            priorities: [{ value: "high", label: "High" }],
+          },
+        },
+      });
+    });
+
+    await page.goto("/foreverbrowsing/my-issues/assigned");
+    const row = page.getByRole("link", { name: "ENG-E2E Open from My Issues" });
+    await expect(row).toHaveAttribute(
+      "href",
+      "/foreverbrowsing/team/ENG/issue/issue-row-e2e",
+    );
+    await row.focus();
+    await expect(row).toBeFocused();
+    await row.click();
+    await expect(page).toHaveURL(
+      /\/foreverbrowsing\/team\/ENG\/issue\/issue-row-e2e$/,
+    );
+  });
+
   test("renders canonical workspace/team deep links and redirects legacy ENG route", async ({
     page,
   }) => {

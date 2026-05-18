@@ -62,6 +62,20 @@ interface MyIssuesResponse {
   filterOptions: FilterOptions;
 }
 
+function buildIssueHref(
+  issue: Pick<IssueData, "id" | "teamKey">,
+  workspaceSlug?: string,
+) {
+  if (!issue.teamKey) {
+    return undefined;
+  }
+
+  return withWorkspaceSlug(
+    `/team/${issue.teamKey}/issue/${issue.id}`,
+    workspaceSlug,
+  );
+}
+
 type StatusCategory =
   | "triage"
   | "backlog"
@@ -356,6 +370,7 @@ export default function MyIssuesTabPage() {
                 labels={iss.labels}
                 projectName={iss.projectName ?? undefined}
                 createdAt={iss.displayAt ?? iss.createdAt}
+                href={buildIssueHref(iss, workspaceSlug)}
                 displayProperties={displayProperties}
               />
             ))}

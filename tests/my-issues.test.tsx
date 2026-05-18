@@ -137,6 +137,43 @@ describe("MyIssuesTabPage", () => {
     expect(screen.getByText("Add dark mode")).toBeDefined();
   });
 
+  it("links rows with team metadata to the workspace issue detail route", async () => {
+    mockFetch(sampleData);
+    render(<MyIssuesTabPage />);
+
+    const issueLink = await screen.findByRole("link", {
+      name: "ENG-1 Fix auth bug",
+    });
+
+    expect(issueLink.getAttribute("href")).toBe(
+      "/foreverbrowsing/team/ENG/issue/i1",
+    );
+  });
+
+  it("does not render a row link when team metadata is missing", async () => {
+    mockFetch({
+      ...sampleData,
+      groups: [
+        {
+          ...sampleData.groups[0],
+          issues: [
+            {
+              ...sampleData.groups[0].issues[0],
+              teamKey: undefined,
+            },
+          ],
+        },
+      ],
+      totalCount: 1,
+    });
+    render(<MyIssuesTabPage />);
+
+    expect(await screen.findByText("ENG-1")).toBeDefined();
+    expect(
+      screen.queryByRole("link", { name: "ENG-1 Fix auth bug" }),
+    ).toBeNull();
+  });
+
   it("shows workflow state group headers", async () => {
     mockFetch(sampleData);
     render(<MyIssuesTabPage />);
