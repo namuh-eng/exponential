@@ -5,6 +5,10 @@ import {
   isSlackOAuthConfigured,
 } from "@/lib/auth-providers";
 import { isPasskeyAuthEnabled } from "@/lib/passkeys";
+import {
+  isWorkspaceAuthMethodAllowed,
+  resolveWorkspaceAuthPolicy,
+} from "@/lib/workspace-auth-methods";
 import { NextResponse } from "next/server";
 
 function accountProviderCapability(configured: boolean, label: string) {
@@ -20,15 +24,32 @@ function accountProviderCapability(configured: boolean, label: string) {
   };
 }
 
-export function GET() {
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const callbackUrl = url.searchParams.get("callbackUrl");
+  const policy = await resolveWorkspaceAuthPolicy({
+    callbackUrl,
+    baseUrl: url.origin,
+  });
+  const googleAllowed = isWorkspaceAuthMethodAllowed(policy, "google");
+  const emailPasskeyAllowed = isWorkspaceAuthMethodAllowed(
+    policy,
+    "emailPasskey",
+  );
+
   return NextResponse.json(
     {
       providers: {
-        google: accountProviderCapability(isGoogleOAuthConfigured(), "Google"),
+        google: accountProviderCapability(
+          googleAllowed && isGoogleOAuthConfigured(),
+          "Google",
+        ),
         github: accountProviderCapability(isGitHubOAuthConfigured(), "GitHub"),
         gitlab: accountProviderCapability(isGitLabOAuthConfigured(), "GitLab"),
         slack: accountProviderCapability(isSlackOAuthConfigured(), "Slack"),
-        passkey: isPasskeyAuthEnabled(),
+        passkey: emailPasskeyAllowed && isPasskeyAuthEnabled(),
+        googleAllowed,
+        emailPasskey: emailPasskeyAllowed,
       },
     },
     {

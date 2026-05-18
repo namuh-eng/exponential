@@ -79,7 +79,13 @@ describe("auth client origin", () => {
       code: "CANCELED",
       message: "Passkey sign-in was canceled. Try again.",
     });
-    expect(signInPasskeyMock).toHaveBeenCalledTimes(1);
+    expect(signInPasskeyMock).toHaveBeenCalledWith({
+      fetchOptions: {
+        headers: {
+          "x-workspace-callback-url": "http://localhost:3015/team/ABC",
+        },
+      },
+    });
   });
 
   it("maps thrown WebAuthn AbortError to a retryable cancellation", async () => {

@@ -28,7 +28,9 @@ describe("provider capabilities route", () => {
     process.env.AUTH_GITHUB_SECRET = "github-secret";
 
     const { GET } = await import("@/app/api/auth/provider-capabilities/route");
-    const response = GET();
+    const response = await GET(
+      new Request("http://localhost/api/auth/provider-capabilities"),
+    );
     const data = await response.json();
 
     expect(response.headers.get("Cache-Control")).toBe("no-store");
@@ -61,6 +63,8 @@ describe("provider capabilities route", () => {
           "Slack OAuth is not configured. Dev and e2e can still exercise the linking surface.",
       },
       passkey: false,
+      googleAllowed: true,
+      emailPasskey: true,
     });
   });
 });
