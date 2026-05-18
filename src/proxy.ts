@@ -289,6 +289,7 @@ export async function proxy(request: NextRequest) {
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-workspace-source-path", pathname);
+  requestHeaders.set("x-workspace-source-query", search);
 
   const workspacePrefixedSettingsRoute =
     getWorkspacePrefixedSettingsRoute(pathname);

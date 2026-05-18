@@ -88,6 +88,7 @@ export default async function AppLayout({
     )?.value;
     const requestedWorkspaceSlug = requestHeaders.get("x-workspace-slug");
     const sourcePath = requestHeaders.get("x-workspace-source-path");
+    const sourceQuery = requestHeaders.get("x-workspace-source-query") ?? "";
 
     const loadMemberships = () =>
       db
@@ -179,7 +180,7 @@ export default async function AppLayout({
       const firstSegment = normalizedSourcePath.split("/").filter(Boolean)[0];
 
       if (isAppRoutePrefix(firstSegment)) {
-        redirect(`/${ws.workspaceSlug}${normalizedSourcePath}`);
+        redirect(`/${ws.workspaceSlug}${normalizedSourcePath}${sourceQuery}`);
       }
     }
 

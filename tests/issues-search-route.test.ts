@@ -18,12 +18,19 @@ vi.mock("@/lib/db", () => ({
     select: vi.fn((selection?: Record<string, unknown>) => {
       // find memberships
       if (selection && "workspaceId" in selection) {
+        const membershipLimit = vi
+          .fn()
+          .mockResolvedValue(membershipsLimitMock());
+        const membershipWhere = vi.fn().mockReturnValue({
+          limit: membershipLimit,
+        });
+        const membershipQuery = {
+          innerJoin: vi.fn().mockReturnThis(),
+          where: membershipWhere,
+        };
+
         return {
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue(membershipsLimitMock()),
-            }),
-          }),
+          from: vi.fn().mockReturnValue(membershipQuery),
         };
       }
 
@@ -42,14 +49,16 @@ vi.mock("@/lib/db", () => ({
 
       // search issues
       if (selection && "identifier" in selection) {
+        const issueQuery = {
+          innerJoin: vi.fn().mockReturnThis(),
+          leftJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          orderBy: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue(issuesLimitMock()),
+        };
+
         return {
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue(issuesLimitMock()),
-              }),
-            }),
-          }),
+          from: vi.fn().mockReturnValue(issueQuery),
         };
       }
 
@@ -74,7 +83,18 @@ describe("issues search route", () => {
     membershipsLimitMock.mockReturnValue([{ workspaceId: "workspace-1" }]);
     teamsWhereMock.mockReturnValue([{ id: "team-1" }]);
     issuesLimitMock.mockReturnValue([
-      { id: "issue-1", identifier: "ENG-1", title: "Search target" },
+      {
+        id: "issue-1",
+        identifier: "ENG-1",
+        title: "Search target",
+        priority: "high",
+        stateName: "In Progress",
+        stateCategory: "started",
+        stateColor: "#f2c94c",
+        assigneeName: "Test User",
+        assigneeImage: null,
+        createdAt: new Date("2026-05-18T00:00:00.000Z"),
+      },
     ]);
   });
 
@@ -94,8 +114,42 @@ describe("issues search route", () => {
 
     expect(response.status).toBe(200);
     const payload = await response.json();
-    expect(payload.length).toBe(1);
-    expect(payload[0].identifier).toBe("ENG-1");
+    expect(payload).toHaveLength(1);
+    expect(payload[0]).toMatchObject({
+      identifier: "ENG-1",
+      title: "Search target",
+      priority: "high",
+      stateName: "In Progress",
+      stateCategory: "started",
+      stateColor: "#f2c94c",
+      assigneeName: "Test User",
+      assigneeImage: null,
+    });
+    expect(payload[0].createdAt).toBeTruthy();
+  });
+
+  it("returns complete issue row metadata for a workspace slug query", async () => {
+    const { GET } = await import("@/app/api/issues/search/route");
+
+    const response = await GET(
+      new Request("http://localhost?q=Search&workspaceSlug=foreverbrowsing"),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload[0]).toEqual(
+      expect.objectContaining({
+        id: "issue-1",
+        identifier: "ENG-1",
+        title: "Search target",
+        priority: "high",
+        stateName: "In Progress",
+        stateCategory: "started",
+        stateColor: "#f2c94c",
+        assigneeName: "Test User",
+        createdAt: expect.any(String),
+      }),
+    );
   });
 
   it("returns empty array for missing query", async () => {
