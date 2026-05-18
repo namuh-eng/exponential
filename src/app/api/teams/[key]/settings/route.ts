@@ -20,7 +20,11 @@ import {
   getTeamRestorableUntil,
   isTeamRestorable,
 } from "@/lib/team-lifecycle";
-import { getMutableTeamSettings, readTeamSettings } from "@/lib/team-settings";
+import {
+  type StatusTransitionRule,
+  getMutableTeamSettings,
+  readTeamSettings,
+} from "@/lib/team-settings";
 import { findAccessibleTeam } from "@/lib/teams";
 import {
   canPerformWorkspacePermission,
@@ -264,6 +268,13 @@ async function buildTeamResponse(
       : "Workspace policy restricts team agent guidance edits.",
     canModifyAgentGuidance,
     autoAssignment: flags.autoAssignment,
+    autoAssignMode: flags.autoAssignMode,
+    defaultAssigneeId: flags.defaultAssigneeId,
+    gitBranchFormat: flags.gitBranchFormat,
+    gitPrAutomationEnabled: flags.gitPrAutomationEnabled,
+    gitPrMergeTargetStatusId: flags.gitPrMergeTargetStatusId,
+    gitBranchCreateTargetStatusId: flags.gitBranchCreateTargetStatusId,
+    statusTransitionRules: flags.statusTransitionRules,
     discussionSummariesEnabled: flags.discussionSummariesEnabled,
     discussionSummaryMinComments: flags.discussionSummaryMinComments,
     discussionSummaryRefreshMode: flags.discussionSummaryRefreshMode,
@@ -338,6 +349,14 @@ export async function PATCH(
     cycleDurationWeeks?: number;
     emailEnabled?: boolean;
     detailedHistory?: boolean;
+    gitBranchFormat?: string;
+    gitPrAutomationEnabled?: boolean;
+    gitPrMergeTargetStatusId?: string | null;
+    gitBranchCreateTargetStatusId?: string | null;
+    autoAssignEnabled?: boolean;
+    autoAssignMode?: "creator" | "team_lead" | "round_robin" | "none";
+    defaultAssigneeId?: string | null;
+    statusTransitionRules?: StatusTransitionRule[];
     agentGuidance?: string;
     autoAssignment?: boolean;
     discussionSummariesEnabled?: boolean;
@@ -573,6 +592,101 @@ export async function PATCH(
 
   const currentFlags = readTeamSettings(teamRecord.settings);
   const currentSettings = getMutableTeamSettings(teamRecord.settings);
+  const normalizeOptionalStateId = (value: string | null | undefined) =>
+    typeof value === "string" ? value.trim() || null : (value ?? null);
+  const nextGitBranchFormat =
+    body.gitBranchFormat === undefined
+      ? currentFlags.gitBranchFormat
+      : body.gitBranchFormat.trim();
+  if (!nextGitBranchFormat || !nextGitBranchFormat.includes("{number}")) {
+    return NextResponse.json(
+      { error: "Branch format must include {number}" },
+      { status: 400 },
+    );
+  }
+  const nextAutoAssignMode = body.autoAssignMode ?? currentFlags.autoAssignMode;
+  if (
+    !["creator", "team_lead", "round_robin", "none"].includes(
+      nextAutoAssignMode,
+    )
+  ) {
+    return NextResponse.json(
+      { error: "Auto-assignment mode is invalid" },
+      { status: 400 },
+    );
+  }
+  const nextStatusTransitionRules =
+    body.statusTransitionRules === undefined
+      ? currentFlags.statusTransitionRules
+      : body.statusTransitionRules;
+  const transitionStateIds = [
+    normalizeOptionalStateId(body.gitPrMergeTargetStatusId),
+    normalizeOptionalStateId(body.gitBranchCreateTargetStatusId),
+    ...nextStatusTransitionRules.map((rule) => rule.targetStatusId),
+  ].filter((value): value is string => Boolean(value));
+  const uniqueTransitionStateIds = [...new Set(transitionStateIds)];
+  const transitionStateRows = uniqueTransitionStateIds.length
+    ? await db
+        .select({ id: workflowState.id, category: workflowState.category })
+        .from(workflowState)
+        .where(
+          and(
+            eq(workflowState.teamId, teamRecord.id),
+            inArray(workflowState.id, uniqueTransitionStateIds),
+          ),
+        )
+    : [];
+  const transitionStatesById = new Map(
+    transitionStateRows.map((state) => [state.id, state]),
+  );
+  if (uniqueTransitionStateIds.some((id) => !transitionStatesById.has(id))) {
+    return NextResponse.json(
+      { error: "Target status must belong to this team's workflow" },
+      { status: 400 },
+    );
+  }
+  const validRuleTriggers = new Set([
+    "branch_created",
+    "pr_opened",
+    "pr_merged",
+    "issue_assigned",
+    "issue_unassigned",
+  ]);
+  const validRuleSources = new Set([
+    "any",
+    "backlog",
+    "unstarted",
+    "started",
+    "completed",
+  ]);
+  for (const rule of nextStatusTransitionRules) {
+    if (
+      !rule.id?.trim() ||
+      !rule.name?.trim() ||
+      !validRuleTriggers.has(rule.trigger) ||
+      !validRuleSources.has(rule.sourceCategory) ||
+      !rule.targetStatusId
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Status transition rules must include a name, trigger, and target status",
+        },
+        { status: 400 },
+      );
+    }
+    const target = transitionStatesById.get(rule.targetStatusId);
+    if (
+      target &&
+      rule.sourceCategory !== "any" &&
+      target.category === rule.sourceCategory
+    ) {
+      return NextResponse.json(
+        { error: "Target status must differ from the source category" },
+        { status: 400 },
+      );
+    }
+  }
   const nextTriageAcceptDestinationStateId =
     body.triageAcceptDestinationStateId === undefined
       ? currentFlags.triageAcceptDestinationStateId
@@ -661,8 +775,35 @@ export async function PATCH(
         ...currentSettings,
         emailEnabled: body.emailEnabled ?? currentFlags.emailEnabled,
         detailedHistory: body.detailedHistory ?? currentFlags.detailedHistory,
+        gitBranchFormat: nextGitBranchFormat,
+        gitPrAutomationEnabled:
+          body.gitPrAutomationEnabled ?? currentFlags.gitPrAutomationEnabled,
+        gitPrMergeTargetStatusId:
+          body.gitPrMergeTargetStatusId === undefined
+            ? currentFlags.gitPrMergeTargetStatusId
+            : normalizeOptionalStateId(body.gitPrMergeTargetStatusId),
+        gitBranchCreateTargetStatusId:
+          body.gitBranchCreateTargetStatusId === undefined
+            ? currentFlags.gitBranchCreateTargetStatusId
+            : normalizeOptionalStateId(body.gitBranchCreateTargetStatusId),
+        autoAssignment:
+          body.autoAssignEnabled ??
+          body.autoAssignment ??
+          currentFlags.autoAssignment,
+        autoAssignMode: nextAutoAssignMode,
+        defaultAssigneeId:
+          body.defaultAssigneeId === undefined
+            ? currentFlags.defaultAssigneeId
+            : body.defaultAssigneeId?.trim() || null,
+        statusTransitionRules: nextStatusTransitionRules.map((rule) => ({
+          id: rule.id.trim(),
+          name: rule.name.trim(),
+          trigger: rule.trigger,
+          sourceCategory: rule.sourceCategory,
+          targetStatusId: rule.targetStatusId,
+          enabled: rule.enabled !== false,
+        })),
         agentGuidance: nextAgentGuidance,
-        autoAssignment: body.autoAssignment ?? currentFlags.autoAssignment,
         discussionSummariesEnabled:
           body.discussionSummariesEnabled ??
           currentFlags.discussionSummariesEnabled,
