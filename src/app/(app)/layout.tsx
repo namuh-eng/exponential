@@ -11,6 +11,7 @@ import {
   shouldRenderDatabaseBootstrapError,
 } from "@/lib/dev-database-error";
 import { activeTeamFilter } from "@/lib/team-lifecycle";
+import { evaluateWorkspaceIpAccess } from "@/lib/workspace-ip-restrictions";
 import { isAppRoutePrefix, normalizeAppPath } from "@/lib/workspace-paths";
 import { and, desc, eq } from "drizzle-orm";
 import { cookies, headers } from "next/headers";
@@ -37,6 +38,27 @@ function DatabaseBootstrapError() {
         <p className="mt-5 text-sm text-[#9aa1b3]">
           If you use a custom database, set DATABASE_URL in .env.local and make
           sure Postgres accepts TCP connections before loading protected routes.
+        </p>
+      </section>
+    </main>
+  );
+}
+
+function WorkspaceIpAccessDenied() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#0f1117] px-6 text-[#f4f5f8]">
+      <section className="max-w-xl rounded-2xl border border-[#3f2530] bg-[#1b1117] p-8 shadow-2xl">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[#ff8ba7]">
+          Access denied
+        </p>
+        <h1 className="text-2xl font-semibold">
+          Your network is not allowed for this workspace
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-[#f0c9d4]">
+          This workspace only allows access from configured IP ranges. Switch to
+          an approved network or contact a workspace admin to update Security
+          settings. Login, logout, invite acceptance, static assets, and test
+          setup routes remain outside this workspace gate.
         </p>
       </section>
     </main>
@@ -70,6 +92,7 @@ export default async function AppLayout({
           workspaceId: string;
           workspaceName: string;
           workspaceSlug: string;
+          settings: unknown;
         };
         teams: {
           id: string;
@@ -95,6 +118,7 @@ export default async function AppLayout({
           workspaceId: member.workspaceId,
           workspaceName: workspace.name,
           workspaceSlug: workspace.urlSlug,
+          settings: workspace.settings,
         })
         .from(member)
         .innerJoin(workspace, eq(member.workspaceId, workspace.id))
@@ -126,6 +150,7 @@ export default async function AppLayout({
           workspaceId: member.workspaceId,
           workspaceName: workspace.name,
           workspaceSlug: workspace.urlSlug,
+          settings: workspace.settings,
         })
         .from(member)
         .innerJoin(workspace, eq(member.workspaceId, workspace.id))
@@ -159,6 +184,7 @@ export default async function AppLayout({
           workspaceId: member.workspaceId,
           workspaceName: workspace.name,
           workspaceSlug: workspace.urlSlug,
+          settings: workspace.settings,
         })
         .from(member)
         .innerJoin(workspace, eq(member.workspaceId, workspace.id))
@@ -173,6 +199,11 @@ export default async function AppLayout({
 
     if (!ws) {
       notFound();
+    }
+
+    const ipAccess = evaluateWorkspaceIpAccess(requestHeaders, ws.settings);
+    if (!ipAccess.allowed) {
+      return <WorkspaceIpAccessDenied />;
     }
 
     if (!requestedWorkspaceSlug && normalizedSourcePath) {

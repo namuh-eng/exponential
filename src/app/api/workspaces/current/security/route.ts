@@ -1,9 +1,14 @@
 import { randomBytes } from "node:crypto";
-import { isIP } from "node:net";
-import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
+import { resolveRequestWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
+import {
+  evaluateWorkspaceIpAccess,
+  isValidCidrRange,
+  normalizeIpRestrictions,
+  workspaceIpRestrictionError,
+} from "@/lib/workspace-ip-restrictions";
 import {
   DEFAULT_WORKSPACE_PERMISSION_SETTINGS,
   type PermissionLevel,
@@ -87,67 +92,6 @@ function normalizeDomains(value: unknown) {
         .filter((domain) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)),
     ),
   );
-}
-
-function isValidCidrRange(value: string) {
-  const trimmed = value.trim();
-  const [address, prefix, extra] = trimmed.split("/");
-  if (!address || extra !== undefined) {
-    return false;
-  }
-
-  const version = isIP(address);
-  if (version === 0) {
-    return false;
-  }
-
-  if (prefix === undefined) {
-    return true;
-  }
-
-  if (!/^\d+$/.test(prefix)) {
-    return false;
-  }
-
-  const prefixNumber = Number(prefix);
-  return version === 4
-    ? prefixNumber >= 0 && prefixNumber <= 32
-    : prefixNumber >= 0 && prefixNumber <= 128;
-}
-
-function normalizeIpRange(value: string) {
-  return value.trim().toLowerCase();
-}
-
-function normalizeIpRestrictions(value: unknown) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const seenRanges = new Set<string>();
-  const restrictions: IpRestriction[] = [];
-
-  for (const item of value) {
-    const record = asRecord(item);
-    const rawRange = typeof record.range === "string" ? record.range : "";
-    const range = normalizeIpRange(rawRange);
-    if (!range || !isValidCidrRange(range) || seenRanges.has(range)) {
-      continue;
-    }
-
-    seenRanges.add(range);
-    restrictions.push({
-      range,
-      description:
-        typeof record.description === "string"
-          ? record.description.trim().slice(0, 120)
-          : "",
-      enabled: typeof record.enabled === "boolean" ? record.enabled : true,
-      type: "allow",
-    });
-  }
-
-  return restrictions;
 }
 
 function validateIpRestrictions(value: unknown) {
@@ -253,8 +197,8 @@ function serializeSecurityState(security: WorkspaceSecurityState) {
   };
 }
 
-async function findCurrentWorkspace(userId: string) {
-  const activeWorkspaceId = await resolveActiveWorkspaceId(userId);
+async function findCurrentWorkspace(userId: string, request: Request) {
+  const activeWorkspaceId = await resolveRequestWorkspaceId(userId, request);
   if (!activeWorkspaceId) {
     return null;
   }
@@ -358,12 +302,22 @@ export async function GET(request: Request) {
     return authResponse;
   }
 
-  const currentWorkspace = await findCurrentWorkspace(session.user.id);
+  const currentWorkspace = await findCurrentWorkspace(session.user.id, request);
   if (!currentWorkspace) {
     return NextResponse.json(
       { error: "No active workspace found" },
       { status: 404 },
     );
+  }
+
+  const ipAccess = evaluateWorkspaceIpAccess(
+    request.headers,
+    currentWorkspace.settings,
+  );
+  if (!ipAccess.allowed) {
+    return NextResponse.json(workspaceIpRestrictionError(ipAccess), {
+      status: 403,
+    });
   }
 
   const inviteLinkToken = await ensureInviteToken(currentWorkspace);
@@ -385,12 +339,22 @@ export async function PATCH(request: Request) {
     return authResponse;
   }
 
-  const currentWorkspace = await findCurrentWorkspace(session.user.id);
+  const currentWorkspace = await findCurrentWorkspace(session.user.id, request);
   if (!currentWorkspace) {
     return NextResponse.json(
       { error: "No active workspace found" },
       { status: 404 },
     );
+  }
+
+  const ipAccess = evaluateWorkspaceIpAccess(
+    request.headers,
+    currentWorkspace.settings,
+  );
+  if (!ipAccess.allowed) {
+    return NextResponse.json(workspaceIpRestrictionError(ipAccess), {
+      status: 403,
+    });
   }
 
   if (!isWorkspaceAdminRole(currentWorkspace.role)) {

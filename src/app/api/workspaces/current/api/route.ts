@@ -1,5 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
-import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
+import {
+  resolveActiveWorkspaceId,
+  resolveRequestWorkspaceId,
+} from "@/lib/active-workspace";
 import { createApiKeyHash, requireApiSession } from "@/lib/api-auth";
 import {
   GRAPHQL_DOCS_URL,
@@ -23,6 +26,10 @@ import {
 } from "@/lib/api-settings";
 import { db } from "@/lib/db";
 import { apiKey, member, user, webhook, workspace } from "@/lib/db/schema";
+import {
+  evaluateWorkspaceIpAccess,
+  workspaceIpRestrictionError,
+} from "@/lib/workspace-ip-restrictions";
 import { and, desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -51,10 +58,14 @@ function createOAuthSecretHash(secret: string) {
 
 async function getWorkspaceAccess(
   userId: string,
+  request: Request | undefined,
   workspaceIdOverride?: string,
 ): Promise<WorkspaceAccess | null> {
   const workspaceId =
-    workspaceIdOverride ?? (await resolveActiveWorkspaceId(userId));
+    workspaceIdOverride ??
+    (request
+      ? await resolveRequestWorkspaceId(userId, request)
+      : await resolveActiveWorkspaceId(userId));
   if (!workspaceId) {
     return null;
   }
@@ -166,7 +177,7 @@ async function buildApiPayload(access: WorkspaceAccess) {
   };
 }
 
-async function loadAuthenticatedAccess() {
+async function loadAuthenticatedAccess(request?: Request) {
   const { response: authResponse, session } = await requireApiSession();
   if (authResponse) {
     return {
@@ -177,6 +188,7 @@ async function loadAuthenticatedAccess() {
 
   const access = await getWorkspaceAccess(
     session.user.id,
+    request,
     "apiKey" in session ? session.apiKey.workspaceId : undefined,
   );
   if (!access) {
@@ -189,11 +201,24 @@ async function loadAuthenticatedAccess() {
     };
   }
 
+  const ipAccess = evaluateWorkspaceIpAccess(
+    request?.headers ?? new Headers(),
+    access.settings,
+  );
+  if (!ipAccess.allowed) {
+    return {
+      error: NextResponse.json(workspaceIpRestrictionError(ipAccess), {
+        status: 403,
+      }),
+      access: null,
+    };
+  }
+
   return { error: null, access };
 }
 
-export async function GET() {
-  const { error, access } = await loadAuthenticatedAccess();
+export async function GET(request?: Request) {
+  const { error, access } = await loadAuthenticatedAccess(request);
   if (error || !access) {
     return error;
   }
@@ -204,7 +229,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const { error, access } = await loadAuthenticatedAccess();
+  const { error, access } = await loadAuthenticatedAccess(request);
   if (error || !access) {
     return error;
   }
@@ -264,7 +289,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { error, access } = await loadAuthenticatedAccess();
+  const { error, access } = await loadAuthenticatedAccess(request);
   if (error || !access) {
     return error;
   }

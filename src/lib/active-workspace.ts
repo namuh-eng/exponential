@@ -136,6 +136,17 @@ export async function resolveRequestWorkspaceId(
   userId: string,
   request: Request,
 ) {
+  const requestedWorkspaceSlug = request.headers.get("x-workspace-slug");
+  if (requestedWorkspaceSlug) {
+    const workspaceId = await resolveWorkspaceIdBySlug(
+      userId,
+      requestedWorkspaceSlug,
+    );
+    if (workspaceId) {
+      return workspaceId;
+    }
+  }
+
   const referer = request.headers.get("referer");
   if (referer) {
     try {

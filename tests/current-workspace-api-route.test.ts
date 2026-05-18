@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getSessionMock = vi.fn();
-const resolveActiveWorkspaceIdMock = vi.fn();
+const resolveRequestWorkspaceIdMock = vi.fn();
 const accessLimitMock = vi.fn();
 const apiKeyLimitMock = vi.fn();
 const webhooksOrderByMock = vi.fn();
@@ -21,7 +21,8 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/active-workspace", () => ({
-  resolveActiveWorkspaceId: resolveActiveWorkspaceIdMock,
+  resolveActiveWorkspaceId: resolveRequestWorkspaceIdMock,
+  resolveRequestWorkspaceId: resolveRequestWorkspaceIdMock,
 }));
 
 vi.mock("@/lib/api-settings", () => ({
@@ -149,7 +150,7 @@ describe("current workspace api route", () => {
     selectCallCount = 0;
     requestHeaders = new Headers();
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
-    resolveActiveWorkspaceIdMock.mockResolvedValue("workspace-1");
+    resolveRequestWorkspaceIdMock.mockResolvedValue("workspace-1");
     apiKeyLimitMock.mockResolvedValue([]);
     accessLimitMock.mockResolvedValue([
       {
@@ -195,7 +196,7 @@ describe("current workspace api route", () => {
   });
 
   it("returns 404 when no active workspace exists", async () => {
-    resolveActiveWorkspaceIdMock.mockResolvedValue(null);
+    resolveRequestWorkspaceIdMock.mockResolvedValue(null);
     const { GET } = await import("@/app/api/workspaces/current/api/route");
 
     const response = await GET();
@@ -227,7 +228,7 @@ describe("current workspace api route", () => {
     const response = await GET();
 
     expect(response.status).toBe(200);
-    expect(resolveActiveWorkspaceIdMock).not.toHaveBeenCalled();
+    expect(resolveRequestWorkspaceIdMock).not.toHaveBeenCalled();
     expect(updateSetMock).toHaveBeenCalledWith({
       lastUsedAt: expect.any(Date),
     });
@@ -242,6 +243,42 @@ describe("current workspace api route", () => {
         ],
       },
     });
+  });
+
+  it("enforces workspace IP restrictions for the workspace API settings route", async () => {
+    accessLimitMock.mockResolvedValue([
+      {
+        workspaceId: "workspace-1",
+        settings: {
+          security: {
+            permissions: { apiKeyCreationRole: "admins" },
+            ipRestrictions: [
+              { range: "203.0.113.0/24", enabled: true, type: "allow" },
+            ],
+          },
+        },
+        memberRole: "owner",
+      },
+    ]);
+    const { GET } = await import("@/app/api/workspaces/current/api/route");
+
+    const denied = await GET(
+      new Request("https://app.test/api/workspaces/current/api", {
+        headers: { "x-forwarded-for": "198.51.100.42" },
+      }),
+    );
+    expect(denied?.status).toBe(403);
+    await expect(denied?.json()).resolves.toMatchObject({
+      code: "workspace_ip_restricted",
+      reason: "ip_not_allowed",
+    });
+
+    const allowed = await GET(
+      new Request("https://app.test/api/workspaces/current/api", {
+        headers: { "x-forwarded-for": "203.0.113.42" },
+      }),
+    );
+    expect(allowed?.status).toBe(200);
   });
 
   it("rejects malformed API key bearer tokens", async () => {
