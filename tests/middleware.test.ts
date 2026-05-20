@@ -334,6 +334,20 @@ describe("Auth proxy", () => {
     expect(redirectUrl.search).toBe("?focusedComment=c-1");
   });
 
+  it("redirects root search to the workspace route without dropping the query", async () => {
+    mockRedirect.mockClear();
+    const { proxy } = await import("@/proxy");
+    const req = createMockRequest("/search?q=cycle", {
+      "__Secure-better-auth.session_token": "valid-session-token",
+      activeWorkspaceSlug: "foreverbrowsing",
+    });
+    await proxy(req as never);
+    expect(mockRedirect).toHaveBeenCalled();
+    const redirectUrl = mockRedirect.mock.calls[0][0] as URL;
+    expect(redirectUrl.pathname).toBe("/foreverbrowsing/search");
+    expect(redirectUrl.search).toBe("?q=cycle");
+  });
+
   it.each([
     "/all",
     "/board",
