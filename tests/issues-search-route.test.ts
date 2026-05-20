@@ -44,9 +44,11 @@ vi.mock("@/lib/db", () => ({
       if (selection && "identifier" in selection) {
         return {
           from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue(issuesLimitMock()),
+            innerJoin: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue(issuesLimitMock()),
+                }),
               }),
             }),
           }),
@@ -74,7 +76,12 @@ describe("issues search route", () => {
     membershipsLimitMock.mockReturnValue([{ workspaceId: "workspace-1" }]);
     teamsWhereMock.mockReturnValue([{ id: "team-1" }]);
     issuesLimitMock.mockReturnValue([
-      { id: "issue-1", identifier: "ENG-1", title: "Search target" },
+      {
+        id: "issue-1",
+        identifier: "ENG-1",
+        title: "Search target",
+        teamKey: "ENG",
+      },
     ]);
   });
 
@@ -96,6 +103,8 @@ describe("issues search route", () => {
     const payload = await response.json();
     expect(payload.length).toBe(1);
     expect(payload[0].identifier).toBe("ENG-1");
+    expect(payload[0].teamKey).toBe("ENG");
+    expect(payload[0].path).toBe("/team/ENG/issue/ENG-1");
   });
 
   it("returns empty array for missing query", async () => {

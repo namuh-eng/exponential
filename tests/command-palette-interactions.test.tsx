@@ -91,6 +91,8 @@ describe("CommandPalette component", () => {
             identifier: "ENG-1",
             title: "Search Result Issue",
             priority: "high",
+            teamKey: "ENG",
+            path: "/team/ENG/issue/ENG-1",
           },
         ]),
     });
@@ -121,7 +123,7 @@ describe("CommandPalette component", () => {
     // First item should be the search result
     fireEvent.keyDown(input, { key: "Enter" });
 
-    expect(pushMock).toHaveBeenCalledWith("/issue/i-1");
+    expect(pushMock).toHaveBeenCalledWith("/team/ENG/issue/ENG-1");
     expect(screen.queryByLabelText("Command palette")).not.toBeInTheDocument();
   });
 

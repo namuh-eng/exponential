@@ -185,4 +185,51 @@ test.describe("Command Palette", () => {
     // Should navigate to inbox
     await page.waitForURL("**/inbox");
   });
+
+  test("routes issue search results to canonical team issue paths", async ({
+    page,
+  }) => {
+    await page.route("**/api/issues/search**", async (route) => {
+      await route.fulfill({
+        json: [
+          {
+            id: "dead-route-uuid",
+            identifier: "ENG-179",
+            title: "Palette routing regression",
+            priority: "high",
+            teamKey: "ENG",
+            path: "/team/ENG/issue/ENG-179",
+          },
+        ],
+      });
+    });
+
+    await page.goto("/foreverbrowsing/team/ENG/all");
+    await page.getByLabel("Search").click();
+
+    await searchInput(page).fill("ENG-179");
+    await expect(
+      dialog(page).getByRole("button", {
+        name: /ENG-179 Palette routing regression/i,
+      }),
+    ).toBeVisible();
+
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(
+      /\/foreverbrowsing\/team\/ENG\/issue\/ENG-179$/,
+    );
+
+    await page.goto("/foreverbrowsing/team/ENG/all");
+    await page.getByLabel("Search").click();
+    await searchInput(page).fill("ENG-179");
+
+    await dialog(page)
+      .getByRole("button", {
+        name: /ENG-179 Palette routing regression/i,
+      })
+      .click();
+    await expect(page).toHaveURL(
+      /\/foreverbrowsing\/team\/ENG\/issue\/ENG-179$/,
+    );
+  });
 });
