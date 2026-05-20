@@ -8,11 +8,25 @@ import {
   waitFor,
 } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("AskLinearAssistant", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          aiSettings: { aiFeaturesEnabled: true, askLinearEnabled: true },
+          capabilities: { canUseAgents: true },
+        }),
+      })),
+    );
+  });
+
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     vi.useRealTimers();
   });
 
@@ -82,5 +96,27 @@ describe("AskLinearAssistant", () => {
       ).toBeVisible();
     });
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("does not open when workspace AI policy disables Ask Linear", async () => {
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        aiSettings: { aiFeaturesEnabled: true, askLinearEnabled: false },
+        capabilities: { canUseAgents: true },
+      }),
+    });
+
+    render(
+      <AskLinearAssistant teamKey="ENG" workspaceSlug="foreverbrowsing" />,
+    );
+
+    const launcher = screen.getByRole("button", { name: "Ask Linear" });
+    await waitFor(() => expect(launcher).toBeDisabled());
+    fireEvent.click(launcher);
+
+    expect(
+      screen.queryByLabelText("Ask Linear assistant"),
+    ).not.toBeInTheDocument();
   });
 });
