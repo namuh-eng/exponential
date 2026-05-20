@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -133,7 +133,13 @@ describe("TeamIssueStatusesPage", () => {
 
   it("renders 'Default' badge on first Backlog status", async () => {
     await renderPage();
-    expect(screen.getByText("Default")).toBeDefined();
+    const backlogRow = screen
+      .getAllByTestId("status-item")
+      .find((row) => within(row).queryByText("Backlog"));
+    expect(backlogRow).toBeDefined();
+    expect(
+      within(backlogRow as HTMLElement).getByText("Default"),
+    ).toBeDefined();
   });
 
   it("renders status descriptions", async () => {

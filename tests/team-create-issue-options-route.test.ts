@@ -102,6 +102,15 @@ describe("team create issue options route", () => {
       name: "Engineering",
       key: "ENG",
       workspaceId: "workspace-1",
+      settings: {
+        workflowStateBehaviors: {
+          "state-1": {
+            terminalBehavior: "resolved",
+            autoArchiveDays: 14,
+            automationUrl: "https://example.com/status-workflow",
+          },
+        },
+      },
     });
     statusesWhereMock.mockReturnValue([{ id: "state-1", name: "Backlog" }]);
     assigneesWhereMock.mockReturnValue([
@@ -149,6 +158,16 @@ describe("team create issue options route", () => {
     expect(response.status).toBe(200);
     const payload = await response.json();
     expect(payload.statuses.length).toBe(1);
+    expect(payload.statuses[0]).toEqual(
+      expect.objectContaining({
+        id: "state-1",
+        behavior: expect.objectContaining({
+          terminalBehavior: "resolved",
+          autoArchiveDays: 14,
+          automationUrl: "https://example.com/status-workflow",
+        }),
+      }),
+    );
     expect(payload.assignees.length).toBe(1);
     expect(payload.labels.length).toBe(1);
     expect(payload.projects.length).toBe(1);

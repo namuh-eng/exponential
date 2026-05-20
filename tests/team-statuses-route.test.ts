@@ -188,6 +188,9 @@ describe("Team Statuses API Route", () => {
           name: "QA Review",
           description: "Ready for verification",
           color: "#123abc",
+          behavior: {
+            automationUrl: "https://example.com/workflow",
+          },
         }),
       }),
       { params: Promise.resolve({ key: "STAT" }) },
@@ -202,6 +205,10 @@ describe("Team Statuses API Route", () => {
       expect.objectContaining({
         description: "Ready for verification",
         color: "#123abc",
+        behavior: expect.objectContaining({
+          terminalBehavior: "open",
+          automationUrl: "https://example.com/workflow",
+        }),
       }),
     );
 
@@ -213,6 +220,9 @@ describe("Team Statuses API Route", () => {
           name: "Verification",
           description: "Being verified",
           color: "#abcdef",
+          behavior: {
+            automationUrl: "https://example.com/updated",
+          },
         }),
       }),
       { params: Promise.resolve({ key: "STAT" }) },
@@ -226,6 +236,10 @@ describe("Team Statuses API Route", () => {
             name: "Verification",
             description: "Being verified",
             color: "#abcdef",
+            behavior: expect.objectContaining({
+              terminalBehavior: "open",
+              automationUrl: "https://example.com/updated",
+            }),
           }),
         ],
       },
@@ -351,6 +365,76 @@ describe("Team Statuses API Route", () => {
       .where(eq(workflowState.id, TEST_ALT_DEFAULT_STATE_ID));
   });
 
+  it("moves statuses across workflow categories after the source has a replacement default", async () => {
+    await db.insert(workflowState).values({
+      id: TEST_ALT_DEFAULT_STATE_ID,
+      teamId: TEST_TEAM_ID,
+      name: "Source replacement",
+      category: "unstarted",
+      position: 20,
+    });
+
+    const switchDefaultRes = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({
+          id: TEST_ALT_DEFAULT_STATE_ID,
+          isDefault: true,
+        }),
+      }),
+      { params: Promise.resolve({ key: "STAT" }) },
+    );
+    expect(switchDefaultRes.status).toBe(200);
+
+    const moveRes = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({
+          id: TEST_STATE_ID,
+          category: "started",
+          behavior: {
+            automationUrl: "https://example.com/moved",
+          },
+        }),
+      }),
+      { params: Promise.resolve({ key: "STAT" }) },
+    );
+
+    expect(moveRes.status).toBe(200);
+    const movePayload = await moveRes.json();
+    expect(movePayload.statuses.unstarted).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: TEST_ALT_DEFAULT_STATE_ID,
+          isDefault: true,
+        }),
+      ]),
+    );
+    expect(movePayload.statuses.started.at(-1)).toEqual(
+      expect.objectContaining({
+        id: TEST_STATE_ID,
+        behavior: expect.objectContaining({
+          automationUrl: "https://example.com/moved",
+        }),
+      }),
+    );
+
+    await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({
+          id: TEST_STATE_ID,
+          category: "unstarted",
+          isDefault: true,
+        }),
+      }),
+      { params: Promise.resolve({ key: "STAT" }) },
+    );
+    await db
+      .delete(workflowState)
+      .where(eq(workflowState.id, TEST_ALT_DEFAULT_STATE_ID));
+  });
+
   it("makes the first status in an empty category the category default", async () => {
     const createRes = await POST(
       new Request("http://localhost", {
@@ -359,6 +443,7 @@ describe("Team Statuses API Route", () => {
           category: "triage",
           name: "Needs review",
           color: "#123abc",
+          behavior: { automationUrl: "https://example.com/triage" },
         }),
       }),
       { params: Promise.resolve({ key: "STAT" }) },
@@ -369,7 +454,15 @@ describe("Team Statuses API Route", () => {
     const created = payload.statuses.triage.find(
       (status: { name: string }) => status.name === "Needs review",
     );
-    expect(created).toEqual(expect.objectContaining({ isDefault: true }));
+    expect(created).toEqual(
+      expect.objectContaining({
+        isDefault: true,
+        behavior: expect.objectContaining({
+          terminalBehavior: "open",
+          automationUrl: "https://example.com/triage",
+        }),
+      }),
+    );
 
     await db.delete(workflowState).where(eq(workflowState.id, created.id));
   });
@@ -534,7 +627,12 @@ describe("Team Statuses API Route", () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.statuses.unstarted).toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: "Todo" })]),
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "Todo",
+          behavior: expect.objectContaining({ terminalBehavior: "open" }),
+        }),
+      ]),
     );
     expect(data.statuses.backlog).toBeDefined();
   });

@@ -13,6 +13,23 @@ import { findAccessibleTeam } from "@/lib/teams";
 import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
+type WorkflowStateBehavior = {
+  terminalBehavior?: "open" | "resolved" | "canceled";
+  autoArchiveDays?: number | null;
+  autoCloseTriage?: boolean;
+  automationUrl?: string | null;
+};
+
+type TeamSettings = Record<string, unknown> & {
+  workflowStateBehaviors?: Record<string, WorkflowStateBehavior>;
+};
+
+function readTeamSettings(settings: unknown): TeamSettings {
+  return settings && typeof settings === "object"
+    ? (settings as TeamSettings)
+    : {};
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ key: string }> },
@@ -44,6 +61,7 @@ export async function GET(
         name: workflowState.name,
         category: workflowState.category,
         color: workflowState.color,
+        isDefault: workflowState.isDefault,
       })
       .from(workflowState)
       .where(eq(workflowState.teamId, teamContext.id))
@@ -100,13 +118,19 @@ export async function GET(
           },
         ];
 
+  const workflowStateBehaviors =
+    readTeamSettings(teamContext.settings).workflowStateBehaviors ?? {};
+
   return NextResponse.json({
     team: {
       id: teamContext.id,
       name: teamContext.name,
       key: teamContext.key,
     },
-    statuses,
+    statuses: statuses.map((status) => ({
+      ...status,
+      behavior: workflowStateBehaviors[status.id] ?? null,
+    })),
     priorities: [
       { value: "urgent", label: "Urgent" },
       { value: "high", label: "High" },
