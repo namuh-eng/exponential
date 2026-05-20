@@ -55,6 +55,7 @@ describe("readProjectSettings", () => {
       labelIds: [],
       resources: [],
       activity: [],
+      milestoneDescriptions: {},
     });
   });
 
@@ -71,6 +72,7 @@ describe("readProjectSettings", () => {
           createdAt: "2026-04-07T00:00:00.000Z",
         },
       ],
+      milestoneDescriptions: { "milestone-1": "Scope" },
       activity: [
         {
           id: "entry-1",
@@ -88,6 +90,7 @@ describe("readProjectSettings", () => {
     expect(parsed.labelIds).toEqual(["label-1"]);
     expect(parsed.resources).toHaveLength(1);
     expect(parsed.activity).toHaveLength(1);
+    expect(parsed.milestoneDescriptions).toEqual({ "milestone-1": "Scope" });
   });
 });
 

@@ -8,6 +8,7 @@ import {
   issue,
   project,
   projectLabel,
+  projectMilestone,
   projectTeam,
   team,
   user,
@@ -237,6 +238,38 @@ export async function POST(request: Request) {
         )
       : []),
   ].filter((value): value is string => Boolean(value));
+  const requestedMilestones = Array.isArray(body.projectMilestones)
+    ? (body.projectMilestones as unknown[])
+        .map((value) => {
+          if (typeof value === "string")
+            return { name: value.trim(), description: null };
+          if (
+            typeof value !== "object" ||
+            value === null ||
+            Array.isArray(value)
+          ) {
+            return null;
+          }
+          const record = value as Record<string, unknown>;
+          const milestoneName =
+            typeof record.name === "string" ? record.name.trim() : "";
+          const milestoneDescription =
+            typeof record.description === "string" && record.description.trim()
+              ? record.description.trim()
+              : typeof record.descriptionData === "string" &&
+                  record.descriptionData.trim()
+                ? record.descriptionData.trim()
+                : null;
+          return milestoneName
+            ? { name: milestoneName, description: milestoneDescription }
+            : null;
+        })
+        .filter(
+          (value): value is { name: string; description: string | null } =>
+            Boolean(value),
+        )
+    : [];
+
   const requestedLabelIds: string[] = Array.isArray(body.labelIds)
     ? Array.from(
         new Set(
@@ -352,6 +385,40 @@ export async function POST(request: Request) {
           teamId: linkedTeam.id,
         })),
       );
+    }
+
+    if (requestedMilestones.length > 0) {
+      const insertedMilestones = await tx
+        .insert(projectMilestone)
+        .values(
+          requestedMilestones.map((milestone, index) => ({
+            projectId: createdProject.id,
+            name: milestone.name,
+            sortOrder: index,
+          })),
+        )
+        .returning({ id: projectMilestone.id });
+
+      const milestoneDescriptions = Object.fromEntries(
+        insertedMilestones.flatMap((milestone, index) => {
+          const description = requestedMilestones[index]?.description;
+          return description ? [[milestone.id, description]] : [];
+        }),
+      );
+
+      if (Object.keys(milestoneDescriptions).length > 0) {
+        await tx
+          .update(project)
+          .set({
+            settings: {
+              ...(linkedLabelIds.size > 0
+                ? { labelIds: Array.from(linkedLabelIds) }
+                : {}),
+              milestoneDescriptions,
+            },
+          })
+          .where(eq(project.id, createdProject.id));
+      }
     }
 
     return createdProject;

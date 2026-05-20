@@ -12,6 +12,7 @@ import {
   issueRelation,
   label,
   project,
+  projectMilestone,
   reaction,
   team,
   user,
@@ -52,6 +53,7 @@ async function findIssueRecord(id: string, workspaceId: string) {
       assigneeId: issue.assigneeId,
       creatorId: issue.creatorId,
       projectId: issue.projectId,
+      projectMilestoneId: issue.projectMilestoneId,
       parentIssueId: issue.parentIssueId,
       cycleId: issue.cycleId,
       dueDate: issue.dueDate,
@@ -91,6 +93,7 @@ async function findIssueRecord(id: string, workspaceId: string) {
       assigneeId: issue.assigneeId,
       creatorId: issue.creatorId,
       projectId: issue.projectId,
+      projectMilestoneId: issue.projectMilestoneId,
       parentIssueId: issue.parentIssueId,
       cycleId: issue.cycleId,
       dueDate: issue.dueDate,
@@ -538,6 +541,7 @@ export async function PATCH(
     stateId?: string;
     sortOrder?: number;
     archive?: boolean;
+    projectMilestoneId?: string | null;
   };
 
   const existingIssue = await findIssueRecord(id, workspaceId);
@@ -616,6 +620,42 @@ export async function PATCH(
     }
   }
 
+  if (body.projectMilestoneId !== undefined) {
+    if (body.projectMilestoneId) {
+      if (!existingIssue.projectId) {
+        return NextResponse.json(
+          {
+            error:
+              "Issue must be assigned to a project before selecting a milestone",
+          },
+          { status: 400 },
+        );
+      }
+      const milestoneRows = await db
+        .select({ id: projectMilestone.id })
+        .from(projectMilestone)
+        .innerJoin(project, eq(projectMilestone.projectId, project.id))
+        .where(
+          and(
+            eq(projectMilestone.id, body.projectMilestoneId),
+            eq(projectMilestone.projectId, existingIssue.projectId),
+            eq(project.workspaceId, workspaceId),
+          ),
+        )
+        .limit(1);
+      if (!milestoneRows[0]) {
+        return NextResponse.json(
+          { error: "Project milestone not found" },
+          { status: 400 },
+        );
+      }
+    }
+    updateData.projectMilestoneId = body.projectMilestoneId;
+    if (body.projectMilestoneId !== existingIssue.projectMilestoneId) {
+      changedFields.push("projectMilestoneId");
+    }
+  }
+
   if (body.archive !== undefined) {
     updateData.archivedAt = body.archive ? new Date() : null;
     if (Boolean(existingIssue.archivedAt) !== body.archive) {
@@ -642,6 +682,7 @@ export async function PATCH(
       stateId: issue.stateId,
       sortOrder: issue.sortOrder,
       archivedAt: issue.archivedAt,
+      projectMilestoneId: issue.projectMilestoneId,
     });
 
   if (updated[0] && changedFields.length > 0) {
