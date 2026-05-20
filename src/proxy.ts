@@ -9,10 +9,18 @@ import {
 } from "@/lib/workspace-paths";
 import { type NextRequest, NextResponse } from "next/server";
 
+export const PUBLIC_ROUTES = [
+  "/homepage",
+  "/pricing",
+  "/customers",
+  "/changelog",
+  "/now",
+] as const;
+
 const publicPaths = [
   "/login",
   "/signup",
-  "/homepage",
+  ...PUBLIC_ROUTES,
   "/api/auth",
   "/api/workspaces",
   "/api/test",

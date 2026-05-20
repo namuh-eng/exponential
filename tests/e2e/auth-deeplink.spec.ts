@@ -8,6 +8,19 @@ const workspaceDeepLinks = [
   "/foreverbrowsing/roadmap?view=list",
 ];
 
+const publicMarketingRoutes = [
+  {
+    path: "/homepage",
+    text: "The product development system for teams and agents",
+  },
+  { path: "/pricing", text: "Free" },
+  {
+    path: "/customers",
+    text: "Why OpenAI chose Linear and scaled to 3,000 users",
+  },
+  { path: "/changelog", text: "Code Intelligence" },
+];
+
 test.describe("Unauthenticated workspace deep links", () => {
   for (const deepLink of workspaceDeepLinks) {
     test(`renders login in place for ${deepLink}`, async ({ page }) => {
@@ -91,6 +104,58 @@ test.describe("Unauthenticated workspace deep links", () => {
     });
   });
 
+  test("public marketing routes render unauthenticated with local navigation", async ({
+    page,
+  }) => {
+    for (const route of publicMarketingRoutes) {
+      await page.goto(route.path);
+      await expect(page).toHaveURL(new RegExp(`${route.path}$`));
+      await expect(page.getByText(route.text).first()).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Log in to Linear" }),
+      ).toHaveCount(0);
+
+      await expect(
+        page.getByRole("link", { name: "Linear" }).first(),
+      ).toHaveAttribute("href", "/homepage");
+      await expect(
+        page
+          .getByRole("navigation", { name: "Public marketing" })
+          .getByRole("link", { name: "Pricing" }),
+      ).toHaveAttribute("href", "/pricing");
+      await expect(
+        page
+          .getByRole("navigation", { name: "Public marketing" })
+          .getByRole("link", { name: "Customers" }),
+      ).toHaveAttribute("href", "/customers");
+      await expect(
+        page
+          .getByRole("navigation", { name: "Public marketing" })
+          .getByRole("link", { name: "Now" }),
+      ).toHaveAttribute("href", "/changelog");
+      await expect(
+        page.getByRole("link", { name: "Log in", exact: true }),
+      ).toHaveAttribute("href", "/login");
+      await expect(
+        page.getByRole("link", { name: "Sign up", exact: true }),
+      ).toHaveAttribute("href", "/signup");
+    }
+  });
+
+  test("protected app routes still redirect unauthenticated visitors", async ({
+    page,
+  }) => {
+    for (const path of ["/settings/security", "/team/ENG/all"]) {
+      await page.goto(path);
+      await expect(page).toHaveURL(
+        new RegExp(`/login\\?callbackUrl=${encodeURIComponent(path)}$`),
+      );
+      await expect(
+        page.getByRole("heading", { name: "Log in to Linear" }),
+      ).toBeVisible();
+    }
+  });
+
   test("direct /login and /signup still render", async ({ page }) => {
     await page.goto("/login");
     await expect(page).toHaveURL(/\/login$/);
@@ -152,18 +217,17 @@ test.describe("Unauthenticated workspace deep links", () => {
     await expect(page).toHaveURL(/\/homepage$/);
     await expect(
       page.getByRole("heading", {
-        name: /Linear is a purpose-built system for planning and building products/i,
+        name: /The product development system for teams and agents/i,
       }),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Log in to Linear" }),
     ).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Sign up" })).toHaveAttribute(
-      "href",
-      "/signup",
-    );
     await expect(
-      page.getByRole("link", { name: "Log in to Linear" }),
+      page.getByRole("link", { name: "Sign up", exact: true }),
+    ).toHaveAttribute("href", "/signup");
+    await expect(
+      page.getByRole("link", { name: "Log in", exact: true }),
     ).toHaveAttribute("href", "/login");
   });
 
