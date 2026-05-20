@@ -3,7 +3,7 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { projectTemplate } from "@/lib/db/schema";
 import { buildProjectTemplateSettings } from "@/lib/project-template-settings";
-import { desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 type ProjectTemplatePayload = {
@@ -26,34 +26,10 @@ function serializeTemplate(template: ProjectTemplatePayload) {
   };
 }
 
-export async function GET() {
-  const { response: authResponse, session } = await requireApiSession();
-  if (authResponse) {
-    return authResponse;
-  }
-
-  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
-  if (!workspaceId) {
-    return NextResponse.json({ templates: [] });
-  }
-
-  const templates = await db
-    .select({
-      id: projectTemplate.id,
-      name: projectTemplate.name,
-      description: projectTemplate.description,
-      settings: projectTemplate.settings,
-      createdAt: projectTemplate.createdAt,
-      updatedAt: projectTemplate.updatedAt,
-    })
-    .from(projectTemplate)
-    .where(eq(projectTemplate.workspaceId, workspaceId))
-    .orderBy(desc(projectTemplate.createdAt));
-
-  return NextResponse.json({ templates: templates.map(serializeTemplate) });
-}
-
-export async function POST(request: Request) {
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const { response: authResponse, session } = await requireApiSession();
   if (authResponse) {
     return authResponse;
@@ -81,12 +57,6 @@ export async function POST(request: Request) {
   }
 
   const name = `${body.name ?? ""}`.trim();
-  const description =
-    typeof body.description === "string" && body.description.trim()
-      ? body.description.trim()
-      : null;
-  const settings = buildProjectTemplateSettings(body.settings ?? {});
-
   if (!name) {
     return NextResponse.json(
       { error: "Template name is required" },
@@ -94,19 +64,65 @@ export async function POST(request: Request) {
     );
   }
 
+  const description =
+    typeof body.description === "string" && body.description.trim()
+      ? body.description.trim()
+      : null;
+  const settings = buildProjectTemplateSettings(body.settings ?? {});
+  const { id } = await params;
+
   const [template] = await db
-    .insert(projectTemplate)
-    .values({
-      name,
-      description,
-      workspaceId,
-      createdById: session.user.id,
-      settings,
-    })
+    .update(projectTemplate)
+    .set({ name, description, settings, updatedAt: new Date() })
+    .where(
+      and(
+        eq(projectTemplate.id, id),
+        eq(projectTemplate.workspaceId, workspaceId),
+      ),
+    )
     .returning();
 
-  return NextResponse.json(
-    { template: serializeTemplate(template) },
-    { status: 201 },
-  );
+  if (!template) {
+    return NextResponse.json(
+      { error: "Project template not found" },
+      { status: 404 },
+    );
+  }
+
+  return NextResponse.json({ template: serializeTemplate(template) });
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
+  const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+  if (!workspaceId) {
+    return NextResponse.json({ error: "No workspace" }, { status: 404 });
+  }
+
+  const { id } = await params;
+  const [deleted] = await db
+    .delete(projectTemplate)
+    .where(
+      and(
+        eq(projectTemplate.id, id),
+        eq(projectTemplate.workspaceId, workspaceId),
+      ),
+    )
+    .returning();
+
+  if (!deleted) {
+    return NextResponse.json(
+      { error: "Project template not found" },
+      { status: 404 },
+    );
+  }
+
+  return NextResponse.json({ success: true });
 }

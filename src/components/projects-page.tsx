@@ -7,6 +7,17 @@ import { useProjectViewState } from "@/hooks/use-project-view-state";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+interface ProjectTemplateOption {
+  id: string;
+  name: string;
+  description: string;
+  settings?: {
+    milestones?: string[];
+    status?: string | null;
+    priority?: string | null;
+  };
+}
+
 interface ProjectData {
   id: string;
   name: string;
@@ -58,6 +69,9 @@ export function ProjectsPage({
   const [availableLabels, setAvailableLabels] = useState<
     { id: string; name: string; color: string }[]
   >([]);
+  const [projectTemplates, setProjectTemplates] = useState<
+    ProjectTemplateOption[]
+  >([]);
   const [labelFilterId, setLabelFilterId] = useState("all");
   const [loading, setLoading] = useState(true);
   const [loadState, setLoadState] = useState<"ready" | "not-found" | "error">(
@@ -100,12 +114,21 @@ export function ProjectsPage({
       if (res.ok) {
         const data = await res.json();
         setProjects(data.projects ?? []);
-        const labelsRes = await fetch("/api/project-labels");
+        const [labelsRes, templatesRes] = await Promise.all([
+          fetch("/api/project-labels"),
+          fetch("/api/project-templates"),
+        ]);
         if (labelsRes.ok) {
           const labelsData = await labelsRes.json();
           setAvailableLabels(labelsData.labels ?? []);
         } else {
           setAvailableLabels([]);
+        }
+        if (templatesRes.ok) {
+          const templatesData = await templatesRes.json();
+          setProjectTemplates(templatesData.templates ?? []);
+        } else {
+          setProjectTemplates([]);
         }
         setActiveTeam(teamRecord);
         setLoadState("ready");
@@ -140,6 +163,7 @@ export function ProjectsPage({
           name: formData.get("name"),
           description: formData.get("description"),
           labelIds: formData.getAll("labelIds"),
+          templateId: formData.get("templateId") || undefined,
           ...(teamKey ? { teamKey } : {}),
         }),
       });
@@ -151,6 +175,28 @@ export function ProjectsPage({
     },
     [fetchProjects, teamKey],
   );
+
+  const templateSelect =
+    projectTemplates.length > 0 ? (
+      <label className="flex flex-col gap-1 text-[12px] text-[var(--color-text-secondary)]">
+        Project template
+        <select
+          name="templateId"
+          aria-label="Apply project template"
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+        >
+          <option value="">No template</option>
+          {projectTemplates.map((template) => (
+            <option key={template.id} value={template.id}>
+              {template.name}
+            </option>
+          ))}
+        </select>
+        <span className="text-[11px] text-[var(--color-text-tertiary)]">
+          Applies configured status, priority, labels, and milestones.
+        </span>
+      </label>
+    ) : null;
 
   if (loading) {
     return (
@@ -198,6 +244,8 @@ export function ProjectsPage({
                 rows={2}
                 className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
               />
+
+              {templateSelect}
 
               {availableLabels.length > 0 && (
                 <label className="flex flex-col gap-1 text-[12px] text-[var(--color-text-secondary)]">
@@ -423,6 +471,8 @@ export function ProjectsPage({
               rows={2}
               className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
             />
+
+            {templateSelect}
 
             {availableLabels.length > 0 && (
               <label className="flex flex-col gap-1 text-[12px] text-[var(--color-text-secondary)]">

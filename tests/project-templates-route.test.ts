@@ -4,6 +4,10 @@ const getSessionMock = vi.fn();
 const resolveActiveWorkspaceIdMock = vi.fn();
 const templatesOrderByMock = vi.fn();
 const insertReturningMock = vi.fn();
+const insertValuesMock = vi.fn();
+const updateSetMock = vi.fn();
+const updateReturningMock = vi.fn();
+const deleteReturningMock = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: {
@@ -25,8 +29,26 @@ vi.mock("@/lib/db", () => ({
       orderBy: vi.fn().mockResolvedValue(templatesOrderByMock()),
     })),
     insert: vi.fn(() => ({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue(insertReturningMock()),
+      values: vi.fn((values) => {
+        insertValuesMock(values);
+        return {
+          returning: vi.fn().mockResolvedValue(insertReturningMock()),
+        };
+      }),
+    })),
+    update: vi.fn(() => ({
+      set: vi.fn((values) => {
+        updateSetMock(values);
+        return {
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue(updateReturningMock()),
+          }),
+        };
+      }),
+    })),
+    delete: vi.fn(() => ({
+      where: vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue(deleteReturningMock()),
       }),
     })),
   },
@@ -62,6 +84,22 @@ describe("project templates route", () => {
         updatedAt: new Date("2026-05-13T00:00:00.000Z"),
       },
     ]);
+    updateReturningMock.mockReturnValue([
+      {
+        id: "template-1",
+        name: "Launch plan edited",
+        description: "Edited structure",
+        settings: {
+          status: "started",
+          priority: "high",
+          labelIds: [],
+          milestones: ["Build"],
+        },
+        createdAt: new Date("2026-05-13T00:00:00.000Z"),
+        updatedAt: new Date("2026-05-14T00:00:00.000Z"),
+      },
+    ]);
+    deleteReturningMock.mockReturnValue([{ id: "template-1" }]);
   });
 
   it("returns 401 without a session", async () => {
@@ -114,7 +152,7 @@ describe("project templates route", () => {
     expect(await response.json()).toEqual({ error: "Invalid JSON" });
   });
 
-  it("creates a project template", async () => {
+  it("creates a project template with structure", async () => {
     const { POST } = await import("@/app/api/project-templates/route");
 
     const response = await POST(
@@ -123,6 +161,12 @@ describe("project templates route", () => {
         body: JSON.stringify({
           name: "Beta rollout",
           description: "Default beta launch structure",
+          settings: {
+            status: "started",
+            priority: "high",
+            labelIds: ["label-1", "label-1"],
+            milestones: ["Plan", "Build", ""],
+          },
         }),
       }),
     );
@@ -130,5 +174,95 @@ describe("project templates route", () => {
     expect(response.status).toBe(201);
     const payload = await response.json();
     expect(payload.template.name).toBe("Beta rollout");
+    expect(insertValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        settings: {
+          status: "started",
+          priority: "high",
+          labelIds: ["label-1"],
+          milestones: ["Plan", "Build"],
+        },
+      }),
+    );
+  });
+
+  it("normalizes project template structure and settings", async () => {
+    const { POST } = await import("@/app/api/project-templates/route");
+
+    await POST(
+      new Request("http://localhost/api/project-templates", {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Launch",
+          settings: {
+            status: "started",
+            priority: "high",
+            labelIds: ["label-1", "label-1", 12],
+            milestones: ["Plan", "Build", "Plan", ""],
+          },
+        }),
+      }),
+    );
+
+    expect(insertValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        settings: {
+          status: "started",
+          priority: "high",
+          labelIds: ["label-1"],
+          milestones: ["Plan", "Build"],
+        },
+      }),
+    );
+  });
+
+  it("updates a project template with editable structure", async () => {
+    const { PATCH } = await import("@/app/api/project-templates/[id]/route");
+
+    const response = await PATCH(
+      new Request("http://localhost/api/project-templates/template-1", {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: "Launch plan edited",
+          description: "Edited structure",
+          settings: {
+            status: "started",
+            priority: "high",
+            milestones: ["Build"],
+          },
+        }),
+      }),
+      { params: Promise.resolve({ id: "template-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.template.name).toBe("Launch plan edited");
+    expect(updateSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Launch plan edited",
+        description: "Edited structure",
+        settings: {
+          status: "started",
+          priority: "high",
+          labelIds: [],
+          milestones: ["Build"],
+        },
+      }),
+    );
+  });
+
+  it("deletes a project template from the active workspace", async () => {
+    const { DELETE } = await import("@/app/api/project-templates/[id]/route");
+
+    const response = await DELETE(
+      new Request("http://localhost/api/project-templates/template-1", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ id: "template-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true });
   });
 });
