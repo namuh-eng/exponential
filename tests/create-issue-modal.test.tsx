@@ -65,7 +65,7 @@ describe("CreateIssueModal", () => {
         return mockJsonResponse(optionsResponse);
       }
 
-      if (url === "/api/issue-templates") {
+      if (url === "/api/issue-templates?teamKey=ENG") {
         return mockJsonResponse({
           templates: [
             {
@@ -211,6 +211,16 @@ describe("CreateIssueModal", () => {
     );
     expect(screen.getByRole("button", { name: "Project" })).toHaveTextContent(
       "Roadmap",
+    );
+  });
+
+  it("loads team-scoped issue templates for the active team", async () => {
+    render(<CreateIssueModal {...defaultProps} />);
+
+    await screen.findByLabelText("Issue template");
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "/api/issue-templates?teamKey=ENG",
     );
   });
 

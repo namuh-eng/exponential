@@ -105,7 +105,7 @@ describe("TeamBoardPage", () => {
         });
       }
 
-      if (url === "/api/issue-templates") {
+      if (url === "/api/issue-templates?teamKey=ENG") {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ templates: [] }),

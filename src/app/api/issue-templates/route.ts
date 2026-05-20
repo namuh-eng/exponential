@@ -2,7 +2,8 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issueTemplate } from "@/lib/db/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { findAccessibleTeam } from "@/lib/teams";
+import { and, desc, eq, isNull, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export type IssueTemplateSettings = {
@@ -22,6 +23,8 @@ type IssueTemplatePayload = {
   id: string;
   name: string;
   description: string;
+  templateType?: string;
+  teamId?: string | null;
   settings: unknown;
   createdAt: Date;
   updatedAt: Date;
@@ -66,6 +69,8 @@ function serializeTemplate(template: IssueTemplatePayload) {
     id: template.id,
     name: template.name,
     description: template.description ?? "",
+    type: template.templateType ?? "issue",
+    teamId: template.teamId ?? null,
     settings,
     createdAt: template.createdAt,
     updatedAt: template.updatedAt,
@@ -76,23 +81,47 @@ async function getWorkspace(userId: string) {
   return resolveActiveWorkspaceId(userId);
 }
 
-export async function GET() {
+export async function GET(
+  request = new Request("http://localhost/api/issue-templates"),
+) {
   const { response: authResponse, session } = await requireApiSession();
   if (authResponse) return authResponse;
   const workspaceId = await getWorkspace(session.user.id);
   if (!workspaceId) return NextResponse.json({ templates: [] });
+
+  const teamKey = new URL(request.url).searchParams.get("teamKey")?.trim();
+  let teamId: string | null = null;
+  if (teamKey) {
+    const teamRecord = await findAccessibleTeam(teamKey, session.user.id, {
+      request,
+    });
+    if (!teamRecord) {
+      return NextResponse.json({ templates: [] });
+    }
+    teamId = teamRecord.id;
+  }
 
   const templates = await db
     .select({
       id: issueTemplate.id,
       name: issueTemplate.name,
       description: issueTemplate.description,
+      templateType: issueTemplate.templateType,
+      teamId: issueTemplate.teamId,
       settings: issueTemplate.settings,
       createdAt: issueTemplate.createdAt,
       updatedAt: issueTemplate.updatedAt,
     })
     .from(issueTemplate)
-    .where(eq(issueTemplate.workspaceId, workspaceId))
+    .where(
+      and(
+        eq(issueTemplate.workspaceId, workspaceId),
+        teamId
+          ? or(isNull(issueTemplate.teamId), eq(issueTemplate.teamId, teamId))
+          : isNull(issueTemplate.teamId),
+        eq(issueTemplate.templateType, "issue"),
+      ),
+    )
     .orderBy(desc(issueTemplate.createdAt));
 
   return NextResponse.json({
@@ -128,6 +157,8 @@ export async function POST(request: Request) {
         id: issueTemplate.id,
         name: issueTemplate.name,
         description: issueTemplate.description,
+        templateType: issueTemplate.templateType,
+        teamId: issueTemplate.teamId,
         settings: issueTemplate.settings,
         createdAt: issueTemplate.createdAt,
         updatedAt: issueTemplate.updatedAt,
@@ -137,6 +168,7 @@ export async function POST(request: Request) {
         and(
           eq(issueTemplate.id, body.duplicateFromId),
           eq(issueTemplate.workspaceId, workspaceId),
+          isNull(issueTemplate.teamId),
         ),
       )
       .limit(1);
@@ -180,7 +212,9 @@ export async function POST(request: Request) {
     .values({
       name: source && !body.name ? `${name} copy` : name,
       description: description || settings.body || "",
+      templateType: "issue",
       workspaceId,
+      teamId: null,
       createdById: session.user.id,
       settings,
     })

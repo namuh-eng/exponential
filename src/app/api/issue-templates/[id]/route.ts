@@ -2,7 +2,7 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issueTemplate } from "@/lib/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { normalizeIssueTemplateSettings } from "../route";
 
@@ -77,7 +77,11 @@ export async function PATCH(
     .update(issueTemplate)
     .set(updates)
     .where(
-      and(eq(issueTemplate.id, id), eq(issueTemplate.workspaceId, workspaceId)),
+      and(
+        eq(issueTemplate.id, id),
+        eq(issueTemplate.workspaceId, workspaceId),
+        isNull(issueTemplate.teamId),
+      ),
     )
     .returning();
   if (!updated)
@@ -98,7 +102,11 @@ export async function DELETE(
   const [deleted] = await db
     .delete(issueTemplate)
     .where(
-      and(eq(issueTemplate.id, id), eq(issueTemplate.workspaceId, workspaceId)),
+      and(
+        eq(issueTemplate.id, id),
+        eq(issueTemplate.workspaceId, workspaceId),
+        isNull(issueTemplate.teamId),
+      ),
     )
     .returning();
   if (!deleted)

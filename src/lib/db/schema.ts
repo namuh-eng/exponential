@@ -443,9 +443,13 @@ export const issueTemplate = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     name: varchar("name", { length: 255 }).notNull(),
     description: text("description").notNull(),
+    templateType: varchar("template_type", { length: 32 })
+      .notNull()
+      .default("issue"),
     workspaceId: uuid("workspace_id")
       .notNull()
       .references(() => workspace.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").references(() => team.id, { onDelete: "cascade" }),
     createdById: text("created_by_id").references(() => user.id, {
       onDelete: "set null",
     }),
@@ -453,7 +457,10 @@ export const issueTemplate = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
-  (t) => [index("issue_template_workspace_idx").on(t.workspaceId)],
+  (t) => [
+    index("issue_template_workspace_idx").on(t.workspaceId),
+    index("issue_template_team_idx").on(t.teamId),
+  ],
 );
 
 // ─── Recurring Issue ────────────────────────────────────────────────
