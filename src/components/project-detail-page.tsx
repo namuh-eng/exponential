@@ -289,6 +289,11 @@ export function ProjectDetailPage() {
   ];
   const createIssueTeam = data.teams[0] ?? data.availableTeams[0] ?? null;
 
+  function openCreateIssue(defaults: CreateIssueDefaults = {}) {
+    setCreateIssueDefaults(defaults);
+    setShowCreateIssue(true);
+  }
+
   async function handleSaveProperties(values: ProjectPropertiesSaveInput) {
     await patchProject(values);
   }
@@ -763,9 +768,20 @@ export function ProjectDetailPage() {
             {activeTab === "issues" ? (
               <SectionCard title="Issues">
                 {data.issueGroups.length === 0 ? (
-                  <p className="text-[13px] text-[var(--color-text-secondary)]">
-                    No issues in this project.
-                  </p>
+                  <div className="rounded-lg border border-dashed border-[var(--color-border)] px-4 py-6 text-center">
+                    <p className="text-[13px] text-[var(--color-text-secondary)]">
+                      No issues in this project yet.
+                    </p>
+                    {createIssueTeam ? (
+                      <button
+                        type="button"
+                        onClick={() => openCreateIssue()}
+                        className="mt-3 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
+                      >
+                        Create issue
+                      </button>
+                    ) : null}
+                  </div>
                 ) : (
                   <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
                     {data.issueGroups.map((group) => (
@@ -780,11 +796,10 @@ export function ProjectDetailPage() {
                           onAddIssue={
                             createIssueTeam
                               ? () => {
-                                  setCreateIssueDefaults({
+                                  openCreateIssue({
                                     stateId: group.state.id,
                                     stateName: group.state.name,
                                   });
-                                  setShowCreateIssue(true);
                                 }
                               : undefined
                           }
