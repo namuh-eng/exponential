@@ -12,6 +12,12 @@ type StatusCategory =
   | "completed"
   | "canceled";
 
+interface StatusBehavior {
+  terminalBehavior?: string;
+  autoArchiveDays?: number | null;
+  slaBehavior?: string;
+}
+
 interface StatusItem {
   id: string;
   name: string;
@@ -19,6 +25,7 @@ interface StatusItem {
   description: string | null;
   color?: string;
   isDefault?: boolean;
+  behavior?: StatusBehavior;
 }
 
 type StatusesByCategory = Record<StatusCategory, StatusItem[]>;
@@ -170,6 +177,7 @@ function StatusDialog({
   saving,
   allStatuses,
   errorMessage,
+  workflowHref,
   onClose,
   onSubmit,
   onDelete,
@@ -178,12 +186,15 @@ function StatusDialog({
   saving: boolean;
   allStatuses: StatusItem[];
   errorMessage: string;
+  workflowHref: string;
   onClose: () => void;
   onSubmit: (values: {
     name: string;
     description: string;
     color: string;
+    category: StatusCategory;
     isDefault: boolean;
+    behavior: StatusBehavior;
   }) => void;
   onDelete: (status: StatusItem, replacementStatusId?: string) => void;
 }) {
@@ -196,8 +207,27 @@ function StatusDialog({
   const [color, setColor] = useState(
     dialog?.mode === "edit" ? (dialog.status.color ?? "#6b6f76") : "#6b6f76",
   );
+  const [category, setCategory] = useState<StatusCategory>(
+    dialog?.category ?? "unstarted",
+  );
   const [isDefault, setIsDefault] = useState(
     dialog?.mode === "edit" ? dialog.status.isDefault === true : false,
+  );
+  const [terminalBehavior, setTerminalBehavior] = useState(
+    dialog?.mode === "edit"
+      ? (dialog.status.behavior?.terminalBehavior ?? "standard")
+      : "standard",
+  );
+  const [autoArchiveDays, setAutoArchiveDays] = useState(
+    dialog?.mode === "edit" &&
+      typeof dialog.status.behavior?.autoArchiveDays === "number"
+      ? String(dialog.status.behavior.autoArchiveDays)
+      : "",
+  );
+  const [slaBehavior, setSlaBehavior] = useState(
+    dialog?.mode === "edit"
+      ? (dialog.status.behavior?.slaBehavior ?? "inherit")
+      : "inherit",
   );
   const [replacementStatusId, setReplacementStatusId] = useState("");
 
@@ -209,8 +239,25 @@ function StatusDialog({
     setColor(
       dialog?.mode === "edit" ? (dialog.status.color ?? "#6b6f76") : "#6b6f76",
     );
+    setCategory(dialog?.category ?? "unstarted");
     setIsDefault(
       dialog?.mode === "edit" ? dialog.status.isDefault === true : false,
+    );
+    setTerminalBehavior(
+      dialog?.mode === "edit"
+        ? (dialog.status.behavior?.terminalBehavior ?? "standard")
+        : "standard",
+    );
+    setAutoArchiveDays(
+      dialog?.mode === "edit" &&
+        typeof dialog.status.behavior?.autoArchiveDays === "number"
+        ? String(dialog.status.behavior.autoArchiveDays)
+        : "",
+    );
+    setSlaBehavior(
+      dialog?.mode === "edit"
+        ? (dialog.status.behavior?.slaBehavior ?? "inherit")
+        : "inherit",
     );
     setReplacementStatusId("");
   }, [dialog]);
@@ -237,7 +284,20 @@ function StatusDialog({
         className="w-full max-w-md rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-4 shadow-xl"
         onSubmit={(event) => {
           event.preventDefault();
-          onSubmit({ name, description, color, isDefault });
+          onSubmit({
+            name,
+            description,
+            color,
+            category,
+            isDefault,
+            behavior: {
+              terminalBehavior,
+              autoArchiveDays: autoArchiveDays.trim()
+                ? Number(autoArchiveDays)
+                : null,
+              slaBehavior,
+            },
+          });
         }}
       >
         <h2 className="text-[16px] font-semibold text-[var(--color-text-primary)]">
@@ -263,6 +323,22 @@ function StatusDialog({
           />
         </label>
         <label className="mt-3 block text-[12px] font-medium text-[var(--color-text-secondary)]">
+          Workflow type
+          <select
+            value={category}
+            onChange={(event) =>
+              setCategory(event.target.value as StatusCategory)
+            }
+            className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none"
+          >
+            {CATEGORY_ORDER.map((cat) => (
+              <option key={cat} value={cat}>
+                {CATEGORY_LABELS[cat]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="mt-3 block text-[12px] font-medium text-[var(--color-text-secondary)]">
           Color
           <input
             type="color"
@@ -271,17 +347,74 @@ function StatusDialog({
             className="mt-1 h-9 w-16 rounded border border-[var(--color-border)] bg-transparent"
           />
         </label>
-        {dialog.mode === "edit" && (
-          <label className="mt-3 flex items-center gap-2 text-[12px] text-[var(--color-text-secondary)]">
-            <input
-              type="checkbox"
-              checked={isDefault}
-              disabled={dialog.status.isDefault === true}
-              onChange={(event) => setIsDefault(event.target.checked)}
-            />
-            Default status for this category
+        <label className="mt-3 flex items-center gap-2 text-[12px] text-[var(--color-text-secondary)]">
+          <input
+            type="checkbox"
+            checked={isDefault}
+            disabled={
+              dialog.mode === "edit" &&
+              dialog.status.isDefault === true &&
+              category === dialog.category
+            }
+            onChange={(event) => setIsDefault(event.target.checked)}
+          />
+          Default status for this workflow type
+        </label>
+        <div className="mt-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+          <div className="text-[12px] font-semibold text-[var(--color-text-primary)]">
+            Workflow behavior
+          </div>
+          <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+            Controls how issues in this status behave in lifecycle automations,
+            SLA reporting, and terminal lists.
+          </p>
+          <label className="mt-3 block text-[12px] font-medium text-[var(--color-text-secondary)]">
+            Terminal behavior
+            <select
+              value={terminalBehavior}
+              onChange={(event) => setTerminalBehavior(event.target.value)}
+              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none"
+            >
+              <option value="standard">Standard workflow status</option>
+              <option value="completed">
+                Completed/resolved terminal status
+              </option>
+              <option value="canceled">
+                Canceled/declined terminal status
+              </option>
+            </select>
           </label>
-        )}
+          <label className="mt-3 block text-[12px] font-medium text-[var(--color-text-secondary)]">
+            Auto-close/archive after days
+            <input
+              type="number"
+              min="0"
+              value={autoArchiveDays}
+              onChange={(event) => setAutoArchiveDays(event.target.value)}
+              placeholder="Inherit team default"
+              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none"
+            />
+          </label>
+          <label className="mt-3 block text-[12px] font-medium text-[var(--color-text-secondary)]">
+            SLA behavior
+            <select
+              value={slaBehavior}
+              onChange={(event) => setSlaBehavior(event.target.value)}
+              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none"
+            >
+              <option value="inherit">Inherit team SLA behavior</option>
+              <option value="pause">Pause SLA timer</option>
+              <option value="complete">Satisfy SLA when entered</option>
+              <option value="ignore">Exclude from SLA reporting</option>
+            </select>
+          </label>
+          <a
+            href={workflowHref}
+            className="mt-3 inline-flex text-[12px] font-medium text-[var(--color-accent)] hover:underline"
+          >
+            Configure workflow automations
+          </a>
+        </div>
         {needsReplacement && (
           <div className="mt-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
             <p className="text-[12px] text-[var(--color-text-secondary)]">
@@ -357,6 +490,11 @@ function StatusDialog({
 export default function TeamIssueStatusesPage() {
   const params = useParams();
   const teamKey = params.key as string;
+  const workspaceSlug =
+    typeof params.workspaceSlug === "string" ? params.workspaceSlug : null;
+  const workflowHref = workspaceSlug
+    ? `/${workspaceSlug}/settings/teams/${teamKey}/workflows`
+    : `/settings/teams/${teamKey}/workflows`;
   const [statuses, setStatuses] = useState<StatusesByCategory | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -416,7 +554,9 @@ export default function TeamIssueStatusesPage() {
     name: string;
     description: string;
     color: string;
+    category: StatusCategory;
     isDefault: boolean;
+    behavior: StatusBehavior;
   }) {
     if (!dialog) return;
     const ok = await mutate(
@@ -425,8 +565,8 @@ export default function TeamIssueStatusesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
           dialog.mode === "create"
-            ? { ...values, category: dialog.category }
-            : { ...values, id: dialog.status.id, category: dialog.category },
+            ? values
+            : { ...values, id: dialog.status.id },
         ),
       },
       dialog.mode === "create" ? "Status created." : "Status updated.",
@@ -520,6 +660,36 @@ export default function TeamIssueStatusesPage() {
       <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
         {CATEGORY_ORDER.map((category) => (
           <div key={category}>
+            <div className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-[12px] text-[var(--color-text-tertiary)]">
+              Default {CATEGORY_LABELS[category].toLowerCase()} status:{" "}
+              <select
+                aria-label={`${CATEGORY_LABELS[category]} default status`}
+                value={
+                  (statuses[category] || []).find((status) => status.isDefault)
+                    ?.id ?? ""
+                }
+                onChange={(event) =>
+                  mutate(
+                    {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        id: event.target.value,
+                        isDefault: true,
+                      }),
+                    },
+                    "Default status saved.",
+                  )
+                }
+                className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-[12px] text-[var(--color-text-primary)]"
+              >
+                {(statuses[category] || []).map((status) => (
+                  <option key={status.id} value={status.id}>
+                    {status.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <CategoryHeader
               category={category}
               onAdd={(selectedCategory) => {
@@ -562,6 +732,7 @@ export default function TeamIssueStatusesPage() {
             </div>
           </div>
           <select
+            aria-label="Duplicate issue status"
             value={duplicateStatus}
             onChange={(e) => handleDuplicateStatusChange(e.target.value)}
             className="rounded-md border border-[var(--color-border)] bg-transparent px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] outline-none"
@@ -580,6 +751,7 @@ export default function TeamIssueStatusesPage() {
         saving={saving}
         allStatuses={allStatuses}
         errorMessage={dialog ? mutationError : ""}
+        workflowHref={workflowHref}
         onClose={() => setDialog(null)}
         onSubmit={handleDialogSubmit}
         onDelete={handleDelete}

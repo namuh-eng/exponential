@@ -188,6 +188,11 @@ describe("Team Statuses API Route", () => {
           name: "QA Review",
           description: "Ready for verification",
           color: "#123abc",
+          behavior: {
+            terminalBehavior: "standard",
+            autoArchiveDays: 7,
+            slaBehavior: "pause",
+          },
         }),
       }),
       { params: Promise.resolve({ key: "STAT" }) },
@@ -202,6 +207,10 @@ describe("Team Statuses API Route", () => {
       expect.objectContaining({
         description: "Ready for verification",
         color: "#123abc",
+        behavior: expect.objectContaining({
+          autoArchiveDays: 7,
+          slaBehavior: "pause",
+        }),
       }),
     );
 
@@ -213,6 +222,11 @@ describe("Team Statuses API Route", () => {
           name: "Verification",
           description: "Being verified",
           color: "#abcdef",
+          behavior: {
+            terminalBehavior: "completed",
+            autoArchiveDays: 14,
+            slaBehavior: "complete",
+          },
         }),
       }),
       { params: Promise.resolve({ key: "STAT" }) },
@@ -226,6 +240,11 @@ describe("Team Statuses API Route", () => {
             name: "Verification",
             description: "Being verified",
             color: "#abcdef",
+            behavior: expect.objectContaining({
+              terminalBehavior: "completed",
+              autoArchiveDays: 14,
+              slaBehavior: "complete",
+            }),
           }),
         ],
       },

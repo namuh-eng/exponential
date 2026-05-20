@@ -44,6 +44,7 @@ export async function GET(
         name: workflowState.name,
         category: workflowState.category,
         color: workflowState.color,
+        isDefault: workflowState.isDefault,
       })
       .from(workflowState)
       .where(eq(workflowState.teamId, teamContext.id))
@@ -100,13 +101,22 @@ export async function GET(
           },
         ];
 
+  const teamSettings =
+    teamContext.settings && typeof teamContext.settings === "object"
+      ? (teamContext.settings as { statusBehaviors?: Record<string, unknown> })
+      : {};
+  const statusesWithBehavior = statuses.map((status) => ({
+    ...status,
+    behavior: teamSettings.statusBehaviors?.[status.id] ?? {},
+  }));
+
   return NextResponse.json({
     team: {
       id: teamContext.id,
       name: teamContext.name,
       key: teamContext.key,
     },
-    statuses,
+    statuses: statusesWithBehavior,
     priorities: [
       { value: "urgent", label: "Urgent" },
       { value: "high", label: "High" },
