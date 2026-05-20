@@ -52,6 +52,27 @@ test.describe("Workspace Views canonical route", () => {
     await expect(page.getByText(projectViewName)).toBeVisible();
     await expect(page).toHaveURL(/\/foreverbrowsing\/views$/);
 
+    await page.goto("/views/all");
+    await expect(page).toHaveURL(/\/views\/all$/);
+    await expect(
+      page.getByRole("heading", { name: "Views", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Issues" })).toHaveAttribute(
+      "data-active",
+      "true",
+    );
+    await page.getByRole("button", { name: "Projects" }).click();
+    await expect(page).toHaveURL(/\/views\/all$/);
+    await expect(
+      page.getByRole("button", { name: "Projects" }),
+    ).toHaveAttribute("data-active", "true");
+
+    await page.goto("/foreverbrowsing/views/all");
+    await expect(page).toHaveURL(/\/foreverbrowsing\/views\/all$/);
+    await expect(
+      page.getByRole("heading", { name: "Views", exact: true }),
+    ).toBeVisible();
+
     await page.goto("/views/issues");
     await expect(page).toHaveURL(/\/foreverbrowsing\/views\/issues$/);
     await expect(

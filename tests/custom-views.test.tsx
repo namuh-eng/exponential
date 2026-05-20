@@ -156,6 +156,28 @@ describe("ViewsPage", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("renders /views/all as the canonical all-views landing route", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => buildViewsResponse(),
+    });
+
+    const { default: ViewsAllPage } = await import(
+      "@/app/(app)/views/all/page"
+    );
+
+    render(<ViewsAllPage />);
+    await waitForLoaded();
+
+    expect(screen.getByRole("heading", { name: "Views" })).toBeInTheDocument();
+    expect(screen.getByText("High priority onboarding")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Projects" }));
+
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.getByText("Project progress")).toBeInTheDocument();
+  });
+
   it("shows the empty state when the active tab has no views", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,

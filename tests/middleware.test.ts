@@ -341,6 +341,7 @@ describe("Auth proxy", () => {
     "/cycles",
     "/cycles/cycle-1",
     "/views",
+    "/views/all",
     "/views/issues",
     "/views/projects",
     "/analytics",
