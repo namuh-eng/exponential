@@ -7,10 +7,11 @@ import {
 import { describe, expect, it } from "vitest";
 
 describe("workspace directory path support", () => {
-  it("treats members, teams, and agent as workspace app routes", () => {
+  it("treats members, teams, agent, and cycles as workspace app routes", () => {
     expect(isAppRoutePrefix("agent")).toBe(true);
     expect(isAppRoutePrefix("members")).toBe(true);
     expect(isAppRoutePrefix("teams")).toBe(true);
+    expect(isAppRoutePrefix("cycles")).toBe(true);
   });
 
   it("does not strip settings/teams as a fake workspace slug", () => {
@@ -30,6 +31,9 @@ describe("workspace directory path support", () => {
     expect(withWorkspaceSlug("/teams", "foreverbrowsing")).toBe(
       "/foreverbrowsing/teams",
     );
+    expect(withWorkspaceSlug("/cycles", "foreverbrowsing")).toBe(
+      "/foreverbrowsing/cycles",
+    );
     expect(getWorkspaceSlugFromPath("/foreverbrowsing/members")).toBe(
       "foreverbrowsing",
     );
@@ -39,5 +43,8 @@ describe("workspace directory path support", () => {
     expect(
       stripWorkspaceSlug("/foreverbrowsing/teams", "foreverbrowsing"),
     ).toBe("/teams");
+    expect(
+      stripWorkspaceSlug("/foreverbrowsing/cycles", "foreverbrowsing"),
+    ).toBe("/cycles");
   });
 });
