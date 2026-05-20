@@ -10,6 +10,7 @@ const appRoutePrefixes = [
   "agent",
   "issue",
   "initiatives",
+  "cycles",
   "settings",
   "search",
 ];

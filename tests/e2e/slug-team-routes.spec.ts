@@ -76,4 +76,64 @@ test.describe("Slug-prefixed team issue routes", () => {
     ).toBeVisible();
     await expectNoMainPane404(page);
   });
+
+  test("workspace-prefixed cycles list and detail routes render and preserve slug", async ({
+    page,
+  }) => {
+    const suffix = Date.now().toString(36);
+    const workspaceSlug = `cycles-routes-${suffix}`;
+    const workspaceResponse = await page.request.post("/api/workspaces", {
+      data: {
+        name: `Cycles Routes ${suffix}`,
+        urlSlug: workspaceSlug,
+      },
+    });
+    expect(workspaceResponse.status()).toBe(201);
+    const workspacePayload = (await workspaceResponse.json()) as {
+      team: { key: string; name: string };
+    };
+    const teamKey = workspacePayload.team.key;
+
+    const cycleResponse = await page.request.post(
+      `/api/teams/${teamKey}/cycles`,
+      {
+        data: {
+          name: `Workspace Cycle ${suffix}`,
+          startDate: "2026-06-01",
+          endDate: "2026-06-14",
+        },
+      },
+    );
+    expect(cycleResponse.status()).toBe(201);
+    const cyclePayload = (await cycleResponse.json()) as { id: string };
+
+    await page.goto(`/${workspaceSlug}/cycles`);
+    await expect(page).toHaveURL(new RegExp(`/${workspaceSlug}/cycles$`));
+    await expect(page.getByText(`Workspace Cycle ${suffix}`)).toBeVisible();
+    await expectNoMainPane404(page);
+    await expect(
+      page.getByRole("link", { name: new RegExp(`Workspace Cycle ${suffix}`) }),
+    ).toHaveAttribute(
+      "href",
+      `/${workspaceSlug}/team/${teamKey}/cycles/${cyclePayload.id}`,
+    );
+
+    await page.goto(`/${workspaceSlug}/team/${teamKey}/cycles`);
+    await expect(page).toHaveURL(
+      new RegExp(`/${workspaceSlug}/team/${teamKey}/cycles$`),
+    );
+    await expect(page.getByText(`Workspace Cycle ${suffix}`)).toBeVisible();
+    await expectNoMainPane404(page);
+
+    await page.goto(
+      `/${workspaceSlug}/team/${teamKey}/cycles/${cyclePayload.id}`,
+    );
+    await expect(page).toHaveURL(
+      new RegExp(
+        `/${workspaceSlug}/team/${teamKey}/cycles/${cyclePayload.id}$`,
+      ),
+    );
+    await expect(page.getByText(`Workspace Cycle ${suffix}`)).toBeVisible();
+    await expectNoMainPane404(page);
+  });
 });

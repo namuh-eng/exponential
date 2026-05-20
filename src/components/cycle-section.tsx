@@ -14,9 +14,15 @@ interface CycleSectionProps {
   title: string;
   cycles: CycleData[];
   teamKey: string;
+  workspaceSlug?: string | null;
 }
 
-export function CycleSection({ title, cycles, teamKey }: CycleSectionProps) {
+export function CycleSection({
+  title,
+  cycles,
+  teamKey,
+  workspaceSlug,
+}: CycleSectionProps) {
   if (cycles.length === 0) return null;
 
   return (
@@ -30,7 +36,12 @@ export function CycleSection({ title, cycles, teamKey }: CycleSectionProps) {
         </span>
       </div>
       {cycles.map((cycle) => (
-        <CycleRow key={cycle.id} cycle={cycle} teamKey={teamKey} />
+        <CycleRow
+          key={cycle.id}
+          cycle={cycle}
+          teamKey={teamKey}
+          workspaceSlug={workspaceSlug}
+        />
       ))}
     </div>
   );
