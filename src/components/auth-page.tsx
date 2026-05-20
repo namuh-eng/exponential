@@ -15,11 +15,23 @@ type LoginStep =
   | "email-verifying"
   | "email-code"
   | "sso-input";
+type ProviderCapability =
+  | boolean
+  | {
+      configured?: boolean;
+    };
 type ProviderCapabilities = {
   providers?: {
-    google?: boolean;
+    google?: ProviderCapability;
+    email?: boolean;
     passkey?: boolean;
   };
+  workspace?: {
+    authentication?: {
+      google?: boolean;
+      emailPasskey?: boolean;
+    };
+  } | null;
 };
 type SocialSignInResult = {
   data?: {
@@ -38,6 +50,12 @@ type SamlDiscoveryResponse = {
 };
 
 const emptyEmailLoginError = "Please enter an email address for login.";
+
+function isProviderConfigured(capability: ProviderCapability | undefined) {
+  return typeof capability === "boolean"
+    ? capability
+    : capability?.configured === true;
+}
 function shouldUseNativeEmailValidation(
   form: HTMLFormElement,
   email: string,
@@ -244,6 +262,9 @@ export function AuthPage({
   const [googleConfigured, setGoogleConfigured] = useState<boolean | null>(
     initialGoogleConfigured,
   );
+  const [googleDisabledByWorkspace, setGoogleDisabledByWorkspace] =
+    useState(false);
+  const [emailConfigured, setEmailConfigured] = useState<boolean | null>(true);
   const [passkeyConfigured, setPasskeyConfigured] = useState<boolean | null>(
     true,
   );
@@ -268,21 +289,38 @@ export function AuthPage({
 
     async function loadProviderCapabilities() {
       try {
-        const response = await fetch("/api/auth/provider-capabilities", {
-          cache: "no-store",
-          signal: controller.signal,
-        });
+        const callbackPath = getSafeCallbackPath();
+        const capabilitiesUrl = new URL(
+          "/api/auth/provider-capabilities",
+          window.location.origin,
+        );
+        if (callbackPath !== "/") {
+          capabilitiesUrl.searchParams.set("callbackUrl", callbackPath);
+        }
+        const response = await fetch(
+          `${capabilitiesUrl.pathname}${capabilitiesUrl.search}`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
         if (!response.ok) {
           throw new Error("Failed to load auth provider capabilities.");
         }
         const data = (await response.json()) as ProviderCapabilities;
-        setGoogleConfigured(data.providers?.google === true);
+        setGoogleConfigured(isProviderConfigured(data.providers?.google));
+        setGoogleDisabledByWorkspace(
+          data.workspace?.authentication?.google === false,
+        );
+        setEmailConfigured(data.providers?.email !== false);
         setPasskeyConfigured(data.providers?.passkey === true);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
         }
         setGoogleConfigured(false);
+        setGoogleDisabledByWorkspace(false);
+        setEmailConfigured(true);
         setPasskeyConfigured(true);
       }
     }
@@ -293,6 +331,13 @@ export function AuthPage({
   }, []);
 
   async function handleGoogleLogin() {
+    if (googleDisabledByWorkspace) {
+      setError(
+        "Google sign-in is disabled for this workspace. Use SAML SSO instead.",
+      );
+      return;
+    }
+
     if (googleConfigured !== true) {
       setError(
         "Google sign-in is not configured. Use email or SAML SSO instead.",
@@ -343,6 +388,13 @@ export function AuthPage({
 
     if (shouldUseNativeEmailValidation(e.currentTarget, normalizedEmail)) {
       setError("");
+      return;
+    }
+
+    if (emailConfigured === false) {
+      setError(
+        "Email and passkey authentication is disabled for this workspace. Use SAML SSO instead.",
+      );
       return;
     }
 
@@ -457,7 +509,7 @@ export function AuthPage({
   async function handlePasskeyLogin() {
     if (passkeyConfigured === false) {
       setError(
-        "Passkey sign-in is not configured. Use email or Google to log in.",
+        "Passkey sign-in is disabled for this workspace. Use SAML SSO instead.",
       );
       return;
     }
@@ -512,66 +564,70 @@ export function AuthPage({
       <div className="mt-8 space-y-4">
         {step === "choose" && (
           <div className="space-y-3">
-            <button
-              type="button"
-              onClick={handleGoogleLogin}
-              disabled={loading}
-              className="auth-primary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 18 18"
-                role="img"
-                aria-label="Google"
+            {!googleDisabledByWorkspace && (
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={loading}
+                className="auth-primary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <path
-                  d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
-                  fill="#4285F4"
-                />
-                <path
-                  d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"
-                  fill="#34A853"
-                />
-                <path
-                  d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
-                  fill="#FBBC05"
-                />
-                <path
-                  d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
-                  fill="#EA4335"
-                />
-              </svg>
-              {googleConfigured === null
-                ? "Checking Google sign-in"
-                : "Continue with Google"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setPasskeyPending(false);
-                setStep("email-input");
-              }}
-              disabled={loading}
-              className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                role="img"
-                aria-label="Email"
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 18 18"
+                  role="img"
+                  aria-label="Google"
+                >
+                  <path
+                    d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
+                    fill="#4285F4"
+                  />
+                  <path
+                    d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"
+                    fill="#34A853"
+                  />
+                  <path
+                    d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
+                    fill="#FBBC05"
+                  />
+                  <path
+                    d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
+                    fill="#EA4335"
+                  />
+                </svg>
+                {googleConfigured === null
+                  ? "Checking Google sign-in"
+                  : "Continue with Google"}
+              </button>
+            )}
+            {emailConfigured !== false && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPasskeyPending(false);
+                  setStep("email-input");
+                }}
+                disabled={loading}
+                className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <rect width="20" height="16" x="2" y="4" rx="2" />
-                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-              </svg>
-              Continue with email
-            </button>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  role="img"
+                  aria-label="Email"
+                >
+                  <rect width="20" height="16" x="2" y="4" rx="2" />
+                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                </svg>
+                Continue with email
+              </button>
+            )}
 
             <button
               type="button"
@@ -638,6 +694,13 @@ export function AuthPage({
                 ) : null}
               </>
             )}
+
+            {googleDisabledByWorkspace && emailConfigured === false ? (
+              <p className="pt-1 text-center text-sm text-[var(--auth-muted)]">
+                Google, email, and passkey login are disabled for this
+                workspace. Continue with SAML SSO.
+              </p>
+            ) : null}
 
             {error && (
               <p className="pt-1 text-center text-sm text-[var(--auth-error)]">

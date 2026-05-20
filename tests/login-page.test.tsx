@@ -93,6 +93,45 @@ describe("Login page", () => {
     ).toBeDefined();
   });
 
+  it("hides workspace-disabled Google, email, and passkey methods", async () => {
+    mockLocation.search =
+      "?callbackUrl=%2Fforeverbrowsing%2Fsettings%2Fsecurity";
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        providers: { google: false, email: false, passkey: false },
+        workspace: {
+          slug: "foreverbrowsing",
+          authentication: { google: false, emailPasskey: false },
+        },
+      }),
+    });
+
+    render(<LoginPage />);
+
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/auth/provider-capabilities?callbackUrl=%2Fforeverbrowsing%2Fsettings%2Fsecurity",
+        expect.objectContaining({ cache: "no-store" }),
+      );
+      expect(
+        screen.queryByRole("button", { name: /Continue with email/i }),
+      ).toBeNull();
+    });
+    expect(
+      screen.queryByRole("button", { name: /Continue with Google/i }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Log in with passkey/i }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
+    ).toBeDefined();
+    expect(
+      screen.getByText(/Google, email, and passkey login are disabled/),
+    ).toBeDefined();
+  });
+
   it("does not leave passkey login stuck checking when capabilities are slow", () => {
     fetchMock.mockReturnValueOnce(new Promise(() => {}));
 

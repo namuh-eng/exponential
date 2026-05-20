@@ -172,7 +172,13 @@ export async function signInWithPasskey({
     session: unknown;
   }>;
   try {
-    result = (await authClient.signIn.passkey()) as PasskeyOperationResult<{
+    result = (await authClient.signIn.passkey({
+      fetchOptions: {
+        headers: {
+          "x-auth-callback-url": callbackURL,
+        },
+      },
+    })) as PasskeyOperationResult<{
       session: unknown;
     }>;
   } catch (error) {
