@@ -313,6 +313,109 @@ describe("Members Admin Page", () => {
     });
   });
 
+  it("removes active members through the members API", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => membersResponse(),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => membersResponse([mockMembers[0], mockMembers[2]]),
+      });
+
+    render(<MembersPage />);
+    await waitForLoaded();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[1]);
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/members", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: "m2",
+          kind: "member",
+        }),
+      });
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByText("Removed Bob Jones from workspace."),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("resends and revokes pending invitations through the members API", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => membersResponse(),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => membersResponse(),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => membersResponse([mockMembers[0], mockMembers[1]]),
+      });
+
+    render(<MembersPage />);
+    await waitForLoaded();
+
+    fireEvent.click(screen.getByRole("button", { name: "Resend" }));
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: "invite-1",
+          kind: "invitation",
+          action: "resend",
+        }),
+      });
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByText("Resent invitation to charlie@acme.com."),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/members", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: "invite-1",
+          kind: "invitation",
+        }),
+      });
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByText("Revoked invitation to charlie@acme.com."),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("exports the current member list as CSV", async () => {
     const anchorClickMock = vi.fn();
     const originalCreateElement = document.createElement.bind(document);

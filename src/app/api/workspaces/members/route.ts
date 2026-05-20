@@ -1,5 +1,6 @@
 import { readAccountProfileFromUserSettings } from "@/lib/account-profile";
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
+import { buildAppUrl, getRequestAppUrl } from "@/lib/app-url";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
@@ -12,6 +13,8 @@ import {
   workspace,
   workspaceInvitation,
 } from "@/lib/db/schema";
+import { sendInvitationEmail } from "@/lib/email";
+import { createInviteToken } from "@/lib/invite-tokens";
 import {
   canPerformWorkspacePermission,
   readWorkspacePermissionSettings,
@@ -24,6 +27,26 @@ type WorkspaceRole = (typeof memberRole.enumValues)[number];
 
 function isManager(role: WorkspaceRole) {
   return role === "owner" || role === "admin";
+}
+
+async function getWorkspaceName(workspaceId: string) {
+  const [workspaceRecord] = await db
+    .select({ name: workspace.name })
+    .from(workspace)
+    .where(eq(workspace.id, workspaceId))
+    .limit(1);
+
+  return workspaceRecord?.name ?? "your workspace";
+}
+
+async function countWorkspaceOwners(workspaceId: string) {
+  const ownerMemberships = await db
+    .select({ id: member.id })
+    .from(member)
+    .where(and(eq(member.workspaceId, workspaceId), eq(member.role, "owner")))
+    .limit(2);
+
+  return ownerMemberships.length;
 }
 
 async function getWorkspaceAccess(userId: string) {
@@ -224,13 +247,20 @@ export async function PATCH(request: Request) {
     kind?: "member" | "invitation";
     id?: string;
     role?: WorkspaceRole;
+    action?: "resend";
   } | null;
 
+  if (!body?.id || (body.kind !== "member" && body.kind !== "invitation")) {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  if (body.action && (body.kind !== "invitation" || body.action !== "resend")) {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
   if (
-    !body?.id ||
-    (body.kind !== "member" && body.kind !== "invitation") ||
-    !body.role ||
-    !memberRole.enumValues.includes(body.role)
+    !body.action &&
+    (!body.role || !memberRole.enumValues.includes(body.role))
   ) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
@@ -272,18 +302,7 @@ export async function PATCH(request: Request) {
     }
 
     if (currentMember.role === "owner" && body.role !== "owner") {
-      const ownerMemberships = await db
-        .select({ id: member.id })
-        .from(member)
-        .where(
-          and(
-            eq(member.workspaceId, access.workspaceId),
-            eq(member.role, "owner"),
-          ),
-        )
-        .limit(2);
-
-      if (ownerMemberships.length < 2) {
+      if ((await countWorkspaceOwners(access.workspaceId)) < 2) {
         return NextResponse.json(
           { error: "Each workspace must keep at least one owner" },
           { status: 400 },
@@ -294,7 +313,7 @@ export async function PATCH(request: Request) {
     await db
       .update(member)
       .set({
-        role: body.role,
+        role: body.role as WorkspaceRole,
         updatedAt: new Date(),
       })
       .where(eq(member.id, currentMember.id));
@@ -305,6 +324,8 @@ export async function PATCH(request: Request) {
   const targetInvitation = await db
     .select({
       id: workspaceInvitation.id,
+      email: workspaceInvitation.email,
+      role: workspaceInvitation.role,
     })
     .from(workspaceInvitation)
     .where(
@@ -323,6 +344,32 @@ export async function PATCH(request: Request) {
     );
   }
 
+  if (body.action === "resend") {
+    const invitation = targetInvitation[0];
+    const inviteToken = createInviteToken({
+      workspaceId: access.workspaceId,
+      email: invitation.email,
+      role: invitation.role,
+    });
+    const inviteUrl = buildAppUrl(
+      getRequestAppUrl(request),
+      `/accept-invite?token=${encodeURIComponent(inviteToken)}`,
+    );
+
+    await sendInvitationEmail(
+      invitation.email,
+      await getWorkspaceName(access.workspaceId),
+      authSession.user.name,
+      inviteUrl,
+    );
+    await db
+      .update(workspaceInvitation)
+      .set({ token: inviteToken, updatedAt: new Date() })
+      .where(eq(workspaceInvitation.id, invitation.id));
+
+    return NextResponse.json({ success: true });
+  }
+
   if (access.membership.role !== "owner" && body.role === "owner") {
     return NextResponse.json(
       { error: "Only owners can assign the owner role" },
@@ -333,10 +380,131 @@ export async function PATCH(request: Request) {
   await db
     .update(workspaceInvitation)
     .set({
-      role: body.role,
+      role: body.role as WorkspaceRole,
       updatedAt: new Date(),
     })
     .where(eq(workspaceInvitation.id, targetInvitation[0].id));
+
+  return NextResponse.json({ success: true });
+}
+
+export async function DELETE(request: Request) {
+  const requestHeaders = await headers();
+  const authSession = await auth.api.getSession({ headers: requestHeaders });
+  if (!authSession) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const access = await getWorkspaceAccess(authSession.user.id);
+  if (!access) {
+    return NextResponse.json(
+      { error: "No active workspace found" },
+      { status: 404 },
+    );
+  }
+
+  if (!isManager(access.membership.role)) {
+    return NextResponse.json(
+      { error: "You do not have permission to manage members" },
+      { status: 403 },
+    );
+  }
+
+  const body = (await request.json().catch(() => null)) as {
+    kind?: "member" | "invitation";
+    id?: string;
+  } | null;
+
+  if (!body?.id || (body.kind !== "member" && body.kind !== "invitation")) {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  if (body.kind === "invitation") {
+    const [invitation] = await db
+      .select({ id: workspaceInvitation.id })
+      .from(workspaceInvitation)
+      .where(
+        and(
+          eq(workspaceInvitation.id, body.id),
+          eq(workspaceInvitation.workspaceId, access.workspaceId),
+          eq(workspaceInvitation.status, "pending"),
+        ),
+      )
+      .limit(1);
+
+    if (!invitation) {
+      return NextResponse.json(
+        { error: "Pending invitation not found" },
+        { status: 404 },
+      );
+    }
+
+    await db
+      .update(workspaceInvitation)
+      .set({ status: "revoked", updatedAt: new Date() })
+      .where(eq(workspaceInvitation.id, invitation.id));
+
+    return NextResponse.json({ success: true });
+  }
+
+  const [targetMember] = await db
+    .select({
+      id: member.id,
+      userId: member.userId,
+      role: member.role,
+    })
+    .from(member)
+    .where(
+      and(eq(member.id, body.id), eq(member.workspaceId, access.workspaceId)),
+    )
+    .limit(1);
+
+  if (!targetMember) {
+    return NextResponse.json({ error: "Member not found" }, { status: 404 });
+  }
+
+  if (targetMember.userId === authSession.user.id) {
+    return NextResponse.json(
+      { error: "Use your account settings to leave this workspace" },
+      { status: 400 },
+    );
+  }
+
+  if (access.membership.role !== "owner" && targetMember.role === "owner") {
+    return NextResponse.json(
+      { error: "Only owners can remove owners" },
+      { status: 403 },
+    );
+  }
+
+  if (
+    targetMember.role === "owner" &&
+    (await countWorkspaceOwners(access.workspaceId)) < 2
+  ) {
+    return NextResponse.json(
+      { error: "Each workspace must keep at least one owner" },
+      { status: 400 },
+    );
+  }
+
+  const workspaceTeams = await db
+    .select({ id: team.id })
+    .from(team)
+    .where(eq(team.workspaceId, access.workspaceId));
+  const teamIds = workspaceTeams.map((entry) => entry.id);
+
+  if (teamIds.length > 0) {
+    await db
+      .delete(teamMember)
+      .where(
+        and(
+          eq(teamMember.userId, targetMember.userId),
+          inArray(teamMember.teamId, teamIds),
+        ),
+      );
+  }
+
+  await db.delete(member).where(eq(member.id, targetMember.id));
 
   return NextResponse.json({ success: true });
 }

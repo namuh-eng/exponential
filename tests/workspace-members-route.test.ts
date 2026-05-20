@@ -8,6 +8,12 @@ const teamMembershipsInnerJoinMock = vi.fn();
 const lastSeenRecordsInnerJoinMock = vi.fn();
 const invitationsWhereMock = vi.fn();
 const updateSetMock = vi.fn();
+const deleteWhereMock = vi.fn();
+const createInviteTokenMock = vi.fn();
+const sendInvitationEmailMock = vi.fn();
+const workspaceNameLimitMock = vi.fn();
+const workspaceTeamsWhereMock = vi.fn();
+const targetMemberLimitMock = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: {
@@ -21,21 +27,17 @@ vi.mock("@/lib/active-workspace", () => ({
   resolveActiveWorkspaceId: resolveActiveWorkspaceIdMock,
 }));
 
+vi.mock("@/lib/email", () => ({
+  sendInvitationEmail: (...args: unknown[]) => sendInvitationEmailMock(...args),
+}));
+
+vi.mock("@/lib/invite-tokens", () => ({
+  createInviteToken: (options: unknown) => createInviteTokenMock(options),
+}));
+
 vi.mock("@/lib/db", () => ({
   db: {
     select: vi.fn((selection?: Record<string, unknown>) => {
-      // selection matches: { id: member.id, role: member.role } (for loadAuthenticatedAccess)
-      // OR { userId: member.userId, role: member.role } (for PATCH target check)
-      if (selection && "role" in selection && "settings" in selection) {
-        const chain = {
-          from: vi.fn().mockReturnThis(),
-          innerJoin: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockResolvedValue(membershipLimitMock()),
-        };
-        return chain;
-      }
-
       // selection matches GET activeMembers list
       if (selection && "joinedAt" in selection) {
         const chain = {
@@ -46,6 +48,31 @@ vi.mock("@/lib/db", () => ({
           // biome-ignore lint/suspicious/noThenProperty: <explanation>
           then: (resolve: (val: unknown) => void) =>
             resolve(activeMembersInnerJoinMock()),
+        };
+        return chain;
+      }
+
+      // selection matches: { id: member.id, role: member.role, settings: workspace.settings }
+      if (selection && "role" in selection && "settings" in selection) {
+        const chain = {
+          from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue(membershipLimitMock()),
+        };
+        return chain;
+      }
+
+      // selection matches helper workspace-name lookup
+      if (
+        selection &&
+        "name" in selection &&
+        Object.keys(selection).length === 1
+      ) {
+        const chain = {
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue(workspaceNameLimitMock()),
         };
         return chain;
       }
@@ -82,7 +109,7 @@ vi.mock("@/lib/db", () => ({
       }
 
       // selection matches GET invitations list
-      if (selection && "invitedEmail" in selection) {
+      if (selection && "email" in selection && "createdAt" in selection) {
         const chain = {
           from: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
@@ -94,17 +121,44 @@ vi.mock("@/lib/db", () => ({
         return chain;
       }
 
-      // PATCH member lookup
-      // selection: { userId: member.userId, role: member.role }
+      // PATCH/DELETE member lookup
+      // selection: { id: member.id, userId: member.userId, role: member.role }
       if (selection && "userId" in selection && "role" in selection) {
+        const chain = {
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue(targetMemberLimitMock()),
+        };
+        return chain;
+      }
+
+      // PATCH/DELETE invitation lookup
+      if (selection && "email" in selection && "role" in selection) {
         const chain = {
           from: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
           limit: vi
             .fn()
             .mockResolvedValue([
-              { id: "member-1", userId: "user-2", role: "member" },
+              { id: "invite-1", email: "pending@test.com", role: "member" },
             ]),
+        };
+        return chain;
+      }
+
+      // DELETE invitation lookup / workspace team ids lookup
+      if (
+        selection &&
+        "id" in selection &&
+        Object.keys(selection).length === 1
+      ) {
+        const chain = {
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue([{ id: "invite-1" }]),
+          // biome-ignore lint/suspicious/noThenProperty: mock query-builder awaitable
+          then: (resolve: (val: unknown) => void) =>
+            resolve(workspaceTeamsWhereMock()),
         };
         return chain;
       }
@@ -128,6 +182,12 @@ vi.mock("@/lib/db", () => ({
         };
       },
     })),
+    delete: vi.fn(() => ({
+      where: (...whereArgs: unknown[]) => {
+        deleteWhereMock(...whereArgs);
+        return Promise.resolve([{ id: "member-1" }]);
+      },
+    })),
   },
 }));
 
@@ -136,7 +196,7 @@ vi.mock("next/headers", () => ({
 }));
 
 vi.mock("@/lib/db/schema", () => ({
-  memberRole: { enumValues: ["owner", "admin", "member"] },
+  memberRole: { enumValues: ["owner", "admin", "member", "guest"] },
   member: { __name: "member" },
   workspace: { __name: "workspace" },
   workspaceInvitation: { __name: "workspaceInvitation" },
@@ -150,7 +210,9 @@ describe("workspace members route", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
-    getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
+    getSessionMock.mockResolvedValue({
+      user: { id: "user-1", name: "Ashley" },
+    });
     resolveActiveWorkspaceIdMock.mockResolvedValue("workspace-1");
     membershipLimitMock.mockReturnValue([
       { id: "member-1", role: "owner", userId: "user-1", settings: {} },
@@ -176,6 +238,13 @@ describe("workspace members route", () => {
       },
     ]);
     invitationsWhereMock.mockReturnValue([]);
+    workspaceNameLimitMock.mockReturnValue([{ name: "Namuh" }]);
+    workspaceTeamsWhereMock.mockReturnValue([{ id: "team-1" }]);
+    targetMemberLimitMock.mockReturnValue([
+      { id: "member-2", userId: "user-2", role: "member" },
+    ]);
+    createInviteTokenMock.mockReturnValue("token-456");
+    sendInvitationEmailMock.mockResolvedValue(undefined);
   });
 
   it("returns 401 without a session", async () => {
@@ -233,6 +302,93 @@ describe("workspace members route", () => {
     expect(response.status).toBe(200);
     expect(updateSetMock).toHaveBeenCalledWith(
       expect.objectContaining({ role: "admin" }),
+    );
+  });
+
+  it("removes active members", async () => {
+    const { DELETE } = await import("@/app/api/workspaces/members/route");
+
+    const response = await DELETE(
+      new Request("http://localhost/api/workspaces/members", {
+        method: "DELETE",
+        body: JSON.stringify({ kind: "member", id: "member-2" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(deleteWhereMock).toHaveBeenCalled();
+  });
+
+  it("rejects self-removal and non-manager removal attempts", async () => {
+    const { DELETE } = await import("@/app/api/workspaces/members/route");
+
+    targetMemberLimitMock.mockReturnValueOnce([
+      { id: "member-1", userId: "user-1", role: "owner" },
+    ]);
+    const selfResponse = await DELETE(
+      new Request("http://localhost/api/workspaces/members", {
+        method: "DELETE",
+        body: JSON.stringify({ kind: "member", id: "member-1" }),
+      }),
+    );
+    expect(selfResponse.status).toBe(400);
+
+    membershipLimitMock.mockReturnValue([
+      { id: "member-3", role: "member", userId: "user-3", settings: {} },
+    ]);
+    const nonManagerResponse = await DELETE(
+      new Request("http://localhost/api/workspaces/members", {
+        method: "DELETE",
+        body: JSON.stringify({ kind: "member", id: "member-2" }),
+      }),
+    );
+    expect(nonManagerResponse.status).toBe(403);
+  });
+
+  it("resends pending invitations", async () => {
+    const { PATCH } = await import("@/app/api/workspaces/members/route");
+
+    const response = await PATCH(
+      new Request("http://localhost:3015/api/workspaces/members", {
+        method: "PATCH",
+        body: JSON.stringify({
+          kind: "invitation",
+          id: "invite-1",
+          action: "resend",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(createInviteTokenMock).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      email: "pending@test.com",
+      role: "member",
+    });
+    expect(sendInvitationEmailMock).toHaveBeenCalledWith(
+      "pending@test.com",
+      "Namuh",
+      "Ashley",
+      "http://localhost:3015/accept-invite?token=token-456",
+    );
+    expect(updateSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({ token: "token-456" }),
+    );
+  });
+
+  it("revokes pending invitations", async () => {
+    const { DELETE } = await import("@/app/api/workspaces/members/route");
+
+    const response = await DELETE(
+      new Request("http://localhost/api/workspaces/members", {
+        method: "DELETE",
+        body: JSON.stringify({ kind: "invitation", id: "invite-1" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "revoked" }),
     );
   });
 });
