@@ -3,19 +3,77 @@
 import { EmptyState } from "@/components/empty-state";
 import { useEffect, useState } from "react";
 
+type ProjectTemplateSettings = {
+  status?: string | null;
+  priority?: string | null;
+  labelIds?: string[];
+  milestones?: string[];
+};
+
 type ProjectTemplate = {
   id: string;
   name: string;
   description: string;
+  settings?: ProjectTemplateSettings;
   createdAt: string;
 };
+
+type ProjectLabel = { id: string; name: string; color: string };
+
+const PROJECT_STATUSES = [
+  ["", "Keep default"],
+  ["planned", "Planned"],
+  ["started", "In progress"],
+  ["paused", "Paused"],
+  ["completed", "Completed"],
+  ["canceled", "Canceled"],
+] as const;
+
+const PROJECT_PRIORITIES = [
+  ["", "Keep default"],
+  ["none", "No priority"],
+  ["urgent", "Urgent"],
+  ["high", "High"],
+  ["medium", "Medium"],
+  ["low", "Low"],
+] as const;
+
+function splitLines(value: string) {
+  return Array.from(
+    new Set(
+      value
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function formatTemplateSummary(template: ProjectTemplate) {
+  const settings = template.settings ?? {};
+  const pieces = [
+    settings.status ? `Status: ${settings.status}` : null,
+    settings.priority ? `Priority: ${settings.priority}` : null,
+    settings.labelIds?.length ? `${settings.labelIds.length} labels` : null,
+    settings.milestones?.length
+      ? `${settings.milestones.length} milestones`
+      : null,
+  ].filter(Boolean);
+
+  return pieces.length > 0 ? pieces.join(" · ") : "No structure configured";
+}
 
 export default function ProjectTemplatesPage() {
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
+  const [labels, setLabels] = useState<ProjectLabel[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [status, setStatus] = useState("");
+  const [priority, setPriority] = useState("");
+  const [labelIds, setLabelIds] = useState<string[]>([]);
+  const [milestones, setMilestones] = useState("");
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -25,13 +83,20 @@ export default function ProjectTemplatesPage() {
 
     async function loadTemplates() {
       try {
-        const response = await fetch("/api/project-templates");
-        if (!response.ok) {
+        const [templatesResponse, labelsResponse] = await Promise.all([
+          fetch("/api/project-templates"),
+          fetch("/api/project-labels"),
+        ]);
+        if (!templatesResponse.ok) {
           throw new Error("Failed to load project templates");
         }
-        const payload = await response.json();
+        const payload = await templatesResponse.json();
+        const labelsPayload = labelsResponse.ok
+          ? await labelsResponse.json()
+          : { labels: [] };
         if (!cancelled) {
           setTemplates(payload.templates ?? []);
+          setLabels(labelsPayload.labels ?? []);
         }
       } catch {
         if (!cancelled) {
@@ -51,6 +116,16 @@ export default function ProjectTemplatesPage() {
     };
   }, []);
 
+  function resetForm() {
+    setName("");
+    setDescription("");
+    setStatus("");
+    setPriority("");
+    setLabelIds([]);
+    setMilestones("");
+    setError("");
+  }
+
   async function saveTemplate() {
     const trimmedName = name.trim();
     if (!trimmedName) {
@@ -65,7 +140,16 @@ export default function ProjectTemplatesPage() {
       const response = await fetch("/api/project-templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmedName, description }),
+        body: JSON.stringify({
+          name: trimmedName,
+          description,
+          settings: {
+            status: status || null,
+            priority: priority || null,
+            labelIds,
+            milestones: splitLines(milestones),
+          },
+        }),
       });
 
       const payload = await response.json().catch(() => ({}));
@@ -76,8 +160,7 @@ export default function ProjectTemplatesPage() {
 
       setTemplates((current) => [payload.template, ...current]);
       setDialogOpen(false);
-      setName("");
-      setDescription("");
+      resetForm();
     } catch {
       setError("Failed to create project template.");
     } finally {
@@ -103,8 +186,8 @@ export default function ProjectTemplatesPage() {
             Project templates
           </h1>
           <p className="mt-3 text-[14px] text-[var(--color-text-secondary)]">
-            Standardize project structures, milestones, and initial issues with
-            templates.
+            Standardize project structures, milestones, and default settings
+            that can be applied when creating projects.
           </p>
         </div>
         {templates.length > 0 ? (
@@ -144,6 +227,9 @@ export default function ProjectTemplatesPage() {
                     No description
                   </p>
                 )}
+                <p className="mt-2 text-[12px] text-[var(--color-text-tertiary)]">
+                  {formatTemplateSummary(template)}
+                </p>
               </article>
             ))}
           </div>
@@ -155,7 +241,7 @@ export default function ProjectTemplatesPage() {
           <dialog
             open
             aria-labelledby="project-template-dialog-title"
-            className="w-full max-w-[420px] rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-5 shadow-xl"
+            className="w-full max-w-[520px] rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-5 shadow-xl"
           >
             <h2
               id="project-template-dialog-title"
@@ -175,9 +261,74 @@ export default function ProjectTemplatesPage() {
               <label className="block text-[13px] text-[var(--color-text-secondary)]">
                 Description
                 <textarea
-                  className="mt-1 min-h-[88px] w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-3 py-2 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[#5E6AD2]"
+                  className="mt-1 min-h-[72px] w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-3 py-2 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[#5E6AD2]"
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
+                />
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-[13px] text-[var(--color-text-secondary)]">
+                  Default status
+                  <select
+                    className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-3 py-2 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[#5E6AD2]"
+                    value={status}
+                    onChange={(event) => setStatus(event.target.value)}
+                  >
+                    {PROJECT_STATUSES.map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-[13px] text-[var(--color-text-secondary)]">
+                  Default priority
+                  <select
+                    className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-3 py-2 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[#5E6AD2]"
+                    value={priority}
+                    onChange={(event) => setPriority(event.target.value)}
+                  >
+                    {PROJECT_PRIORITIES.map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {labels.length > 0 ? (
+                <label className="block text-[13px] text-[var(--color-text-secondary)]">
+                  Default labels
+                  <select
+                    multiple
+                    aria-label="Default project labels"
+                    className="mt-1 min-h-[80px] w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-3 py-2 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[#5E6AD2]"
+                    value={labelIds}
+                    onChange={(event) =>
+                      setLabelIds(
+                        Array.from(
+                          event.currentTarget.selectedOptions,
+                          (option) => option.value,
+                        ),
+                      )
+                    }
+                  >
+                    {labels.map((label) => (
+                      <option key={label.id} value={label.id}>
+                        {label.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              <label className="block text-[13px] text-[var(--color-text-secondary)]">
+                Milestones
+                <textarea
+                  aria-label="Template milestones"
+                  placeholder="One milestone per line"
+                  className="mt-1 min-h-[88px] w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-3 py-2 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[#5E6AD2]"
+                  value={milestones}
+                  onChange={(event) => setMilestones(event.target.value)}
                 />
               </label>
               {error ? (
@@ -190,9 +341,7 @@ export default function ProjectTemplatesPage() {
                 type="button"
                 onClick={() => {
                   setDialogOpen(false);
-                  setError("");
-                  setName("");
-                  setDescription("");
+                  resetForm();
                 }}
               >
                 Cancel

@@ -2,6 +2,7 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { projectTemplate } from "@/lib/db/schema";
+import { buildProjectTemplateSettings } from "@/lib/project-template-settings";
 import { desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -63,7 +64,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
   }
 
-  let body: { name?: unknown; description?: unknown };
+  let body: {
+    name?: unknown;
+    description?: unknown;
+    settings?: {
+      status?: unknown;
+      priority?: unknown;
+      labelIds?: unknown;
+      milestones?: unknown;
+    };
+  };
   try {
     body = await request.json();
   } catch {
@@ -75,6 +85,7 @@ export async function POST(request: Request) {
     typeof body.description === "string" && body.description.trim()
       ? body.description.trim()
       : null;
+  const settings = buildProjectTemplateSettings(body.settings ?? {});
 
   if (!name) {
     return NextResponse.json(
@@ -90,7 +101,7 @@ export async function POST(request: Request) {
       description,
       workspaceId,
       createdById: session.user.id,
-      settings: {},
+      settings,
     })
     .returning();
 

@@ -8,11 +8,14 @@ import {
   issue,
   project,
   projectLabel,
+  projectMilestone,
   projectTeam,
+  projectTemplate,
   team,
   user,
 } from "@/lib/db/schema";
 import { readProjectSettings } from "@/lib/project-detail";
+import { readProjectTemplateSettings } from "@/lib/project-template-settings";
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -199,11 +202,44 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
+  const templateId =
+    typeof body.templateId === "string" && body.templateId.trim()
+      ? body.templateId.trim()
+      : null;
+  const selectedTemplate = templateId
+    ? (
+        await db
+          .select({
+            id: projectTemplate.id,
+            description: projectTemplate.description,
+            settings: projectTemplate.settings,
+          })
+          .from(projectTemplate)
+          .where(
+            and(
+              eq(projectTemplate.workspaceId, workspaceId),
+              eq(projectTemplate.id, templateId),
+            ),
+          )
+          .limit(1)
+      )[0]
+    : null;
+
+  if (templateId && !selectedTemplate) {
+    return NextResponse.json(
+      { error: "Project template not found in active workspace" },
+      { status: 400 },
+    );
+  }
+
+  const templateSettings = readProjectTemplateSettings(
+    selectedTemplate?.settings,
+  );
   const name = `${body.name ?? ""}`.trim();
   const description =
     typeof body.description === "string" && body.description.trim()
       ? body.description.trim()
-      : null;
+      : selectedTemplate?.description || null;
 
   if (!name) {
     return NextResponse.json(
@@ -237,15 +273,16 @@ export async function POST(request: Request) {
         )
       : []),
   ].filter((value): value is string => Boolean(value));
-  const requestedLabelIds: string[] = Array.isArray(body.labelIds)
-    ? Array.from(
-        new Set(
-          (body.labelIds as unknown[]).filter(
+  const requestedLabelIds: string[] = Array.from(
+    new Set([
+      ...templateSettings.labelIds,
+      ...(Array.isArray(body.labelIds)
+        ? (body.labelIds as unknown[]).filter(
             (value): value is string => typeof value === "string",
-          ),
-        ),
-      )
-    : [];
+          )
+        : []),
+    ]),
+  );
 
   const linkedTeamsById = new Map<
     string,
@@ -336,6 +373,8 @@ export async function POST(request: Request) {
         name,
         description,
         slug: finalSlug,
+        status: templateSettings.status ?? undefined,
+        priority: templateSettings.priority ?? undefined,
         workspaceId,
         leadId: session.user.id,
         settings:
@@ -354,11 +393,26 @@ export async function POST(request: Request) {
       );
     }
 
+    if (templateSettings.milestones.length > 0) {
+      await tx.insert(projectMilestone).values(
+        templateSettings.milestones.map((milestoneName, index) => ({
+          name: milestoneName,
+          projectId: createdProject.id,
+          sortOrder: index,
+        })),
+      );
+    }
+
     return createdProject;
   });
 
   return NextResponse.json(
-    { ...newProject, teams: linkedTeams },
+    {
+      ...newProject,
+      teams: linkedTeams,
+      appliedTemplateId: selectedTemplate?.id ?? null,
+      appliedMilestones: templateSettings.milestones,
+    },
     { status: 201 },
   );
 }

@@ -14,10 +14,13 @@ const fetchMock = vi.fn();
 describe("ProjectTemplatesPage component", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", fetchMock);
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({ templates: [] }),
-    });
+    fetchMock.mockImplementation((url) =>
+      Promise.resolve({
+        ok: true,
+        json: async () =>
+          url === "/api/project-labels" ? { labels: [] } : { templates: [] },
+      }),
+    );
   });
 
   afterEach(() => {
@@ -69,22 +72,32 @@ describe("ProjectTemplatesPage component", () => {
   });
 
   it("validates, saves, and renders a created project template", async () => {
-    fetchMock
-      .mockResolvedValueOnce({
+    fetchMock.mockImplementation((url, init) => {
+      if (url === "/api/project-templates" && init?.method === "POST") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            template: {
+              id: "template-1",
+              name: "Launch plan",
+              description: "Milestones and starter tasks",
+              settings: {
+                status: "started",
+                priority: "high",
+                milestones: ["Plan", "Build"],
+              },
+              createdAt: "2026-05-13T00:00:00.000Z",
+            },
+          }),
+        });
+      }
+
+      return Promise.resolve({
         ok: true,
-        json: async () => ({ templates: [] }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          template: {
-            id: "template-1",
-            name: "Launch plan",
-            description: "Milestones and starter tasks",
-            createdAt: "2026-05-13T00:00:00.000Z",
-          },
-        }),
+        json: async () =>
+          url === "/api/project-labels" ? { labels: [] } : { templates: [] },
       });
+    });
 
     render(<ProjectTemplatesPage />);
 
@@ -101,6 +114,15 @@ describe("ProjectTemplatesPage component", () => {
     fireEvent.change(screen.getByLabelText("Description"), {
       target: { value: "Milestones and starter tasks" },
     });
+    fireEvent.change(screen.getByLabelText("Default status"), {
+      target: { value: "started" },
+    });
+    fireEvent.change(screen.getByLabelText("Default priority"), {
+      target: { value: "high" },
+    });
+    fireEvent.change(screen.getByLabelText("Template milestones"), {
+      target: { value: "Plan\nBuild" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Save template" }));
 
     expect(await screen.findByText("Launch plan")).toBeInTheDocument();
@@ -108,18 +130,27 @@ describe("ProjectTemplatesPage component", () => {
       screen.getByText("Milestones and starter tasks"),
     ).toBeInTheDocument();
     expect(screen.queryByText("No project templates")).not.toBeInTheDocument();
-    expect(fetchMock).toHaveBeenLastCalledWith(
+    expect(screen.getByText(/2 milestones/)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/project-templates",
-      expect.objectContaining({ method: "POST" }),
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining('"milestones":["Plan","Build"]'),
+      }),
     );
   });
   it("keeps the dialog open and shows an error when saving fails", async () => {
-    fetchMock
-      .mockResolvedValueOnce({
+    fetchMock.mockImplementation((url, init) => {
+      if (url === "/api/project-templates" && init?.method === "POST") {
+        return Promise.reject(new Error("offline"));
+      }
+
+      return Promise.resolve({
         ok: true,
-        json: async () => ({ templates: [] }),
-      })
-      .mockRejectedValueOnce(new Error("offline"));
+        json: async () =>
+          url === "/api/project-labels" ? { labels: [] } : { templates: [] },
+      });
+    });
 
     render(<ProjectTemplatesPage />);
 

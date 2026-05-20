@@ -4,6 +4,7 @@ const getSessionMock = vi.fn();
 const resolveActiveWorkspaceIdMock = vi.fn();
 const templatesOrderByMock = vi.fn();
 const insertReturningMock = vi.fn();
+const insertValuesMock = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: {
@@ -25,8 +26,11 @@ vi.mock("@/lib/db", () => ({
       orderBy: vi.fn().mockResolvedValue(templatesOrderByMock()),
     })),
     insert: vi.fn(() => ({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue(insertReturningMock()),
+      values: vi.fn((values) => {
+        insertValuesMock(values);
+        return {
+          returning: vi.fn().mockResolvedValue(insertReturningMock()),
+        };
       }),
     })),
   },
@@ -123,6 +127,12 @@ describe("project templates route", () => {
         body: JSON.stringify({
           name: "Beta rollout",
           description: "Default beta launch structure",
+          settings: {
+            status: "started",
+            priority: "high",
+            labelIds: ["label-1", "label-1"],
+            milestones: ["Plan", "Build", ""],
+          },
         }),
       }),
     );
@@ -130,5 +140,45 @@ describe("project templates route", () => {
     expect(response.status).toBe(201);
     const payload = await response.json();
     expect(payload.template.name).toBe("Beta rollout");
+    expect(insertValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        settings: {
+          status: "started",
+          priority: "high",
+          labelIds: ["label-1"],
+          milestones: ["Plan", "Build"],
+        },
+      }),
+    );
+  });
+
+  it("normalizes project template structure and settings", async () => {
+    const { POST } = await import("@/app/api/project-templates/route");
+
+    await POST(
+      new Request("http://localhost/api/project-templates", {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Launch",
+          settings: {
+            status: "started",
+            priority: "high",
+            labelIds: ["label-1", "label-1", 12],
+            milestones: ["Plan", "Build", "Plan", ""],
+          },
+        }),
+      }),
+    );
+
+    expect(insertValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        settings: {
+          status: "started",
+          priority: "high",
+          labelIds: ["label-1"],
+          milestones: ["Plan", "Build"],
+        },
+      }),
+    );
   });
 });
