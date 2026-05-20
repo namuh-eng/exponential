@@ -12,7 +12,7 @@ const mockNext = vi.fn(
   (_init?: unknown) => new Response(null, { status: 200 }),
 );
 const mockRewrite = vi.fn(
-  (url: URL) => new Response(url.toString(), { status: 200 }),
+  (url: URL, _init?: unknown) => new Response(url.toString(), { status: 200 }),
 );
 
 vi.mock("next/server", () => ({
@@ -77,6 +77,7 @@ describe("Auth proxy", () => {
     "/foreverbrowsing/settings/account/security",
     "/foreverbrowsing/team/ENG/all",
     "/foreverbrowsing/projects",
+    "/foreverbrowsing/roadmap",
     "/foreverbrowsing/team/ENG/views",
     "/foreverbrowsing/team/ENG/analytics",
     "/foreverbrowsing/team/ENG/insights",
@@ -192,6 +193,7 @@ describe("Auth proxy", () => {
   it.each([
     ["/foreverbrowsing/members", "/members"],
     ["/foreverbrowsing/agent", "/agent"],
+    ["/foreverbrowsing/roadmap", "/roadmap"],
   ])(
     "rewrites authenticated workspace-prefixed app route %s without changing the browser URL",
     async (sourcePath, rewrittenPath) => {
@@ -206,6 +208,15 @@ describe("Auth proxy", () => {
       expect(mockRewrite).toHaveBeenCalled();
       expect(mockRewrite.mock.calls[0]?.[0].pathname).toBe(rewrittenPath);
       expect(mockRewrite.mock.calls[0]?.[0].search).toBe("?view=list");
+      const rewriteOptions = mockRewrite.mock.calls[0]?.[1] as
+        | { request?: { headers?: Headers } }
+        | undefined;
+      expect(rewriteOptions?.request?.headers?.get("x-workspace-slug")).toBe(
+        "foreverbrowsing",
+      );
+      expect(
+        rewriteOptions?.request?.headers?.get("x-workspace-source-path"),
+      ).toBe(sourcePath);
     },
   );
 

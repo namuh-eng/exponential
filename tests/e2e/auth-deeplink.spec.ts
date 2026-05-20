@@ -5,6 +5,7 @@ const workspaceDeepLinks = [
   "/foreverbrowsing/settings/account/security",
   "/foreverbrowsing/team/ENG/all",
   "/foreverbrowsing/projects?view=list",
+  "/foreverbrowsing/roadmap?view=list",
 ];
 
 test.describe("Unauthenticated workspace deep links", () => {
