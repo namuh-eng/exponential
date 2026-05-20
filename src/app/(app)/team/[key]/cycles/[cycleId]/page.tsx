@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/empty-state";
 import { IssueRow, priorityMap } from "@/components/issue-row";
 import { IssuesGroupHeader } from "@/components/issues-group-header";
 import { formatCycleDate } from "@/lib/cycle-utils";
+import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -58,7 +59,11 @@ interface CycleDetailResponse {
 }
 
 export default function CycleDetailPage() {
-  const params = useParams<{ key: string; cycleId: string }>();
+  const params = useParams<{
+    key: string;
+    cycleId: string;
+    workspaceSlug?: string;
+  }>();
   const router = useRouter();
   const [data, setData] = useState<CycleDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -109,7 +114,14 @@ export default function CycleDetailPage() {
       <div className="flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-2">
         <button
           type="button"
-          onClick={() => router.push(`/team/${params.key}/cycles`)}
+          onClick={() =>
+            router.push(
+              withWorkspaceSlug(
+                `/team/${params.key}/cycles`,
+                params.workspaceSlug,
+              ),
+            )
+          }
           className="flex items-center gap-1 text-[13px] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
         >
           <svg

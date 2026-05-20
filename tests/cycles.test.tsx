@@ -101,6 +101,21 @@ describe("CycleRow", () => {
     render(<CycleRow cycle={cycle} teamKey="ENG" />);
     expect(screen.getByText(/10/)).toBeTruthy();
   });
+
+  it("preserves workspace slug in cycle detail links when provided", async () => {
+    const { CycleRow } = await import("@/components/cycle-row");
+    render(
+      <CycleRow
+        cycle={makeCycle({ id: "cycle-1" })}
+        teamKey="ENG"
+        workspaceSlug="foreverbrowsing"
+      />,
+    );
+
+    expect(screen.getByTestId("cycle-row").getAttribute("href")).toBe(
+      "/foreverbrowsing/team/ENG/cycles/cycle-1",
+    );
+  });
 });
 
 // ─── CycleSection ───────────────────────────────────────────────────
@@ -223,10 +238,10 @@ describe("formatCycleDate", () => {
 });
 
 describe("getDateInputValue", () => {
-  it("returns the local calendar date instead of the UTC date", async () => {
+  it("returns the requested timezone calendar date instead of the UTC date", async () => {
     const { getDateInputValue } = await import("@/lib/cycle-utils");
     const kstDate = new Date("2026-04-08T02:06:37+09:00");
-    expect(getDateInputValue(kstDate)).toBe("2026-04-08");
+    expect(getDateInputValue(kstDate, "Asia/Seoul")).toBe("2026-04-08");
   });
 });
 

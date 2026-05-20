@@ -174,6 +174,35 @@ function getWorkspacePrefixedTeamAnalyticsRoute(pathname: string) {
   return null;
 }
 
+function getWorkspacePrefixedCyclesRoute(pathname: string) {
+  const segments = getPathSegments(pathname);
+
+  if (
+    isWorkspaceSlugSegment(segments[0]) &&
+    segments[1] === "team" &&
+    segments.length >= 4 &&
+    segments[3] === "cycles"
+  ) {
+    return { slug: decodeURIComponent(segments[0]) };
+  }
+
+  return null;
+}
+
+function getWorkspaceCyclesRedirect(pathname: string) {
+  const segments = getPathSegments(pathname);
+
+  if (
+    isWorkspaceSlugSegment(segments[0]) &&
+    segments[1] === "cycles" &&
+    segments.length === 2
+  ) {
+    return `/${segments[0]}/team/${CANONICAL_TEAM_KEY}/cycles`;
+  }
+
+  return null;
+}
+
 function getWorkspacePrefixedInitiativesRoute(pathname: string) {
   const segments = getPathSegments(pathname);
 
@@ -287,6 +316,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(canonicalIssueUrl);
   }
 
+  const workspaceCyclesRedirect = getWorkspaceCyclesRedirect(pathname);
+  if (workspaceCyclesRedirect) {
+    const workspaceCyclesUrl = request.nextUrl.clone();
+    workspaceCyclesUrl.pathname = workspaceCyclesRedirect;
+    return NextResponse.redirect(workspaceCyclesUrl);
+  }
+
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-workspace-source-path", pathname);
 
@@ -338,6 +374,13 @@ export async function proxy(request: NextRequest) {
       "x-workspace-slug",
       workspacePrefixedTeamAnalyticsRoute.slug,
     );
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
+  const workspacePrefixedCyclesRoute =
+    getWorkspacePrefixedCyclesRoute(pathname);
+  if (workspacePrefixedCyclesRoute) {
+    requestHeaders.set("x-workspace-slug", workspacePrefixedCyclesRoute.slug);
     return NextResponse.next({ request: { headers: requestHeaders } });
   }
 

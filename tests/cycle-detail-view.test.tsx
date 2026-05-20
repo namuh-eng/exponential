@@ -3,9 +3,16 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const pushMock = vi.fn();
+let mockParams = { key: "ENG", cycleId: "cycle-1" } as {
+  key: string;
+  cycleId: string;
+  workspaceSlug?: string;
+};
+
 vi.mock("next/navigation", () => ({
-  useParams: () => ({ key: "ENG", cycleId: "cycle-1" }),
-  useRouter: () => ({ push: vi.fn() }),
+  useParams: () => mockParams,
+  useRouter: () => ({ push: pushMock }),
 }));
 
 vi.mock("next/link", () => ({
@@ -62,6 +69,8 @@ const cycleDetailResponse = {
 
 describe("CycleDetailPage", () => {
   beforeEach(() => {
+    pushMock.mockClear();
+    mockParams = { key: "ENG", cycleId: "cycle-1" };
     vi.stubGlobal(
       "fetch",
       vi.fn(() =>
@@ -93,5 +102,20 @@ describe("CycleDetailPage", () => {
 
     expect(issueRow).toHaveAttribute("data-testid", "issue-row");
     expect(issueRow).toHaveAttribute("href", "/team/ENG/issue/ENG-123");
+  });
+
+  it("preserves workspace slug when navigating back to the cycles list", async () => {
+    mockParams = {
+      key: "ENG",
+      cycleId: "cycle-1",
+      workspaceSlug: "foreverbrowsing",
+    };
+
+    render(<CycleDetailPage />);
+
+    const backButton = await screen.findByRole("button", { name: "Cycles" });
+    backButton.click();
+
+    expect(pushMock).toHaveBeenCalledWith("/foreverbrowsing/team/ENG/cycles");
   });
 });

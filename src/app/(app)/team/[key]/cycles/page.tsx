@@ -77,7 +77,7 @@ function getCycleFormDefaults(data: CyclesResponse | null) {
 }
 
 export default function TeamCyclesPage() {
-  const params = useParams<{ key: string }>();
+  const params = useParams<{ key: string; workspaceSlug?: string }>();
   const [data, setData] = useState<CyclesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadState, setLoadState] = useState<"ready" | "not-found" | "error">(
@@ -281,13 +281,27 @@ export default function TeamCyclesPage() {
                 Current Cycle
               </span>
             </div>
-            <CycleRow cycle={current} teamKey={params.key} />
+            <CycleRow
+              cycle={current}
+              teamKey={params.key}
+              workspaceSlug={params.workspaceSlug}
+            />
           </div>
         )}
 
-        <CycleSection title="Upcoming" cycles={upcoming} teamKey={params.key} />
+        <CycleSection
+          title="Upcoming"
+          cycles={upcoming}
+          teamKey={params.key}
+          workspaceSlug={params.workspaceSlug}
+        />
 
-        <CycleSection title="Past Cycles" cycles={past} teamKey={params.key} />
+        <CycleSection
+          title="Past Cycles"
+          cycles={past}
+          teamKey={params.key}
+          workspaceSlug={params.workspaceSlug}
+        />
       </div>
     </div>
   );

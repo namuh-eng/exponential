@@ -80,6 +80,8 @@ describe("Auth proxy", () => {
     "/foreverbrowsing/team/ENG/views",
     "/foreverbrowsing/team/ENG/analytics",
     "/foreverbrowsing/team/ENG/insights",
+    "/foreverbrowsing/team/ENG/cycles",
+    "/foreverbrowsing/team/ENG/cycles/cycle-1",
   ])(
     "rewrites unauthenticated workspace deep link %s to login without changing the browser URL",
     async (path) => {
@@ -267,6 +269,8 @@ describe("Auth proxy", () => {
     "/foreverbrowsing/team/ENG/analytics/drilldown",
     "/foreverbrowsing/team/ENG/insights",
     "/foreverbrowsing/team/ENG/insights/drilldown",
+    "/foreverbrowsing/team/ENG/cycles",
+    "/foreverbrowsing/team/ENG/cycles/cycle-1",
     "/foreverbrowsing/initiatives",
     "/foreverbrowsing/initiatives/init-1",
   ])(
@@ -326,6 +330,8 @@ describe("Auth proxy", () => {
     "/views/projects",
     "/analytics",
     "/insights",
+    "/cycles",
+    "/cycles/cycle-1",
   ])(
     "redirects legacy canonical ENG team%s routes to workspace-scoped routes",
     async (teamRoute) => {
@@ -362,6 +368,21 @@ describe("Auth proxy", () => {
     expect(redirectUrl.searchParams.get("callbackUrl")).toBe(
       "/accept-invite?token=signed-token",
     );
+  });
+
+  it("redirects workspace cycles shortcut to the canonical workspace team cycles route", async () => {
+    mockRedirect.mockClear();
+    mockRewrite.mockClear();
+    const { proxy } = await import("@/proxy");
+    const req = createMockRequest("/foreverbrowsing/cycles?view=list", {
+      "better-auth.session_token": "valid-session-token",
+    });
+    await proxy(req as never);
+    expect(mockRewrite).not.toHaveBeenCalled();
+    expect(mockRedirect).toHaveBeenCalled();
+    const redirectUrl = mockRedirect.mock.calls[0][0] as URL;
+    expect(redirectUrl.pathname).toBe("/foreverbrowsing/team/ENG/cycles");
+    expect(redirectUrl.search).toBe("?view=list");
   });
 
   it("exports matcher config", async () => {

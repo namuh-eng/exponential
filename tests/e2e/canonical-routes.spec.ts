@@ -309,4 +309,75 @@ test.describe("Canonical Forever Browsing routes", () => {
     ).toBeVisible();
     await expectRenderedAppPage(page);
   });
+
+  test("renders workspace-prefixed team cycles list, detail, sidebar nav, and shortcut redirect", async ({
+    page,
+  }) => {
+    await page.route("**/api/teams/ENG/cycles", async (route) => {
+      await route.fulfill({
+        json: {
+          team: {
+            id: "team-1",
+            name: "Engineering",
+            key: "ENG",
+            cyclesEnabled: true,
+            cycleStartDay: 1,
+            cycleDurationWeeks: 2,
+            timezone: "America/Los_Angeles",
+          },
+          cycles: [
+            {
+              id: "cycle-1",
+              name: "Workspace Cycle",
+              number: 42,
+              startDate: "2026-05-01T00:00:00.000Z",
+              endDate: "2026-05-31T00:00:00.000Z",
+              issueCount: 1,
+              completedIssueCount: 0,
+            },
+          ],
+        },
+      });
+    });
+    await page.route("**/api/teams/ENG/cycles/cycle-1", async (route) => {
+      await route.fulfill({
+        json: {
+          team: { id: "team-1", name: "Engineering", key: "ENG" },
+          cycle: {
+            id: "cycle-1",
+            name: "Workspace Cycle",
+            number: 42,
+            startDate: "2026-05-01T00:00:00.000Z",
+            endDate: "2026-05-31T00:00:00.000Z",
+            issueCount: 0,
+            completedIssueCount: 0,
+          },
+          groups: [],
+        },
+      });
+    });
+
+    await page.goto("/foreverbrowsing/team/ENG/cycles");
+    await expect(page).toHaveURL(/\/foreverbrowsing\/team\/ENG\/cycles$/);
+    await expect(page.getByText("Workspace Cycle")).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Cycles" }).first(),
+    ).toHaveAttribute("href", "/foreverbrowsing/team/ENG/cycles");
+    await expect(page.getByTestId("cycle-row")).toHaveAttribute(
+      "href",
+      "/foreverbrowsing/team/ENG/cycles/cycle-1",
+    );
+
+    await page.getByTestId("cycle-row").click();
+    await expect(page).toHaveURL(
+      /\/foreverbrowsing\/team\/ENG\/cycles\/cycle-1$/,
+    );
+    await expect(
+      page.getByRole("heading", { name: "Workspace Cycle" }),
+    ).toBeVisible();
+
+    await page.goto("/foreverbrowsing/cycles");
+    await expect(page).toHaveURL(/\/foreverbrowsing\/team\/ENG\/cycles$/);
+    await expect(page.getByText("Workspace Cycle")).toBeVisible();
+  });
 });
