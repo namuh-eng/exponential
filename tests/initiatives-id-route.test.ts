@@ -9,6 +9,7 @@ const initiativeNameRowsMock = vi.fn();
 const issueCountsWhereMock = vi.fn();
 const completedStatesWhereMock = vi.fn();
 const completedIssueCountsWhereMock = vi.fn();
+const workspaceLimitMock = vi.fn();
 const txUpdateSetMock = vi.fn();
 const txUpdateWhereMock = vi.fn();
 const deleteWhereMock = vi.fn();
@@ -63,6 +64,21 @@ vi.mock("@/lib/db", () => ({
               orderBy: vi.fn().mockReturnValue({
                 limit: membershipsLimitMock,
               }),
+            }),
+          }),
+        };
+      }
+
+      // workspace initiative settings
+      if (
+        selection &&
+        Object.keys(selection).length === 1 &&
+        "settings" in selection
+      ) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: workspaceLimitMock,
             }),
           }),
         };
@@ -282,6 +298,7 @@ describe("initiative detail route", () => {
     completedIssueCountsWhereMock.mockReturnValue([
       { projectId: "proj-1", completedCount: 5 },
     ]);
+    workspaceLimitMock.mockResolvedValue([{ settings: {} }]);
     deleteReturningMock.mockResolvedValue([{ id: "init-1" }]);
   });
 
@@ -344,6 +361,40 @@ describe("initiative detail route", () => {
       updates: [],
       activity: [],
     });
+  });
+
+  it("blocks detail access when workspace initiatives are disabled", async () => {
+    workspaceLimitMock.mockResolvedValue([
+      { settings: { features: { initiatives: { enabled: false } } } },
+    ]);
+    const { GET, PATCH, DELETE } = await import(
+      "@/app/api/initiatives/[id]/route"
+    );
+
+    let response: Response = await GET(new Request("http://localhost"), {
+      params: Promise.resolve({ id: "init-1" }),
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Initiatives are disabled for this workspace",
+    });
+
+    response = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({ name: "Blocked" }),
+      }),
+      { params: Promise.resolve({ id: "init-1" }) },
+    );
+
+    expect(response.status).toBe(403);
+
+    response = await DELETE(new Request("http://localhost"), {
+      params: Promise.resolve({ id: "init-1" }),
+    });
+
+    expect(response.status).toBe(403);
   });
 
   it("updates an initiative including status updates", async () => {

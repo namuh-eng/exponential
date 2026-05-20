@@ -104,7 +104,7 @@ interface InitiativeData {
     withUpdates: number;
     withoutUpdates: number;
     paused: number;
-  };
+  } | null;
   projectCount: number;
   completedProjectCount: number;
   createdAt: string;
@@ -114,6 +114,10 @@ interface InitiativesResponse {
   initiatives: InitiativeData[];
   workspaceMembers?: WorkspaceMember[];
   workspaceTeams?: WorkspaceTeam[];
+  initiativesSettings?: {
+    enabled: boolean;
+    projectRollups: boolean;
+  };
 }
 
 export default function InitiativesPage() {
@@ -170,8 +174,11 @@ export default function InitiativesPage() {
   const shortcutRef = useRef<{ key: string; timestamp: number } | null>(null);
 
   const openCreateForm = useCallback(() => {
+    if (data?.initiativesSettings?.enabled === false) {
+      return;
+    }
     setShowCreateForm(true);
-  }, []);
+  }, [data?.initiativesSettings?.enabled]);
 
   const fetchInitiatives = useCallback(async () => {
     try {
@@ -413,19 +420,24 @@ export default function InitiativesPage() {
         }
 
         const rollup = initiative.activeProjectHealthRollup;
+        const projectRollupsEnabled =
+          data?.initiativesSettings?.projectRollups !== false;
         if (
+          projectRollupsEnabled &&
           activeProjectFilter === "withActive" &&
           !(rollup?.total && rollup.total > 0)
         ) {
           return false;
         }
         if (
+          projectRollupsEnabled &&
           activeProjectFilter === "needsUpdate" &&
           !(rollup?.withoutUpdates && rollup.withoutUpdates > 0)
         ) {
           return false;
         }
         if (
+          projectRollupsEnabled &&
           activeProjectFilter === "paused" &&
           !(rollup?.paused && rollup.paused > 0)
         ) {
@@ -460,6 +472,7 @@ export default function InitiativesPage() {
     activeProjectFilter,
     activeTab,
     data?.initiatives,
+    data?.initiativesSettings?.projectRollups,
     healthFilter,
     ownerFilter,
     search,
@@ -485,6 +498,10 @@ export default function InitiativesPage() {
       {},
     );
   }, [filteredInitiatives, groupKey]);
+
+  const initiativesEnabled = data?.initiativesSettings?.enabled !== false;
+  const projectRollupsEnabled =
+    data?.initiativesSettings?.projectRollups !== false;
 
   const hasActiveFilters =
     search.trim() ||
@@ -532,9 +549,12 @@ export default function InitiativesPage() {
         <button
           type="button"
           onClick={openCreateForm}
-          className="inline-flex items-center gap-2 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:opacity-90"
+          disabled={!initiativesEnabled}
+          className="inline-flex items-center gap-2 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <span>New initiative</span>
+          <span>
+            {initiativesEnabled ? "New initiative" : "Initiatives disabled"}
+          </span>
           <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-1.5 py-0.5 text-[11px] font-normal">
             <kbd className="font-medium not-italic">N</kbd>
             <span>then</span>
@@ -617,9 +637,12 @@ export default function InitiativesPage() {
           onChange={(event) =>
             setActiveProjectFilter(event.target.value as ActiveProjectFilter)
           }
+          disabled={!projectRollupsEnabled}
           className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-hover)] px-2 py-1.5 text-[13px] text-[var(--color-text-primary)]"
         >
-          <option value="any">Any projects</option>
+          <option value="any">
+            {projectRollupsEnabled ? "Any projects" : "Project rollups off"}
+          </option>
           <option value="withActive">Has active projects</option>
           <option value="needsUpdate">Needs project update</option>
           <option value="paused">Has paused projects</option>

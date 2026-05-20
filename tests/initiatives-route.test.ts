@@ -7,6 +7,7 @@ const initiativesWhereMock = vi.fn();
 const projectsInnerJoinMock = vi.fn();
 const workspaceMembersWhereMock = vi.fn();
 const workspaceTeamsWhereMock = vi.fn();
+const workspaceLimitMock = vi.fn();
 const initiativeTeamsWhereMock = vi.fn();
 const ownerLimitMock = vi.fn();
 const insertValuesMock = vi.fn();
@@ -34,6 +35,20 @@ vi.mock("@/lib/db", () => ({
               orderBy: vi.fn().mockReturnValue({
                 limit: membershipsLimitMock,
               }),
+            }),
+          }),
+        };
+      }
+
+      if (
+        selection &&
+        Object.keys(selection).length === 1 &&
+        "settings" in selection
+      ) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: workspaceLimitMock,
             }),
           }),
         };
@@ -114,6 +129,7 @@ describe("initiatives collection route", () => {
     workspaceTeamsWhereMock.mockResolvedValue([
       { id: "team-1", name: "Engineering", key: "ENG", icon: "🛠" },
     ]);
+    workspaceLimitMock.mockResolvedValue([{ settings: {} }]);
     initiativeTeamsWhereMock.mockResolvedValue([
       { id: "team-1", name: "Engineering", key: "ENG", icon: "🛠" },
     ]);
@@ -240,7 +256,67 @@ describe("initiatives collection route", () => {
       workspaceTeams: [
         { id: "team-1", name: "Engineering", key: "ENG", icon: "🛠" },
       ],
+      initiativesSettings: {
+        enabled: true,
+        projectRollups: true,
+        visibility: "workspace",
+        roadmapMode: "all",
+      },
     });
+  });
+
+  it("returns an empty disabled payload and rejects creation when initiatives are off", async () => {
+    workspaceLimitMock.mockResolvedValue([
+      { settings: { features: { initiatives: { enabled: false } } } },
+    ]);
+    const { GET, POST } = await import("@/app/api/initiatives/route");
+
+    let response: Response = await GET(
+      new Request("http://localhost/api/initiatives"),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      initiatives: [],
+      workspaceMembers: [],
+      workspaceTeams: [],
+      initiativesSettings: {
+        enabled: false,
+        projectRollups: true,
+        visibility: "workspace",
+        roadmapMode: "all",
+      },
+    });
+
+    response = await POST(
+      new Request("http://localhost/api/initiatives", {
+        method: "POST",
+        body: JSON.stringify({ name: "Blocked" }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Initiatives are disabled for this workspace",
+    });
+  });
+
+  it("omits project rollup details when workspace rollups are disabled", async () => {
+    workspaceLimitMock.mockResolvedValue([
+      {
+        settings: {
+          features: { initiatives: { enabled: true, projectRollups: false } },
+        },
+      },
+    ]);
+    const { GET } = await import("@/app/api/initiatives/route");
+
+    const response = await GET(new Request("http://localhost/api/initiatives"));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.initiatives[0].activeProjectHealthRollup).toBeNull();
+    expect(data.initiativesSettings.projectRollups).toBe(false);
   });
 
   it("rejects creation with missing name", async () => {
