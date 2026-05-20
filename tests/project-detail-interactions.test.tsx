@@ -28,6 +28,10 @@ describe("ProjectDetailPage interactions", () => {
       icon: "📱",
       slug: "mobile-app",
       status: "planned",
+      statusLabel: "Planned",
+      statusColor: "#6b6f76",
+      statusIcon: "○",
+      statusIsDefault: true,
       priority: "high",
       startDate: null,
       targetDate: null,
@@ -39,6 +43,29 @@ describe("ProjectDetailPage interactions", () => {
     availableMembers: [{ id: "u-1", name: "Ashley" }],
     availableTeams: [{ id: "t-1", name: "Engineering", key: "ENG" }],
     availableLabels: [],
+    availableStatuses: [
+      {
+        key: "planned",
+        name: "Planned",
+        color: "#6b6f76",
+        icon: "○",
+        isDefault: true,
+      },
+      {
+        key: "started",
+        name: "In progress",
+        color: "#b58900",
+        icon: "◐",
+        isDefault: true,
+      },
+      {
+        key: "blocked",
+        name: "Blocked",
+        color: "#8844ff",
+        icon: "!",
+        isDefault: false,
+      },
+    ],
     slackChannel: null,
     resources: [],
     activity: [],
@@ -67,7 +94,14 @@ describe("ProjectDetailPage interactions", () => {
         json: () =>
           Promise.resolve({
             ...mockProjectData,
-            project: { ...mockProjectData.project, status: "started" },
+            project: {
+              ...mockProjectData.project,
+              status: "blocked",
+              statusLabel: "Blocked",
+              statusColor: "#8844ff",
+              statusIcon: "!",
+              statusIsDefault: false,
+            },
           }),
       });
 
@@ -86,9 +120,9 @@ describe("ProjectDetailPage interactions", () => {
     // Based on the DOM output, the second one is usually the properties one if the first is description.
     fireEvent.click(editButtons[1]);
 
-    // Change status to "In Progress" (which maps to 'started')
+    // Change status to a custom workspace status.
     const statusSelect = screen.getByLabelText(/status/i);
-    fireEvent.change(statusSelect, { target: { value: "started" } });
+    fireEvent.change(statusSelect, { target: { value: "blocked" } });
 
     // Save
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -98,14 +132,12 @@ describe("ProjectDetailPage interactions", () => {
         "/api/projects/mobile-app",
         expect.objectContaining({
           method: "PATCH",
-          body: expect.stringContaining('"status":"started"'),
+          body: expect.stringContaining('"status":"blocked"'),
         }),
       );
     });
 
-    // Check if the UI updated (Summary status should be 'Started' or 'In Progress' depending on display)
-    // Summary items uses capitalize: project.status.replace(/^./, (char) => char.toUpperCase())
-    expect(screen.getByText("Started")).toBeInTheDocument();
+    expect(screen.getAllByText("Blocked").length).toBeGreaterThan(0);
   });
 
   it("adds a new link resource to the project", async () => {

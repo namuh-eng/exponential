@@ -7,12 +7,7 @@ import { LabelChip } from "@/components/label-chip";
 import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import Link from "next/link";
 
-type ProjectStatus =
-  | "planned"
-  | "started"
-  | "paused"
-  | "completed"
-  | "canceled";
+type ProjectStatus = string;
 type ProjectPriority = "none" | "urgent" | "high" | "medium" | "low";
 
 const priorityMap: Record<string, 0 | 1 | 2 | 3 | 4> = {
@@ -94,6 +89,9 @@ export interface ProjectRowProps {
   icon: string | null;
   slug: string;
   status: ProjectStatus;
+  statusLabel?: string;
+  statusColor?: string;
+  statusIcon?: string;
   priority: ProjectPriority;
   health: string;
   lead: { name: string; image?: string } | null;
@@ -107,6 +105,9 @@ export function ProjectRow({
   icon,
   slug,
   status,
+  statusLabel,
+  statusColor,
+  statusIcon,
   priority,
   health,
   lead,
@@ -166,9 +167,20 @@ export function ProjectRow({
         {targetDate ? formatDate(targetDate) : ""}
       </div>
 
-      {/* Status (progress ring + %) */}
-      <div className="flex w-[70px] shrink-0 items-center gap-1.5">
+      {/* Status */}
+      <div className="flex w-[120px] shrink-0 items-center gap-1.5">
         <ProgressRing progress={progress} status={status} />
+        <span
+          className="inline-flex min-w-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+          style={{
+            backgroundColor: `${statusColor ?? "#6b6f76"}22`,
+            color: statusColor ?? "var(--color-text-secondary)",
+          }}
+          title={`${statusLabel ?? status} · ${progress}% complete`}
+        >
+          <span>{statusIcon ?? "•"}</span>
+          <span className="truncate">{statusLabel ?? status}</span>
+        </span>
         <span className="text-[12px] text-[var(--color-text-secondary)]">
           {progress}%
         </span>

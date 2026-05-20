@@ -9,6 +9,7 @@ const insertReturningMock = vi.fn();
 const teamLimitMock = vi.fn();
 const projectInsertValuesMock = vi.fn();
 const projectTeamInsertValuesMock = vi.fn();
+const workspaceSettingsLimitMock = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: {
@@ -26,6 +27,18 @@ vi.mock("@/lib/active-workspace", () => ({
 vi.mock("@/lib/db", () => ({
   db: {
     select: vi.fn((selection?: Record<string, unknown>) => {
+      if (
+        selection &&
+        "settings" in selection &&
+        Object.keys(selection).length === 1
+      ) {
+        return {
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue(workspaceSettingsLimitMock()),
+        };
+      }
+
       // projects lookup
       if (selection && "slug" in selection && "leadId" in selection) {
         return {
@@ -128,6 +141,7 @@ describe("projects collection route", () => {
     vi.clearAllMocks();
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
     resolveActiveWorkspaceIdMock.mockResolvedValue("workspace-1");
+    workspaceSettingsLimitMock.mockReturnValue([]);
     projectsOrderByMock.mockReturnValue([
       {
         id: "proj-1",
@@ -219,6 +233,59 @@ describe("projects collection route", () => {
     expect(projectTeamInsertValuesMock).toHaveBeenCalledWith([
       { projectId: "proj-2", teamId: "team-1" },
     ]);
+  });
+
+  it("creates a project with a configured custom status", async () => {
+    workspaceSettingsLimitMock.mockReturnValue([
+      {
+        settings: {
+          projectStatuses: [
+            {
+              id: "blocked",
+              key: "blocked",
+              name: "Blocked",
+              description: "Waiting",
+              color: "#8844ff",
+              icon: "!",
+              position: 5,
+            },
+          ],
+        },
+      },
+    ]);
+    const { POST } = await import("@/app/api/projects/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/projects", {
+        method: "POST",
+        body: JSON.stringify({ name: "Blocked Project", status: "blocked" }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(projectInsertValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "planned",
+        settings: expect.objectContaining({ projectStatusKey: "blocked" }),
+      }),
+    );
+  });
+
+  it("rejects project creation with an unknown custom status", async () => {
+    const { POST } = await import("@/app/api/projects/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/projects", {
+        method: "POST",
+        body: JSON.stringify({ name: "Unknown", status: "unknown" }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Project status is not configured for this workspace",
+    });
+    expect(projectInsertValuesMock).not.toHaveBeenCalled();
   });
 
   it.each([

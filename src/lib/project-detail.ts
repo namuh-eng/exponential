@@ -21,6 +21,7 @@ export interface ProjectSettingsShape {
   labelIds: string[];
   resources: ProjectResource[];
   activity: ProjectActivityEntry[];
+  projectStatusKey: string | null;
 }
 
 export interface ProjectMilestoneInput {
@@ -71,6 +72,7 @@ export function readProjectSettings(settings: unknown): ProjectSettingsShape {
       labelIds: [],
       resources: [],
       activity: [],
+      projectStatusKey: null,
     };
   }
 
@@ -90,6 +92,11 @@ export function readProjectSettings(settings: unknown): ProjectSettingsShape {
     activity: Array.isArray(settings.activity)
       ? settings.activity.filter(isActivityEntry)
       : [],
+    projectStatusKey:
+      typeof settings.projectStatusKey === "string" &&
+      settings.projectStatusKey.trim()
+        ? settings.projectStatusKey.trim()
+        : null,
   };
 }
 

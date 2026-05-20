@@ -20,7 +20,6 @@ type ProjectStatusesResponse = {
   readOnly: boolean;
   customStatusesSupported: boolean;
   canManage: boolean;
-  limitation?: string;
 };
 
 async function readProjectStatusesError(response: Response) {
@@ -201,11 +200,8 @@ export default function ProjectStatusesPage() {
 
       <div className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-4 text-[13px] text-[var(--color-text-secondary)]">
         Workspace admins can edit names, descriptions, colors, icons, and order.
-        Default lifecycle statuses remain protected when projects are using
-        them.
-        {data?.limitation ? (
-          <span className="block mt-2">{data.limitation}</span>
-        ) : null}
+        Custom statuses can be applied to projects from each project properties
+        panel, and statuses with projects assigned remain protected.
       </div>
 
       {loading ? (

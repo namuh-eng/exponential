@@ -12,7 +12,10 @@ interface ProjectData {
   name: string;
   icon: string | null;
   slug: string;
-  status: "planned" | "started" | "paused" | "completed" | "canceled";
+  status: string;
+  statusLabel?: string;
+  statusColor?: string;
+  statusIcon?: string;
   priority: "none" | "urgent" | "high" | "medium" | "low";
   health: string;
   lead: { name: string; image?: string | null } | null;
@@ -269,6 +272,16 @@ export function ProjectsPage({
     );
   }
 
+  const statusOptions = Array.from(
+    new Map(
+      scopedProjects.map((project) => [
+        project.status,
+        project.statusLabel ??
+          project.status.replace(/^./, (char) => char.toUpperCase()),
+      ]),
+    ),
+  );
+
   const filteredProjects = scopedProjects.filter((project) => {
     if (
       !teamKey &&
@@ -343,11 +356,11 @@ export function ProjectsPage({
             className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-2 py-1 text-[12px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
           >
             <option value="all">All statuses</option>
-            <option value="planned">Planned</option>
-            <option value="started">In progress</option>
-            <option value="paused">Paused</option>
-            <option value="completed">Completed</option>
-            <option value="canceled">Canceled</option>
+            {statusOptions.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
           </select>
         </label>
         <label className="mr-2 flex items-center gap-2 text-[12px] text-[var(--color-text-secondary)]">
@@ -466,7 +479,7 @@ export function ProjectsPage({
         <div className="w-[60px] shrink-0 text-center">Priority</div>
         <div className="w-[60px] shrink-0 text-center">Lead</div>
         <div className="w-[80px] shrink-0">Target date</div>
-        <div className="w-[70px] shrink-0">Status</div>
+        <div className="w-[120px] shrink-0">Status</div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -478,6 +491,9 @@ export function ProjectsPage({
               icon={project.icon}
               slug={project.slug}
               status={project.status}
+              statusLabel={project.statusLabel}
+              statusColor={project.statusColor}
+              statusIcon={project.statusIcon}
               priority={project.priority}
               health={project.health}
               lead={

@@ -56,11 +56,7 @@ function readStoredProjectViewState(storageKey: string): ProjectViewState {
     const parsed = JSON.parse(raw) as Partial<ProjectViewState>;
     return {
       statusFilter:
-        parsed.statusFilter === "planned" ||
-        parsed.statusFilter === "started" ||
-        parsed.statusFilter === "paused" ||
-        parsed.statusFilter === "completed" ||
-        parsed.statusFilter === "canceled"
+        typeof parsed.statusFilter === "string" && parsed.statusFilter.trim()
           ? parsed.statusFilter
           : "all",
       sortBy:
