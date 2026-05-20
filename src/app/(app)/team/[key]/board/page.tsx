@@ -128,6 +128,10 @@ export default function TeamBoardPage() {
   );
   const [showDisplayOptions, setShowDisplayOptions] = useState(false);
   const [showCreateIssue, setShowCreateIssue] = useState(false);
+  const [createIssueDefaults, setCreateIssueDefaults] = useState<{
+    stateId?: string;
+    stateName: string;
+  }>({ stateName: "Backlog" });
   const [draggedIssue, setDraggedIssue] = useState<{
     issueId: string;
     fromStateId: string;
@@ -209,6 +213,14 @@ export default function TeamBoardPage() {
   const totalIssues = (data?.groups ?? []).reduce(
     (sum, g) => sum + g.issues.length,
     0,
+  );
+
+  const openCreateIssue = useCallback(
+    (defaults?: { stateId?: string; stateName: string }) => {
+      setCreateIssueDefaults(defaults ?? { stateName: "Backlog" });
+      setShowCreateIssue(true);
+    },
+    [],
   );
 
   const handleIssueDragStart = useCallback(
@@ -373,7 +385,7 @@ export default function TeamBoardPage() {
           }
           action={{
             label: "Create issue",
-            onClick: () => setShowCreateIssue(true),
+            onClick: () => openCreateIssue(),
           }}
         />
         <CreateIssueModal
@@ -383,6 +395,8 @@ export default function TeamBoardPage() {
           teamKey={data?.team?.key ?? params.key}
           teamName={data?.team?.name ?? params.key}
           teamId={data?.team?.id ?? ""}
+          defaultStateId={createIssueDefaults.stateId}
+          defaultStateName={createIssueDefaults.stateName}
         />
       </>
     );
@@ -492,6 +506,12 @@ export default function TeamBoardPage() {
             onDragOver={handleColumnDragOver(group.state.id)}
             onDrop={handleColumnDrop(group.state.id)}
             onDragLeave={handleColumnDragLeave(group.state.id)}
+            onAddIssue={() =>
+              openCreateIssue({
+                stateId: group.state.id,
+                stateName: group.state.name,
+              })
+            }
           >
             {group.issues.map((iss) => (
               <IssueCard
@@ -508,6 +528,10 @@ export default function TeamBoardPage() {
                 projectName={iss.projectName}
                 dueDate={iss.dueDate}
                 createdAt={iss.createdAt}
+                href={withWorkspaceSlug(
+                  `/team/${data.team.key}/issue/${iss.identifier}`,
+                  workspaceSlug,
+                )}
                 displayProperties={options.displayProperties}
                 draggable
                 isDragging={draggedIssue?.issueId === iss.id}
@@ -523,6 +547,17 @@ export default function TeamBoardPage() {
       <div className="flex items-center border-t border-[var(--color-border)] px-4 py-1.5 text-[12px] text-[var(--color-text-secondary)]">
         {totalIssues} issues
       </div>
+
+      <CreateIssueModal
+        open={showCreateIssue}
+        onClose={() => setShowCreateIssue(false)}
+        onCreated={fetchIssues}
+        teamKey={data.team.key}
+        teamName={data.team.name}
+        teamId={data.team.id}
+        defaultStateId={createIssueDefaults.stateId}
+        defaultStateName={createIssueDefaults.stateName}
+      />
     </div>
   );
 }

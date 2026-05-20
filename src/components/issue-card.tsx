@@ -3,6 +3,7 @@ import type { DisplayProperties } from "@/components/display-options-panel";
 import { PriorityIcon } from "@/components/icons/priority-icon";
 import { StatusIcon } from "@/components/icons/status-icon";
 import { LabelChip } from "@/components/label-chip";
+import Link from "next/link";
 
 type StatusCategory =
   | "triage"
@@ -29,8 +30,8 @@ interface IssueCardProps {
   displayProperties?: DisplayProperties;
   draggable?: boolean;
   isDragging?: boolean;
-  onDragStart?: React.DragEventHandler<HTMLDivElement>;
-  onDragEnd?: React.DragEventHandler<HTMLDivElement>;
+  onDragStart?: React.DragEventHandler<HTMLElement>;
+  onDragEnd?: React.DragEventHandler<HTMLElement>;
 }
 
 function formatDate(dateStr: string): string {
@@ -49,7 +50,7 @@ function formatDate(dateStr: string): string {
     "Nov",
     "Dec",
   ];
-  return `${months[date.getMonth()]} ${date.getDate()}`;
+  return `${months[date.getUTCMonth()]} ${date.getUTCDate()}`;
 }
 
 export function IssueCard({
@@ -65,6 +66,7 @@ export function IssueCard({
   projectName,
   dueDate,
   createdAt,
+  href,
   displayProperties,
   draggable = false,
   isDragging = false,
@@ -74,18 +76,22 @@ export function IssueCard({
   const showProp = (key: keyof DisplayProperties) =>
     !displayProperties || displayProperties[key];
 
-  return (
-    <div
-      data-testid="issue-card"
-      data-issue-id={issueId}
-      draggable={draggable}
-      aria-grabbed={draggable ? isDragging : undefined}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      className={`rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors hover:bg-[var(--color-surface-hover)] ${
-        draggable ? "cursor-grab active:cursor-grabbing" : ""
-      } ${isDragging ? "opacity-60" : ""}`}
-    >
+  const className = `block rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-left transition-colors hover:bg-[var(--color-surface-hover)] ${
+    draggable ? "cursor-grab active:cursor-grabbing" : ""
+  } ${isDragging ? "opacity-60" : ""}`;
+
+  const cardProps = {
+    "data-testid": "issue-card",
+    "data-issue-id": issueId,
+    draggable,
+    "aria-grabbed": draggable ? isDragging : undefined,
+    onDragStart,
+    onDragEnd,
+    className,
+  };
+
+  const content = (
+    <>
       {/* Title */}
       <p className="mb-2 text-[13px] leading-snug text-[var(--color-text-primary)]">
         {title}
@@ -144,6 +150,16 @@ export function IssueCard({
           </div>
         ) : null}
       </div>
-    </div>
+    </>
   );
+
+  if (href) {
+    return (
+      <Link href={href} aria-label={`${identifier} ${title}`} {...cardProps}>
+        {content}
+      </Link>
+    );
+  }
+
+  return <div {...cardProps}>{content}</div>;
 }

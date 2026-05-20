@@ -6,6 +6,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import TeamBoardPage from "@/app/(app)/team/[key]/board/page";
@@ -86,6 +87,71 @@ describe("TeamBoardPage", () => {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve(structuredClone(boardData)),
+        });
+      }
+
+      if (url === "/api/teams/ENG/create-issue-options") {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              team: boardData.team,
+              statuses: boardData.groups.map((group) => group.state),
+              priorities: [{ value: "none", label: "No priority" }],
+              assignees: [],
+              labels: [],
+              projects: [],
+            }),
+        });
+      }
+
+      if (url === "/api/issue-templates") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ templates: [] }),
+        });
+      }
+
+      if (url === "/api/issues" && init?.method === "POST") {
+        const body = JSON.parse(String(init.body));
+        expect(body).toEqual(
+          expect.objectContaining({
+            title: "New todo issue",
+            teamId: "team-1",
+            stateId: "state-todo",
+          }),
+        );
+
+        boardData = {
+          ...boardData,
+          groups: boardData.groups.map((group) =>
+            group.state.id === "state-todo"
+              ? {
+                  ...group,
+                  issues: [
+                    ...group.issues,
+                    {
+                      id: "issue-2",
+                      identifier: "ENG-2",
+                      title: "New todo issue",
+                      priority: "none",
+                      stateId: "state-todo",
+                      assigneeId: null,
+                      assignee: null,
+                      labels: [],
+                      labelIds: [],
+                      projectId: null,
+                      createdAt: "2026-04-08T00:00:00.000Z",
+                    },
+                  ],
+                }
+              : group,
+          ),
+        };
+
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ id: "issue-2" }),
         });
       }
 
@@ -170,5 +236,43 @@ describe("TeamBoardPage", () => {
     await waitFor(() => {
       expect(screen.queryByText("ENG-1")).toBeNull();
     });
+  });
+
+  it("opens the create issue modal from a column and creates in that status", async () => {
+    render(<TeamBoardPage />);
+
+    const todoColumn = await screen.findByTestId("board-column-state-todo");
+    fireEvent.click(
+      within(todoColumn).getByRole("button", { name: /add issue to todo/i }),
+    );
+
+    expect(await screen.findByTestId("create-issue-composer")).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Status" })).toHaveTextContent(
+        "Todo",
+      );
+    });
+
+    const titleInput = screen.getByRole("textbox", { name: "Issue title" });
+    titleInput.textContent = "New todo issue";
+    fireEvent.input(titleInput);
+    fireEvent.click(screen.getByRole("button", { name: "Create Issue" }));
+
+    await waitFor(() => {
+      expect(
+        within(screen.getByTestId("board-column-state-todo")).getByText(
+          "New todo issue",
+        ),
+      ).toBeDefined();
+    });
+  });
+
+  it("renders board cards as links to issue detail", async () => {
+    render(<TeamBoardPage />);
+
+    const link = await screen.findByRole("link", {
+      name: /ENG-1 First board issue/i,
+    });
+    expect(link).toHaveAttribute("href", "/team/ENG/issue/ENG-1");
   });
 });
