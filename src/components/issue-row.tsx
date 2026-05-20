@@ -23,6 +23,8 @@ interface IssueRowProps {
   assigneeImage?: string;
   labels?: { name: string; color: string }[];
   projectName?: string;
+  cycleName?: string | null;
+  estimate?: number | null;
   dueDate?: string | null;
   createdAt: string;
   href?: string;
@@ -71,6 +73,8 @@ export function IssueRow({
   assigneeImage,
   labels,
   projectName,
+  cycleName,
+  estimate,
   dueDate,
   createdAt,
   href,
@@ -141,6 +145,18 @@ export function IssueRow({
           <span aria-hidden="true">›</span>
           <span className="truncate">{projectName}</span>
         </div>
+      )}
+
+      {/* Cycle and estimate */}
+      {cycleName && (
+        <span className="shrink-0 text-[12px] text-[var(--color-text-secondary)]">
+          {cycleName}
+        </span>
+      )}
+      {estimate !== null && estimate !== undefined && (
+        <span className="shrink-0 rounded border border-[var(--color-border)] px-1.5 py-0.5 text-[11px] text-[var(--color-text-secondary)]">
+          {estimate} pt
+        </span>
       )}
 
       {/* Due date */}

@@ -10,6 +10,8 @@ const loadGroupByMock = vi.fn();
 const insertIssueValuesMock = vi.fn();
 const insertLabelsValuesMock = vi.fn();
 const insertHistoryValuesMock = vi.fn();
+const insertRelationValuesMock = vi.fn();
+const insertSubscriptionValuesMock = vi.fn();
 const buildNotificationValuesMock = vi.fn();
 const insertNotificationsMock = vi.fn();
 const normalizeIssueDescriptionHtmlMock = vi.fn();
@@ -134,6 +136,24 @@ vi.mock("@/lib/db", () => ({
               };
             }
 
+            if (typedTable.__name === "issueRelation") {
+              return {
+                values: (...valuesArgs: unknown[]) => {
+                  insertRelationValuesMock(...valuesArgs);
+                  return Promise.resolve();
+                },
+              };
+            }
+
+            if (typedTable.__name === "issueSubscription") {
+              return {
+                values: (...valuesArgs: unknown[]) => {
+                  insertSubscriptionValuesMock(...valuesArgs);
+                  return Promise.resolve();
+                },
+              };
+            }
+
             return {
               values: (...valuesArgs: unknown[]) => {
                 insertIssueValuesMock(...valuesArgs);
@@ -152,6 +172,9 @@ vi.mock("@/lib/db", () => ({
                       assigneeId: "user-2",
                       projectId: "project-1",
                       parentIssueId: null,
+                      cycleId: null,
+                      estimate: null,
+                      dueDate: null,
                     },
                   ]),
                 };
@@ -170,6 +193,8 @@ vi.mock("@/lib/db/schema", () => ({
   issue: { __name: "issue", assigneeId: "issue.assigneeId" },
   issueHistory: { __name: "issueHistory" },
   issueLabel: { __name: "issueLabel" },
+  issueRelation: { __name: "issueRelation" },
+  issueSubscription: { __name: "issueSubscription" },
   label: {
     id: "label.id",
     parentLabelId: "label.parentLabelId",
@@ -312,6 +337,9 @@ describe("issues route", () => {
       assigneeId: "user-2",
       projectId: "project-1",
       parentIssueId: null,
+      cycleId: null,
+      estimate: null,
+      dueDate: null,
     });
     expect(insertLabelsValuesMock).toHaveBeenCalledWith([
       { issueId: "issue-1", labelId: "label-1" },
@@ -327,6 +355,11 @@ describe("issues route", () => {
         identifier: "ENG-8",
         title: "Ship this",
         teamId: "team-1",
+        cycleId: null,
+        estimate: null,
+        dueDate: null,
+        parentIssueId: null,
+        relatedIssueId: null,
       },
     });
     expect(insertNotificationsMock).toHaveBeenCalledWith([
@@ -345,7 +378,63 @@ describe("issues route", () => {
       assigneeId: "user-2",
       projectId: "project-1",
       parentIssueId: null,
+      cycleId: null,
+      estimate: null,
+      dueDate: null,
     });
+  });
+
+  it("persists composer planning metadata and creation relations", async () => {
+    const { POST } = await import("@/app/api/issues/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/issues", {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Plan metadata",
+          teamId: "team-1",
+          cycleId: "cycle-1",
+          estimate: 5,
+          dueDate: "2026-06-01",
+          parentIssueId: "parent-1",
+          relatedIssueId: "related-1",
+          relationType: "related",
+          subscribe: true,
+        }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(insertIssueValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cycleId: "cycle-1",
+        estimate: 5,
+        dueDate: new Date("2026-06-01T00:00:00.000Z"),
+        parentIssueId: "parent-1",
+      }),
+    );
+    expect(insertRelationValuesMock).toHaveBeenCalledWith({
+      issueId: "issue-1",
+      relatedIssueId: "related-1",
+      type: "related",
+    });
+    expect(insertSubscriptionValuesMock).toHaveBeenCalledWith({
+      issueId: "issue-1",
+      userId: "user-1",
+      subscribed: true,
+    });
+    expect(insertHistoryValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          cycleId: "cycle-1",
+          estimate: 5,
+          dueDate: "2026-06-01T00:00:00.000Z",
+          parentIssueId: "parent-1",
+          relatedIssueId: "related-1",
+        }),
+      }),
+    );
   });
 
   it("uses account auto-assignment preference before team load balancing", async () => {

@@ -1,6 +1,9 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
+  cycle,
+  issue,
+  issueTemplate,
   label,
   project,
   teamMember,
@@ -9,7 +12,7 @@ import {
 } from "@/lib/db/schema";
 import { isTeamRetired } from "@/lib/team-lifecycle";
 import { findAccessibleTeam } from "@/lib/teams";
-import { and, asc, eq, isNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -36,7 +39,15 @@ export async function GET(
     );
   }
 
-  const [statuses, assigneeRows, labels, projects] = await Promise.all([
+  const [
+    statuses,
+    assigneeRows,
+    labels,
+    projects,
+    cycles,
+    templates,
+    relationIssues,
+  ] = await Promise.all([
     db
       .select({
         id: workflowState.id,
@@ -81,6 +92,36 @@ export async function GET(
       .from(project)
       .where(eq(project.workspaceId, teamContext.workspaceId))
       .orderBy(asc(project.name)),
+    db
+      .select({
+        id: cycle.id,
+        name: cycle.name,
+        number: cycle.number,
+        startDate: cycle.startDate,
+        endDate: cycle.endDate,
+      })
+      .from(cycle)
+      .where(eq(cycle.teamId, teamContext.id))
+      .orderBy(desc(cycle.startDate), desc(cycle.number)),
+    db
+      .select({
+        id: issueTemplate.id,
+        name: issueTemplate.name,
+        description: issueTemplate.description,
+        settings: issueTemplate.settings,
+      })
+      .from(issueTemplate)
+      .where(eq(issueTemplate.workspaceId, teamContext.workspaceId))
+      .orderBy(asc(issueTemplate.name)),
+    db
+      .select({
+        id: issue.id,
+        identifier: issue.identifier,
+        title: issue.title,
+      })
+      .from(issue)
+      .where(and(eq(issue.teamId, teamContext.id), isNull(issue.archivedAt)))
+      .orderBy(desc(issue.createdAt)),
   ]);
 
   const fallbackAssignees =
@@ -99,6 +140,8 @@ export async function GET(
       id: teamContext.id,
       name: teamContext.name,
       key: teamContext.key,
+      cyclesEnabled: Boolean(teamContext.cyclesEnabled),
+      estimateType: teamContext.estimateType ?? "not_in_use",
     },
     statuses,
     priorities: [
@@ -111,5 +154,27 @@ export async function GET(
     assignees: fallbackAssignees,
     labels,
     projects,
+    cycles: cycles.map((item) => ({
+      id: item.id,
+      name: item.name ?? `Cycle ${item.number}`,
+      number: item.number,
+      startDate: item.startDate,
+      endDate: item.endDate,
+    })),
+    estimates:
+      teamContext.estimateType === "not_in_use"
+        ? []
+        : [1, 2, 3, 5, 8].map((value) => ({
+            value,
+            label: `${value} point${value === 1 ? "" : "s"}`,
+          })),
+    templates,
+    relationIssues,
+    dueDatePresets: [
+      { value: "today", label: "Today" },
+      { value: "tomorrow", label: "Tomorrow" },
+      { value: "next-week", label: "Next week" },
+      { value: "custom", label: "Custom date" },
+    ],
   });
 }
