@@ -19,6 +19,11 @@ const appRoutePrefixes = [
 const publicRoutePrefixes = [
   "login",
   "signup",
+  "homepage",
+  "pricing",
+  "customers",
+  "changelog",
+  "now",
   "api",
   "onboarding",
   "accept-invite",

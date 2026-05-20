@@ -9,7 +9,15 @@ import {
 } from "@/lib/workspace-paths";
 import { type NextRequest, NextResponse } from "next/server";
 
-const publicPaths = [
+export const PUBLIC_ROUTES = [
+  "/homepage",
+  "/pricing",
+  "/customers",
+  "/changelog",
+  "/now",
+];
+
+const publicPathPrefixes = [
   "/login",
   "/signup",
   "/api/auth",
@@ -18,8 +26,11 @@ const publicPaths = [
 ];
 
 function isPublicPath(pathname: string): boolean {
-  return publicPaths.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  return (
+    PUBLIC_ROUTES.includes(pathname) ||
+    publicPathPrefixes.some(
+      (p) => pathname === p || pathname.startsWith(`${p}/`),
+    )
   );
 }
 

@@ -9,6 +9,75 @@ const workspaceDeepLinks = [
 ];
 
 test.describe("Unauthenticated workspace deep links", () => {
+  test("public marketing routes render without redirecting to login", async ({
+    page,
+  }) => {
+    const publicRoutes = [
+      {
+        path: "/homepage",
+        heading: "The product development system for teams and agents",
+        text: "Purpose-built for high-velocity product teams",
+      },
+      {
+        path: "/pricing",
+        heading: "Plans for every stage of product development",
+        text: "Free",
+      },
+      {
+        path: "/customers",
+        heading: "Built for teams shaping the future of software",
+        text: "Why OpenAI chose Linear and scaled to 3,000 users",
+      },
+      {
+        path: "/changelog",
+        heading: "Latest product updates from the public changelog",
+        text: "Code Intelligence",
+      },
+    ];
+
+    for (const publicRoute of publicRoutes) {
+      await page.goto(publicRoute.path);
+      await expect(page).toHaveURL((url) => url.pathname === publicRoute.path);
+      await expect(
+        page.getByRole("heading", { name: publicRoute.heading }),
+      ).toBeVisible();
+      await expect(page.getByText(publicRoute.text).first()).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Log in to Linear" }),
+      ).toHaveCount(0);
+    }
+  });
+
+  test("public marketing navigation uses local clone URLs", async ({
+    page,
+  }) => {
+    await page.goto("/homepage");
+
+    await expect(page.getByRole("link", { name: "Log in" })).toHaveAttribute(
+      "href",
+      "/login",
+    );
+    await expect(page.getByRole("link", { name: "Sign up" })).toHaveAttribute(
+      "href",
+      "/signup",
+    );
+    await expect(
+      page.getByRole("link", { exact: true, name: "Pricing" }),
+    ).toHaveAttribute("href", "/pricing");
+    await expect(page.getByRole("link", { name: "Customers" })).toHaveAttribute(
+      "href",
+      "/customers",
+    );
+    await expect(page.getByRole("link", { name: "Now" })).toHaveAttribute(
+      "href",
+      "/now",
+    );
+    await expect(page.getByLabel("Exponential homepage")).toHaveAttribute(
+      "href",
+      "/homepage",
+    );
+  });
+
   for (const deepLink of workspaceDeepLinks) {
     test(`renders login in place for ${deepLink}`, async ({ page }) => {
       await page.goto(deepLink);
