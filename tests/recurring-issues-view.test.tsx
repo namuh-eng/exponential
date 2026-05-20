@@ -1,0 +1,173 @@
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import "@testing-library/jest-dom/vitest";
+import TeamRecurringIssuesSettingsPage from "@/app/(app)/settings/teams/[key]/recurring-issues/page";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const fetchMock = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useParams: () => ({ key: "ENG", workspaceSlug: "foreverbrowsing" }),
+}));
+
+const savedIssue = {
+  id: "recurring-1",
+  title: "Weekly metrics review",
+  description: "Review dashboards",
+  cadenceConfig: {
+    cadence: "weekly",
+    interval: 1,
+    startDate: "2026-05-21",
+    time: "09:00",
+  },
+  cadenceLabel: "Weekly",
+  timezone: "UTC",
+  nextRunAt: "2026-05-21T09:00:00.000Z",
+  enabled: true,
+};
+
+describe("TeamRecurringIssuesSettingsPage", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        team: { name: "Engineering", key: "ENG" },
+        recurringIssues: [],
+      }),
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it("opens the create dialog from the CTA", async () => {
+    render(<TeamRecurringIssuesSettingsPage />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "New recurring issue" }),
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: "Create recurring issue" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Issue title")).toBeInTheDocument();
+    expect(screen.getByLabelText("Cadence")).toBeInTheDocument();
+  });
+
+  it("validates, creates, lists, disables, edits, and deletes a recurring issue", async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          team: { name: "Engineering", key: "ENG" },
+          recurringIssues: [],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ recurringIssue: savedIssue }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          recurringIssue: { ...savedIssue, enabled: false },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          recurringIssue: {
+            ...savedIssue,
+            title: "Monthly metrics review",
+            cadenceLabel: "Monthly",
+            cadenceConfig: {
+              cadence: "monthly",
+              interval: 1,
+              startDate: "2026-05-21",
+              time: "09:00",
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true }),
+      });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<TeamRecurringIssuesSettingsPage />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "New recurring issue" }),
+    );
+    fireEvent.click(
+      within(
+        screen.getByRole("dialog", { name: "Create recurring issue" }),
+      ).getByRole("button", { name: "Create recurring issue" }),
+    );
+    expect(await screen.findByText("Title is required.")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Issue title"), {
+      target: { value: "Weekly metrics review" },
+    });
+    fireEvent.change(screen.getByLabelText("Description"), {
+      target: { value: "Review dashboards" },
+    });
+    fireEvent.change(screen.getByLabelText("Cadence"), {
+      target: { value: "weekly" },
+    });
+    fireEvent.change(screen.getByLabelText("Start date"), {
+      target: { value: "2026-05-21" },
+    });
+    fireEvent.click(
+      within(
+        screen.getByRole("dialog", { name: "Create recurring issue" }),
+      ).getByRole("button", { name: "Create recurring issue" }),
+    );
+
+    expect(
+      await screen.findByText("Weekly metrics review"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Weekly")).toBeInTheDocument();
+    expect(screen.getByText("Enabled")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Disable" }));
+    expect(await screen.findByText("Disabled")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.change(screen.getByLabelText("Issue title"), {
+      target: { value: "Monthly metrics review" },
+    });
+    fireEvent.change(screen.getByLabelText("Cadence"), {
+      target: { value: "monthly" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(
+      await screen.findByText("Monthly metrics review"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Monthly")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() =>
+      expect(
+        screen.queryByText("Monthly metrics review"),
+      ).not.toBeInTheDocument(),
+    );
+    expect(
+      screen.getByText(
+        "No recurring issues have been configured for this team.",
+      ),
+    ).toBeInTheDocument();
+  });
+});
