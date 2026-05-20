@@ -234,3 +234,44 @@ test.describe("Unauthenticated workspace deep links", () => {
     await expect(page.getByText("Enter a valid email address.")).toHaveCount(0);
   });
 });
+
+test("workspace-disabled auth methods are hidden on workspace-scoped login", async ({
+  page,
+}) => {
+  await page.route("**/api/auth/provider-capabilities**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        providers: { google: false, email: false, passkey: false },
+        workspace: {
+          slug: "foreverbrowsing",
+          authentication: { google: false, emailPasskey: false },
+        },
+      }),
+    });
+  });
+
+  await page.goto(
+    "/login?callbackUrl=%2Fforeverbrowsing%2Fsettings%2Fsecurity",
+  );
+
+  await expect(
+    page.getByRole("heading", { name: "Log in to Linear" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Continue with email" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Log in with passkey" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Continue with SAML SSO" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Google, email, and passkey login are disabled/),
+  ).toBeVisible();
+});
