@@ -14,10 +14,13 @@ const fetchMock = vi.fn();
 describe("ProjectTemplatesPage component", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", fetchMock);
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({ templates: [] }),
-    });
+    fetchMock.mockImplementation((url) =>
+      Promise.resolve({
+        ok: true,
+        json: async () =>
+          url === "/api/project-labels" ? { labels: [] } : { templates: [] },
+      }),
+    );
   });
 
   afterEach(() => {
@@ -69,22 +72,32 @@ describe("ProjectTemplatesPage component", () => {
   });
 
   it("validates, saves, and renders a created project template", async () => {
-    fetchMock
-      .mockResolvedValueOnce({
+    fetchMock.mockImplementation((url, init) => {
+      if (url === "/api/project-templates" && init?.method === "POST") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            template: {
+              id: "template-1",
+              name: "Launch plan",
+              description: "Milestones and starter tasks",
+              settings: {
+                status: "started",
+                priority: "high",
+                milestones: ["Plan", "Build"],
+              },
+              createdAt: "2026-05-13T00:00:00.000Z",
+            },
+          }),
+        });
+      }
+
+      return Promise.resolve({
         ok: true,
-        json: async () => ({ templates: [] }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          template: {
-            id: "template-1",
-            name: "Launch plan",
-            description: "Milestones and starter tasks",
-            createdAt: "2026-05-13T00:00:00.000Z",
-          },
-        }),
+        json: async () =>
+          url === "/api/project-labels" ? { labels: [] } : { templates: [] },
       });
+    });
 
     render(<ProjectTemplatesPage />);
 
@@ -101,6 +114,15 @@ describe("ProjectTemplatesPage component", () => {
     fireEvent.change(screen.getByLabelText("Description"), {
       target: { value: "Milestones and starter tasks" },
     });
+    fireEvent.change(screen.getByLabelText("Default status"), {
+      target: { value: "started" },
+    });
+    fireEvent.change(screen.getByLabelText("Default priority"), {
+      target: { value: "high" },
+    });
+    fireEvent.change(screen.getByLabelText("Template milestones"), {
+      target: { value: "Plan\nBuild" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Save template" }));
 
     expect(await screen.findByText("Launch plan")).toBeInTheDocument();
@@ -108,18 +130,27 @@ describe("ProjectTemplatesPage component", () => {
       screen.getByText("Milestones and starter tasks"),
     ).toBeInTheDocument();
     expect(screen.queryByText("No project templates")).not.toBeInTheDocument();
-    expect(fetchMock).toHaveBeenLastCalledWith(
+    expect(screen.getByText(/2 milestones/)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/project-templates",
-      expect.objectContaining({ method: "POST" }),
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining('"milestones":["Plan","Build"]'),
+      }),
     );
   });
   it("keeps the dialog open and shows an error when saving fails", async () => {
-    fetchMock
-      .mockResolvedValueOnce({
+    fetchMock.mockImplementation((url, init) => {
+      if (url === "/api/project-templates" && init?.method === "POST") {
+        return Promise.reject(new Error("offline"));
+      }
+
+      return Promise.resolve({
         ok: true,
-        json: async () => ({ templates: [] }),
-      })
-      .mockRejectedValueOnce(new Error("offline"));
+        json: async () =>
+          url === "/api/project-labels" ? { labels: [] } : { templates: [] },
+      });
+    });
 
     render(<ProjectTemplatesPage />);
 
@@ -135,5 +166,108 @@ describe("ProjectTemplatesPage component", () => {
     expect(
       screen.getByRole("dialog", { name: "Create project template" }),
     ).toBeInTheDocument();
+  });
+
+  it("edits, duplicates, and deletes template rows with visible feedback", async () => {
+    fetchMock.mockImplementation((url, init) => {
+      if (url === "/api/project-templates" && !init) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            templates: [
+              {
+                id: "template-1",
+                name: "Launch plan",
+                description: "Original structure",
+                settings: { status: "planned", milestones: ["Plan"] },
+                createdAt: "2026-05-13T00:00:00.000Z",
+              },
+            ],
+          }),
+        });
+      }
+      if (url === "/api/project-labels") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ labels: [] }),
+        });
+      }
+      if (
+        url === "/api/project-templates/template-1" &&
+        init?.method === "PATCH"
+      ) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            template: {
+              id: "template-1",
+              name: "Launch plan v2",
+              description: "Updated structure",
+              settings: { status: "started", milestones: ["Plan", "Build"] },
+              createdAt: "2026-05-13T00:00:00.000Z",
+            },
+          }),
+        });
+      }
+      if (url === "/api/project-templates" && init?.method === "POST") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            template: {
+              id: "template-2",
+              name: "Launch plan v2 copy",
+              description: "Updated structure",
+              settings: { status: "started", milestones: ["Plan", "Build"] },
+              createdAt: "2026-05-13T00:00:00.000Z",
+            },
+          }),
+        });
+      }
+      if (
+        url === "/api/project-templates/template-1" &&
+        init?.method === "DELETE"
+      ) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ success: true }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+
+    render(<ProjectTemplatesPage />);
+
+    expect(await screen.findByText("Launch plan")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(
+      screen.getByRole("dialog", { name: "Edit project template" }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Template name"), {
+      target: { value: "Launch plan v2" },
+    });
+    fireEvent.change(screen.getByLabelText("Template milestones"), {
+      target: { value: "Plan\nBuild" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(
+      await screen.findByText("Project template updated."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Launch plan v2")).toBeInTheDocument();
+    expect(
+      screen.getByText("Status: started · 2 milestones"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Duplicate" }));
+    expect(
+      await screen.findByText("Project template duplicated."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Launch plan v2 copy")).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete" })[1]);
+    expect(
+      await screen.findByText("Project template deleted."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Launch plan v2")).not.toBeInTheDocument();
   });
 });
