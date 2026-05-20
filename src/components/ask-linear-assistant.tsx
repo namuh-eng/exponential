@@ -23,6 +23,8 @@ export function AskLinearAssistant({
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [status, setStatus] = useState<"idle" | "loading">("idle");
+  const [canAskLinear, setCanAskLinear] = useState(true);
+  const [policyMessage, setPolicyMessage] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastFocusedElementRef = useRef<HTMLElement | null>(null);
   const responseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -38,8 +40,44 @@ export function AskLinearAssistant({
   }, []);
 
   const openAssistant = useCallback(() => {
+    if (!canAskLinear) {
+      return;
+    }
     lastFocusedElementRef.current = document.activeElement as HTMLElement;
     setOpen(true);
+  }, [canAskLinear]);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/workspaces/current/ai-settings", { credentials: "include" })
+      .then(async (response) => {
+        const payload = (await response.json().catch(() => null)) as {
+          aiSettings?: {
+            aiFeaturesEnabled?: boolean;
+            askLinearEnabled?: boolean;
+          };
+          capabilities?: { canUseAgents?: boolean };
+        } | null;
+        if (!response.ok || !payload?.aiSettings) {
+          return;
+        }
+        if (!active) {
+          return;
+        }
+        const enabled =
+          payload.aiSettings.aiFeaturesEnabled !== false &&
+          payload.aiSettings.askLinearEnabled !== false &&
+          payload.capabilities?.canUseAgents !== false;
+        setCanAskLinear(enabled);
+        setPolicyMessage(
+          enabled ? null : "Ask Linear is disabled by workspace AI settings.",
+        );
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -107,7 +145,9 @@ export function AskLinearAssistant({
         type="button"
         aria-label="Ask Linear"
         onClick={openAssistant}
-        className="fixed right-5 bottom-5 z-40 flex items-center gap-2 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-content-bg)] px-4 py-2.5 text-[13px] font-medium text-[var(--color-text-primary)] shadow-[var(--shadow-editorial-md)] transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-2 focus:ring-offset-[var(--color-content-bg)]"
+        disabled={!canAskLinear}
+        title={policyMessage ?? undefined}
+        className="fixed right-5 bottom-5 z-40 flex items-center gap-2 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-content-bg)] px-4 py-2.5 text-[13px] font-medium text-[var(--color-text-primary)] shadow-[var(--shadow-editorial-md)] transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-2 focus:ring-offset-[var(--color-content-bg)] disabled:cursor-not-allowed disabled:opacity-50"
       >
         <span aria-hidden="true" className="text-[15px]">
           ✦

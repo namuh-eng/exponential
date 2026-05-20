@@ -2,6 +2,7 @@ import { readAccountPreferencesFromUserSettings } from "@/lib/account-preference
 import { db } from "@/lib/db";
 import { member, team, user, workspace } from "@/lib/db/schema";
 import { readTeamSettings } from "@/lib/team-settings";
+import { readWorkspaceAiSettings } from "@/lib/workspace-ai-settings";
 import { and, eq } from "drizzle-orm";
 
 export type AgentGuidanceSource = "workspace" | "account" | "team";
@@ -19,24 +20,8 @@ export interface EffectiveAgentGuidance {
   teamKey: string | null;
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
 export function readWorkspaceAgentGuidance(settings: unknown) {
-  const root = asRecord(settings);
-  const ai = asRecord(root.ai);
-  const agents = asRecord(root.agents);
-  const candidate =
-    ai.agentGuidance ??
-    ai.guidance ??
-    agents.agentGuidance ??
-    agents.guidance ??
-    root.agentGuidance;
-
-  return typeof candidate === "string" ? candidate : "";
+  return readWorkspaceAiSettings(settings).workspaceAgentGuidance;
 }
 
 function normalizeGuidance(value: string) {

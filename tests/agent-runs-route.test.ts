@@ -1,4 +1,4 @@
-import { POST } from "@/app/api/agent/runs/route";
+import { GET, POST } from "@/app/api/agent/runs/route";
 import { db } from "@/lib/db";
 import { member, team, teamMember, user, workspace } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -171,5 +171,87 @@ describe("agent runs route", () => {
       payload.run.promptConfig.guidance.effectiveInstructions;
     expect(instructions).toContain("OPS: prioritize runbook updates.");
     expect(instructions).not.toContain("ENG: include frontend test plan.");
+  });
+  it("blocks run creation when workspace AI features are disabled", async () => {
+    mockSession();
+    await db
+      .update(workspace)
+      .set({ settings: { ai: { aiFeaturesEnabled: false } } })
+      .where(eq(workspace.id, WS_ID));
+
+    const response = await POST(
+      new Request("http://localhost/api/agent/runs", {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Investigate disabled workspace",
+          prompt: "Inspect this issue and propose the safest fix.",
+          teamKey: "ENG",
+          context: "ENG-333",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Workspace AI and agent features are disabled",
+    });
+
+    await db
+      .update(workspace)
+      .set({ settings: { ai: { agentGuidance: "Workspace: cite evidence." } } })
+      .where(eq(workspace.id, WS_ID));
+  });
+
+  it("reports and enforces workspace agent usage permissions", async () => {
+    mockSession();
+    await db
+      .update(member)
+      .set({ role: "member" })
+      .where(eq(member.userId, USER_ID));
+    await db
+      .update(workspace)
+      .set({
+        settings: {
+          ai: {
+            aiFeaturesEnabled: true,
+            agentGuidance: "Workspace: cite evidence.",
+            agentUsagePermission: "admins",
+          },
+        },
+      })
+      .where(eq(workspace.id, WS_ID));
+
+    const listResponse = await GET();
+    expect(listResponse.status).toBe(200);
+    await expect(listResponse.json()).resolves.toMatchObject({
+      canCreateRuns: false,
+    });
+
+    const createResponse = await POST(
+      new Request("http://localhost/api/agent/runs", {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Investigate restricted workspace",
+          prompt: "Inspect this issue and propose the safest fix.",
+          teamKey: "ENG",
+          context: "ENG-334",
+        }),
+      }),
+    );
+
+    expect(createResponse.status).toBe(403);
+    await expect(createResponse.json()).resolves.toEqual({
+      error:
+        "You do not have permission to create agent runs in this workspace",
+    });
+
+    await db
+      .update(member)
+      .set({ role: "admin" })
+      .where(eq(member.userId, USER_ID));
+    await db
+      .update(workspace)
+      .set({ settings: { ai: { agentGuidance: "Workspace: cite evidence." } } })
+      .where(eq(workspace.id, WS_ID));
   });
 });
