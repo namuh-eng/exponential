@@ -76,7 +76,7 @@ describe("TeamIssueStatusesPage", () => {
     expect(screen.getByText("New issues")).toBeInTheDocument();
 
     expect(screen.getAllByText("Todo").length).toBeGreaterThan(0);
-    expect(screen.getByText("Default")).toBeInTheDocument();
+    expect(screen.getAllByText("Default").length).toBeGreaterThan(0);
     expect(screen.getByText("10 issues")).toBeInTheDocument();
   });
 
@@ -112,6 +112,7 @@ describe("TeamIssueStatusesPage", () => {
                       issueCount: 0,
                       description: "Ready for QA",
                       color: "#123abc",
+                      behavior: { terminalBehavior: "open" },
                     },
                   ],
                 },
@@ -153,6 +154,12 @@ describe("TeamIssueStatusesPage", () => {
     fireEvent.change(screen.getByLabelText("Description"), {
       target: { value: "Ready for QA" },
     });
+    fireEvent.change(screen.getByLabelText("Workflow type"), {
+      target: { value: "completed" },
+    });
+    fireEvent.change(screen.getByLabelText("Workflow automation link"), {
+      target: { value: "https://example.com/qa" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => screen.getByText("Status created."));
@@ -160,12 +167,14 @@ describe("TeamIssueStatusesPage", () => {
       "/api/teams/TEAM/statuses",
       expect.objectContaining({
         method: "POST",
-        body: expect.stringContaining('"name":"QA Review"'),
+        body: expect.stringContaining('"category":"completed"'),
       }),
     );
     expect(screen.getAllByText("QA Review").length).toBeGreaterThan(0);
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "s5" } });
+    fireEvent.change(screen.getByLabelText("Duplicate issue status"), {
+      target: { value: "s5" },
+    });
     await waitFor(() => screen.getByText("Duplicate issue status saved."));
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/teams/TEAM/statuses",
@@ -209,6 +218,9 @@ describe("TeamIssueStatusesPage", () => {
     fireEvent.change(screen.getByLabelText("Name"), {
       target: { value: "Incoming" },
     });
+    fireEvent.change(screen.getByLabelText("Workflow type"), {
+      target: { value: "started" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => screen.getByText("Status updated."));
@@ -216,7 +228,7 @@ describe("TeamIssueStatusesPage", () => {
       "/api/teams/TEAM/statuses",
       expect.objectContaining({
         method: "PATCH",
-        body: expect.stringContaining('"name":"Incoming"'),
+        body: expect.stringContaining('"category":"started"'),
       }),
     );
 
@@ -231,6 +243,58 @@ describe("TeamIssueStatusesPage", () => {
         }),
       }),
     );
+  });
+
+  it("surfaces per-category default status controls", async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PATCH") {
+          return {
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                statuses: {
+                  ...mockStatuses,
+                  started: mockStatuses.started.map((status) => ({
+                    ...status,
+                    isDefault: status.id === "s8",
+                  })),
+                },
+                duplicateStatusId: "s6",
+              }),
+          } as Response;
+        }
+
+        return {
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              statuses: mockStatuses,
+              duplicateStatusId: "s6",
+            }),
+        } as Response;
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<TeamIssueStatusesPage />);
+    await screen.findByText("Issue statuses");
+
+    fireEvent.change(screen.getByLabelText("Started default status"), {
+      target: { value: "s8" },
+    });
+
+    await waitFor(() => screen.getByText("Default status saved."));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/teams/TEAM/statuses",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ id: "s8", isDefault: true }),
+      }),
+    );
+    expect(
+      screen.getAllByRole("link", { name: "Automations" })[0],
+    ).toHaveAttribute("href", "/settings/teams/TEAM/workflows");
   });
 
   it("deletes an unused non-default status without requiring replacement", async () => {
@@ -359,18 +423,35 @@ describe("TeamIssueStatusesPage", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders duplicate issue status selector with all statuses", async () => {
+  it("renders workflow behavior controls and duplicate issue status selector with all statuses", async () => {
     render(<TeamIssueStatusesPage />);
     await waitFor(() => screen.getByText("Duplicate issue status"));
 
-    const select = screen.getByRole("combobox");
+    expect(
+      screen.getByText(/workflow automation links for every team status/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[6]);
+    expect(screen.getByText("Workflow behavior")).toBeInTheDocument();
+    expect(screen.getByLabelText("Workflow type")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Auto-archive issues after days"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(
+        "Auto-close matching triage issues when moved here",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    const select = screen.getByLabelText("Duplicate issue status");
     expect(select).toBeInTheDocument();
 
-    // Check if some statuses from different categories are options
-    expect(screen.getByRole("option", { name: "Triage" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Done" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("option", { name: "Canceled" }),
-    ).toBeInTheDocument();
+    const optionLabels = Array.from((select as HTMLSelectElement).options).map(
+      (option) => option.textContent,
+    );
+    expect(optionLabels).toEqual(
+      expect.arrayContaining(["Triage", "Done", "Canceled"]),
+    );
   });
 });
