@@ -93,6 +93,7 @@ interface IssuePropertyOptions {
     name: string;
     category: NonNullable<IssueDetail["state"]>["category"];
     color: string;
+    isDefault?: boolean | null;
   }[];
   priorities: { value: IssueDetail["priority"]; label: string }[];
   assignees: { id: string; name: string | null; image: string | null }[];

@@ -374,6 +374,79 @@ describe("Team Statuses API Route", () => {
     await db.delete(workflowState).where(eq(workflowState.id, created.id));
   });
 
+  it("persists workflow behavior metadata and exposes category changes to creation options", async () => {
+    const createRes = await POST(
+      new Request("http://localhost", {
+        method: "POST",
+        body: JSON.stringify({
+          category: "started",
+          name: "Behavior QA",
+          behavior: {
+            slaBehavior: "pauses",
+            autoCloseEnabled: true,
+            autoCloseDays: 7,
+            archiveClosedIssues: true,
+            automationLinkEnabled: true,
+          },
+        }),
+      }),
+      { params: Promise.resolve({ key: "STAT" }) },
+    );
+    expect(createRes.status).toBe(200);
+    const createPayload = await createRes.json();
+    const created = createPayload.statuses.started.find(
+      (status: { name: string }) => status.name === "Behavior QA",
+    );
+    expect(created).toEqual(
+      expect.objectContaining({
+        behavior: expect.objectContaining({
+          slaBehavior: "pauses",
+          autoCloseEnabled: true,
+          autoCloseDays: 7,
+        }),
+      }),
+    );
+
+    const moveRes = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({
+          id: created.id,
+          category: "completed",
+          isDefault: true,
+          behavior: { terminalBehavior: "completed" },
+        }),
+      }),
+      { params: Promise.resolve({ key: "STAT" }) },
+    );
+    expect(moveRes.status).toBe(200);
+    const movePayload = await moveRes.json();
+    expect(movePayload.statuses.completed).toContainEqual(
+      expect.objectContaining({
+        id: created.id,
+        isDefault: true,
+        behavior: expect.objectContaining({ terminalBehavior: "completed" }),
+      }),
+    );
+
+    const optionsRes = await (
+      await import("@/app/api/teams/[key]/create-issue-options/route")
+    ).GET(new Request("http://localhost"), {
+      params: Promise.resolve({ key: "STAT" }),
+    });
+    expect(optionsRes.status).toBe(200);
+    const optionsPayload = await optionsRes.json();
+    expect(optionsPayload.statuses).toContainEqual(
+      expect.objectContaining({
+        id: created.id,
+        category: "completed",
+        isDefault: true,
+      }),
+    );
+
+    await db.delete(workflowState).where(eq(workflowState.id, created.id));
+  });
+
   it("rejects invalid mutation payloads and blocks unsafe deletion", async () => {
     const invalidCategoryRes = await POST(
       new Request("http://localhost", {

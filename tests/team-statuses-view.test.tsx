@@ -55,8 +55,8 @@ describe("TeamIssueStatusesPage", () => {
 
     const statusItems = await screen.findAllByTestId("status-item");
 
-    const backlogRow = statusItems.find((el) =>
-      within(el).queryByText("Backlog"),
+    const backlogRow = statusItems.find(
+      (el) => within(el).queryAllByText("Backlog").length > 0,
     );
     expect(backlogRow).toBeDefined();
     if (backlogRow) {
@@ -65,14 +65,22 @@ describe("TeamIssueStatusesPage", () => {
       expect(within(backlogRow).getByText("Default")).toBeInTheDocument();
     }
 
-    expect(statusItems.some((el) => within(el).queryByText("Todo"))).toBe(true);
     expect(
-      statusItems.some((el) => within(el).queryByText("In Progress")),
+      statusItems.some((el) => within(el).queryAllByText("Todo").length > 0),
     ).toBe(true);
-    expect(statusItems.some((el) => within(el).queryByText("Done"))).toBe(true);
-    expect(statusItems.some((el) => within(el).queryByText("Canceled"))).toBe(
-      true,
-    );
+    expect(
+      statusItems.some(
+        (el) => within(el).queryAllByText("In Progress").length > 0,
+      ),
+    ).toBe(true);
+    expect(
+      statusItems.some((el) => within(el).queryAllByText("Done").length > 0),
+    ).toBe(true);
+    expect(
+      statusItems.some(
+        (el) => within(el).queryAllByText("Canceled").length > 0,
+      ),
+    ).toBe(true);
   });
 
   it("shows category headers", async () => {
@@ -84,9 +92,11 @@ describe("TeamIssueStatusesPage", () => {
     render(<TeamIssueStatusesPage />);
 
     // Triage is empty but header should be there
-    expect(await screen.findByText("Triage")).toBeInTheDocument();
-    expect(screen.getByText("Unstarted")).toBeInTheDocument();
-    expect(screen.getByText("Started")).toBeInTheDocument();
-    expect(screen.getByText("Completed")).toBeInTheDocument();
+    expect(
+      (await screen.findAllByText("Triage")).length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Unstarted").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Started").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Completed").length).toBeGreaterThanOrEqual(1);
   });
 });

@@ -91,7 +91,7 @@ describe("TeamIssueStatusesPage", () => {
 
   it("renders description text", async () => {
     await renderPage();
-    expect(screen.getByText(/define the workflow/i)).toBeDefined();
+    expect(screen.getByText(/define the team workflow/i)).toBeDefined();
   });
 
   it("renders all 6 category headers", async () => {

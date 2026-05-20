@@ -18,8 +18,31 @@ type StatusCategory = (typeof CATEGORY_ORDER)[number];
 
 type TeamRecord = NonNullable<Awaited<ReturnType<typeof findAccessibleTeam>>>;
 
+type StatusTerminalBehavior = "none" | "completed" | "canceled";
+type StatusSlaBehavior = "counts" | "pauses" | "breached";
+
+type StatusBehavior = {
+  terminalBehavior: StatusTerminalBehavior;
+  slaBehavior: StatusSlaBehavior;
+  autoCloseEnabled: boolean;
+  autoCloseDays: number | null;
+  archiveClosedIssues: boolean;
+  automationLinkEnabled: boolean;
+};
+
 type TeamSettings = Record<string, unknown> & {
   duplicateIssueStatusId?: string;
+  triageAcceptDestinationStateId?: string;
+  triageDeclineDestinationStateId?: string;
+  workflowAutomation?: {
+    gitBranchCreateTargetStatusId?: string | null;
+    gitPrMergeTargetStatusId?: string | null;
+    statusTransitionRules?: Array<{
+      sourceStatusId?: string | null;
+      targetStatusId?: string | null;
+    }>;
+  };
+  statusBehaviors?: Record<string, Partial<StatusBehavior>>;
 };
 
 function isStatusCategory(value: unknown): value is StatusCategory {
@@ -53,6 +76,156 @@ function normalizeColor(value: unknown) {
     return null;
   }
   return value.toLowerCase();
+}
+
+function defaultBehaviorForCategory(category: StatusCategory): StatusBehavior {
+  if (category === "completed") {
+    return {
+      terminalBehavior: "completed",
+      slaBehavior: "pauses",
+      autoCloseEnabled: false,
+      autoCloseDays: 14,
+      archiveClosedIssues: true,
+      automationLinkEnabled: true,
+    };
+  }
+  if (category === "canceled") {
+    return {
+      terminalBehavior: "canceled",
+      slaBehavior: "pauses",
+      autoCloseEnabled: false,
+      autoCloseDays: 14,
+      archiveClosedIssues: true,
+      automationLinkEnabled: true,
+    };
+  }
+  if (category === "triage") {
+    return {
+      terminalBehavior: "none",
+      slaBehavior: "breached",
+      autoCloseEnabled: false,
+      autoCloseDays: null,
+      archiveClosedIssues: false,
+      automationLinkEnabled: true,
+    };
+  }
+  return {
+    terminalBehavior: "none",
+    slaBehavior: "counts",
+    autoCloseEnabled: false,
+    autoCloseDays: null,
+    archiveClosedIssues: false,
+    automationLinkEnabled: true,
+  };
+}
+
+function normalizeTerminalBehavior(
+  value: unknown,
+  category: StatusCategory,
+): StatusTerminalBehavior {
+  if (category === "completed") return "completed";
+  if (category === "canceled") return "canceled";
+  return value === "completed" || value === "canceled" || value === "none"
+    ? value
+    : "none";
+}
+
+function normalizeStatusBehavior(
+  value: unknown,
+  category: StatusCategory,
+): StatusBehavior {
+  const defaults = defaultBehaviorForCategory(category);
+  const parsed =
+    value && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : {};
+  const autoCloseDays = Number(parsed.autoCloseDays ?? defaults.autoCloseDays);
+  return {
+    terminalBehavior: normalizeTerminalBehavior(
+      parsed.terminalBehavior,
+      category,
+    ),
+    slaBehavior:
+      parsed.slaBehavior === "counts" ||
+      parsed.slaBehavior === "pauses" ||
+      parsed.slaBehavior === "breached"
+        ? parsed.slaBehavior
+        : defaults.slaBehavior,
+    autoCloseEnabled: parsed.autoCloseEnabled === true,
+    autoCloseDays:
+      Number.isInteger(autoCloseDays) &&
+      autoCloseDays >= 1 &&
+      autoCloseDays <= 365
+        ? autoCloseDays
+        : defaults.autoCloseDays,
+    archiveClosedIssues: !!(
+      parsed.archiveClosedIssues ?? defaults.archiveClosedIssues
+    ),
+    automationLinkEnabled: parsed.automationLinkEnabled !== false,
+  };
+}
+
+function readStatusBehaviors(settings: TeamSettings) {
+  return settings.statusBehaviors &&
+    typeof settings.statusBehaviors === "object"
+    ? settings.statusBehaviors
+    : {};
+}
+
+function mergeStatusBehavior(
+  current: StatusBehavior,
+  patch: unknown,
+  category: StatusCategory,
+) {
+  return normalizeStatusBehavior(
+    { ...current, ...(patch && typeof patch === "object" ? patch : {}) },
+    category,
+  );
+}
+
+function pruneStatusReferences(
+  settings: TeamSettings,
+  deletedStatusId: string,
+) {
+  const nextSettings: TeamSettings = { ...settings };
+  const behaviors = { ...readStatusBehaviors(settings) };
+  delete behaviors[deletedStatusId];
+  nextSettings.statusBehaviors = behaviors;
+
+  if (nextSettings.triageAcceptDestinationStateId === deletedStatusId) {
+    nextSettings.triageAcceptDestinationStateId = undefined;
+  }
+  if (nextSettings.triageDeclineDestinationStateId === deletedStatusId) {
+    nextSettings.triageDeclineDestinationStateId = undefined;
+  }
+
+  const automation = nextSettings.workflowAutomation;
+  if (automation && typeof automation === "object") {
+    nextSettings.workflowAutomation = {
+      ...automation,
+      gitBranchCreateTargetStatusId:
+        automation.gitBranchCreateTargetStatusId === deletedStatusId
+          ? null
+          : automation.gitBranchCreateTargetStatusId,
+      gitPrMergeTargetStatusId:
+        automation.gitPrMergeTargetStatusId === deletedStatusId
+          ? null
+          : automation.gitPrMergeTargetStatusId,
+      statusTransitionRules: Array.isArray(automation.statusTransitionRules)
+        ? automation.statusTransitionRules.filter(
+            (rule) =>
+              rule.sourceStatusId !== deletedStatusId &&
+              rule.targetStatusId !== deletedStatusId,
+          )
+        : automation.statusTransitionRules,
+    };
+  }
+
+  return nextSettings;
+}
+
+function isAcceptDestinationCategory(category: StatusCategory) {
+  return ["backlog", "unstarted", "started", "completed"].includes(category);
 }
 
 async function canManageTeamStatuses(teamRecord: TeamRecord, userId: string) {
@@ -135,6 +308,8 @@ async function buildStatusesResponse(teamRecord: TeamRecord) {
     .groupBy(issue.stateId);
 
   const countMap = new Map(issueCounts.map((ic) => [ic.stateId, ic.count]));
+  const settings = readTeamSettings(teamRecord.settings);
+  const statusBehaviors = readStatusBehaviors(settings);
   const grouped: Record<
     string,
     Array<{
@@ -145,6 +320,7 @@ async function buildStatusesResponse(teamRecord: TeamRecord) {
       color: string;
       position: number;
       isDefault: boolean | null;
+      behavior: StatusBehavior;
     }>
   > = {};
 
@@ -163,10 +339,10 @@ async function buildStatusesResponse(teamRecord: TeamRecord) {
       color: state.color,
       position: state.position,
       isDefault: state.isDefault,
+      behavior: normalizeStatusBehavior(statusBehaviors[state.id], cat),
     });
   }
 
-  const settings = readTeamSettings(teamRecord.settings);
   const persistedDuplicateStatusId =
     typeof settings.duplicateIssueStatusId === "string"
       ? settings.duplicateIssueStatusId
@@ -188,19 +364,13 @@ async function buildStatusesResponse(teamRecord: TeamRecord) {
 
 async function ensureUniqueName(
   teamId: string,
-  category: StatusCategory,
   name: string,
   ignoreId?: string,
 ) {
   const rows = await db
     .select({ id: workflowState.id, name: workflowState.name })
     .from(workflowState)
-    .where(
-      and(
-        eq(workflowState.teamId, teamId),
-        eq(workflowState.category, category),
-      ),
-    );
+    .where(eq(workflowState.teamId, teamId));
 
   return !rows.some(
     (state) =>
@@ -287,9 +457,9 @@ export async function POST(
     );
   }
 
-  if (!(await ensureUniqueName(result.teamRecord.id, body.category, name))) {
+  if (!(await ensureUniqueName(result.teamRecord.id, name))) {
     return NextResponse.json(
-      { error: "A status with that name already exists in this category" },
+      { error: "A status with that name already exists on this team" },
       { status: 409 },
     );
   }
@@ -308,18 +478,50 @@ export async function POST(
 
   const isFirstInCategory = categoryStates.length === 0;
 
-  await db.insert(workflowState).values({
-    teamId: result.teamRecord.id,
-    category: body.category,
-    name,
-    description: normalizeDescription(body.description),
-    color: color ?? "#6b6f76",
-    position: nextPosition,
-    isDefault: isFirstInCategory,
-    updatedAt: new Date(),
-  });
+  const [created] = await db
+    .insert(workflowState)
+    .values({
+      teamId: result.teamRecord.id,
+      category: body.category,
+      name,
+      description: normalizeDescription(body.description),
+      color: color ?? "#6b6f76",
+      position: nextPosition,
+      isDefault: isFirstInCategory || body.isDefault === true,
+      updatedAt: new Date(),
+    })
+    .returning({ id: workflowState.id });
 
-  return buildStatusesResponse(result.teamRecord);
+  const settings = readTeamSettings(result.teamRecord.settings);
+  const nextSettings = {
+    ...settings,
+    statusBehaviors: {
+      ...readStatusBehaviors(settings),
+      [created.id]: normalizeStatusBehavior(body.behavior, body.category),
+    },
+  };
+  await db
+    .update(team)
+    .set({ settings: nextSettings, updatedAt: new Date() })
+    .where(eq(team.id, result.teamRecord.id));
+
+  if (body.isDefault === true && !isFirstInCategory) {
+    await db
+      .update(workflowState)
+      .set({ isDefault: false, updatedAt: new Date() })
+      .where(
+        and(
+          eq(workflowState.teamId, result.teamRecord.id),
+          eq(workflowState.category, body.category),
+          ne(workflowState.id, created.id),
+        ),
+      );
+  }
+
+  return buildStatusesResponse({
+    ...result.teamRecord,
+    settings: nextSettings,
+  });
 }
 
 export async function PATCH(
@@ -482,12 +684,9 @@ export async function PATCH(
     );
   }
 
-  if (
-    name &&
-    !(await ensureUniqueName(result.teamRecord.id, nextCategory, name, id))
-  ) {
+  if (name && !(await ensureUniqueName(result.teamRecord.id, name, id))) {
     return NextResponse.json(
-      { error: "A status with that name already exists in this category" },
+      { error: "A status with that name already exists on this team" },
       { status: 409 },
     );
   }
@@ -520,6 +719,55 @@ export async function PATCH(
     );
   }
 
+  const settings = readTeamSettings(result.teamRecord.settings);
+  if (
+    settings.triageAcceptDestinationStateId === id &&
+    !isAcceptDestinationCategory(nextCategory)
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "Triage accept destination must stay in an accepted workflow category",
+      },
+      { status: 400 },
+    );
+  }
+  if (
+    settings.triageDeclineDestinationStateId === id &&
+    nextCategory !== "canceled"
+  ) {
+    return NextResponse.json(
+      { error: "Triage decline destination must stay canceled" },
+      { status: 400 },
+    );
+  }
+
+  const nextCategoryStates = await db
+    .select({ id: workflowState.id })
+    .from(workflowState)
+    .where(
+      and(
+        eq(workflowState.teamId, result.teamRecord.id),
+        eq(workflowState.category, nextCategory),
+        ne(workflowState.id, id),
+      ),
+    );
+  const shouldBecomeDefault =
+    body.isDefault === true ||
+    (nextCategory !== existing.category && nextCategoryStates.length === 0);
+
+  const currentBehavior = normalizeStatusBehavior(
+    readStatusBehaviors(settings)[id],
+    existing.category,
+  );
+  const nextSettings = {
+    ...settings,
+    statusBehaviors: {
+      ...readStatusBehaviors(settings),
+      [id]: mergeStatusBehavior(currentBehavior, body.behavior, nextCategory),
+    },
+  };
+
   await db
     .update(workflowState)
     .set({
@@ -529,14 +777,14 @@ export async function PATCH(
         : {}),
       ...(color !== undefined ? { color } : {}),
       ...(body.category !== undefined ? { category: nextCategory } : {}),
-      ...(body.isDefault !== undefined
-        ? { isDefault: body.isDefault === true }
+      ...(body.isDefault !== undefined || shouldBecomeDefault
+        ? { isDefault: shouldBecomeDefault }
         : {}),
       updatedAt: new Date(),
     })
     .where(eq(workflowState.id, id));
 
-  if (body.isDefault === true) {
+  if (shouldBecomeDefault) {
     await db
       .update(workflowState)
       .set({ isDefault: false, updatedAt: new Date() })
@@ -549,7 +797,15 @@ export async function PATCH(
       );
   }
 
-  return buildStatusesResponse(result.teamRecord);
+  await db
+    .update(team)
+    .set({ settings: nextSettings, updatedAt: new Date() })
+    .where(eq(team.id, result.teamRecord.id));
+
+  return buildStatusesResponse({
+    ...result.teamRecord,
+    settings: nextSettings,
+  });
 }
 
 export async function DELETE(
@@ -637,7 +893,10 @@ export async function DELETE(
 
   await db.delete(workflowState).where(eq(workflowState.id, id));
 
-  const settings = readTeamSettings(result.teamRecord.settings);
+  const settings = pruneStatusReferences(
+    readTeamSettings(result.teamRecord.settings),
+    id,
+  );
   if (settings.duplicateIssueStatusId === id) {
     const [fallback] = await db
       .select({ id: workflowState.id })
@@ -645,14 +904,12 @@ export async function DELETE(
       .where(eq(workflowState.teamId, result.teamRecord.id))
       .orderBy(asc(workflowState.position))
       .limit(1);
-    await db
-      .update(team)
-      .set({
-        settings: { ...settings, duplicateIssueStatusId: fallback?.id },
-        updatedAt: new Date(),
-      })
-      .where(eq(team.id, result.teamRecord.id));
+    settings.duplicateIssueStatusId = fallback?.id;
   }
+  await db
+    .update(team)
+    .set({ settings, updatedAt: new Date() })
+    .where(eq(team.id, result.teamRecord.id));
 
-  return buildStatusesResponse(result.teamRecord);
+  return buildStatusesResponse({ ...result.teamRecord, settings });
 }

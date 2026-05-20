@@ -97,8 +97,8 @@ export async function POST(request: Request) {
   // Use provided stateId or find default backlog state
   let finalStateId = stateId;
   if (!finalStateId) {
-    const defaultState = await db
-      .select({ id: workflowState.id })
+    const backlogStates = await db
+      .select({ id: workflowState.id, isDefault: workflowState.isDefault })
       .from(workflowState)
       .where(
         and(
@@ -106,9 +106,11 @@ export async function POST(request: Request) {
           eq(workflowState.category, "backlog"),
         ),
       )
-      .limit(1);
+      .limit(20);
 
-    finalStateId = defaultState[0]?.id;
+    finalStateId =
+      backlogStates.find((state) => state.isDefault === true)?.id ??
+      backlogStates[0]?.id;
   }
 
   if (!finalStateId) {

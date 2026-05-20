@@ -76,7 +76,7 @@ describe("TeamIssueStatusesPage", () => {
     expect(screen.getByText("New issues")).toBeInTheDocument();
 
     expect(screen.getAllByText("Todo").length).toBeGreaterThan(0);
-    expect(screen.getByText("Default")).toBeInTheDocument();
+    expect(screen.getAllByText("Default").length).toBeGreaterThan(0);
     expect(screen.getByText("10 issues")).toBeInTheDocument();
   });
 
@@ -153,6 +153,13 @@ describe("TeamIssueStatusesPage", () => {
     fireEvent.change(screen.getByLabelText("Description"), {
       target: { value: "Ready for QA" },
     });
+    expect(screen.getByLabelText("Workflow type")).toHaveValue("started");
+    fireEvent.change(screen.getByLabelText("SLA behavior"), {
+      target: { value: "pauses" },
+    });
+    fireEvent.click(
+      screen.getByLabelText("Auto-close/archive issues in this status"),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => screen.getByText("Status created."));
@@ -165,7 +172,9 @@ describe("TeamIssueStatusesPage", () => {
     );
     expect(screen.getAllByText("QA Review").length).toBeGreaterThan(0);
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "s5" } });
+    fireEvent.change(screen.getByLabelText("Duplicate issue status"), {
+      target: { value: "s5" },
+    });
     await waitFor(() => screen.getByText("Duplicate issue status saved."));
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/teams/TEAM/statuses",
@@ -206,6 +215,10 @@ describe("TeamIssueStatusesPage", () => {
     await screen.findByText("Issue statuses");
 
     fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]);
+    expect(screen.getByLabelText("Workflow type")).toHaveValue("triage");
+    fireEvent.change(screen.getByLabelText("Workflow type"), {
+      target: { value: "backlog" },
+    });
     fireEvent.change(screen.getByLabelText("Name"), {
       target: { value: "Incoming" },
     });
@@ -320,7 +333,7 @@ describe("TeamIssueStatusesPage", () => {
       (replacementSelect as HTMLSelectElement).options,
     ).map((option) => option.textContent);
     expect(replacementOptionLabels).not.toContain("Triage");
-    expect(replacementOptionLabels).toContain("Backlog");
+    expect(replacementOptionLabels).toContain("Backlog (Backlog)");
 
     const deleteButton = screen.getByRole("button", { name: "Delete" });
     expect(deleteButton).toBeDisabled();
@@ -363,7 +376,7 @@ describe("TeamIssueStatusesPage", () => {
     render(<TeamIssueStatusesPage />);
     await waitFor(() => screen.getByText("Duplicate issue status"));
 
-    const select = screen.getByRole("combobox");
+    const select = screen.getByLabelText("Duplicate issue status");
     expect(select).toBeInTheDocument();
 
     // Check if some statuses from different categories are options

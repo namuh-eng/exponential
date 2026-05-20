@@ -51,6 +51,7 @@ interface CreateIssueOptions {
     name: string;
     category: string;
     color: string;
+    isDefault?: boolean | null;
   }>;
   priorities: Array<{
     value: string;
@@ -65,6 +66,7 @@ interface CreateIssueOptions {
     id: string;
     name: string;
     color: string;
+    isDefault?: boolean | null;
   }>;
   projects: Array<{
     id: string;
@@ -346,6 +348,11 @@ export function CreateIssueModal({
           defaultStateId ||
           data.statuses.find((status) => status.name === defaultStateName)
             ?.id ||
+          data.statuses.find(
+            (status) =>
+              status.isDefault === true && status.category === "backlog",
+          )?.id ||
+          data.statuses.find((status) => status.isDefault === true)?.id ||
           data.statuses[0]?.id ||
           "";
         setSelectedStateId(nextStateId);

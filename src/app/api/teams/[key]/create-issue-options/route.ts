@@ -44,6 +44,7 @@ export async function GET(
         name: workflowState.name,
         category: workflowState.category,
         color: workflowState.color,
+        isDefault: workflowState.isDefault,
       })
       .from(workflowState)
       .where(eq(workflowState.teamId, teamContext.id))
