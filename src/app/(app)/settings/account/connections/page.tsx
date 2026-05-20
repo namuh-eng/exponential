@@ -154,15 +154,30 @@ function formatDate(value?: string | null) {
   }).format(date)}`;
 }
 
+function getConnectionsPathname() {
+  return window.location.pathname.endsWith(CONNECTIONS_PATH)
+    ? window.location.pathname
+    : CONNECTIONS_PATH;
+}
+
+function getConnectionsCallbackPath(params?: URLSearchParams) {
+  const query = params?.toString();
+  return `${getConnectionsPathname()}${query ? `?${query}` : ""}`;
+}
+
 function getConnectionsCallbackUrl(params?: URLSearchParams) {
   const base = new URL(window.location.href);
-  const pathname = base.pathname.endsWith(CONNECTIONS_PATH)
-    ? base.pathname
-    : CONNECTIONS_PATH;
-  base.pathname = pathname;
+  base.pathname = getConnectionsPathname();
   base.search = params?.toString() ? `?${params.toString()}` : "";
   base.hash = "";
   return base.toString();
+}
+
+function getProviderCapabilitiesPath() {
+  const params = new URLSearchParams({
+    callbackUrl: getConnectionsCallbackPath(),
+  });
+  return `/api/auth/provider-capabilities?${params.toString()}`;
 }
 
 function noticeFromSearch() {
@@ -218,7 +233,7 @@ export default function ConnectedAccountsPage() {
             signal: controller.signal,
             credentials: "include",
           }),
-          fetch("/api/auth/provider-capabilities", {
+          fetch(getProviderCapabilitiesPath(), {
             signal: controller.signal,
             credentials: "include",
           }),

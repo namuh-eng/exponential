@@ -129,6 +129,18 @@ describe("Auth proxy", () => {
     expect(redirectUrl.searchParams.get("callbackUrl")).toBe("/inbox");
   });
 
+  it("allows unauthenticated account API requests to return JSON 401 from the route", async () => {
+    mockNext.mockClear();
+    mockRedirect.mockClear();
+    mockRewrite.mockClear();
+    const { proxy } = await import("@/proxy");
+    const req = createMockRequest("/api/account/security");
+    await proxy(req as never);
+    expect(mockRedirect).not.toHaveBeenCalled();
+    expect(mockRewrite).not.toHaveBeenCalled();
+    expect(mockNext).toHaveBeenCalled();
+  });
+
   it("redirects unauthenticated users away from /create-workspace", async () => {
     mockRedirect.mockClear();
     const { proxy } = await import("@/proxy");

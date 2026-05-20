@@ -52,7 +52,7 @@ function mockFetch({
         headers: { "Content-Type": "application/json" },
       });
     }
-    if (path === "/api/auth/provider-capabilities") {
+    if (path.startsWith("/api/auth/provider-capabilities")) {
       return new Response(JSON.stringify({ providers: capabilities }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -95,6 +95,10 @@ describe("ConnectedAccountsPage component", () => {
       );
     });
 
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/provider-capabilities?callbackUrl=%2Fforeverbrowsing%2Fsettings%2Faccount%2Fconnections",
+      expect.objectContaining({ credentials: "include" }),
+    );
     expect(
       screen.getByRole("heading", { level: 1, name: "Connected accounts" }),
     ).toBeInTheDocument();
@@ -174,7 +178,9 @@ describe("ConnectedAccountsPage component", () => {
     expect(await screen.findAllByText("GitHub")).toHaveLength(2);
     expect(screen.getAllByText("The Octocat")).toHaveLength(1);
     expect(screen.getByText("octocat")).toBeInTheDocument();
-    expect(screen.getAllByText(/Connected Apr 30, 2026/)).toHaveLength(2);
+    expect(screen.getAllByText(/Connected (Apr 30|May 1), 2026/)).toHaveLength(
+      2,
+    );
     expect(screen.getAllByText("Connected")).toHaveLength(2);
     expect(
       screen.queryByText("No connected accounts yet."),

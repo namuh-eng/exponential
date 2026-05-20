@@ -16,6 +16,7 @@ const publicPaths = [
   "/api/auth",
   "/api/workspaces",
   "/api/test",
+  "/api/account",
 ];
 
 function isPublicPath(pathname: string): boolean {

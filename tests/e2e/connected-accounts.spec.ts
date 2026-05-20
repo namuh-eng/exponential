@@ -14,7 +14,22 @@ test.describe("Connected accounts", () => {
     });
     expect(workspaceResponse.status()).toBe(201);
 
+    const apiRedirects: string[] = [];
+    page.on("response", (response) => {
+      const url = response.url();
+      if (
+        url.includes("/api/account/") &&
+        response.status() >= 300 &&
+        response.status() < 400
+      ) {
+        apiRedirects.push(`${response.status()} ${url}`);
+      }
+    });
+
     await page.goto(`/${workspaceSlug}/settings/account/connections`);
+    await expect(page).toHaveURL(
+      new RegExp(`/${workspaceSlug}/settings/account/connections$`),
+    );
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Connected accounts" }),
@@ -71,5 +86,19 @@ test.describe("Connected accounts", () => {
         0,
       );
     }
+
+    expect(apiRedirects).toEqual([]);
+  });
+
+  test("non-prefixed connected accounts route still renders for authenticated users", async ({
+    page,
+  }) => {
+    await page.goto("/settings/account/connections");
+
+    await expect(page).not.toHaveURL(/\/login/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Connected accounts" }),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/settings\/account\/connections$/);
   });
 });
