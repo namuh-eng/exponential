@@ -1,31 +1,46 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import "@testing-library/jest-dom/vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TeamRecurringIssuesSettingsPage from "../src/app/(app)/settings/teams/[key]/recurring-issues/page";
 
-// Mock useParams
+const fetchMock = vi.fn();
+
 vi.mock("next/navigation", () => ({
   useParams: () => ({ key: "ENG" }),
 }));
 
 describe("TeamRecurringIssuesSettingsPage component", () => {
-  afterEach(() => {
-    cleanup();
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        team: { name: "Engineering", key: "ENG" },
+        recurringIssues: [],
+      }),
+    });
   });
 
-  it("renders recurring issues settings state", () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it("renders recurring issues settings state", async () => {
     render(<TeamRecurringIssuesSettingsPage />);
 
-    expect(screen.getByText("Recurring issues")).toBeDefined();
+    expect(await screen.findByText("Recurring issues")).toBeInTheDocument();
     expect(
       screen.getByText(/Set up scheduled issues that repeat/i),
-    ).toBeDefined();
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "New recurring issue" }),
-    ).toBeDefined();
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         "No recurring issues have been configured for this team.",
       ),
-    ).toBeDefined();
+    ).toBeInTheDocument();
   });
 });

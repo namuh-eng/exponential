@@ -456,6 +456,50 @@ export const issueTemplate = pgTable(
   (t) => [index("issue_template_workspace_idx").on(t.workspaceId)],
 );
 
+// ─── Recurring Issue ────────────────────────────────────────────────
+
+export const recurringIssue = pgTable(
+  "recurring_issue",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => team.id, { onDelete: "cascade" }),
+    creatorId: text("creator_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    title: varchar("title", { length: 500 }).notNull(),
+    description: text("description").notNull().default(""),
+    stateId: uuid("state_id").references(() => workflowState.id, {
+      onDelete: "set null",
+    }),
+    assigneeId: text("assignee_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    priority: issuePriority("priority").notNull().default("none"),
+    labelIds: jsonb("label_ids").notNull().default([]),
+    projectId: uuid("project_id").references(() => project.id, {
+      onDelete: "set null",
+    }),
+    cycleBehavior: jsonb("cycle_behavior"),
+    cadenceConfig: jsonb("cadence_config").notNull().default({}),
+    timezone: varchar("timezone", { length: 100 }).notNull().default("UTC"),
+    nextRunAt: timestamp("next_run_at").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    lastRunAt: timestamp("last_run_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("recurring_issue_workspace_idx").on(t.workspaceId),
+    index("recurring_issue_team_idx").on(t.teamId),
+    index("recurring_issue_next_run_idx").on(t.enabled, t.nextRunAt),
+  ],
+);
+
 // ─── Project Team (many-to-many) ─────────────────────────────────────
 
 export const projectTeam = pgTable(
@@ -1018,6 +1062,7 @@ export const teamRelations = relations(team, ({ one, many }) => ({
   members: many(teamMember),
   workflowStates: many(workflowState),
   issues: many(issue),
+  recurringIssues: many(recurringIssue),
   labels: many(label),
   cycles: many(cycle),
 }));
@@ -1100,6 +1145,33 @@ export const issueRelationRelations = relations(issueRelation, ({ one }) => ({
     fields: [issueRelation.relatedIssueId],
     references: [issue.id],
     relationName: "target",
+  }),
+}));
+
+export const recurringIssueRelations = relations(recurringIssue, ({ one }) => ({
+  workspace: one(workspace, {
+    fields: [recurringIssue.workspaceId],
+    references: [workspace.id],
+  }),
+  team: one(team, {
+    fields: [recurringIssue.teamId],
+    references: [team.id],
+  }),
+  creator: one(user, {
+    fields: [recurringIssue.creatorId],
+    references: [user.id],
+  }),
+  state: one(workflowState, {
+    fields: [recurringIssue.stateId],
+    references: [workflowState.id],
+  }),
+  assignee: one(user, {
+    fields: [recurringIssue.assigneeId],
+    references: [user.id],
+  }),
+  project: one(project, {
+    fields: [recurringIssue.projectId],
+    references: [project.id],
   }),
 }));
 
