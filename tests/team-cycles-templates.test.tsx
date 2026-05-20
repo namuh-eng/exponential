@@ -39,14 +39,42 @@ describe("Team Cycles & Templates Settings", () => {
     ],
   };
 
-  it("renders team slack settings correctly", () => {
+  it("renders team slack settings correctly", async () => {
     vi.mocked(useParams).mockReturnValue({ key: "ENG" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            team: { name: "Engineering", key: "ENG" },
+            canManage: true,
+            workspaceSlack: {
+              status: "configuration_required",
+              workspaceName: null,
+              availableChannels: [],
+              configurationError: "Slack OAuth credentials are not configured.",
+            },
+            settings: {
+              enabled: false,
+              channelId: null,
+              channelName: null,
+              events: {
+                issueCreated: true,
+                issueCompleted: true,
+                comments: false,
+                projectUpdates: true,
+              },
+            },
+          }),
+      }),
+    );
     render(<TeamSlackSettingsPage />);
 
-    expect(screen.getByText("Slack notifications")).toBeInTheDocument();
+    expect(await screen.findByText("Slack notifications")).toBeInTheDocument();
     expect(screen.getByText("Slack is not connected")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Connect Slack" }),
+      screen.getByRole("link", { name: "Connect Slack in integrations" }),
     ).toBeInTheDocument();
   });
 

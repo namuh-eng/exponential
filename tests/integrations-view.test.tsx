@@ -7,11 +7,49 @@ import {
 } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import IntegrationsSettingsPage from "@/app/(app)/settings/integrations/page";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const fetchMock = vi.fn();
+
+const integrationsPayload = {
+  canManageIntegrations: true,
+  allowLocalSlackInstall: true,
+  integrations: [
+    {
+      provider: "github",
+      name: "GitHub",
+      description: "Sync pull requests, commits, and issue links with Linear.",
+      state: { status: "configuration_required" },
+    },
+    {
+      provider: "slack",
+      name: "Slack",
+      description: "Send issue updates and create issues from Slack messages.",
+      state: { status: "configuration_required" },
+    },
+    {
+      provider: "zendesk",
+      name: "Zendesk",
+      description:
+        "Connect support tickets to product work and customer requests.",
+      state: { status: "configuration_required" },
+    },
+  ],
+};
 
 describe("IntegrationsSettingsPage component", () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => integrationsPayload,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
   afterEach(() => {
     cleanup();
+    vi.unstubAllGlobals();
   });
 
   it("opens an integrations catalog instead of using a no-op action", async () => {
@@ -40,5 +78,7 @@ describe("IntegrationsSettingsPage component", () => {
     expect(dialog).toBeInTheDocument();
     expect(screen.getByText("GitHub")).toBeInTheDocument();
     expect(screen.getByText("Slack")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Connect" })).toBeInTheDocument();
+    expect(screen.queryByText(/Setup unavailable/i)).not.toBeInTheDocument();
   });
 });
