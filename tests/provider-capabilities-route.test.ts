@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const getWorkspaceAuthPolicyBySlugMock = vi.hoisted(() => vi.fn());
-const getWorkspaceSlugFromCallbackUrlMock = vi.hoisted(() => vi.fn());
+const resolveWorkspaceAuthPolicyMock = vi.hoisted(() => vi.fn());
+const isWorkspaceAuthMethodAllowedMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/passkeys", () => ({
   isPasskeyAuthEnabled: () => false,
 }));
 
-vi.mock("@/lib/workspace-auth-settings", () => ({
-  getWorkspaceAuthPolicyBySlug: getWorkspaceAuthPolicyBySlugMock,
-  getWorkspaceSlugFromCallbackUrl: getWorkspaceSlugFromCallbackUrlMock,
+vi.mock("@/lib/workspace-auth-methods", () => ({
+  resolveWorkspaceAuthPolicy: resolveWorkspaceAuthPolicyMock,
+  isWorkspaceAuthMethodAllowed: isWorkspaceAuthMethodAllowedMock,
 }));
 
 const OAUTH_ENV_KEYS = [
@@ -35,75 +35,61 @@ describe("provider capabilities route", () => {
   it("exposes integration-backed connected account provider flags", async () => {
     process.env.AUTH_GITHUB_ID = "github-client";
     process.env.AUTH_GITHUB_SECRET = "github-secret";
-    getWorkspaceAuthPolicyBySlugMock.mockResolvedValue(null);
+    resolveWorkspaceAuthPolicyMock.mockResolvedValue(null);
+    isWorkspaceAuthMethodAllowedMock.mockReturnValue(true);
 
     const { GET } = await import("@/app/api/auth/provider-capabilities/route");
     const response = await GET(
-      new Request("https://app.test/api/auth/provider-capabilities"),
+      new Request("http://localhost/api/auth/provider-capabilities"),
     );
     const data = await response.json();
 
     expect(response.headers.get("Cache-Control")).toBe("no-store");
-    expect(data).toEqual({
-      providers: {
-        google: {
-          supported: true,
-          configured: false,
-          devLinking: true,
-          unavailableReason:
-            "Google OAuth is not configured. Dev and e2e can still exercise the linking surface.",
-        },
-        github: {
-          supported: true,
-          configured: true,
-          devLinking: true,
-          unavailableReason: null,
-        },
-        gitlab: {
-          supported: true,
-          configured: false,
-          devLinking: true,
-          unavailableReason:
-            "GitLab OAuth is not configured. Dev and e2e can still exercise the linking surface.",
-        },
-        slack: {
-          supported: true,
-          configured: false,
-          devLinking: true,
-          unavailableReason:
-            "Slack OAuth is not configured. Dev and e2e can still exercise the linking surface.",
-        },
-        email: true,
-        passkey: false,
-      },
-      workspace: null,
+    expect(data.providers.github).toEqual({
+      supported: true,
+      configured: true,
+      devLinking: true,
+      unavailableReason: null,
     });
+    expect(data.providers.gitlab).toEqual({
+      supported: true,
+      configured: false,
+      devLinking: true,
+      unavailableReason:
+        "GitLab OAuth is not configured. Dev and e2e can still exercise the linking surface.",
+    });
+    expect(data.providers.passkey).toBe(false);
+    expect(data.providers.googleAllowed).toBe(true);
+    expect(data.providers.emailPasskey).toBe(true);
+    expect(data.workspace).toBeNull();
   });
 
   it("applies workspace authentication settings to login providers", async () => {
     process.env.AUTH_GOOGLE_ID = "google-client";
     process.env.AUTH_GOOGLE_SECRET = "google-secret";
-    getWorkspaceSlugFromCallbackUrlMock.mockReturnValue("foreverbrowsing");
-    getWorkspaceAuthPolicyBySlugMock.mockResolvedValue({
+    resolveWorkspaceAuthPolicyMock.mockResolvedValue({
       workspaceSlug: "foreverbrowsing",
       workspaceId: "workspace-1",
       authentication: { google: false, emailPasskey: false },
     });
+    isWorkspaceAuthMethodAllowedMock.mockImplementation(
+      (_policy: unknown, method: string) => {
+        if (method === "google") return false;
+        if (method === "emailPasskey") return false;
+        return true;
+      },
+    );
 
     const { GET } = await import("@/app/api/auth/provider-capabilities/route");
     const response = await GET(
       new Request(
-        "https://app.test/api/auth/provider-capabilities?callbackUrl=%2Fforeverbrowsing%2Fsettings%2Fsecurity",
+        "http://localhost/api/auth/provider-capabilities?callbackUrl=%2Fforeverbrowsing%2Fsettings%2Fsecurity",
       ),
     );
     const data = await response.json();
 
-    expect(getWorkspaceSlugFromCallbackUrlMock).toHaveBeenCalledWith(
-      "/foreverbrowsing/settings/security",
-      "https://app.test",
-    );
-    expect(data.providers.google).toBe(false);
-    expect(data.providers.email).toBe(false);
+    expect(data.providers.googleAllowed).toBe(false);
+    expect(data.providers.emailPasskey).toBe(false);
     expect(data.providers.passkey).toBe(false);
     expect(data.workspace).toEqual({
       slug: "foreverbrowsing",

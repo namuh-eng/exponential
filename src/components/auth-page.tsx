@@ -15,16 +15,15 @@ type LoginStep =
   | "email-verifying"
   | "email-code"
   | "sso-input";
-type ProviderCapability =
+type ProviderCapabilityValue =
   | boolean
-  | {
-      configured?: boolean;
-    };
+  | { configured?: boolean; devLinking?: boolean; supported?: boolean };
 type ProviderCapabilities = {
   providers?: {
-    google?: ProviderCapability;
-    email?: boolean;
+    google?: ProviderCapabilityValue;
     passkey?: boolean;
+    googleAllowed?: boolean;
+    emailPasskey?: boolean;
   };
   workspace?: {
     authentication?: {
@@ -33,6 +32,13 @@ type ProviderCapabilities = {
     };
   } | null;
 };
+
+function isProviderEnabled(value: ProviderCapabilityValue | undefined) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  return value?.configured === true;
+}
 type SocialSignInResult = {
   data?: {
     url?: string;
@@ -262,9 +268,7 @@ export function AuthPage({
   const [googleConfigured, setGoogleConfigured] = useState<boolean | null>(
     initialGoogleConfigured,
   );
-  const [googleDisabledByWorkspace, setGoogleDisabledByWorkspace] =
-    useState(false);
-  const [emailConfigured, setEmailConfigured] = useState<boolean | null>(true);
+  const [googleAllowed, setGoogleAllowed] = useState(true);
   const [passkeyConfigured, setPasskeyConfigured] = useState<boolean | null>(
     true,
   );
@@ -308,19 +312,18 @@ export function AuthPage({
           throw new Error("Failed to load auth provider capabilities.");
         }
         const data = (await response.json()) as ProviderCapabilities;
-        setGoogleConfigured(isProviderConfigured(data.providers?.google));
-        setGoogleDisabledByWorkspace(
-          data.workspace?.authentication?.google === false,
+        setGoogleConfigured(isProviderEnabled(data.providers?.google));
+        setGoogleAllowed(data.providers?.googleAllowed !== false);
+        setPasskeyConfigured(
+          data.providers?.emailPasskey !== false &&
+            data.providers?.passkey === true,
         );
-        setEmailConfigured(data.providers?.email !== false);
-        setPasskeyConfigured(data.providers?.passkey === true);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
         }
         setGoogleConfigured(false);
-        setGoogleDisabledByWorkspace(false);
-        setEmailConfigured(true);
+        setGoogleAllowed(true);
         setPasskeyConfigured(true);
       }
     }
@@ -331,7 +334,7 @@ export function AuthPage({
   }, []);
 
   async function handleGoogleLogin() {
-    if (googleDisabledByWorkspace) {
+    if (!googleAllowed) {
       setError(
         "Google sign-in is disabled for this workspace. Use SAML SSO instead.",
       );
@@ -564,7 +567,7 @@ export function AuthPage({
       <div className="mt-8 space-y-4">
         {step === "choose" && (
           <div className="space-y-3">
-            {!googleDisabledByWorkspace && (
+            {googleAllowed && (
               <button
                 type="button"
                 onClick={handleGoogleLogin}
@@ -600,7 +603,7 @@ export function AuthPage({
                   : "Continue with Google"}
               </button>
             )}
-            {emailConfigured !== false && (
+            {passkeyConfigured !== false && (
               <button
                 type="button"
                 onClick={() => {

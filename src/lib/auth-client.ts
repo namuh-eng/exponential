@@ -174,9 +174,7 @@ export async function signInWithPasskey({
   try {
     result = (await authClient.signIn.passkey({
       fetchOptions: {
-        headers: {
-          "x-auth-callback-url": callbackURL,
-        },
+        headers: { "x-workspace-callback-url": callbackURL },
       },
     })) as PasskeyOperationResult<{
       session: unknown;

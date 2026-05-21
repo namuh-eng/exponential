@@ -158,6 +158,42 @@ describe("Login page", () => {
     expect(screen.queryByText("Checking passkey sign-in")).toBeNull();
   });
 
+  it("hides Google, email, and passkey for a workspace-scoped login when capabilities disable workspace auth methods", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        providers: {
+          google: { configured: false },
+          googleAllowed: false,
+          emailPasskey: false,
+          passkey: false,
+        },
+      }),
+    });
+    mockLocation.pathname = "/auth-methods-off/inbox";
+
+    render(<LoginPage />);
+
+    await vi.waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: /Continue with Google/i }),
+      ).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: /Continue with email/i }),
+      ).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: /Log in with passkey/i }),
+      ).toBeNull();
+    });
+    expect(
+      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
+    ).toBeDefined();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/provider-capabilities?callbackUrl=%2Fauth-methods-off%2Finbox",
+      expect.objectContaining({ cache: "no-store" }),
+    );
+  });
+
   it("matches Linear's focused SAML email step from the login chooser", () => {
     render(<LoginPage />);
 
