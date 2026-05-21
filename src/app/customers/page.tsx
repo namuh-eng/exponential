@@ -1,81 +1,69 @@
 import {
-  Eyebrow,
   MarketingCard,
   MarketingShell,
-} from "@/components/public-marketing";
+} from "@/components/marketing/public-marketing";
 
+const filters = ["All", "Startups", "Enterprise", "AI", "Design partners"];
 const stories = [
-  {
-    company: "OpenAI",
-    title: "Why OpenAI chose Linear and scaled to 3,000 users",
-    body: "AI research and product teams coordinate fast-moving work with a shared product development system.",
-  },
-  {
-    company: "Ramp",
-    title: "Ramp keeps finance product launches aligned",
-    body: "Product, engineering, and design teams connect roadmaps to daily execution across squads.",
-  },
-  {
-    company: "Perplexity",
-    title: "Perplexity plans launches with focused issue workflows",
-    body: "A high-velocity team uses cycles, projects, and triage to keep momentum visible.",
-  },
+  [
+    "OpenAI",
+    "Why OpenAI chose Linear and scaled to 3,000 users",
+    "AI research and product teams coordinate fast-moving work with shared roadmaps and issue context.",
+  ],
+  [
+    "Vercel",
+    "How Vercel ships frontend infrastructure with Linear",
+    "Product, engineering, and support teams keep customer feedback close to execution.",
+  ],
+  [
+    "Cash App",
+    "Operating high-trust product workflows",
+    "Enterprise controls and focused planning help teams move quickly without losing clarity.",
+  ],
 ];
 
-const filters = ["All", "AI", "Fintech", "Startups", "Enterprise"];
-
 export const metadata = {
-  title: "Customers | Exponential",
-  description:
-    "Public Linear-style customer stories available without authentication.",
+  title: "Customers | Linear clone",
+  description: "Public customer stories for the Linear clone.",
 };
 
 export default function CustomersPage() {
   return (
-    <MarketingShell>
-      <section className="mx-auto max-w-7xl px-6 py-16 sm:px-10 lg:px-12">
-        <div className="max-w-3xl">
-          <Eyebrow>Customers</Eyebrow>
-          <h1 className="text-balance text-5xl font-semibold leading-tight tracking-[-0.05em] sm:text-6xl">
-            Built with the teams defining modern software
-          </h1>
-          <p className="mt-5 text-lg leading-8 text-[var(--editorial-ink-3)]">
-            Read representative customer stories and discover why ambitious
-            teams choose Linear for planning, tracking, and shipping.
-          </p>
-        </div>
-
+    <MarketingShell eyebrow="Customers">
+      <div className="py-14">
+        <h1 className="max-w-4xl text-balance text-5xl font-semibold leading-none tracking-[-0.05em] sm:text-6xl">
+          Built with the teams defining modern product development
+        </h1>
         <div
-          className="mt-10 flex flex-wrap gap-3"
+          className="mt-8 flex flex-wrap gap-2"
           aria-label="Customer categories"
         >
           {filters.map((filter) => (
             <button
               key={filter}
               type="button"
-              className="rounded-full border border-[var(--editorial-line-strong)] bg-[var(--editorial-surface)] px-4 py-2 text-sm font-medium text-[var(--editorial-ink-2)]"
+              className="rounded-full border border-[var(--editorial-line)] bg-[var(--editorial-surface)] px-4 py-2 text-sm text-[var(--editorial-ink-2)]"
             >
               {filter}
             </button>
           ))}
         </div>
-
-        <div className="mt-12 grid gap-4 md:grid-cols-3">
-          {stories.map((story) => (
-            <MarketingCard key={story.company}>
+        <div className="mt-10 grid gap-5 lg:grid-cols-3">
+          {stories.map(([company, title, copy]) => (
+            <MarketingCard key={company}>
               <p className="text-sm font-semibold text-[var(--editorial-accent)]">
-                {story.company}
+                {company}
               </p>
-              <h2 className="mt-4 text-3xl font-semibold leading-tight">
-                {story.title}
+              <h2 className="mt-4 text-2xl font-semibold tracking-[-0.03em]">
+                {title}
               </h2>
-              <p className="mt-4 leading-7 text-[var(--editorial-ink-3)]">
-                {story.body}
+              <p className="mt-4 text-sm leading-6 text-[var(--editorial-ink-3)]">
+                {copy}
               </p>
             </MarketingCard>
           ))}
         </div>
-      </section>
+      </div>
     </MarketingShell>
   );
 }

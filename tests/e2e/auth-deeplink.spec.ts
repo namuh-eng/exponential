@@ -210,11 +210,12 @@ test.describe("Unauthenticated workspace deep links", () => {
     await expect(
       page.getByRole("heading", { name: "Log in to Linear" }),
     ).toHaveCount(0);
+    const publicNav = page.getByLabel("Public");
     await expect(
-      page.getByRole("link", { name: "Sign up", exact: true }),
+      publicNav.getByRole("link", { name: "Sign up" }),
     ).toHaveAttribute("href", "/signup");
     await expect(
-      page.getByRole("link", { name: "Log in", exact: true }),
+      publicNav.getByRole("link", { name: "Log in" }),
     ).toHaveAttribute("href", "/login");
   });
 
@@ -325,4 +326,101 @@ test("workspace-disabled auth methods are hidden on workspace-scoped login", asy
   await expect(
     page.getByText(/Google, email, and passkey login are disabled/),
   ).toBeVisible();
+});
+
+const publicMarketingRoutes = [
+  {
+    path: "/homepage",
+    heading: /The product development system for teams and agents/i,
+    text: "Product workspace",
+  },
+  {
+    path: "/pricing",
+    heading:
+      /Plans that scale from first issue to enterprise product operations/i,
+    text: "Enterprise",
+  },
+  {
+    path: "/customers",
+    heading: /Built with the teams defining modern product development/i,
+    text: "Why OpenAI chose Linear and scaled to 3,000 users",
+  },
+  {
+    path: "/changelog",
+    heading: /The latest from Linear product development/i,
+    text: "Code Intelligence",
+  },
+];
+
+test.describe("Public marketing routes", () => {
+  for (const route of publicMarketingRoutes) {
+    test(`${route.path} renders public content while unauthenticated`, async ({
+      page,
+    }) => {
+      await page.goto(route.path);
+
+      await expect(page).toHaveURL(new RegExp(`${route.path}$`));
+      await expect(
+        page.getByRole("heading", { name: route.heading }),
+      ).toBeVisible();
+      await expect(page.getByText(route.text).first()).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Log in to Linear" }),
+      ).toHaveCount(0);
+
+      const publicNav = page.getByLabel("Public");
+      await expect(
+        publicNav.getByRole("link", { name: "Linear" }),
+      ).toHaveAttribute("href", "/homepage");
+      await expect(
+        publicNav.getByRole("link", { name: "Pricing" }),
+      ).toHaveAttribute("href", "/pricing");
+      await expect(
+        publicNav.getByRole("link", { name: "Customers" }),
+      ).toHaveAttribute("href", "/customers");
+      await expect(
+        publicNav.getByRole("link", { name: "Now" }),
+      ).toHaveAttribute("href", "/changelog");
+      await expect(
+        publicNav.getByRole("link", { name: "Log in" }),
+      ).toHaveAttribute("href", "/login");
+      await expect(
+        publicNav.getByRole("link", { name: "Sign up" }),
+      ).toHaveAttribute("href", "/signup");
+    });
+  }
+
+  test("/now serves the public changelog hub", async ({ page }) => {
+    await page.goto("/now");
+
+    await expect(page).toHaveURL(/\/now$/);
+    await expect(
+      page.getByRole("heading", {
+        name: /The latest from Linear product development/i,
+      }),
+    ).toBeVisible();
+    await expect(page.getByText("May 14, 2026")).toBeVisible();
+    await expect(page.getByText("Code Intelligence")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Log in to Linear" }),
+    ).toHaveCount(0);
+  });
+
+  test("auth-required app routes still redirect unauthenticated users", async ({
+    page,
+  }) => {
+    await page.goto("/settings/security");
+    await expect(page).toHaveURL(
+      /\/login\?callbackUrl=%2Fsettings%2Fsecurity$/,
+    );
+    await expect(
+      page.getByRole("heading", { name: "Log in to Linear" }),
+    ).toBeVisible();
+
+    await page.goto("/team/ENG/all");
+    await expect(page).toHaveURL(/\/login\?callbackUrl=%2Fteam%2FENG%2Fall$/);
+    await expect(
+      page.getByRole("heading", { name: "Log in to Linear" }),
+    ).toBeVisible();
+  });
 });
