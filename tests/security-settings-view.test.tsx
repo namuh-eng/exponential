@@ -367,5 +367,14 @@ describe("SecurityPage component", () => {
     await waitFor(() =>
       expect(screen.getByText(/New token \(copy once\)/)).toBeDefined(),
     );
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      "scim_secret_once",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Copy SCIM token" }),
+    );
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      "scim_secret_once",
+    );
   });
 });
