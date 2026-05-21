@@ -53,14 +53,14 @@ vi.mock("@/lib/db", () => ({
 
       // issues in cycle fetch
       if (selection && "identifier" in selection) {
-        return {
-          from: vi.fn().mockReturnValue({
-            leftJoin: vi.fn().mockReturnValue({
-              where: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockResolvedValue(issuesOrderByMock()),
-              }),
-            }),
+        const issueQuery = {
+          leftJoin: vi.fn(() => issueQuery),
+          where: vi.fn().mockReturnValue({
+            orderBy: vi.fn().mockResolvedValue(issuesOrderByMock()),
           }),
+        };
+        return {
+          from: vi.fn().mockReturnValue(issueQuery),
         };
       }
 

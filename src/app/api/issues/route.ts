@@ -3,6 +3,7 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
+  cycle,
   issue,
   issueLabel,
   team,
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
     priority,
     assigneeId,
     projectId,
+    cycleId,
     labelIds,
     parentIssueId,
   } = body;
@@ -177,6 +179,19 @@ export async function POST(request: Request) {
     }
   }
 
+  const finalCycleId = cycleId || null;
+  if (finalCycleId) {
+    const [cycleRecord] = await db
+      .select({ id: cycle.id })
+      .from(cycle)
+      .where(and(eq(cycle.id, finalCycleId), eq(cycle.teamId, teamId)))
+      .limit(1);
+
+    if (!cycleRecord) {
+      return NextResponse.json({ error: "Cycle not found" }, { status: 400 });
+    }
+  }
+
   const normalizedDescription = normalizeIssueDescriptionHtml(description);
   const normalizedLabels = await normalizeApplicableIssueLabelIds({
     db,
@@ -205,6 +220,7 @@ export async function POST(request: Request) {
         priority: priority || "none",
         assigneeId: finalAssigneeId,
         projectId: projectId || null,
+        cycleId: finalCycleId,
         parentIssueId: parentIssueId || null,
       })
       .returning();

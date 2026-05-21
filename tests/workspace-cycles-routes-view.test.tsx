@@ -23,7 +23,9 @@ let shellContextMock = {
 
 vi.mock("next/navigation", () => ({
   useParams: () => paramsMock,
-  useRouter: () => ({ push: pushMock }),
+  useRouter: () => ({ push: pushMock, replace: vi.fn() }),
+  usePathname: () => "/foreverbrowsing/team/ENG/cycles/cycle-1",
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock("@/app/(app)/app-shell", () => ({
@@ -90,6 +92,7 @@ const cycleDetailResponse = {
           assigneeId: null,
           assignee: null,
           labels: [],
+          labelIds: [],
           projectId: null,
           dueDate: null,
           createdAt: "2026-05-20T00:00:00.000Z",
@@ -97,6 +100,25 @@ const cycleDetailResponse = {
       ],
     },
   ],
+  filterOptions: {
+    statuses: [
+      {
+        id: "state-1",
+        name: "In Progress",
+        category: "started",
+        color: "#f2c94c",
+      },
+    ],
+    assignees: [],
+    labels: [],
+    projects: [],
+    creators: [],
+    cycles: [{ id: "cycle-1", name: "Workspace Cycle" }],
+    estimates: [],
+    dueDates: [],
+    teams: [{ id: "team-1", name: "Engineering" }],
+    priorities: [{ value: "medium", label: "Medium" }],
+  },
 };
 
 describe("workspace-prefixed cycles pages", () => {
@@ -152,12 +174,17 @@ describe("workspace-prefixed cycles pages", () => {
     paramsMock = { key: "ENG", cycleId: "cycle-1" };
     vi.stubGlobal(
       "fetch",
-      vi.fn(() =>
-        Promise.resolve({
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/teams/ENG/display-options") {
+          return { ok: true, json: async () => ({}) } as Response;
+        }
+
+        return {
           ok: true,
-          json: () => Promise.resolve(cycleDetailResponse),
-        } as Response),
-      ),
+          json: async () => cycleDetailResponse,
+        } as Response;
+      }),
     );
     const { default: WorkspaceCycleDetailPage } = await import(
       "@/app/(app)/[workspaceSlug]/team/[key]/cycles/[cycleId]/page"

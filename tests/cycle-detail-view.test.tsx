@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ key: "ENG", cycleId: "cycle-1" }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => "/team/ENG/cycles/cycle-1",
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock("next/link", () => ({
@@ -51,6 +53,7 @@ const cycleDetailResponse = {
           assigneeId: null,
           assignee: null,
           labels: [],
+          labelIds: [],
           projectId: null,
           dueDate: null,
           createdAt: "2026-05-10T00:00:00.000Z",

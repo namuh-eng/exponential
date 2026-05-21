@@ -20,6 +20,8 @@ interface CreateIssueModalProps {
   defaultStateId?: string;
   defaultStateName?: string;
   defaultProjectId?: string | null;
+  defaultCycleId?: string | null;
+  defaultCycleName?: string | null;
   onCreated?: () => void | Promise<void>;
 }
 
@@ -262,6 +264,8 @@ export function CreateIssueModal({
   defaultStateId,
   defaultStateName = "Backlog",
   defaultProjectId = null,
+  defaultCycleId = null,
+  defaultCycleName = null,
   onCreated,
 }: CreateIssueModalProps) {
   const [title, setTitle] = useState("");
@@ -470,6 +474,7 @@ export function CreateIssueModal({
           priority,
           assigneeId: selectedAssigneeId,
           projectId: selectedProjectId,
+          cycleId: defaultCycleId,
           labelIds: selectedLabelIds,
         }),
       });
@@ -1009,6 +1014,28 @@ export function CreateIssueModal({
                 )
               }
             />
+            {defaultCycleName && (
+              <span
+                className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)]"
+                aria-label={`Cycle ${defaultCycleName}`}
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 12a9 9 0 1 0 3-6.7" />
+                  <path d="M3 3v6h6" />
+                </svg>
+                {defaultCycleName}
+              </span>
+            )}
             <ToolbarButton
               label="Labels"
               value={
