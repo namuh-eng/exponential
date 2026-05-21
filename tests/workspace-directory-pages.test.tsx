@@ -45,6 +45,10 @@ vi.mock("next/navigation", () => ({
   notFound: notFoundMock,
 }));
 
+vi.mock("@/app/(app)/app-shell", () => ({
+  useAppShellContext: () => ({ workspaceSlug: "foreverbrowsing" }),
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     children,
@@ -259,7 +263,7 @@ describe("workspace directory routes", () => {
     );
     expect(screen.getByRole("link", { name: /Settings/i })).toHaveAttribute(
       "href",
-      "/settings/teams/ENG",
+      "/foreverbrowsing/settings/teams/ENG",
     );
   });
 
