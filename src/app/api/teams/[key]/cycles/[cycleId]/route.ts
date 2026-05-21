@@ -1,10 +1,10 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { cycleRangesOverlap, parseCycleDateInput } from "@/lib/cycle-utils";
 import { db } from "@/lib/db";
-import { cycle, issue, user, workflowState } from "@/lib/db/schema";
+import { cycle, issue, project, user, workflowState } from "@/lib/db/schema";
 import { getLabelsForIssues } from "@/lib/issue-labels";
 import { findAccessibleTeam } from "@/lib/teams";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -56,14 +56,25 @@ export async function GET(
       assigneeId: issue.assigneeId,
       assigneeName: user.name,
       assigneeImage: user.image,
+      creatorId: issue.creatorId,
       projectId: issue.projectId,
+      projectName: project.name,
+      cycleId: issue.cycleId,
+      estimate: issue.estimate,
       dueDate: issue.dueDate,
       createdAt: issue.createdAt,
       sortOrder: issue.sortOrder,
     })
     .from(issue)
     .leftJoin(user, eq(issue.assigneeId, user.id))
-    .where(and(eq(issue.cycleId, cycleId), eq(issue.teamId, teamRecord.id)))
+    .leftJoin(project, eq(issue.projectId, project.id))
+    .where(
+      and(
+        eq(issue.cycleId, cycleId),
+        eq(issue.teamId, teamRecord.id),
+        isNull(issue.archivedAt),
+      ),
+    )
     .orderBy(asc(issue.sortOrder), desc(issue.createdAt));
 
   // Get labels for issues
@@ -95,13 +106,84 @@ export async function GET(
         assignee: i.assigneeName
           ? { name: i.assigneeName, image: i.assigneeImage }
           : null,
+        creatorId: i.creatorId,
         labels: labelsMap[i.id] ?? [],
-        labelIds: (labelsMap[i.id] ?? []).map((l) => l.name),
+        labelIds: (labelsMap[i.id] ?? []).map((l) => l.id),
         projectId: i.projectId,
+        projectName: i.projectName,
+        cycleId: i.cycleId,
+        cycleName: cycleRecord.name ?? `Cycle ${cycleRecord.number}`,
+        estimate: i.estimate,
         dueDate: i.dueDate,
         createdAt: i.createdAt,
       })),
   }));
+
+  const uniqueAssignees: { id: string; name: string; image: string | null }[] =
+    [];
+  const seenAssignees = new Set<string>();
+  for (const i of issues) {
+    if (i.assigneeId && i.assigneeName && !seenAssignees.has(i.assigneeId)) {
+      seenAssignees.add(i.assigneeId);
+      uniqueAssignees.push({
+        id: i.assigneeId,
+        name: i.assigneeName,
+        image: i.assigneeImage,
+      });
+    }
+  }
+
+  const uniqueLabels: { id: string; name: string; color: string }[] = [];
+  const seenLabels = new Set<string>();
+  for (const labelList of Object.values(labelsMap)) {
+    for (const label of labelList) {
+      if (!seenLabels.has(label.id)) {
+        seenLabels.add(label.id);
+        uniqueLabels.push(label);
+      }
+    }
+  }
+
+  const uniqueProjects = issues
+    .filter((i) => i.projectId && i.projectName)
+    .reduce<{ id: string; name: string }[]>((projects, issueRecord) => {
+      if (projects.some((item) => item.id === issueRecord.projectId)) {
+        return projects;
+      }
+
+      projects.push({
+        id: issueRecord.projectId as string,
+        name: issueRecord.projectName as string,
+      });
+      return projects;
+    }, []);
+
+  const uniqueEstimates = [
+    ...new Set(issues.map((i) => i.estimate).filter((value) => value !== null)),
+  ]
+    .sort((a, b) => Number(a) - Number(b))
+    .map((value) => ({ value: String(value), label: String(value) }));
+
+  const uniqueDueDates = [
+    ...new Set(
+      issues
+        .map((i) => (i.dueDate ? i.dueDate.toISOString().split("T")[0] : null))
+        .filter((value): value is string => !!value),
+    ),
+  ]
+    .sort()
+    .map((value) => ({
+      value,
+      label: new Date(`${value}T00:00:00`).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year:
+          new Date(`${value}T00:00:00`).getFullYear() !==
+          new Date().getFullYear()
+            ? "numeric"
+            : undefined,
+      }),
+    }));
 
   return NextResponse.json({
     team: { id: teamRecord.id, name: teamRecord.name, key: teamRecord.key },
@@ -113,6 +195,34 @@ export async function GET(
       ).length,
     },
     groups,
+    filterOptions: {
+      statuses: states.map((s) => ({
+        id: s.id,
+        name: s.name,
+        category: s.category,
+        color: s.color,
+      })),
+      assignees: uniqueAssignees,
+      labels: uniqueLabels,
+      projects: uniqueProjects,
+      creators: [],
+      cycles: [
+        {
+          id: cycleRecord.id,
+          name: cycleRecord.name ?? `Cycle ${cycleRecord.number}`,
+        },
+      ],
+      estimates: uniqueEstimates,
+      dueDates: uniqueDueDates,
+      teams: [{ id: teamRecord.id, name: teamRecord.name }],
+      priorities: [
+        { value: "urgent", label: "Urgent" },
+        { value: "high", label: "High" },
+        { value: "medium", label: "Medium" },
+        { value: "low", label: "Low" },
+        { value: "none", label: "No priority" },
+      ],
+    },
   });
 }
 

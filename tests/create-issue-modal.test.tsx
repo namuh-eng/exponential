@@ -224,6 +224,32 @@ describe("CreateIssueModal", () => {
     );
   });
 
+  it("includes a default cycle when creating from a cycle context", async () => {
+    render(
+      <CreateIssueModal
+        {...defaultProps}
+        defaultCycleId="cycle-1"
+        defaultCycleName="Cycle 1"
+      />,
+    );
+
+    expect(await screen.findByLabelText("Cycle Cycle 1")).toBeInTheDocument();
+
+    const titleBox = screen.getByRole("textbox", { name: "Issue title" });
+    setEditableValue(titleBox, "Cycle-scoped issue");
+    fireEvent.click(screen.getByText("Create Issue"));
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "/api/issues",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"cycleId":"cycle-1"'),
+        }),
+      );
+    });
+  });
+
   it("creates an issue with selected assignee, project, labels, and create more", async () => {
     const onCreated = vi.fn();
     render(<CreateIssueModal {...defaultProps} onCreated={onCreated} />);

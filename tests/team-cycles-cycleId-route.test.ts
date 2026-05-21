@@ -56,8 +56,10 @@ vi.mock("@/lib/db", () => ({
         return {
           from: vi.fn().mockReturnValue({
             leftJoin: vi.fn().mockReturnValue({
-              where: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockResolvedValue(issuesOrderByMock()),
+              leftJoin: vi.fn().mockReturnValue({
+                where: vi.fn().mockReturnValue({
+                  orderBy: vi.fn().mockResolvedValue(issuesOrderByMock()),
+                }),
               }),
             }),
           }),
@@ -111,7 +113,19 @@ describe("team cycle detail route", () => {
         number: 1,
         identifier: "ENG-1",
         title: "Cycle work",
+        priority: "medium",
         stateId: "state-1",
+        assigneeId: null,
+        assigneeName: null,
+        assigneeImage: null,
+        creatorId: "user-1",
+        projectId: null,
+        projectName: null,
+        cycleId: "cycle-1",
+        estimate: null,
+        dueDate: null,
+        createdAt: new Date("2026-04-02T00:00:00.000Z"),
+        sortOrder: 1,
       },
     ]);
     getLabelsForIssuesMock.mockResolvedValue({ "issue-1": [] });

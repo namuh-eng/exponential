@@ -23,7 +23,9 @@ let shellContextMock = {
 
 vi.mock("next/navigation", () => ({
   useParams: () => paramsMock,
-  useRouter: () => ({ push: pushMock }),
+  usePathname: () => "/foreverbrowsing/team/ENG/cycles/cycle-1",
+  useRouter: () => ({ push: pushMock, replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock("@/app/(app)/app-shell", () => ({
@@ -69,6 +71,7 @@ const cycleDetailResponse = {
     endDate: "2026-05-31T00:00:00.000Z",
     issueCount: 1,
     completedIssueCount: 0,
+    autoRollover: true,
   },
   groups: [
     {
@@ -90,13 +93,37 @@ const cycleDetailResponse = {
           assigneeId: null,
           assignee: null,
           labels: [],
+          labelIds: [],
           projectId: null,
+          projectName: null,
+          cycleId: "cycle-1",
+          cycleName: "Workspace Cycle",
+          estimate: null,
           dueDate: null,
           createdAt: "2026-05-20T00:00:00.000Z",
         },
       ],
     },
   ],
+  filterOptions: {
+    statuses: [
+      {
+        id: "state-1",
+        name: "In Progress",
+        category: "started",
+        color: "#f2c94c",
+      },
+    ],
+    assignees: [],
+    labels: [],
+    projects: [],
+    creators: [],
+    cycles: [{ id: "cycle-1", name: "Workspace Cycle" }],
+    estimates: [],
+    dueDates: [],
+    teams: [{ id: "team-1", name: "Engineering" }],
+    priorities: [{ value: "medium", label: "Medium" }],
+  },
 };
 
 describe("workspace-prefixed cycles pages", () => {

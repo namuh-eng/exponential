@@ -42,6 +42,16 @@ vi.mock("@/lib/db", () => ({
     select: vi.fn((selection: Record<string, unknown>) => {
       selectCallCount += 1;
 
+      if (selection.id === "cycle.id") {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue([{ id: "cycle-1" }]),
+            }),
+          }),
+        };
+      }
+
       if ("key" in selection) {
         return {
           from: vi.fn().mockReturnValue({
@@ -151,6 +161,7 @@ vi.mock("@/lib/db", () => ({
                       priority: "high",
                       assigneeId: "user-2",
                       projectId: "project-1",
+                      cycleId: null,
                       parentIssueId: null,
                     },
                   ]),
@@ -167,6 +178,7 @@ vi.mock("@/lib/db", () => ({
 }));
 
 vi.mock("@/lib/db/schema", () => ({
+  cycle: { id: "cycle.id", teamId: "cycle.teamId" },
   issue: { __name: "issue", assigneeId: "issue.assigneeId" },
   issueHistory: { __name: "issueHistory" },
   issueLabel: { __name: "issueLabel" },
@@ -311,6 +323,7 @@ describe("issues route", () => {
       priority: "high",
       assigneeId: "user-2",
       projectId: "project-1",
+      cycleId: null,
       parentIssueId: null,
     });
     expect(insertLabelsValuesMock).toHaveBeenCalledWith([
@@ -344,8 +357,30 @@ describe("issues route", () => {
       priority: "high",
       assigneeId: "user-2",
       projectId: "project-1",
+      cycleId: null,
       parentIssueId: null,
     });
+  });
+
+  it("creates a cycle-scoped issue when the cycle belongs to the team", async () => {
+    const { POST } = await import("@/app/api/issues/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/issues", {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Cycle task",
+          teamId: "team-1",
+          cycleId: "cycle-1",
+        }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(insertIssueValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ cycleId: "cycle-1" }),
+    );
   });
 
   it("uses account auto-assignment preference before team load balancing", async () => {
