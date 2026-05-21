@@ -178,7 +178,11 @@ async function buildProjectResponse(
           .limit(1)
       : Promise.resolve([]),
     db
-      .select({ id: projectMilestone.id, name: projectMilestone.name })
+      .select({
+        id: projectMilestone.id,
+        name: projectMilestone.name,
+        sortOrder: projectMilestone.sortOrder,
+      })
       .from(projectMilestone)
       .where(eq(projectMilestone.projectId, proj.id))
       .orderBy(asc(projectMilestone.sortOrder)),
@@ -283,6 +287,7 @@ async function buildProjectResponse(
         createdAt: Date;
         href: string | null;
         labels: { id: string; name: string; color: string }[];
+        projectMilestoneId: string | null;
       }[];
     }
   >();
@@ -319,6 +324,7 @@ async function buildProjectResponse(
         ? `${workspaceSlug ? `/${encodeURIComponent(workspaceSlug)}` : ""}/team/${projectIssue.teamKey}/issue/${projectIssue.id}`
         : null,
       labels: labelsByIssue.get(projectIssue.id) ?? [],
+      projectMilestoneId: projectIssue.projectMilestoneId,
     });
   }
 
@@ -388,7 +394,13 @@ async function buildProjectResponse(
       activity: settings.activity
         .slice()
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
-      milestones: buildMilestoneData(milestones, projectIssues),
+      milestones: buildMilestoneData(
+        milestones.map((milestone) => ({
+          ...milestone,
+          description: settings.milestoneDescriptions[milestone.id] ?? null,
+        })),
+        projectIssues,
+      ),
       issueGroups: Array.from(issueGroups.values())
         .sort((left, right) => left.position - right.position)
         .map((group) => ({ state: group.state, issues: group.issues })),

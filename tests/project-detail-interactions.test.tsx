@@ -227,3 +227,176 @@ describe("ProjectDetailPage interactions", () => {
     expect(screen.getByText(/Link added/)).toBeInTheDocument();
   });
 });
+
+describe("ProjectDetailPage milestone management", () => {
+  const mockProjectData = {
+    project: {
+      id: "p-1",
+      name: "Mobile App",
+      description: "Building the next gen mobile app",
+      icon: "📱",
+      slug: "mobile-app",
+      status: "planned",
+      priority: "high",
+      startDate: null,
+      targetDate: null,
+    },
+    lead: { id: "u-1", name: "Ashley" },
+    members: [],
+    teams: [{ id: "t-1", name: "Engineering", key: "ENG" }],
+    labels: [],
+    availableMembers: [{ id: "u-1", name: "Ashley" }],
+    availableTeams: [{ id: "t-1", name: "Engineering", key: "ENG" }],
+    availableLabels: [],
+    slackChannel: null,
+    resources: [],
+    activity: [],
+    milestones: [],
+    issueGroups: [],
+    progress: {
+      total: 0,
+      completed: 0,
+      percentage: 0,
+      assignees: [],
+      labels: [],
+    },
+  };
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("creates a milestone from the empty sidebar state", async () => {
+    vi.mocked(useParams).mockReturnValue({
+      slug: "mobile-app",
+      workspaceSlug: "foreverbrowsing",
+    });
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockProjectData),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ milestone: { id: "m-1" } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            ...mockProjectData,
+            milestones: [
+              {
+                id: "m-1",
+                name: "Beta",
+                description: "Customer preview",
+                issueCount: 0,
+                completedCount: 0,
+                progress: 0,
+              },
+            ],
+          }),
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ProjectDetailPage />);
+
+    await screen.findByText("Mobile App");
+    fireEvent.click(screen.getByRole("button", { name: "Add milestone" }));
+    fireEvent.change(screen.getByLabelText("Milestone name"), {
+      target: { value: "Beta" },
+    });
+    fireEvent.change(screen.getByLabelText("Milestone description"), {
+      target: { value: "Customer preview" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create milestone" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/projects/mobile-app/milestones?workspaceSlug=foreverbrowsing",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            name: "Beta",
+            description: "Customer preview",
+          }),
+        }),
+      ),
+    );
+    expect(await screen.findByText("Beta")).toBeInTheDocument();
+  });
+
+  it("assigns an issue to a project milestone", async () => {
+    vi.mocked(useParams).mockReturnValue({ slug: "mobile-app" });
+    const dataWithIssue = {
+      ...mockProjectData,
+      milestones: [
+        {
+          id: "m-1",
+          name: "Beta",
+          description: null,
+          issueCount: 0,
+          completedCount: 0,
+          progress: 0,
+        },
+      ],
+      issueGroups: [
+        {
+          state: {
+            id: "state-1",
+            name: "Todo",
+            category: "unstarted",
+            color: "#888",
+          },
+          issues: [
+            {
+              id: "issue-1",
+              identifier: "ENG-1",
+              title: "Scope beta",
+              priority: "none",
+              assignee: null,
+              createdAt: "2026-05-01T00:00:00.000Z",
+              href: null,
+              labels: [],
+              projectMilestoneId: null,
+            },
+          ],
+        },
+      ],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(dataWithIssue),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: "issue-1" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(dataWithIssue),
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ProjectDetailPage />);
+    await screen.findByText("Mobile App");
+    fireEvent.click(screen.getByRole("button", { name: "Issues" }));
+    fireEvent.change(await screen.findByLabelText("Milestone for ENG-1"), {
+      target: { value: "m-1" },
+    });
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/issues/issue-1",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ projectMilestoneId: "m-1" }),
+        }),
+      ),
+    );
+  });
+});

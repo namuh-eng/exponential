@@ -6,6 +6,8 @@ import {
   cycle,
   issue,
   issueLabel,
+  project,
+  projectMilestone,
   team,
   teamMember,
   user,
@@ -41,6 +43,7 @@ export async function POST(request: Request) {
     cycleId,
     labelIds,
     parentIssueId,
+    projectMilestoneId,
   } = body;
 
   const trimmedTitle = typeof title === "string" ? title.trim() : "";
@@ -206,6 +209,37 @@ export async function POST(request: Request) {
     );
   }
 
+  const finalProjectMilestoneId = projectMilestoneId || null;
+  if (finalProjectMilestoneId) {
+    if (!projectId) {
+      return NextResponse.json(
+        { error: "Project is required for milestone assignment" },
+        { status: 400 },
+      );
+    }
+    const milestoneRows = await db
+      .select({
+        id: projectMilestone.id,
+        projectId: projectMilestone.projectId,
+      })
+      .from(projectMilestone)
+      .innerJoin(project, eq(projectMilestone.projectId, project.id))
+      .where(
+        and(
+          eq(projectMilestone.id, finalProjectMilestoneId),
+          eq(projectMilestone.projectId, projectId),
+          eq(project.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1);
+    if (!milestoneRows[0]) {
+      return NextResponse.json(
+        { error: "Project milestone not found" },
+        { status: 400 },
+      );
+    }
+  }
+
   const newIssue = await db.transaction(async (tx) => {
     const [createdIssue] = await tx
       .insert(issue)
@@ -220,6 +254,9 @@ export async function POST(request: Request) {
         priority: priority || "none",
         assigneeId: finalAssigneeId,
         projectId: projectId || null,
+        ...(finalProjectMilestoneId
+          ? { projectMilestoneId: finalProjectMilestoneId }
+          : {}),
         cycleId: finalCycleId,
         parentIssueId: parentIssueId || null,
       })

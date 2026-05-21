@@ -273,6 +273,49 @@ export async function POST(request: Request) {
         )
       : []),
   ].filter((value): value is string => Boolean(value));
+  const requestedMilestones = [
+    ...templateSettings.milestones.map((name) => ({
+      name,
+      description: null as string | null,
+    })),
+    ...(Array.isArray(body.projectMilestones)
+      ? (body.projectMilestones as unknown[])
+          .map((value) => {
+            if (typeof value === "string") {
+              return { name: value.trim(), description: null };
+            }
+            if (
+              typeof value !== "object" ||
+              value === null ||
+              Array.isArray(value)
+            ) {
+              return null;
+            }
+            const record = value as Record<string, unknown>;
+            const milestoneName =
+              typeof record.name === "string" ? record.name.trim() : "";
+            const milestoneDescription =
+              typeof record.description === "string" &&
+              record.description.trim()
+                ? record.description.trim()
+                : typeof record.descriptionData === "string" &&
+                    record.descriptionData.trim()
+                  ? record.descriptionData.trim()
+                  : null;
+            return milestoneName
+              ? { name: milestoneName, description: milestoneDescription }
+              : null;
+          })
+          .filter(
+            (value): value is { name: string; description: string | null } =>
+              Boolean(value),
+          )
+      : []),
+  ].filter(
+    (milestone, index, milestones) =>
+      milestones.findIndex((item) => item.name === milestone.name) === index,
+  );
+
   const requestedLabelIds: string[] = Array.from(
     new Set([
       ...templateSettings.labelIds,
@@ -393,14 +436,43 @@ export async function POST(request: Request) {
       );
     }
 
-    if (templateSettings.milestones.length > 0) {
-      await tx.insert(projectMilestone).values(
-        templateSettings.milestones.map((milestoneName, index) => ({
-          name: milestoneName,
-          projectId: createdProject.id,
-          sortOrder: index,
-        })),
+    if (requestedMilestones.length > 0) {
+      const milestoneValues = requestedMilestones.map((milestone, index) => ({
+        projectId: createdProject.id,
+        name: milestone.name,
+        sortOrder: index,
+      }));
+      const hasMilestoneDescriptions = requestedMilestones.some(
+        (milestone) => milestone.description,
       );
+
+      if (hasMilestoneDescriptions) {
+        const insertedMilestones = await tx
+          .insert(projectMilestone)
+          .values(milestoneValues)
+          .returning({ id: projectMilestone.id });
+
+        const milestoneDescriptions = Object.fromEntries(
+          insertedMilestones.flatMap((milestone, index) => {
+            const description = requestedMilestones[index]?.description;
+            return description ? [[milestone.id, description]] : [];
+          }),
+        );
+
+        await tx
+          .update(project)
+          .set({
+            settings: {
+              ...(linkedLabelIds.size > 0
+                ? { labelIds: Array.from(linkedLabelIds) }
+                : {}),
+              milestoneDescriptions,
+            },
+          })
+          .where(eq(project.id, createdProject.id));
+      } else {
+        await tx.insert(projectMilestone).values(milestoneValues);
+      }
     }
 
     return createdProject;
@@ -411,7 +483,7 @@ export async function POST(request: Request) {
       ...newProject,
       teams: linkedTeams,
       appliedTemplateId: selectedTemplate?.id ?? null,
-      appliedMilestones: templateSettings.milestones,
+      appliedMilestones: requestedMilestones.map((milestone) => milestone.name),
     },
     { status: 201 },
   );

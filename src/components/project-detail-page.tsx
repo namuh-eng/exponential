@@ -28,7 +28,7 @@ type StatusCategory =
 interface ProjectDetail {
   id: string;
   name: string;
-  description: string | null;
+  description?: string | null;
   icon: string | null;
   slug: string;
   status: string;
@@ -41,6 +41,7 @@ interface ProjectDetail {
 interface MilestoneData {
   id: string;
   name: string;
+  description: string | null;
   issueCount: number;
   completedCount: number;
   progress: number;
@@ -55,6 +56,7 @@ interface IssueData {
   createdAt: string;
   href: string | null;
   labels: { id: string; name: string; color: string }[];
+  projectMilestoneId: string | null;
 }
 
 interface StateGroup {
@@ -160,6 +162,12 @@ export function ProjectDetailPage() {
   const [showDescriptionEditor, setShowDescriptionEditor] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState("");
   const [showCreateIssue, setShowCreateIssue] = useState(false);
+  const [showMilestoneForm, setShowMilestoneForm] = useState(false);
+  const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(
+    null,
+  );
+  const [milestoneName, setMilestoneName] = useState("");
+  const [milestoneDescription, setMilestoneDescription] = useState("");
   const [createIssueDefaults, setCreateIssueDefaults] =
     useState<CreateIssueDefaults>({});
   const [saving, setSaving] = useState(false);
@@ -351,6 +359,125 @@ export function ProjectDetailPage() {
     setDescriptionDraft(json.project.description ?? "");
   }
 
+  function milestoneApiPath(milestoneId?: string) {
+    const base = `/api/projects/${encodeURIComponent(params.slug)}/milestones`;
+    const path = milestoneId
+      ? `${base}/${encodeURIComponent(milestoneId)}`
+      : base;
+    if (!params.workspaceSlug) {
+      return path;
+    }
+
+    return `${path}?workspaceSlug=${encodeURIComponent(params.workspaceSlug)}`;
+  }
+
+  function resetMilestoneForm() {
+    setShowMilestoneForm(false);
+    setEditingMilestoneId(null);
+    setMilestoneName("");
+    setMilestoneDescription("");
+  }
+
+  async function handleSaveMilestone() {
+    const name = milestoneName.trim();
+    if (!name) return;
+    setSaving(true);
+    setErrorMessage(null);
+    try {
+      const res = await fetch(
+        milestoneApiPath(editingMilestoneId ?? undefined),
+        {
+          method: editingMilestoneId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            description: milestoneDescription.trim() || null,
+          }),
+        },
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorMessage(json.error ?? "Unable to save milestone.");
+        return;
+      }
+      await refreshProject();
+      resetMilestoneForm();
+    } catch {
+      setErrorMessage("Unable to save milestone.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteMilestone(milestoneId: string) {
+    setSaving(true);
+    setErrorMessage(null);
+    try {
+      const res = await fetch(milestoneApiPath(milestoneId), {
+        method: "DELETE",
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorMessage(json.error ?? "Unable to delete milestone.");
+        return;
+      }
+      await refreshProject();
+    } catch {
+      setErrorMessage("Unable to delete milestone.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleMoveMilestone(
+    milestone: MilestoneData,
+    direction: -1 | 1,
+  ) {
+    const index =
+      data?.milestones.findIndex((item) => item.id === milestone.id) ?? -1;
+    const other = data?.milestones[index + direction];
+    if (!data || !other) return;
+    const reordered = [...data.milestones];
+    reordered[index] = other;
+    reordered[index + direction] = milestone;
+    setData({ ...data, milestones: reordered });
+    await Promise.all(
+      reordered.map((item, sortOrder) =>
+        fetch(milestoneApiPath(item.id), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sortOrder }),
+        }),
+      ),
+    );
+    await refreshProject();
+  }
+
+  async function handleAssignIssueMilestone(
+    issueId: string,
+    projectMilestoneId: string | null,
+  ) {
+    setSaving(true);
+    setErrorMessage(null);
+    try {
+      const res = await fetch(`/api/issues/${encodeURIComponent(issueId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectMilestoneId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorMessage(json.error ?? "Unable to assign milestone.");
+        return;
+      }
+      await refreshProject();
+    } catch {
+      setErrorMessage("Unable to assign milestone.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const sidebar = (
     <div className="w-full shrink-0 space-y-4 xl:w-[320px]">
       <ProjectProperties
@@ -370,22 +497,99 @@ export function ProjectDetailPage() {
         onSave={handleSaveProperties}
       />
 
-      <SectionCard title="Milestones">
+      <SectionCard
+        title="Milestones"
+        action={
+          showMilestoneForm ? null : (
+            <button
+              type="button"
+              onClick={() => {
+                setShowMilestoneForm(true);
+                setEditingMilestoneId(null);
+                setMilestoneName("");
+                setMilestoneDescription("");
+              }}
+              className="rounded-md px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+            >
+              Add milestone
+            </button>
+          )
+        }
+      >
+        {showMilestoneForm ? (
+          <div className="mb-3 space-y-2 rounded-lg border border-[var(--color-border)] p-3">
+            <input
+              aria-label="Milestone name"
+              value={milestoneName}
+              onChange={(event) => setMilestoneName(event.target.value)}
+              placeholder="Milestone name"
+              className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+            />
+            <textarea
+              aria-label="Milestone description"
+              value={milestoneDescription}
+              onChange={(event) => setMilestoneDescription(event.target.value)}
+              placeholder="Description (optional)"
+              rows={2}
+              className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={resetMilestoneForm}
+                className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving || !milestoneName.trim()}
+                onClick={handleSaveMilestone}
+                className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {saving
+                  ? "Saving..."
+                  : editingMilestoneId
+                    ? "Save milestone"
+                    : "Create milestone"}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {data.milestones.length > 0 ? (
           <div className="space-y-1">
-            {data.milestones.map((milestone) => (
+            {data.milestones.map((milestone, index) => (
               <MilestoneRow
                 key={milestone.id}
                 name={milestone.name}
+                description={milestone.description ?? undefined}
                 progress={milestone.progress}
                 issueCount={milestone.issueCount}
                 completedCount={milestone.completedCount}
+                onEdit={() => {
+                  setShowMilestoneForm(true);
+                  setEditingMilestoneId(milestone.id);
+                  setMilestoneName(milestone.name);
+                  setMilestoneDescription(milestone.description ?? "");
+                }}
+                onDelete={() => handleDeleteMilestone(milestone.id)}
+                onMoveUp={
+                  index > 0
+                    ? () => handleMoveMilestone(milestone, -1)
+                    : undefined
+                }
+                onMoveDown={
+                  index < data.milestones.length - 1
+                    ? () => handleMoveMilestone(milestone, 1)
+                    : undefined
+                }
               />
             ))}
           </div>
         ) : (
           <p className="text-[13px] text-[var(--color-text-secondary)]">
-            No milestones yet.
+            No milestones yet. Use Add milestone to plan delivery phases.
           </p>
         )}
       </SectionCard>
@@ -819,21 +1023,43 @@ export function ProjectDetailPage() {
                           }
                         />
                         {group.issues.map((issue) => (
-                          <IssueRow
+                          <div
                             key={issue.id}
-                            identifier={issue.identifier}
-                            title={issue.title}
-                            priority={priorityMap[issue.priority] ?? 0}
-                            statusCategory={
-                              group.state.category as StatusCategory
-                            }
-                            statusColor={group.state.color}
-                            assigneeName={issue.assignee?.name}
-                            assigneeImage={issue.assignee?.image ?? undefined}
-                            labels={issue.labels}
-                            createdAt={issue.createdAt}
-                            href={issue.href ?? undefined}
-                          />
+                            className="grid grid-cols-[1fr_auto] items-center gap-2 border-t border-[var(--color-border)] first:border-t-0"
+                          >
+                            <IssueRow
+                              identifier={issue.identifier}
+                              title={issue.title}
+                              priority={priorityMap[issue.priority] ?? 0}
+                              statusCategory={
+                                group.state.category as StatusCategory
+                              }
+                              statusColor={group.state.color}
+                              assigneeName={issue.assignee?.name}
+                              assigneeImage={issue.assignee?.image ?? undefined}
+                              labels={issue.labels}
+                              createdAt={issue.createdAt}
+                              href={issue.href ?? undefined}
+                            />
+                            <select
+                              aria-label={`Milestone for ${issue.identifier}`}
+                              value={issue.projectMilestoneId ?? ""}
+                              onChange={(event) =>
+                                handleAssignIssueMilestone(
+                                  issue.id,
+                                  event.target.value || null,
+                                )
+                              }
+                              className="mr-3 rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1 text-[12px] text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-accent)]"
+                            >
+                              <option value="">No milestone</option>
+                              {data.milestones.map((milestone) => (
+                                <option key={milestone.id} value={milestone.id}>
+                                  {milestone.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         ))}
                       </div>
                     ))}
