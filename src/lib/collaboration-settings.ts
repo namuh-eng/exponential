@@ -12,13 +12,27 @@ export type PulseSettings = {
   velocityTarget: number;
 };
 
+export type CustomerRequestsSettings = {
+  enabled: boolean;
+  intakeEmail: string;
+  defaultTeamKey: string;
+  linkMode: "manual" | "suggested" | "automatic";
+  autoCreateIssues: boolean;
+};
+
 export type CollaborationSettings = {
   asks: AsksSettings;
   pulse: PulseSettings;
+  customerRequests: CustomerRequestsSettings;
 };
 
 const PRIORITIES = new Set(["low", "medium", "high", "urgent"]);
 const DIGEST_FREQUENCIES = new Set(["daily", "weekly", "off"]);
+const CUSTOMER_REQUEST_LINK_MODES = new Set([
+  "manual",
+  "suggested",
+  "automatic",
+]);
 
 export function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -36,6 +50,14 @@ function readPositiveInteger(value: unknown, fallback: number) {
     : fallback;
 }
 
+function sanitizeTeamKey(value: string) {
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, "")
+    .slice(0, 12);
+}
+
 export function readCollaborationSettings(
   settings: unknown,
 ): CollaborationSettings {
@@ -43,6 +65,7 @@ export function readCollaborationSettings(
   const collaboration = asRecord(root.collaboration);
   const asks = asRecord(collaboration.asks);
   const pulse = asRecord(collaboration.pulse);
+  const customerRequests = asRecord(collaboration.customerRequests);
 
   return {
     asks: {
@@ -65,6 +88,23 @@ export function readCollaborationSettings(
       burnoutAlerts: readBoolean(pulse.burnoutAlerts, true),
       velocityTarget: readPositiveInteger(pulse.velocityTarget, 40),
     },
+    customerRequests: {
+      enabled: readBoolean(customerRequests.enabled, false),
+      intakeEmail:
+        typeof customerRequests.intakeEmail === "string"
+          ? customerRequests.intakeEmail
+          : "",
+      defaultTeamKey:
+        typeof customerRequests.defaultTeamKey === "string"
+          ? sanitizeTeamKey(customerRequests.defaultTeamKey)
+          : "",
+      linkMode:
+        typeof customerRequests.linkMode === "string" &&
+        CUSTOMER_REQUEST_LINK_MODES.has(customerRequests.linkMode)
+          ? (customerRequests.linkMode as CustomerRequestsSettings["linkMode"])
+          : "suggested",
+      autoCreateIssues: readBoolean(customerRequests.autoCreateIssues, true),
+    },
   };
 }
 
@@ -73,6 +113,7 @@ export function mergeCollaborationSettings(
   updates: Partial<{
     asks: Partial<AsksSettings>;
     pulse: Partial<PulseSettings>;
+    customerRequests: Partial<CustomerRequestsSettings>;
   }>,
 ) {
   const root = asRecord(existingSettings);
@@ -90,6 +131,10 @@ export function mergeCollaborationSettings(
         ...current.pulse,
         ...updates.pulse,
       },
+      customerRequests: {
+        ...current.customerRequests,
+        ...updates.customerRequests,
+      },
     },
   };
 }
@@ -99,6 +144,7 @@ export function parseCollaborationUpdate(body: unknown) {
   const updates: Partial<{
     asks: Partial<AsksSettings>;
     pulse: Partial<PulseSettings>;
+    customerRequests: Partial<CustomerRequestsSettings>;
   }> = {};
 
   const asks = asRecord(record.asks);
@@ -117,6 +163,35 @@ export function parseCollaborationUpdate(body: unknown) {
     }
     if (typeof asks.autoAssign === "boolean") {
       updates.asks.autoAssign = asks.autoAssign;
+    }
+  }
+
+  const customerRequests = asRecord(record.customerRequests);
+  if (Object.keys(customerRequests).length > 0) {
+    updates.customerRequests = {};
+    if (typeof customerRequests.enabled === "boolean") {
+      updates.customerRequests.enabled = customerRequests.enabled;
+    }
+    if (typeof customerRequests.intakeEmail === "string") {
+      updates.customerRequests.intakeEmail = customerRequests.intakeEmail
+        .trim()
+        .slice(0, 120);
+    }
+    if (typeof customerRequests.defaultTeamKey === "string") {
+      updates.customerRequests.defaultTeamKey = sanitizeTeamKey(
+        customerRequests.defaultTeamKey,
+      );
+    }
+    if (
+      typeof customerRequests.linkMode === "string" &&
+      CUSTOMER_REQUEST_LINK_MODES.has(customerRequests.linkMode)
+    ) {
+      updates.customerRequests.linkMode =
+        customerRequests.linkMode as CustomerRequestsSettings["linkMode"];
+    }
+    if (typeof customerRequests.autoCreateIssues === "boolean") {
+      updates.customerRequests.autoCreateIssues =
+        customerRequests.autoCreateIssues;
     }
   }
 
