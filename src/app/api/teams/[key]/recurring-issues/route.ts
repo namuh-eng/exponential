@@ -1,50 +1,134 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { recurringIssue } from "@/lib/db/schema";
+import { recurringIssue, workflowState } from "@/lib/db/schema";
 import {
+  computeNextRunAt,
   formatCadence,
-  normalizeRecurringIssueInput,
+  normalizeCadenceConfig,
+  parseDateTimeInput,
 } from "@/lib/recurring-issues";
 import { findAccessibleTeam } from "@/lib/teams";
 import { and, desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
-type RecurringIssueRecord = typeof recurringIssue.$inferSelect;
+const TITLE_MAX_LENGTH = 500;
 
-export function serializeRecurringIssue(record: RecurringIssueRecord) {
+type RecurringIssueInput = {
+  title?: unknown;
+  description?: unknown;
+  cadenceConfig?: unknown;
+  startAt?: unknown;
+  timezone?: unknown;
+  enabled?: unknown;
+  stateId?: unknown;
+  assigneeId?: unknown;
+  priority?: unknown;
+  labelIds?: unknown;
+  projectId?: unknown;
+};
+
+const validPriorities = new Set(["none", "urgent", "high", "medium", "low"]);
+
+function serializeRecurringIssue(record: typeof recurringIssue.$inferSelect) {
   return {
-    id: record.id,
-    title: record.title,
-    description: record.description,
-    teamId: record.teamId,
-    stateId: record.stateId,
-    assigneeId: record.assigneeId,
-    priority: record.priority,
-    labelIds: record.labelIds,
-    projectId: record.projectId,
-    cadenceConfig: record.cadenceConfig,
-    cadenceLabel: formatCadence(record.cadenceConfig),
-    timezone: record.timezone,
-    nextRunAt: record.nextRunAt,
-    enabled: record.enabled,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
+    ...record,
+    startAt: record.startAt?.toISOString() ?? null,
+    nextRunAt: record.nextRunAt.toISOString(),
+    lastRunAt: record.lastRunAt?.toISOString() ?? null,
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+    cadenceLabel: formatCadence(
+      record.cadenceConfig as { cadence: string; interval: number },
+    ),
   };
 }
 
-async function getTeamOrResponse(
-  request: Request,
-  key: string,
-  userId: string,
-) {
-  const teamRecord = await findAccessibleTeam(key, userId, { request });
-  if (!teamRecord) {
+async function getDefaultStateId(teamId: string) {
+  const [state] = await db
+    .select({ id: workflowState.id })
+    .from(workflowState)
+    .where(
+      and(eq(workflowState.teamId, teamId), eq(workflowState.isDefault, true)),
+    )
+    .limit(1);
+
+  if (state) return state.id;
+
+  const [fallbackState] = await db
+    .select({ id: workflowState.id })
+    .from(workflowState)
+    .where(eq(workflowState.teamId, teamId))
+    .limit(1);
+
+  return fallbackState?.id ?? null;
+}
+
+function validateBody(body: RecurringIssueInput) {
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  if (!title) {
+    return { error: "Title is required", status: 400 as const };
+  }
+  if (title.length > TITLE_MAX_LENGTH) {
     return {
-      response: NextResponse.json({ error: "Team not found" }, { status: 404 }),
-      teamRecord: null,
+      error: "Title must be 500 characters or fewer",
+      status: 400 as const,
     };
   }
-  return { response: null, teamRecord };
+
+  const cadence = normalizeCadenceConfig(body.cadenceConfig);
+  if (cadence.error || !cadence.config) {
+    return {
+      error: cadence.error ?? "Choose a valid cadence",
+      status: 400 as const,
+    };
+  }
+
+  const startAt = parseDateTimeInput(body.startAt);
+  if (!startAt) {
+    return { error: "Start date/time is required", status: 400 as const };
+  }
+
+  const timezone =
+    typeof body.timezone === "string" && body.timezone.trim()
+      ? body.timezone.trim().slice(0, 100)
+      : "UTC";
+
+  const priority = typeof body.priority === "string" ? body.priority : "none";
+  if (!validPriorities.has(priority)) {
+    return { error: "Choose a valid priority", status: 400 as const };
+  }
+
+  const labelIds = Array.isArray(body.labelIds)
+    ? body.labelIds.filter((v): v is string => typeof v === "string")
+    : [];
+
+  return {
+    value: {
+      title,
+      description:
+        typeof body.description === "string" && body.description.trim()
+          ? body.description.trim()
+          : null,
+      cadenceConfig: cadence.config,
+      startAt,
+      timezone,
+      enabled: body.enabled !== false,
+      assigneeId:
+        typeof body.assigneeId === "string" && body.assigneeId.trim()
+          ? body.assigneeId.trim()
+          : null,
+      stateId:
+        typeof body.stateId === "string" && body.stateId.trim()
+          ? body.stateId.trim()
+          : null,
+      priority: priority as "none" | "urgent" | "high" | "medium" | "low",
+      labelIds,
+      projectId:
+        typeof body.projectId === "string" && body.projectId.trim()
+          ? body.projectId.trim()
+          : null,
+    },
+  };
 }
 
 export async function GET(
@@ -55,27 +139,26 @@ export async function GET(
   if (authResponse) return authResponse;
 
   const { key } = await params;
-  const { response, teamRecord } = await getTeamOrResponse(
+  const teamRecord = await findAccessibleTeam(key, session.user.id, {
     request,
-    key,
-    session.user.id,
-  );
-  if (response) return response;
+  });
+  if (!teamRecord) {
+    return NextResponse.json({ error: "Team not found" }, { status: 404 });
+  }
 
-  const issues = await db
+  const records = await db
     .select()
     .from(recurringIssue)
-    .where(
-      and(
-        eq(recurringIssue.workspaceId, teamRecord.workspaceId),
-        eq(recurringIssue.teamId, teamRecord.id),
-      ),
-    )
+    .where(eq(recurringIssue.teamId, teamRecord.id))
     .orderBy(desc(recurringIssue.createdAt));
 
   return NextResponse.json({
-    team: { id: teamRecord.id, name: teamRecord.name, key: teamRecord.key },
-    recurringIssues: issues.map(serializeRecurringIssue),
+    team: {
+      id: teamRecord.id,
+      name: teamRecord.name,
+      key: teamRecord.key,
+    },
+    recurringIssues: records.map(serializeRecurringIssue),
   });
 }
 
@@ -87,34 +170,28 @@ export async function POST(
   if (authResponse) return authResponse;
 
   const { key } = await params;
-  const { response, teamRecord } = await getTeamOrResponse(
+  const teamRecord = await findAccessibleTeam(key, session.user.id, {
     request,
-    key,
-    session.user.id,
-  );
-  if (response) return response;
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  });
+  if (!teamRecord) {
+    return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
-  let input: ReturnType<typeof normalizeRecurringIssueInput>;
-  try {
-    input = normalizeRecurringIssueInput(
-      body && typeof body === "object" ? body : {},
-    );
-  } catch (error) {
+  const body = (await request.json().catch(() => ({}))) as RecurringIssueInput;
+  const validation = validateBody(body);
+  if ("error" in validation) {
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Invalid recurring issue",
-      },
-      { status: 400 },
+      { error: validation.error },
+      { status: validation.status },
     );
   }
+
+  const defaultStateId = await getDefaultStateId(teamRecord.id);
+  const stateId = validation.value.stateId ?? defaultStateId;
+  const nextRunAt = computeNextRunAt(
+    validation.value.cadenceConfig,
+    validation.value.startAt,
+  );
 
   const [created] = await db
     .insert(recurringIssue)
@@ -122,22 +199,20 @@ export async function POST(
       workspaceId: teamRecord.workspaceId,
       teamId: teamRecord.id,
       creatorId: session.user.id,
-      title: input.title,
-      description: input.description,
-      stateId: input.stateId,
-      assigneeId: input.assigneeId,
-      priority: input.priority,
-      labelIds: input.labelIds,
-      projectId: input.projectId,
-      cadenceConfig: input.cadenceConfig,
-      timezone: input.timezone,
-      nextRunAt: input.nextRunAt,
-      enabled: input.enabled,
+      title: validation.value.title,
+      description: validation.value.description,
+      stateId,
+      assigneeId: validation.value.assigneeId,
+      priority: validation.value.priority,
+      labelIds: validation.value.labelIds,
+      projectId: validation.value.projectId,
+      cadenceConfig: validation.value.cadenceConfig,
+      timezone: validation.value.timezone,
+      startAt: validation.value.startAt,
+      nextRunAt,
+      enabled: validation.value.enabled,
     })
     .returning();
 
-  return NextResponse.json(
-    { recurringIssue: serializeRecurringIssue(created) },
-    { status: 201 },
-  );
+  return NextResponse.json(serializeRecurringIssue(created), { status: 201 });
 }

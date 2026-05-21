@@ -535,7 +535,7 @@ export const recurringIssue = pgTable(
       onDelete: "set null",
     }),
     title: varchar("title", { length: 500 }).notNull(),
-    description: text("description").notNull().default(""),
+    description: text("description"),
     stateId: uuid("state_id").references(() => workflowState.id, {
       onDelete: "set null",
     }),
@@ -547,9 +547,9 @@ export const recurringIssue = pgTable(
     projectId: uuid("project_id").references(() => project.id, {
       onDelete: "set null",
     }),
-    cycleBehavior: jsonb("cycle_behavior"),
     cadenceConfig: jsonb("cadence_config").notNull().default({}),
     timezone: varchar("timezone", { length: 100 }).notNull().default("UTC"),
+    startAt: timestamp("start_at"),
     nextRunAt: timestamp("next_run_at").notNull(),
     enabled: boolean("enabled").notNull().default(true),
     lastRunAt: timestamp("last_run_at"),
@@ -559,7 +559,7 @@ export const recurringIssue = pgTable(
   (t) => [
     index("recurring_issue_workspace_idx").on(t.workspaceId),
     index("recurring_issue_team_idx").on(t.teamId),
-    index("recurring_issue_next_run_idx").on(t.enabled, t.nextRunAt),
+    index("recurring_issue_next_run_idx").on(t.nextRunAt),
   ],
 );
 
@@ -1064,6 +1064,12 @@ export const userRelations = relations(user, ({ many }) => ({
   createdIssues: many(issue, { relationName: "creator" }),
   assignedIssues: many(issue, { relationName: "assignee" }),
   projectTemplates: many(projectTemplate),
+  createdRecurringIssues: many(recurringIssue, {
+    relationName: "recurringIssueCreator",
+  }),
+  assignedRecurringIssues: many(recurringIssue, {
+    relationName: "recurringIssueAssignee",
+  }),
   comments: many(comment),
   notifications: many(notification, { relationName: "recipient" }),
 }));
@@ -1162,6 +1168,7 @@ export const teamRelations = relations(team, ({ one, many }) => ({
   recurringIssues: many(recurringIssue),
   labels: many(label),
   cycles: many(cycle),
+  recurringIssues: many(recurringIssue),
 }));
 
 export const teamMemberRelations = relations(teamMember, ({ one }) => ({
@@ -1222,6 +1229,35 @@ export const issueRelations = relations(issue, ({ one, many }) => ({
   notifications: many(notification),
 }));
 
+export const recurringIssueRelations = relations(recurringIssue, ({ one }) => ({
+  workspace: one(workspace, {
+    fields: [recurringIssue.workspaceId],
+    references: [workspace.id],
+  }),
+  team: one(team, {
+    fields: [recurringIssue.teamId],
+    references: [team.id],
+  }),
+  creator: one(user, {
+    fields: [recurringIssue.creatorId],
+    references: [user.id],
+    relationName: "recurringIssueCreator",
+  }),
+  state: one(workflowState, {
+    fields: [recurringIssue.stateId],
+    references: [workflowState.id],
+  }),
+  assignee: one(user, {
+    fields: [recurringIssue.assigneeId],
+    references: [user.id],
+    relationName: "recurringIssueAssignee",
+  }),
+  project: one(project, {
+    fields: [recurringIssue.projectId],
+    references: [project.id],
+  }),
+}));
+
 export const issueHistoryRelations = relations(issueHistory, ({ one }) => ({
   issue: one(issue, { fields: [issueHistory.issueId], references: [issue.id] }),
   actor: one(user, { fields: [issueHistory.actorId], references: [user.id] }),
@@ -1245,32 +1281,6 @@ export const issueRelationRelations = relations(issueRelation, ({ one }) => ({
   }),
 }));
 
-export const recurringIssueRelations = relations(recurringIssue, ({ one }) => ({
-  workspace: one(workspace, {
-    fields: [recurringIssue.workspaceId],
-    references: [workspace.id],
-  }),
-  team: one(team, {
-    fields: [recurringIssue.teamId],
-    references: [team.id],
-  }),
-  creator: one(user, {
-    fields: [recurringIssue.creatorId],
-    references: [user.id],
-  }),
-  state: one(workflowState, {
-    fields: [recurringIssue.stateId],
-    references: [workflowState.id],
-  }),
-  assignee: one(user, {
-    fields: [recurringIssue.assigneeId],
-    references: [user.id],
-  }),
-  project: one(project, {
-    fields: [recurringIssue.projectId],
-    references: [project.id],
-  }),
-}));
 
 export const labelRelations = relations(label, ({ one, many }) => ({
   workspace: one(workspace, {
