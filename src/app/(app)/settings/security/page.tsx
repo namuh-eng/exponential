@@ -485,9 +485,13 @@ export default function SecurityPage() {
         current ? { ...current, scim: data.scim as ScimSettings } : current,
       );
       setScimToken(data.token);
-      await copyText(data.token).catch(() => undefined);
+      const copied = await copyText(data.token)
+        .then(() => true)
+        .catch(() => false);
       setStatusMessage(
-        "SCIM token generated and copied. Copy it now; it will not be shown again.",
+        copied
+          ? "SCIM token generated and copied. Copy it now; it will not be shown again."
+          : "SCIM token generated. Copy it now; it will not be shown again.",
       );
     } finally {
       setSaving(false);
@@ -1063,8 +1067,23 @@ export default function SecurityPage() {
                   </button>
                 </div>
                 {scimToken ? (
-                  <div className="mb-3 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-[12px] text-[var(--color-text-secondary)]">
-                    New token (copy once): <code>{scimToken}</code>
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-[12px] text-[var(--color-text-secondary)]">
+                    <span>
+                      New token (copy once): <code>{scimToken}</code>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void copyText(scimToken)
+                          .then(() => setStatusMessage("SCIM token copied."))
+                          .catch(() =>
+                            setErrorMessage("Unable to copy SCIM token."),
+                          );
+                      }}
+                      className="rounded-md border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                    >
+                      Copy SCIM token
+                    </button>
                   </div>
                 ) : null}
                 {security.scim.tokens.length ? (
