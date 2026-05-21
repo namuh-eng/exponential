@@ -11,6 +11,7 @@ import {
   shouldRenderDatabaseBootstrapError,
 } from "@/lib/dev-database-error";
 import { activeTeamFilter } from "@/lib/team-lifecycle";
+import { evaluateWorkspaceIpRestrictions } from "@/lib/workspace-ip-restrictions";
 import { isAppRoutePrefix, normalizeAppPath } from "@/lib/workspace-paths";
 import { and, desc, eq } from "drizzle-orm";
 import { cookies, headers } from "next/headers";
@@ -37,6 +38,32 @@ function DatabaseBootstrapError() {
         <p className="mt-5 text-sm text-[#9aa1b3]">
           If you use a custom database, set DATABASE_URL in .env.local and make
           sure Postgres accepts TCP connections before loading protected routes.
+        </p>
+      </section>
+    </main>
+  );
+}
+
+function IpRestrictedAccessDenied() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#0f1117] px-6 text-[#f4f5f8]">
+      <section className="max-w-xl rounded-2xl border border-[#343847] bg-[#171a22] p-8 shadow-2xl">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[#ffb86c]">
+          Workspace access restricted
+        </p>
+        <h1 className="text-2xl font-semibold">
+          Your IP address is not allowed for this workspace
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-[#c4c8d4]">
+          This workspace only allows direct web, desktop, mobile, and API access
+          from configured IP ranges. Connect from an approved office or VPN
+          network and try again.
+        </p>
+        <p className="mt-4 text-sm leading-6 text-[#9aa1b3]">
+          Recovery: workspace owners can sign in from an allowed network to
+          update Security settings. If every owner is locked out, contact
+          support or clear the workspace IP restrictions from the database with
+          audited administrator access.
         </p>
       </section>
     </main>
@@ -70,6 +97,7 @@ export default async function AppLayout({
           workspaceId: string;
           workspaceName: string;
           workspaceSlug: string;
+          workspaceSettings: unknown;
         };
         teams: {
           id: string;
@@ -95,6 +123,7 @@ export default async function AppLayout({
           workspaceId: member.workspaceId,
           workspaceName: workspace.name,
           workspaceSlug: workspace.urlSlug,
+          workspaceSettings: workspace.settings,
         })
         .from(member)
         .innerJoin(workspace, eq(member.workspaceId, workspace.id))
@@ -126,6 +155,7 @@ export default async function AppLayout({
           workspaceId: member.workspaceId,
           workspaceName: workspace.name,
           workspaceSlug: workspace.urlSlug,
+          workspaceSettings: workspace.settings,
         })
         .from(member)
         .innerJoin(workspace, eq(member.workspaceId, workspace.id))
@@ -159,6 +189,7 @@ export default async function AppLayout({
           workspaceId: member.workspaceId,
           workspaceName: workspace.name,
           workspaceSlug: workspace.urlSlug,
+          workspaceSettings: workspace.settings,
         })
         .from(member)
         .innerJoin(workspace, eq(member.workspaceId, workspace.id))
@@ -181,6 +212,18 @@ export default async function AppLayout({
       if (isAppRoutePrefix(firstSegment)) {
         redirect(`/${ws.workspaceSlug}${normalizedSourcePath}`);
       }
+    }
+
+    const ipDecision = evaluateWorkspaceIpRestrictions({
+      settings: ws.workspaceSettings,
+      headers: requestHeaders,
+    });
+    if (!ipDecision.allowed) {
+      console.warn("workspace_ip_restriction_denied", {
+        workspaceId: ws.workspaceId,
+        reason: ipDecision.reason,
+      });
+      return <IpRestrictedAccessDenied />;
     }
 
     // Get first team

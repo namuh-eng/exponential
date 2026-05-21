@@ -56,6 +56,17 @@ vi.mock("next/headers", () => ({
   headers: async () => new Headers(),
 }));
 
+function securityRequest(init: RequestInit = {}) {
+  const headers = new Headers(init.headers);
+  if (!headers.has("x-forwarded-for")) {
+    headers.set("x-forwarded-for", "203.0.113.42");
+  }
+  return new Request("https://app.test/settings/security", {
+    ...init,
+    headers,
+  });
+}
+
 describe("current workspace security route", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -95,9 +106,7 @@ describe("current workspace security route", () => {
     getSessionMock.mockResolvedValue(null);
     const { GET } = await import("@/app/api/workspaces/current/security/route");
 
-    const response = await GET(
-      new Request("https://app.test/settings/security"),
-    );
+    const response = await GET(securityRequest());
 
     expect(response.status).toBe(401);
   });
@@ -106,9 +115,7 @@ describe("current workspace security route", () => {
     resolveActiveWorkspaceIdMock.mockResolvedValue(null);
     const { GET } = await import("@/app/api/workspaces/current/security/route");
 
-    const response = await GET(
-      new Request("https://app.test/settings/security"),
-    );
+    const response = await GET(securityRequest());
 
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({
@@ -119,9 +126,7 @@ describe("current workspace security route", () => {
   it("returns normalized security settings and invite url", async () => {
     const { GET } = await import("@/app/api/workspaces/current/security/route");
 
-    const response = await GET(
-      new Request("https://app.test/settings/security"),
-    );
+    const response = await GET(securityRequest());
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -183,6 +188,20 @@ describe("current workspace security route", () => {
     });
   });
 
+  it("blocks workspace security API requests from disallowed IPs", async () => {
+    const { GET } = await import("@/app/api/workspaces/current/security/route");
+
+    const response = await GET(
+      securityRequest({ headers: { "x-forwarded-for": "198.51.100.10" } }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Access denied by workspace IP restrictions",
+      reason: "ip_not_allowed",
+    });
+  });
+
   it("creates an invite token when one is missing", async () => {
     currentWorkspaceLimitMock.mockResolvedValue([
       {
@@ -196,9 +215,7 @@ describe("current workspace security route", () => {
     ]);
     const { GET } = await import("@/app/api/workspaces/current/security/route");
 
-    const response = await GET(
-      new Request("https://app.test/settings/security"),
-    );
+    const response = await GET(securityRequest());
 
     expect(response.status).toBe(200);
     expect(updateSetMock).toHaveBeenCalledWith(
@@ -215,7 +232,7 @@ describe("current workspace security route", () => {
     );
 
     const response = await PATCH(
-      new Request("https://app.test/settings/security", {
+      securityRequest({
         method: "PATCH",
         body: JSON.stringify({ restrictFileUploads: "yes" }),
         headers: { "content-type": "application/json" },
@@ -234,7 +251,7 @@ describe("current workspace security route", () => {
     );
 
     const response = await PATCH(
-      new Request("https://app.test/settings/security", {
+      securityRequest({
         method: "PATCH",
         body: JSON.stringify({ approvedEmailDomains: "example.com" }),
         headers: { "content-type": "application/json" },
@@ -253,7 +270,7 @@ describe("current workspace security route", () => {
     );
 
     const response = await PATCH(
-      new Request("https://app.test/settings/security", {
+      securityRequest({
         method: "PATCH",
         body: JSON.stringify({
           ipRestrictions: [{ range: "999.0.0.1/33", enabled: true }],
@@ -274,7 +291,7 @@ describe("current workspace security route", () => {
     );
 
     const response = await PATCH(
-      new Request("https://app.test/settings/security", {
+      securityRequest({
         method: "PATCH",
         body: JSON.stringify({
           inviteLinkEnabled: false,
@@ -386,7 +403,7 @@ describe("current workspace security route", () => {
     );
 
     const response = await PATCH(
-      new Request("https://app.test/settings/security", {
+      securityRequest({
         method: "PATCH",
         body: JSON.stringify({ permissions: { invitationsRole: "anyone" } }),
         headers: { "content-type": "application/json" },
