@@ -8,7 +8,7 @@ export interface ProjectResource {
 
 export interface ProjectActivityEntry {
   id: string;
-  type: "update" | "resource" | "properties";
+  type: "update" | "resource" | "properties" | "milestone";
   title: string;
   body: string | null;
   actorName: string;
@@ -21,11 +21,13 @@ export interface ProjectSettingsShape {
   labelIds: string[];
   resources: ProjectResource[];
   activity: ProjectActivityEntry[];
+  milestoneDescriptions: Record<string, string>;
 }
 
 export interface ProjectMilestoneInput {
   id: string;
   name: string;
+  description?: string | null;
 }
 
 export interface ProjectIssueInput {
@@ -55,7 +57,8 @@ function isActivityEntry(value: unknown): value is ProjectActivityEntry {
     typeof value.id === "string" &&
     (value.type === "update" ||
       value.type === "resource" ||
-      value.type === "properties") &&
+      value.type === "properties" ||
+      value.type === "milestone") &&
     typeof value.title === "string" &&
     (typeof value.body === "string" || value.body === null) &&
     typeof value.actorName === "string" &&
@@ -71,6 +74,7 @@ export function readProjectSettings(settings: unknown): ProjectSettingsShape {
       labelIds: [],
       resources: [],
       activity: [],
+      milestoneDescriptions: {},
     };
   }
 
@@ -90,6 +94,14 @@ export function readProjectSettings(settings: unknown): ProjectSettingsShape {
     activity: Array.isArray(settings.activity)
       ? settings.activity.filter(isActivityEntry)
       : [],
+    milestoneDescriptions: isRecord(settings.milestoneDescriptions)
+      ? Object.fromEntries(
+          Object.entries(settings.milestoneDescriptions).filter(
+            (entry): entry is [string, string] =>
+              typeof entry[0] === "string" && typeof entry[1] === "string",
+          ),
+        )
+      : {},
   };
 }
 
@@ -109,6 +121,9 @@ export function buildMilestoneData(
     return {
       id: milestone.id,
       name: milestone.name,
+      ...(milestone.description !== undefined
+        ? { description: milestone.description }
+        : {}),
       issueCount,
       completedCount,
       progress:

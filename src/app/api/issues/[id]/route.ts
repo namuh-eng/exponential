@@ -13,6 +13,7 @@ import {
   label,
   member,
   project,
+  projectMilestone,
   reaction,
   team,
   user,
@@ -53,6 +54,7 @@ async function findIssueRecord(id: string, workspaceId: string) {
       assigneeId: issue.assigneeId,
       creatorId: issue.creatorId,
       projectId: issue.projectId,
+      projectMilestoneId: issue.projectMilestoneId,
       parentIssueId: issue.parentIssueId,
       cycleId: issue.cycleId,
       dueDate: issue.dueDate,
@@ -92,6 +94,7 @@ async function findIssueRecord(id: string, workspaceId: string) {
       assigneeId: issue.assigneeId,
       creatorId: issue.creatorId,
       projectId: issue.projectId,
+      projectMilestoneId: issue.projectMilestoneId,
       parentIssueId: issue.parentIssueId,
       cycleId: issue.cycleId,
       dueDate: issue.dueDate,
@@ -555,6 +558,7 @@ export async function PATCH(
     dueDate?: string | null;
     estimate?: number | null;
     labelIds?: string[];
+    projectMilestoneId?: string | null;
   };
 
   const existingIssue = await findIssueRecord(id, workspaceId);
@@ -772,6 +776,55 @@ export async function PATCH(
     }
   }
 
+  if (body.projectMilestoneId !== undefined) {
+    const nextProjectId =
+      body.projectId !== undefined ? body.projectId : existingIssue.projectId;
+
+    if (body.projectMilestoneId) {
+      if (!nextProjectId) {
+        return NextResponse.json(
+          {
+            error:
+              "Issue must be assigned to a project before selecting a milestone",
+          },
+          { status: 400 },
+        );
+      }
+
+      const milestoneRows = await db
+        .select({ id: projectMilestone.id })
+        .from(projectMilestone)
+        .innerJoin(project, eq(projectMilestone.projectId, project.id))
+        .where(
+          and(
+            eq(projectMilestone.id, body.projectMilestoneId),
+            eq(projectMilestone.projectId, nextProjectId),
+            eq(project.workspaceId, workspaceId),
+          ),
+        )
+        .limit(1);
+
+      if (!milestoneRows[0]) {
+        return NextResponse.json(
+          { error: "Project milestone not found" },
+          { status: 400 },
+        );
+      }
+    }
+
+    updateData.projectMilestoneId = body.projectMilestoneId;
+    if (body.projectMilestoneId !== existingIssue.projectMilestoneId) {
+      changedFields.push("projectMilestoneId");
+    }
+  } else if (
+    body.projectId !== undefined &&
+    body.projectId !== existingIssue.projectId &&
+    existingIssue.projectMilestoneId
+  ) {
+    updateData.projectMilestoneId = null;
+    changedFields.push("projectMilestoneId");
+  }
+
   let normalizedLabelIds: string[] | undefined;
   if (body.labelIds !== undefined) {
     normalizedLabelIds = [
@@ -830,6 +883,7 @@ export async function PATCH(
       priority: issue.priority,
       assigneeId: issue.assigneeId,
       projectId: issue.projectId,
+      projectMilestoneId: issue.projectMilestoneId,
       parentIssueId: issue.parentIssueId,
       cycleId: issue.cycleId,
       dueDate: issue.dueDate,

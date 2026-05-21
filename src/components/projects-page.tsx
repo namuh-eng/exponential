@@ -156,6 +156,12 @@ export function ProjectsPage({
       e.preventDefault();
       const formData = new FormData(e.currentTarget);
 
+      const milestoneInput = `${formData.get("projectMilestones") ?? ""}`
+        .split("\n")
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map((name) => ({ name }));
+
       const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -164,6 +170,9 @@ export function ProjectsPage({
           description: formData.get("description"),
           labelIds: formData.getAll("labelIds"),
           templateId: formData.get("templateId") || undefined,
+          ...(milestoneInput.length > 0
+            ? { projectMilestones: milestoneInput }
+            : {}),
           ...(teamKey ? { teamKey } : {}),
         }),
       });
@@ -242,6 +251,12 @@ export function ProjectsPage({
                 name="description"
                 placeholder="Description (optional)"
                 rows={2}
+                className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
+              />
+              <textarea
+                name="projectMilestones"
+                placeholder="Initial milestones (one per line, optional)"
+                rows={3}
                 className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
               />
 
@@ -469,6 +484,12 @@ export function ProjectsPage({
               name="description"
               placeholder="Description (optional)"
               rows={2}
+              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
+            />
+            <textarea
+              name="projectMilestones"
+              placeholder="Initial milestones (one per line, optional)"
+              rows={3}
               className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
             />
 
