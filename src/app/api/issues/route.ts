@@ -6,6 +6,8 @@ import {
   cycle,
   issue,
   issueLabel,
+  issueRelation,
+  issueSubscription,
   team,
   teamMember,
   user,
@@ -41,6 +43,11 @@ export async function POST(request: Request) {
     cycleId,
     labelIds,
     parentIssueId,
+    estimate,
+    dueDate,
+    relatedIssueId,
+    relationType,
+    subscribe,
   } = body;
 
   const trimmedTitle = typeof title === "string" ? title.trim() : "";
@@ -193,6 +200,33 @@ export async function POST(request: Request) {
   }
 
   const normalizedDescription = normalizeIssueDescriptionHtml(description);
+  const normalizedEstimate =
+    estimate === null || estimate === undefined || estimate === ""
+      ? null
+      : Number(estimate);
+  if (normalizedEstimate !== null && !Number.isFinite(normalizedEstimate)) {
+    return NextResponse.json(
+      { error: "Estimate must be a number" },
+      { status: 400 },
+    );
+  }
+
+  const normalizedDueDate =
+    typeof dueDate === "string" && dueDate.trim()
+      ? new Date(`${dueDate.trim()}T00:00:00.000Z`)
+      : null;
+  if (normalizedDueDate && Number.isNaN(normalizedDueDate.getTime())) {
+    return NextResponse.json({ error: "Due date is invalid" }, { status: 400 });
+  }
+
+  const normalizedRelationType =
+    relationType === "blocks" ||
+    relationType === "blocked_by" ||
+    relationType === "duplicate" ||
+    relationType === "related"
+      ? relationType
+      : "related";
+
   const normalizedLabels = await normalizeApplicableIssueLabelIds({
     db,
     labelIds,
@@ -222,6 +256,8 @@ export async function POST(request: Request) {
         projectId: projectId || null,
         cycleId: finalCycleId,
         parentIssueId: parentIssueId || null,
+        estimate: normalizedEstimate,
+        dueDate: normalizedDueDate,
       })
       .returning();
 
@@ -234,6 +270,22 @@ export async function POST(request: Request) {
       );
     }
 
+    if (relatedIssueId) {
+      await tx.insert(issueRelation).values({
+        issueId: createdIssue.id,
+        relatedIssueId,
+        type: normalizedRelationType,
+      });
+    }
+
+    if (subscribe) {
+      await tx.insert(issueSubscription).values({
+        issueId: createdIssue.id,
+        userId: session.user.id,
+        subscribed: true,
+      });
+    }
+
     await insertIssueHistoryEvent(tx, teamRecord, {
       issueId: createdIssue.id,
       actorId: session.user.id,
@@ -244,6 +296,11 @@ export async function POST(request: Request) {
         identifier: createdIssue.identifier,
         title: createdIssue.title,
         teamId,
+        cycleId: finalCycleId,
+        estimate: normalizedEstimate,
+        dueDate: normalizedDueDate?.toISOString() ?? null,
+        parentIssueId: parentIssueId || null,
+        relatedIssueId: relatedIssueId || null,
       },
     });
 

@@ -41,6 +41,18 @@ const optionsResponse = {
   assignees: [{ id: "user-1", name: "Jaeyun Ha", image: null }],
   labels: [{ id: "label-1", name: "Bug", color: "#ef4444" }],
   projects: [{ id: "project-1", name: "Roadmap", icon: "R" }],
+  cycles: [{ id: "cycle-1", name: "Cycle 1", number: 1 }],
+  estimates: [{ value: 3, label: "3 points" }],
+  relationIssues: [
+    { id: "issue-parent", identifier: "ENG-1", title: "Parent task" },
+    { id: "issue-related", identifier: "ENG-2", title: "Related task" },
+  ],
+  dueDatePresets: [
+    { value: "today", label: "Today" },
+    { value: "tomorrow", label: "Tomorrow" },
+    { value: "next-week", label: "Next week" },
+    { value: "custom", label: "Custom date" },
+  ],
 };
 
 function mockJsonResponse(payload: unknown, ok = true, status = 200): Response {
@@ -298,5 +310,78 @@ describe("CreateIssueModal", () => {
       expect.objectContaining({ method: "POST" }),
     );
     expect(titleBox.textContent).toBe("");
+  });
+
+  it("creates an issue with cycle, estimate, due date, template, and relation metadata", async () => {
+    render(<CreateIssueModal {...defaultProps} />);
+
+    const titleBox = await screen.findByRole("textbox", {
+      name: "Issue title",
+    });
+    setEditableValue(titleBox, "Metadata issue");
+
+    fireEvent.click(screen.getByRole("button", { name: "Cycle" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cycle 1" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Estimate" }));
+    fireEvent.click(await screen.findByRole("button", { name: "3 points" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Due date" }));
+    fireEvent.change(await screen.findByLabelText("Custom due date"), {
+      target: { value: "2026-06-01" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Template" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Bug template" }),
+    );
+
+    fireEvent.click(screen.getByLabelText("More actions"));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Set parent issue" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: /ENG-1 Parent task/ }),
+    );
+
+    fireEvent.click(screen.getByLabelText("More actions"));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Link related issue" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: /ENG-2 Related task/ }),
+    );
+
+    fireEvent.click(screen.getByLabelText("More actions"));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Subscribe me to updates" }),
+    );
+
+    fireEvent.click(screen.getByText("Create Issue"));
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "/api/issues",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+
+    const createCall = vi
+      .mocked(globalThis.fetch)
+      .mock.calls.find(
+        ([url, init]) => url === "/api/issues" && init?.method === "POST",
+      );
+    expect(JSON.parse(String(createCall?.[1]?.body))).toEqual(
+      expect.objectContaining({
+        cycleId: "cycle-1",
+        estimate: 3,
+        dueDate: "2026-06-01",
+        parentIssueId: "issue-parent",
+        relatedIssueId: "issue-related",
+        subscribe: true,
+        description: "<p>Steps to reproduce</p>",
+        priority: "high",
+      }),
+    );
   });
 });
