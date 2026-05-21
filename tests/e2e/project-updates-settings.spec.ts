@@ -1,7 +1,34 @@
 import { expect, test } from "@playwright/test";
 
+async function deleteExistingProjectUpdateConfigurations(
+  page: import("@playwright/test").Page,
+) {
+  const response = await page.request.get("/api/project-updates", {
+    headers: {
+      referer: "http://localhost:3015/foreverbrowsing/settings/project-updates",
+    },
+  });
+  expect(response.status()).toBe(200);
+  const payload = (await response.json()) as {
+    configurations?: Array<{ id: string }>;
+  };
+
+  for (const configuration of payload.configurations ?? []) {
+    const deleteResponse = await page.request.delete(
+      `/api/project-updates/${configuration.id}`,
+      {
+        headers: {
+          referer:
+            "http://localhost:3015/foreverbrowsing/settings/project-updates",
+        },
+      },
+    );
+    expect(deleteResponse.status()).toBe(200);
+  }
+}
+
 test.describe("Project updates settings", () => {
-  test("creates, edits, deletes, reloads, and routes project update configurations", async ({
+  test("renders via direct and workspace-prefixed navigation", async ({
     page,
   }) => {
     const suffix = Date.now().toString(36);
@@ -28,80 +55,6 @@ test.describe("Project updates settings", () => {
       page.getByRole("button", { name: "Create update configuration" }),
     ).toBeEnabled();
 
-    await page
-      .getByRole("button", { name: "Create update configuration" })
-      .click();
-    await expect(
-      page.getByRole("dialog", { name: "Create update configuration" }),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "Save configuration" }).click();
-    await expect(
-      page.getByText("Configuration name is required."),
-    ).toBeVisible();
-
-    const configurationName = `Friday update ${suffix}`;
-    await page.getByLabel("Configuration name").fill(configurationName);
-    await page.getByLabel("Reminder cadence").selectOption("weekly");
-    await page.getByLabel("Due day").selectOption("5");
-    await page.getByLabel("Due time").fill("15:30");
-    await page.getByLabel("Timezone").fill("America/Los_Angeles");
-    await page.getByLabel("Project scope").selectOption("statuses");
-    await page.getByLabel("Planned").uncheck();
-    await page.getByLabel("In progress").check();
-    await page.getByLabel("Slack channel").check();
-    await page.getByLabel("Slack channel name").fill("#project-updates");
-    await page.getByRole("button", { name: "Save configuration" }).click();
-
-    await expect(
-      page.getByText("Project update configuration created."),
-    ).toBeVisible();
-    await expect(page.getByText(configurationName)).toBeVisible();
-    await expect(
-      page.getByText("Weekly on Friday at 15:30 America/Los_Angeles"),
-    ).toBeVisible();
-    await expect(page.getByText("#project-updates")).toBeVisible();
-
-    await page.goto(`/${workspaceSlug}/settings/project-updates`, {
-      waitUntil: "domcontentloaded",
-    });
-    await expect(page.getByText(configurationName)).toBeVisible();
-
-    const apiResponse = await page.request.get(
-      "/api/project-update-configurations",
-    );
-    expect(apiResponse.status()).toBe(200);
-    const apiPayload = await apiResponse.json();
-    const saved = apiPayload.configurations.find(
-      (configuration: { name: string }) =>
-        configuration.name === configurationName,
-    );
-    expect(saved).toMatchObject({
-      cadence: "weekly",
-      projectScope: "statuses",
-      shareTargets: ["workspace", "slack"],
-      slackChannel: "#project-updates",
-    });
-
-    await page.getByRole("button", { name: "Edit" }).click();
-    await expect(
-      page.getByRole("dialog", { name: "Edit update configuration" }),
-    ).toBeVisible();
-    await page.getByLabel("Enable update reminders").uncheck();
-    await page.getByLabel("Reminder cadence").selectOption("monthly");
-    await page.getByRole("button", { name: "Save changes" }).click();
-    await expect(
-      page.getByText("Project update configuration updated."),
-    ).toBeVisible();
-    await expect(page.getByText("Disabled")).toBeVisible();
-    await expect(page.getByText("Monthly on Friday at 15:30")).toBeVisible();
-
-    await page.getByRole("button", { name: "Delete" }).click();
-    await expect(
-      page.getByText("Project update configuration deleted."),
-    ).toBeVisible();
-    await expect(page.getByText(configurationName)).toHaveCount(0);
-    await expect(page.getByText("No update configurations")).toBeVisible();
-
     await page.goto("/settings/project-updates", {
       waitUntil: "domcontentloaded",
     });
@@ -111,15 +64,58 @@ test.describe("Project updates settings", () => {
     await expect(
       page.getByRole("heading", { name: "Project updates" }),
     ).toBeVisible();
+  });
 
-    await page.goto(`/${workspaceSlug}/settings/account/preferences`);
-    const updatesLink = page.getByRole("link", {
-      name: "Updates",
-      exact: true,
-    });
-    await expect(updatesLink).toHaveAttribute(
-      "href",
-      `/${workspaceSlug}/settings/project-updates`,
+  test("creates, reloads, edits, disables, validates, and deletes foreverbrowsing settings", async ({
+    page,
+  }) => {
+    await deleteExistingProjectUpdateConfigurations(page);
+
+    await page.goto("/foreverbrowsing/settings/project-updates");
+    await expect(page).toHaveURL(
+      /\/foreverbrowsing\/settings\/project-updates$/,
     );
+    await expect(page.getByText("No update configurations")).toBeVisible();
+
+    await page
+      .getByRole("button", { name: "Create update configuration" })
+      .click();
+    await page.getByLabel("Name").fill("Weekly roadmap report");
+    await page.getByLabel("Timezone").fill("UTC");
+    await page.getByLabel("Reporting destination").selectOption("slack");
+    await page.getByLabel("Share target").fill("#project-updates");
+    await page.getByRole("button", { name: "Create configuration" }).click();
+
+    await expect(page.getByText("Weekly roadmap report")).toBeVisible();
+    await expect(page.getByText("#project-updates")).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByText("Weekly roadmap report")).toBeVisible();
+    await expect(page.getByText("#project-updates")).toBeVisible();
+
+    await page.getByRole("button", { name: "Edit" }).click();
+    await page.getByLabel("Name").fill("Biweekly roadmap report");
+    await page.getByLabel("Cadence").selectOption("biweekly");
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.getByText("Biweekly roadmap report")).toBeVisible();
+    await expect(page.getByText(/Every two weeks/)).toBeVisible();
+
+    await page.getByRole("button", { name: "Disable" }).click();
+    await expect(page.getByText("Disabled", { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByText("Disabled", { exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Create configuration" }).click();
+    await page.getByLabel("Name").fill("Invalid timezone report");
+    await page.getByLabel("Timezone").fill("Bad Zone!");
+    await page
+      .locator("form")
+      .getByRole("button", { name: "Create configuration" })
+      .click();
+    await expect(page.getByText("Timezone is invalid")).toBeVisible();
+    await page.getByRole("button", { name: "Cancel" }).click();
+
+    await page.getByRole("button", { name: "Delete" }).click();
+    await expect(page.getByText("No update configurations")).toBeVisible();
   });
 });
