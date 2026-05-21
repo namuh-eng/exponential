@@ -141,6 +141,39 @@ function writeStoredIssueDisplayOptions(
   );
 }
 
+function readStoredIssueDisplayOptions(
+  teamKey: string,
+): ViewDisplayOptions | null {
+  const storage = getStorage();
+  if (!storage) {
+    return null;
+  }
+
+  const raw = storage.getItem(`${DISPLAY_OPTIONS_STORAGE_PREFIX}${teamKey}`);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+
+    const record = parsed as Partial<ViewDisplayOptions>;
+    return {
+      ...defaultViewDisplayOptions,
+      ...record,
+      displayProperties: {
+        ...defaultViewDisplayOptions.displayProperties,
+        ...(record.displayProperties ?? {}),
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
 function writeStoredProjectViewState(options: {
   statusFilter: ProjectViewStatusFilter;
   sortBy: ProjectViewSortOption;
@@ -414,6 +447,10 @@ function CreateViewModal({
     }
 
     setIssueFilters(readStoredIssueFilters(selectedTeam.key));
+    setIssueDisplayOptions(
+      readStoredIssueDisplayOptions(selectedTeam.key) ??
+        defaultViewDisplayOptions,
+    );
   }, [activeTab, selectedTeam, view]);
 
   useEffect(() => {

@@ -391,6 +391,18 @@ describe("ViewsPage", () => {
       "exponential-filters:team:ONB",
       JSON.stringify([{ type: "status", operator: "is", values: ["started"] }]),
     );
+    window.localStorage.setItem(
+      "exponential-display-options:team:ONB",
+      JSON.stringify({
+        groupBy: "assignee",
+        subGroupBy: "none",
+        orderBy: "updated",
+        displayProperties: { labels: false },
+        showSubIssues: false,
+        showTriageIssues: true,
+        showEmptyColumns: true,
+      }),
+    );
 
     mockFetch
       .mockResolvedValueOnce({
@@ -425,6 +437,23 @@ describe("ViewsPage", () => {
           body: expect.stringContaining('"issueFilters":[{"type":"status"'),
         }),
       );
+      const postCall = mockFetch.mock.calls.find(
+        ([url, options]) =>
+          url === "/api/views" &&
+          (options as RequestInit | undefined)?.method === "POST",
+      );
+      expect(postCall).toBeTruthy();
+      const body = JSON.parse((postCall?.[1] as RequestInit).body as string);
+      expect(body.filterState.issueDisplayOptions).toMatchObject({
+        groupBy: "assignee",
+        orderBy: "updated",
+        showSubIssues: false,
+        showTriageIssues: true,
+        showEmptyColumns: true,
+      });
+      expect(
+        body.filterState.issueDisplayOptions.displayProperties.labels,
+      ).toBe(false);
     });
   });
 
