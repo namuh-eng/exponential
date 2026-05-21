@@ -1,6 +1,7 @@
 /* Keep this imported stylesheet free of Tailwind layer at-rules.
    globals.css imports it before @tailwind so CSS @import stays valid; adding
-   a layer at-rule here makes Tailwind see a layer before its matching Tailwind rule. */
+   a layer at-rule here makes Tailwind see a layer before its matching Tailwind rule.
+   Intentionally not wrapped in @layer: Tailwind layer directives here would break dev compilation. */
 :root {
   /* Editorial theme: warm paper, serious ink, rust accent. Canonical source: src/lib/editorial-theme-tokens.ts */
   --editorial-bg: #faf7f2;
