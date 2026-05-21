@@ -39,11 +39,31 @@ describe("Team Cycles & Templates Settings", () => {
     ],
   };
 
-  it("renders team slack settings correctly", () => {
+  it("renders team slack settings correctly", async () => {
     vi.mocked(useParams).mockReturnValue({ key: "ENG" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            team: { id: "team-1", key: "ENG", name: "Engineering" },
+            workspaceSlack: null,
+            canManageSlackNotifications: true,
+            availableEvents: [],
+            settings: {
+              channelId: "",
+              channelName: "",
+              enabled: false,
+              events: [],
+              updatedAt: null,
+            },
+          }),
+      }),
+    );
     render(<TeamSlackSettingsPage />);
 
-    expect(screen.getByText("Slack notifications")).toBeInTheDocument();
+    expect(await screen.findByText("Slack notifications")).toBeInTheDocument();
     expect(screen.getByText("Slack is not connected")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Connect Slack" }),

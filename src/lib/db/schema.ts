@@ -167,6 +167,62 @@ export const authorizedApplicationGrant = pgTable(
   ],
 );
 
+export const workspaceIntegration = pgTable(
+  "workspace_integration",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    provider: varchar("provider", { length: 64 }).notNull(),
+    status: varchar("status", { length: 32 }).notNull().default("connected"),
+    externalId: text("external_id"),
+    displayName: varchar("display_name", { length: 255 }),
+    metadata: jsonb("metadata").notNull().default({}),
+    connectedByUserId: text("connected_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    connectedAt: timestamp("connected_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("workspace_integration_workspace_idx").on(t.workspaceId),
+    uniqueIndex("workspace_integration_workspace_provider_idx").on(
+      t.workspaceId,
+      t.provider,
+    ),
+  ],
+);
+
+export const teamNotificationIntegration = pgTable(
+  "team_notification_integration",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => team.id, { onDelete: "cascade" }),
+    workspaceIntegrationId: uuid("workspace_integration_id").references(
+      () => workspaceIntegration.id,
+      { onDelete: "set null" },
+    ),
+    provider: varchar("provider", { length: 64 }).notNull(),
+    channelId: text("channel_id"),
+    channelName: varchar("channel_name", { length: 255 }),
+    enabled: boolean("enabled").notNull().default(false),
+    events: jsonb("events").notNull().default([]),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("team_notification_integration_team_idx").on(t.teamId),
+    uniqueIndex("team_notification_integration_team_provider_idx").on(
+      t.teamId,
+      t.provider,
+    ),
+  ],
+);
+
 export const verification = pgTable("verification", {
   id: text("id").primaryKey(),
   identifier: text("identifier").notNull(),
@@ -999,6 +1055,7 @@ export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
   authorizedApplicationGrants: many(authorizedApplicationGrant),
+  connectedWorkspaceIntegrations: many(workspaceIntegration),
   memberships: many(member),
   workspaceInvitations: many(workspaceInvitation),
   teamMemberships: many(teamMember),
@@ -1019,8 +1076,38 @@ export const authorizedApplicationGrantRelations = relations(
   }),
 );
 
+export const workspaceIntegrationRelations = relations(
+  workspaceIntegration,
+  ({ one, many }) => ({
+    workspace: one(workspace, {
+      fields: [workspaceIntegration.workspaceId],
+      references: [workspace.id],
+    }),
+    connectedBy: one(user, {
+      fields: [workspaceIntegration.connectedByUserId],
+      references: [user.id],
+    }),
+    teamNotificationIntegrations: many(teamNotificationIntegration),
+  }),
+);
+
+export const teamNotificationIntegrationRelations = relations(
+  teamNotificationIntegration,
+  ({ one }) => ({
+    team: one(team, {
+      fields: [teamNotificationIntegration.teamId],
+      references: [team.id],
+    }),
+    workspaceIntegration: one(workspaceIntegration, {
+      fields: [teamNotificationIntegration.workspaceIntegrationId],
+      references: [workspaceIntegration.id],
+    }),
+  }),
+);
+
 export const workspaceRelations = relations(workspace, ({ many }) => ({
   members: many(member),
+  integrations: many(workspaceIntegration),
   invitations: many(workspaceInvitation),
   teams: many(team),
   labels: many(label),
@@ -1067,6 +1154,7 @@ export const teamRelations = relations(team, ({ one, many }) => ({
   }),
   childTeams: many(team, { relationName: "parentTeam" }),
   members: many(teamMember),
+  notificationIntegrations: many(teamNotificationIntegration),
   workflowStates: many(workflowState),
   issues: many(issue),
   recurringIssues: many(recurringIssue),
