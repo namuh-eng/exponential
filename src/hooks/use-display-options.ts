@@ -19,6 +19,46 @@ export interface DisplayOptionsState {
   showEmptyColumns: boolean;
 }
 
+const DISPLAY_OPTIONS_STORAGE_PREFIX = "exponential-display-options:team:";
+
+function getStorage(): Pick<Storage, "getItem" | "removeItem"> | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const storage = window.localStorage;
+  if (
+    !storage ||
+    typeof storage.getItem !== "function" ||
+    typeof storage.removeItem !== "function"
+  ) {
+    return null;
+  }
+
+  return storage;
+}
+
+function readStoredDisplayOptions(teamKey: string) {
+  const storage = getStorage();
+  if (!storage) {
+    return null;
+  }
+
+  const raw = storage.getItem(`${DISPLAY_OPTIONS_STORAGE_PREFIX}${teamKey}`);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object"
+      ? (parsed as Partial<DisplayOptionsState>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export const defaultDisplayOptions: DisplayOptionsState = {
   layout: "list",
   groupBy: "status",
@@ -43,16 +83,16 @@ export function useDisplayOptions(
   useEffect(() => {
     async function load() {
       try {
+        const storedOptions = readStoredDisplayOptions(teamKey);
         const res = await fetch(`/api/teams/${teamKey}/display-options`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.displayOptions) {
-            setOptions((prev) => ({
-              ...prev,
-              ...data.displayOptions,
-              layout: initialLayout,
-            }));
-          }
+        const data = res.ok ? await res.json() : {};
+        if (data.displayOptions || storedOptions) {
+          setOptions((prev) => ({
+            ...prev,
+            ...data.displayOptions,
+            ...storedOptions,
+            layout: initialLayout,
+          }));
         }
       } finally {
         setLoaded(true);

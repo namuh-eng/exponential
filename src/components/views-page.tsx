@@ -3,15 +3,25 @@
 import { useAppShellContext } from "@/app/(app)/app-shell";
 import { Avatar } from "@/components/avatar";
 import { EmptyState } from "@/components/empty-state";
-import type { FilterCondition } from "@/components/filter-bar";
+import {
+  FilterBar,
+  type FilterCondition,
+  applyFilters,
+} from "@/components/filter-bar";
 import { SidebarFavoriteButton } from "@/components/sidebar-favorite-button";
 import { TeamRouteErrorState } from "@/components/team-route-error-state";
 import {
+  type ProjectViewDisplayOptions,
+  type ProjectViewGroupByOption,
   type ProjectViewSortOption,
   type ProjectViewStatusFilter,
+  type ViewDisplayOptions,
   type ViewEntityType,
+  type ViewLayout,
   type ViewScope,
   type ViewSummary,
+  defaultProjectViewDisplayOptions,
+  defaultViewDisplayOptions,
   projectViewSortOptions,
   projectViewStatusOptions,
 } from "@/lib/views";
@@ -25,8 +35,39 @@ interface ViewTeam {
   name: string;
 }
 
+interface IssuePreviewData {
+  groups: Array<{
+    issues: Array<{
+      id: string;
+      stateId: string;
+      priority: string;
+      assigneeId: string | null;
+      labelIds: string[];
+      projectId: string | null;
+      creatorId?: string | null;
+      cycleId?: string | null;
+      dueDate?: string | Date | null;
+      estimate?: number | string | null;
+      teamId?: string | null;
+    }>;
+  }>;
+  filterOptions: {
+    statuses: { id: string; name: string; category: string; color: string }[];
+    assignees: { id: string; name: string; image?: string | null }[];
+    labels: { id: string; name: string; color: string }[];
+    projects: { id: string; name: string }[];
+    creators: { id: string; name: string }[];
+    cycles: { id: string; name: string }[];
+    estimates: { value: string; label: string }[];
+    dueDates: { value: string; label: string }[];
+    priorities: { value: string; label: string }[];
+    teams?: { id: string; name: string }[];
+  };
+}
+
 const ISSUE_FILTER_STORAGE_PREFIX = "exponential-filters:team:";
 const PROJECT_VIEW_STORAGE_KEY = "exponential-project-view:workspace";
+const DISPLAY_OPTIONS_STORAGE_PREFIX = "exponential-display-options:team:";
 
 function getStorage(): Pick<
   Storage,
@@ -85,6 +126,21 @@ function writeStoredIssueFilters(teamKey: string, filters: FilterCondition[]) {
   );
 }
 
+function writeStoredIssueDisplayOptions(
+  teamKey: string,
+  options: ViewDisplayOptions,
+) {
+  const storage = getStorage();
+  if (!storage) {
+    return;
+  }
+
+  storage.setItem(
+    `${DISPLAY_OPTIONS_STORAGE_PREFIX}${teamKey}`,
+    JSON.stringify(options),
+  );
+}
+
 function writeStoredProjectViewState(options: {
   statusFilter: ProjectViewStatusFilter;
   sortBy: ProjectViewSortOption;
@@ -119,6 +175,30 @@ function LayoutIcon({
       >
         <rect x="3" y="3" width="7" height="18" rx="1" />
         <rect x="14" y="3" width="7" height="10" rx="1" />
+      </svg>
+    );
+  }
+
+  if (layout === "timeline") {
+    return (
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        role="img"
+        aria-label="Timeline layout"
+      >
+        <path d="M4 6h16" />
+        <path d="M4 12h16" />
+        <path d="M4 18h16" />
+        <circle cx="8" cy="6" r="2" />
+        <rect x="11" y="10" width="6" height="4" rx="1" />
+        <circle cx="18" cy="18" r="2" />
       </svg>
     );
   }
@@ -222,6 +302,55 @@ function ViewRow({
   );
 }
 
+const groupByLabels: Record<ViewDisplayOptions["groupBy"], string> = {
+  status: "Status",
+  priority: "Priority",
+  assignee: "Assignee",
+  label: "Label",
+  project: "Project",
+  none: "No grouping",
+};
+
+const orderByLabels: Record<ViewDisplayOptions["orderBy"], string> = {
+  priority: "Priority",
+  created: "Created",
+  updated: "Updated",
+  manual: "Manual",
+};
+
+const projectGroupByLabels: Record<ProjectViewGroupByOption, string> = {
+  status: "Status",
+  lead: "Lead",
+  team: "Team",
+  none: "No grouping",
+};
+
+const displayPropertyLabels: Array<{
+  key: keyof ViewDisplayOptions["displayProperties"];
+  label: string;
+}> = [
+  { key: "id", label: "ID" },
+  { key: "status", label: "Status" },
+  { key: "assignee", label: "Assignee" },
+  { key: "priority", label: "Priority" },
+  { key: "project", label: "Project" },
+  { key: "dueDate", label: "Due date" },
+  { key: "labels", label: "Labels" },
+  { key: "created", label: "Created" },
+  { key: "updated", label: "Updated" },
+];
+
+const projectPropertyLabels: Array<{
+  key: keyof ProjectViewDisplayOptions["visibleProperties"];
+  label: string;
+}> = [
+  { key: "status", label: "Status" },
+  { key: "progress", label: "Progress" },
+  { key: "lead", label: "Lead" },
+  { key: "team", label: "Team" },
+  { key: "targetDate", label: "Target date" },
+];
+
 function CreateViewModal({
   activeTab,
   teams,
@@ -238,9 +367,7 @@ function CreateViewModal({
   onSaved: (view: ViewSummary) => void;
 }) {
   const [name, setName] = useState(view?.name ?? "");
-  const [layout, setLayout] = useState<"list" | "board">(
-    view?.layout === "board" ? "board" : "list",
-  );
+  const [layout, setLayout] = useState<ViewLayout>(view?.layout ?? "list");
   const [isPersonal, setIsPersonal] = useState(view?.isPersonal ?? true);
   const [scope, setScope] = useState<ViewScope>(view?.scope ?? "workspace");
   const [teamId, setTeamId] = useState<string>(
@@ -249,6 +376,13 @@ function CreateViewModal({
       teams[0]?.id ??
       "",
   );
+  const [issueFilters, setIssueFilters] = useState<FilterCondition[]>(
+    view?.filterState.issueFilters ?? [],
+  );
+  const [issueDisplayOptions, setIssueDisplayOptions] =
+    useState<ViewDisplayOptions>(
+      view?.filterState.issueDisplayOptions ?? defaultViewDisplayOptions,
+    );
   const [projectStatusFilter, setProjectStatusFilter] =
     useState<ProjectViewStatusFilter>(
       view?.filterState.projectStatusFilter ?? "all",
@@ -256,6 +390,13 @@ function CreateViewModal({
   const [projectSortBy, setProjectSortBy] = useState<ProjectViewSortOption>(
     view?.filterState.projectSortBy ?? "created-desc",
   );
+  const [projectDisplayOptions, setProjectDisplayOptions] =
+    useState<ProjectViewDisplayOptions>(
+      view?.filterState.projectDisplayOptions ??
+        defaultProjectViewDisplayOptions,
+    );
+  const [previewData, setPreviewData] = useState<IssuePreviewData | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -266,10 +407,62 @@ function CreateViewModal({
   }, [activeTab]);
 
   const selectedTeam = teams.find((team) => team.id === teamId) ?? null;
-  const capturedFilters =
-    activeTab === "issues" && selectedTeam
-      ? readStoredIssueFilters(selectedTeam.key)
-      : [];
+
+  useEffect(() => {
+    if (view || activeTab !== "issues" || !selectedTeam) {
+      return;
+    }
+
+    setIssueFilters(readStoredIssueFilters(selectedTeam.key));
+  }, [activeTab, selectedTeam, view]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPreview() {
+      if (activeTab !== "issues" || !selectedTeam) {
+        setPreviewData(null);
+        return;
+      }
+
+      setPreviewLoading(true);
+      try {
+        const res = await fetch(`/api/teams/${selectedTeam.key}/issues`);
+        if (!res.ok) {
+          if (!cancelled) setPreviewData(null);
+          return;
+        }
+
+        const data = (await res.json()) as IssuePreviewData;
+        if (!cancelled) setPreviewData(data);
+      } finally {
+        if (!cancelled) setPreviewLoading(false);
+      }
+    }
+
+    void loadPreview();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, selectedTeam]);
+
+  const totalIssues = useMemo(
+    () =>
+      (previewData?.groups ?? []).reduce(
+        (sum, group) => sum + group.issues.length,
+        0,
+      ),
+    [previewData],
+  );
+  const matchingIssues = useMemo(
+    () =>
+      applyFilters(
+        (previewData?.groups ?? []).flatMap((group) => group.issues),
+        issueFilters,
+      ).length,
+    [issueFilters, previewData],
+  );
+  const filterOptions = previewData?.filterOptions;
 
   const handleSubmit = async () => {
     if (!name.trim() || submitting) {
@@ -292,9 +485,11 @@ function CreateViewModal({
       filterState: {
         entityType: activeTab,
         scope: activeTab === "issues" ? "team" : scope,
-        issueFilters: activeTab === "issues" ? capturedFilters : [],
+        issueFilters: activeTab === "issues" ? issueFilters : [],
+        issueDisplayOptions,
         projectStatusFilter,
         projectSortBy,
+        projectDisplayOptions,
       },
     };
 
@@ -323,7 +518,7 @@ function CreateViewModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="w-full max-w-[440px] rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-4 shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-[720px] overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-4 shadow-xl">
         <h2 className="mb-3 text-[14px] font-medium text-[var(--color-text-primary)]">
           {view ? "Edit view" : "Create view"}
         </h2>
@@ -355,11 +550,37 @@ function CreateViewModal({
               </select>
             </div>
 
-            <div className="mb-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-hover)] px-3 py-2 text-[12px] text-[var(--color-text-secondary)]">
-              Uses {capturedFilters.length} saved filter
-              {capturedFilters.length === 1 ? "" : "s"} from{" "}
-              {selectedTeam?.name ?? "this team"}.
-            </div>
+            <section className="mb-3 rounded-lg border border-[var(--color-border)] p-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-[12px] font-medium text-[var(--color-text-primary)]">
+                    Filters
+                  </h3>
+                  <p className="text-[11px] text-[var(--color-text-secondary)]">
+                    Define the issue criteria saved with this view.
+                  </p>
+                </div>
+                <span className="rounded-md bg-[var(--color-surface-hover)] px-2 py-1 text-[11px] text-[var(--color-text-secondary)]">
+                  {previewLoading
+                    ? "Loading preview…"
+                    : `${matchingIssues} of ${totalIssues} matching`}
+                </span>
+              </div>
+              <FilterBar
+                filters={issueFilters}
+                onFiltersChange={setIssueFilters}
+                availableStatuses={filterOptions?.statuses ?? []}
+                availableLabels={filterOptions?.labels ?? []}
+                availableAssignees={filterOptions?.assignees ?? []}
+                availablePriorities={filterOptions?.priorities ?? []}
+                availableProjects={filterOptions?.projects ?? []}
+                availableCreators={filterOptions?.creators ?? []}
+                availableCycles={filterOptions?.cycles ?? []}
+                availableEstimates={filterOptions?.estimates ?? []}
+                availableDueDates={filterOptions?.dueDates ?? []}
+                availableTeams={filterOptions?.teams ?? []}
+              />
+            </section>
           </>
         )}
 
@@ -465,31 +686,156 @@ function CreateViewModal({
               Layout
             </span>
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setLayout("list")}
-                className={`rounded-md px-3 py-1.5 text-[12px] ${
-                  layout === "list"
-                    ? "bg-[var(--color-surface-active)] text-[var(--color-text-primary)]"
-                    : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                }`}
-              >
-                List
-              </button>
-              <button
-                type="button"
-                onClick={() => setLayout("board")}
-                className={`rounded-md px-3 py-1.5 text-[12px] ${
-                  layout === "board"
-                    ? "bg-[var(--color-surface-active)] text-[var(--color-text-primary)]"
-                    : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                }`}
-              >
-                Board
-              </button>
+              {(["list", "board", "timeline"] as ViewLayout[]).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setLayout(option)}
+                  className={`rounded-md px-3 py-1.5 text-[12px] capitalize ${
+                    layout === option
+                      ? "bg-[var(--color-surface-active)] text-[var(--color-text-primary)]"
+                      : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
             </div>
           </div>
         )}
+
+        <section className="mb-3 rounded-lg border border-[var(--color-border)] p-3">
+          <h3 className="mb-2 text-[12px] font-medium text-[var(--color-text-primary)]">
+            Display options
+          </h3>
+          {activeTab === "issues" ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-[12px] text-[var(--color-text-secondary)]">
+                <span className="mb-1 block">Group by</span>
+                <select
+                  aria-label="Select issue group by"
+                  value={issueDisplayOptions.groupBy}
+                  onChange={(event) =>
+                    setIssueDisplayOptions((current) => ({
+                      ...current,
+                      groupBy: event.target
+                        .value as ViewDisplayOptions["groupBy"],
+                    }))
+                  }
+                  className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                >
+                  {Object.entries(groupByLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-[12px] text-[var(--color-text-secondary)]">
+                <span className="mb-1 block">Order by</span>
+                <select
+                  aria-label="Select issue order by"
+                  value={issueDisplayOptions.orderBy}
+                  onChange={(event) =>
+                    setIssueDisplayOptions((current) => ({
+                      ...current,
+                      orderBy: event.target
+                        .value as ViewDisplayOptions["orderBy"],
+                    }))
+                  }
+                  className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                >
+                  {Object.entries(orderByLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="sm:col-span-2">
+                <span className="mb-1 block text-[12px] text-[var(--color-text-secondary)]">
+                  Visible properties
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {displayPropertyLabels.map(({ key, label }) => (
+                    <label
+                      key={key}
+                      className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={issueDisplayOptions.displayProperties[key]}
+                        onChange={() =>
+                          setIssueDisplayOptions((current) => ({
+                            ...current,
+                            displayProperties: {
+                              ...current.displayProperties,
+                              [key]: !current.displayProperties[key],
+                            },
+                          }))
+                        }
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-[12px] text-[var(--color-text-secondary)]">
+                <span className="mb-1 block">Group by</span>
+                <select
+                  aria-label="Select project group by"
+                  value={projectDisplayOptions.groupBy}
+                  onChange={(event) =>
+                    setProjectDisplayOptions((current) => ({
+                      ...current,
+                      groupBy: event.target.value as ProjectViewGroupByOption,
+                    }))
+                  }
+                  className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                >
+                  {Object.entries(projectGroupByLabels).map(
+                    ([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+              <div>
+                <span className="mb-1 block text-[12px] text-[var(--color-text-secondary)]">
+                  Visible properties
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {projectPropertyLabels.map(({ key, label }) => (
+                    <label
+                      key={key}
+                      className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={projectDisplayOptions.visibleProperties[key]}
+                        onChange={() =>
+                          setProjectDisplayOptions((current) => ({
+                            ...current,
+                            visibleProperties: {
+                              ...current.visibleProperties,
+                              [key]: !current.visibleProperties[key],
+                            },
+                          }))
+                        }
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
 
         <div className="mb-4">
           <span className="mb-1 block text-[12px] text-[var(--color-text-secondary)]">
@@ -643,11 +989,17 @@ export function ViewsPage({
       }
 
       writeStoredIssueFilters(view.teamKey, view.filterState.issueFilters);
+      writeStoredIssueDisplayOptions(
+        view.teamKey,
+        view.filterState.issueDisplayOptions,
+      );
       router.push(
         withWorkspaceSlug(
           view.layout === "board"
             ? `/team/${view.teamKey}/board`
-            : `/team/${view.teamKey}/all`,
+            : view.layout === "timeline"
+              ? `/team/${view.teamKey}/timeline`
+              : `/team/${view.teamKey}/all`,
           workspaceSlug,
         ),
       );

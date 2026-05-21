@@ -72,7 +72,7 @@ vi.mock("@/lib/db", () => ({
       };
     }),
     insert: vi.fn(() => ({
-      values: vi.fn().mockReturnValue({
+      values: insertValuesMock.mockReturnValue({
         returning: vi.fn().mockResolvedValue([{ id: "view-2" }]),
       }),
     })),
@@ -160,6 +160,45 @@ describe("views collection route", () => {
     const payload = await response.json();
     expect(payload.views.length).toBe(1);
     expect(payload.teams.length).toBe(1);
+  });
+
+  it("persists timeline layouts and rich display options", async () => {
+    normalizeViewFilterStateMock.mockReturnValueOnce({
+      entityType: "issues",
+      scope: "team",
+      issueFilters: [{ type: "status", operator: "is", values: ["started"] }],
+      issueDisplayOptions: { groupBy: "assignee", orderBy: "updated" },
+      projectStatusFilter: "all",
+      projectSortBy: "created-desc",
+      projectDisplayOptions: { groupBy: "status" },
+    });
+    const { POST } = await import("@/app/api/views/route");
+
+    const response = await POST(
+      new Request("http://localhost", {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Timeline issues",
+          layout: "timeline",
+          teamId: "team-1",
+          filterState: { entityType: "issues" },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(insertValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        layout: "timeline",
+        filterState: expect.objectContaining({
+          issueFilters: [
+            { type: "status", operator: "is", values: ["started"] },
+          ],
+          issueDisplayOptions: { groupBy: "assignee", orderBy: "updated" },
+        }),
+        teamId: "team-1",
+      }),
+    );
   });
 
   it("creates a view", async () => {
