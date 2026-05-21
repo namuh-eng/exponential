@@ -140,13 +140,9 @@ export async function PATCH(request: Request) {
     currentAiSettings,
     body.aiSettings,
   );
-  const currentSettings = asRecord(currentWorkspace.settings);
   const settings = {
-    ...currentSettings,
-    ai: {
-      ...asRecord(currentSettings.ai),
-      ...serializeWorkspaceAiSettings(nextAiSettings),
-    },
+    ...asRecord(currentWorkspace.settings),
+    ai: serializeWorkspaceAiSettings(nextAiSettings),
   };
 
   await db
