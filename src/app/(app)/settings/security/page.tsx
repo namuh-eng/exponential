@@ -709,7 +709,10 @@ export default function SecurityPage() {
           </div>
           <p className="mb-3 text-[12px] text-[var(--color-text-tertiary)]">
             Restrict direct web, desktop, mobile, and API access to configured
-            IP addresses or CIDR ranges. Available on Enterprise plans.
+            IP addresses or CIDR ranges. Owners should verify an allowed VPN or
+            office range before enabling; support or audited database access is
+            the recovery path if all owners are locked out. Available on
+            Enterprise plans.
           </p>
           <div className="rounded-lg border border-[var(--color-border)] px-4 py-3">
             {security.ipRestrictions.length > 0 ? (

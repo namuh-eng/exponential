@@ -1,9 +1,14 @@
 import { randomBytes } from "node:crypto";
-import { isIP } from "node:net";
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
+import {
+  createIpRestrictionApiResponse,
+  evaluateWorkspaceIpRestrictions,
+  isValidIpOrCidrRange,
+  normalizeIpRange,
+} from "@/lib/workspace-ip-restrictions";
 import {
   DEFAULT_WORKSPACE_PERMISSION_SETTINGS,
   type PermissionLevel,
@@ -75,36 +80,6 @@ const DEFAULT_SECURITY_STATE: WorkspaceSecurityState = {
   ipRestrictions: [],
 };
 
-function isValidCidrRange(value: string) {
-  const trimmed = value.trim();
-  const [address, prefix, extra] = trimmed.split("/");
-  if (!address || extra !== undefined) {
-    return false;
-  }
-
-  const version = isIP(address);
-  if (version === 0) {
-    return false;
-  }
-
-  if (prefix === undefined) {
-    return true;
-  }
-
-  if (!/^\d+$/.test(prefix)) {
-    return false;
-  }
-
-  const prefixNumber = Number(prefix);
-  return version === 4
-    ? prefixNumber >= 0 && prefixNumber <= 32
-    : prefixNumber >= 0 && prefixNumber <= 128;
-}
-
-function normalizeIpRange(value: string) {
-  return value.trim().toLowerCase();
-}
-
 function normalizeIpRestrictions(value: unknown) {
   if (!Array.isArray(value)) {
     return [];
@@ -117,7 +92,7 @@ function normalizeIpRestrictions(value: unknown) {
     const record = asRecord(item);
     const rawRange = typeof record.range === "string" ? record.range : "";
     const range = normalizeIpRange(rawRange);
-    if (!range || !isValidCidrRange(range) || seenRanges.has(range)) {
+    if (!range || !isValidIpOrCidrRange(range) || seenRanges.has(range)) {
       continue;
     }
 
@@ -146,7 +121,7 @@ function validateIpRestrictions(value: unknown) {
       return "IP restrictions must contain valid entries";
     }
 
-    if (typeof item.range !== "string" || !isValidCidrRange(item.range)) {
+    if (typeof item.range !== "string" || !isValidIpOrCidrRange(item.range)) {
       return "IP restrictions must use valid IP addresses or CIDR ranges";
     }
 
@@ -365,6 +340,18 @@ export async function GET(request: Request) {
     );
   }
 
+  const ipDecision = evaluateWorkspaceIpRestrictions({
+    settings: currentWorkspace.settings,
+    headers: request.headers,
+  });
+  if (!ipDecision.allowed) {
+    console.warn("workspace_ip_restriction_denied", {
+      workspaceId: currentWorkspace.id,
+      reason: ipDecision.reason,
+    });
+    return createIpRestrictionApiResponse(ipDecision);
+  }
+
   const inviteLinkToken = await ensureInviteToken(currentWorkspace);
   return NextResponse.json(
     buildResponse(
@@ -390,6 +377,18 @@ export async function PATCH(request: Request) {
       { error: "No active workspace found" },
       { status: 404 },
     );
+  }
+
+  const ipDecision = evaluateWorkspaceIpRestrictions({
+    settings: currentWorkspace.settings,
+    headers: request.headers,
+  });
+  if (!ipDecision.allowed) {
+    console.warn("workspace_ip_restriction_denied", {
+      workspaceId: currentWorkspace.id,
+      reason: ipDecision.reason,
+    });
+    return createIpRestrictionApiResponse(ipDecision);
   }
 
   if (!isWorkspaceAdminRole(currentWorkspace.role)) {
