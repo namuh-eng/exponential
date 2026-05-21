@@ -24,6 +24,8 @@ interface IssueCardProps {
   assigneeImage?: string;
   labels?: { name: string; color: string }[];
   projectName?: string | null;
+  cycleName?: string | null;
+  estimate?: number | null;
   dueDate?: string | null;
   createdAt: string;
   href?: string;
@@ -64,6 +66,8 @@ export function IssueCard({
   assigneeImage,
   labels,
   projectName,
+  cycleName,
+  estimate,
   dueDate,
   createdAt,
   href,
@@ -98,10 +102,16 @@ export function IssueCard({
       </p>
 
       {(showProp("project") && projectName) ||
-      (showProp("dueDate") && dueDate) ? (
+      (showProp("dueDate") && dueDate) ||
+      cycleName ||
+      (estimate !== null && estimate !== undefined) ? (
         <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-text-secondary)]">
           {showProp("project") && projectName ? (
             <span className="truncate">{projectName}</span>
+          ) : null}
+          {cycleName ? <span>{cycleName}</span> : null}
+          {estimate !== null && estimate !== undefined ? (
+            <span>{estimate} pt</span>
           ) : null}
           {showProp("dueDate") && dueDate ? (
             <span>Due {formatDate(dueDate)}</span>

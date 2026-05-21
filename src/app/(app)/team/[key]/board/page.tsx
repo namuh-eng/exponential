@@ -526,6 +526,8 @@ export default function TeamBoardPage() {
                 assigneeImage={iss.assignee?.image ?? undefined}
                 labels={iss.labels}
                 projectName={iss.projectName}
+                cycleName={iss.cycleName}
+                estimate={iss.estimate}
                 dueDate={iss.dueDate}
                 createdAt={iss.createdAt}
                 href={withWorkspaceSlug(

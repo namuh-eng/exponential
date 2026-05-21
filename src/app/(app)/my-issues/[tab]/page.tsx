@@ -31,6 +31,8 @@ interface IssueData {
   labelIds: string[];
   projectId: string | null;
   projectName?: string | null;
+  cycleName?: string | null;
+  estimate?: number | null;
   dueDate: string | null;
   createdAt: string;
   updatedAt?: string;
@@ -369,6 +371,9 @@ export default function MyIssuesTabPage() {
                 assigneeImage={iss.assignee?.image ?? undefined}
                 labels={iss.labels}
                 projectName={iss.projectName ?? undefined}
+                cycleName={iss.cycleName}
+                estimate={iss.estimate}
+                dueDate={iss.dueDate}
                 createdAt={iss.displayAt ?? iss.createdAt}
                 href={buildIssueHref(iss, workspaceSlug)}
                 displayProperties={displayProperties}
