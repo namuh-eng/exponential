@@ -10,12 +10,8 @@ import {
   describeNotificationDomainPreferences,
   mergeAccountNotificationSettings,
 } from "@/lib/account-notifications";
-import {
-  getWorkspaceSlugFromPath,
-  withWorkspaceSlug,
-} from "@/lib/workspace-paths";
+import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 const DOMAIN_METADATA: Record<
@@ -223,11 +219,7 @@ export function NotificationsOverviewPage({
   const { settings, saveState, updateSettings } =
     useAccountNotificationsSettings();
   const shellContext = useAppShellContext();
-  const pathname = usePathname();
-  const workspaceSlug =
-    workspaceSlugProp ||
-    shellContext?.workspaceSlug ||
-    getWorkspaceSlugFromPath(pathname);
+  const workspaceSlug = workspaceSlugProp ?? shellContext?.workspaceSlug;
 
   return (
     <div className="max-w-[820px]">
@@ -364,11 +356,7 @@ export function NotificationChannelPage({
   const { settings, saveState, updateSettings } =
     useAccountNotificationsSettings();
   const shellContext = useAppShellContext();
-  const pathname = usePathname();
-  const workspaceSlug =
-    workspaceSlugProp ||
-    shellContext?.workspaceSlug ||
-    getWorkspaceSlugFromPath(pathname);
+  const workspaceSlug = workspaceSlugProp ?? shellContext?.workspaceSlug;
   const activeChannel: AccountNotificationChannelKey =
     channel === "mobile" ? "inbox" : channel;
   const metadata =
