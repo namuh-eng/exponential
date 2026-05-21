@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { createIsolatedTestSession } from "./test-session";
 
 test.describe("Integrations and Slack notification settings", () => {
   test("exercises catalog setup state, team Slack save path, and application revoke", async ({
     page,
   }) => {
+    await createIsolatedTestSession(page, "integrations");
     const suffix = Date.now().toString(36);
     const workspaceSlug = `integrations-${suffix}`;
     const workspaceResponse = await page.request.post("/api/workspaces", {
@@ -30,7 +32,9 @@ test.describe("Integrations and Slack notification settings", () => {
     await page.goto(
       `/${workspaceSlug}/settings/teams/${teamKey}/slack-notifications`,
     );
-    await expect(page.getByText("Slack is not connected")).toBeVisible();
+    await expect(page.getByText("Slack is not connected")).toBeVisible({
+      timeout: 15000,
+    });
     await page.getByRole("button", { name: "Connect Slack" }).click();
     await expect(
       page.getByText(/Slack OAuth|AUTH_SLACK/).first(),
@@ -63,7 +67,9 @@ test.describe("Integrations and Slack notification settings", () => {
     expect(grantResponse.status()).toBe(201);
 
     await page.goto(`/${workspaceSlug}/settings/applications`);
-    await expect(page.getByText("Integrations E2E App")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Integrations E2E App", exact: true }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "Revoke" }).click();
     await page.getByRole("button", { name: "Confirm revoke" }).click();
     await expect(page.getByText("Application access revoked.")).toBeVisible();

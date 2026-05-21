@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { createIsolatedTestSession } from "./test-session";
 
 test.describe("Workspace applications settings", () => {
   test("shows true empty state, then displays and revokes a connected application", async ({
     page,
   }) => {
+    await createIsolatedTestSession(page, "applications");
     const suffix = Date.now().toString(36);
     const workspaceSlug = `applications-${suffix}`;
     const workspaceResponse = await page.request.post("/api/workspaces", {
@@ -35,7 +37,9 @@ test.describe("Workspace applications settings", () => {
     const grant = await grantResponse.json();
 
     await page.reload();
-    await expect(page.getByText("E2E Workspace App")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "E2E Workspace App", exact: true }),
+    ).toBeVisible();
     await expect(page.getByText(/Authorized by /)).toBeVisible();
     await expect(page.getByText(grant.clientId)).toBeVisible();
     await expect(
@@ -50,7 +54,9 @@ test.describe("Workspace applications settings", () => {
       }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Cancel" }).click();
-    await expect(page.getByText("E2E Workspace App")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "E2E Workspace App", exact: true }),
+    ).toBeVisible();
 
     await page.getByRole("button", { name: "Revoke" }).click();
     await page.getByRole("button", { name: "Confirm revoke" }).click();
