@@ -22,23 +22,40 @@ async function unreadCountFor(userId: string) {
 }
 
 export async function PATCH(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { response: authResponse, session } = await requireApiSession();
-  if (authResponse) {
-    return authResponse;
+  if (authResponse) return authResponse;
+
+  const body = (await request.json().catch(() => null)) as {
+    snoozedUntilAt?: string | null;
+  } | null;
+  const nextSnoozedUntilAt = body?.snoozedUntilAt ?? null;
+  const snoozeDate = nextSnoozedUntilAt ? new Date(nextSnoozedUntilAt) : null;
+
+  if (snoozeDate && Number.isNaN(snoozeDate.getTime())) {
+    return NextResponse.json(
+      { error: "snoozedUntilAt must be a valid ISO date or null" },
+      { status: 400 },
+    );
   }
 
   const { id } = await params;
-
   const updated = await db
     .update(notification)
-    .set({ readAt: new Date() })
+    .set({
+      snoozedUntilAt: snoozeDate,
+      unsnoozedAt: snoozeDate ? null : new Date(),
+    })
     .where(
       and(eq(notification.id, id), eq(notification.userId, session.user.id)),
     )
-    .returning({ id: notification.id });
+    .returning({
+      id: notification.id,
+      snoozedUntilAt: notification.snoozedUntilAt,
+      unsnoozedAt: notification.unsnoozedAt,
+    });
 
   if (updated.length === 0) {
     return NextResponse.json(
@@ -51,6 +68,11 @@ export async function PATCH(
 
   return NextResponse.json({
     success: true,
+    notification: {
+      id: updated[0].id,
+      snoozedUntilAt: updated[0].snoozedUntilAt?.toISOString() ?? null,
+      unsnoozedAt: updated[0].unsnoozedAt?.toISOString() ?? null,
+    },
     ...(unreadCount !== undefined ? { unreadCount } : {}),
   });
 }

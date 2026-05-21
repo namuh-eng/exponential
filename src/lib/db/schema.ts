@@ -1000,6 +1000,8 @@ export const notification = pgTable(
     }),
     type: notificationType("type").notNull(),
     readAt: timestamp("read_at"),
+    snoozedUntilAt: timestamp("snoozed_until_at"),
+    unsnoozedAt: timestamp("unsnoozed_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [

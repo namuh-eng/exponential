@@ -107,7 +107,7 @@ describe("NotificationRow", () => {
     render(<NotificationRow {...defaultProps} />);
     expect(
       screen.getByRole("button", {
-        name: "Open ENG-136 Add dark mode support",
+        name: "Open notification ENG-136 Add dark mode support",
       }),
     ).toBeDefined();
   });
@@ -277,7 +277,9 @@ describe("Inbox page", () => {
 
     await vi.waitFor(() => {
       expect(
-        screen.getByRole("button", { name: /filter inbox notifications/i }),
+        screen.getByRole("button", {
+          name: /filter inbox notifications/i,
+        }),
       ).toBeDefined();
       expect(
         screen.getByRole("button", {
@@ -331,7 +333,9 @@ describe("Inbox page", () => {
     });
 
     fireEvent.click(
-      screen.getByRole("button", { name: /filter inbox notifications/i }),
+      screen.getByRole("button", {
+        name: /filter inbox notifications/i,
+      }),
     );
 
     await vi.waitFor(() => {
@@ -447,7 +451,7 @@ describe("Inbox page", () => {
     });
   });
 
-  it("opens issue rows directly while marking them read", async () => {
+  it("opens notification deep links while marking rows read", async () => {
     global.fetch = vi
       .fn()
       .mockResolvedValueOnce({
@@ -487,14 +491,14 @@ describe("Inbox page", () => {
     fireEvent.click(screen.getByTestId("notification-row"));
 
     await vi.waitFor(() => {
-      expect(mockRouterPush).toHaveBeenCalledWith("/issue/ENG-136");
+      expect(mockRouterPush).toHaveBeenCalledWith("/inbox/notification/n1");
     });
     expect(global.fetch).toHaveBeenCalledWith("/api/notifications/n1/read", {
       method: "PATCH",
     });
   });
 
-  it("still opens issue rows when marking read fails", async () => {
+  it("still opens notification deep links when marking read fails", async () => {
     global.fetch = vi
       .fn()
       .mockResolvedValueOnce({
@@ -534,7 +538,7 @@ describe("Inbox page", () => {
     fireEvent.click(screen.getByTestId("notification-row"));
 
     await vi.waitFor(() => {
-      expect(mockRouterPush).toHaveBeenCalledWith("/issue/ENG-136");
+      expect(mockRouterPush).toHaveBeenCalledWith("/inbox/notification/n1");
     });
   });
 
@@ -577,7 +581,7 @@ describe("Inbox page", () => {
 
     fireEvent.click(screen.getByTestId("notification-row"));
 
-    expect(mockRouterPush).not.toHaveBeenCalled();
+    expect(mockRouterPush).toHaveBeenCalledWith("/inbox/notification/n1");
     await vi.waitFor(() => {
       expect(screen.getByText(/commented on this issue/)).toBeDefined();
     });
@@ -625,6 +629,233 @@ describe("Inbox page", () => {
     await vi.waitFor(() => {
       expect(screen.getAllByText(/Ashley Ha/).length).toBeGreaterThan(0);
       expect(screen.getByText(/mentioned you in this issue/)).toBeDefined();
+    });
+  });
+});
+
+describe("Inbox page issue 196 controls", () => {
+  it("marks a read notification unread from the detail pane", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            notifications: [
+              {
+                id: "n-read",
+                type: "assigned",
+                actorName: "Ashley Ha",
+                actorImage: null,
+                issueIdentifier: "ENG-196",
+                issueTitle: "Restore unread state",
+                issuePriority: "high",
+                readAt: "2026-01-01T00:00:00.000Z",
+                createdAt: "2026-01-01T00:00:00.000Z",
+                snoozedUntilAt: null,
+                unsnoozedAt: null,
+              },
+            ],
+            unreadCount: 0,
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, unreadCount: 1 }),
+      }) as unknown as typeof fetch;
+
+    cleanup();
+    vi.resetModules();
+    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
+    render(<InboxPage />);
+
+    await vi.waitFor(() => {
+      expect(
+        screen.getAllByText("Restore unread state").length,
+      ).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByTestId("mark-unread-action"));
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/1 unread/)).toBeDefined();
+    });
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/notifications/n-read/unread",
+      { method: "PATCH" },
+    );
+  });
+
+  it("bulk marks unread non-comment notifications as read", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            notifications: [
+              {
+                id: "n-assigned",
+                type: "assigned",
+                actorName: "Ashley Ha",
+                actorImage: null,
+                issueIdentifier: "ENG-196",
+                issueTitle: "Bulk read target",
+                issuePriority: "high",
+                readAt: null,
+                createdAt: "2026-01-02T00:00:00.000Z",
+                snoozedUntilAt: null,
+                unsnoozedAt: null,
+              },
+              {
+                id: "n-comment",
+                type: "comment",
+                actorName: "MCP",
+                actorImage: null,
+                issueIdentifier: "ENG-197",
+                issueTitle: "Comment stays unread",
+                issuePriority: "low",
+                readAt: null,
+                createdAt: "2026-01-01T00:00:00.000Z",
+                snoozedUntilAt: null,
+                unsnoozedAt: null,
+              },
+            ],
+            unreadCount: 2,
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, unreadCount: 1 }),
+      }) as unknown as typeof fetch;
+
+    cleanup();
+    vi.resetModules();
+    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
+    render(<InboxPage />);
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/2 unread/)).toBeDefined();
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /mark non-comment notifications as read/i,
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/1 unread/)).toBeDefined();
+    });
+    expect(global.fetch).toHaveBeenCalledWith("/api/notifications/bulk-read", {
+      method: "PATCH",
+    });
+  });
+
+  it("selects a deep-linked notification id and shows not-found state for missing ids", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          notifications: [
+            {
+              id: "n-deep",
+              type: "mentioned",
+              actorName: "Ashley Ha",
+              actorImage: null,
+              issueIdentifier: "ENG-196",
+              issueTitle: "Deep linked notification",
+              issuePriority: "medium",
+              readAt: "2026-01-01T00:00:00.000Z",
+              createdAt: "2026-01-01T00:00:00.000Z",
+              snoozedUntilAt: null,
+              unsnoozedAt: null,
+            },
+          ],
+          unreadCount: 0,
+        }),
+    }) as unknown as typeof fetch;
+
+    cleanup();
+    vi.resetModules();
+    const { InboxClient } = await import("@/components/inbox-client");
+    const { rerender } = render(<InboxClient initialSelectedId="n-deep" />);
+
+    await vi.waitFor(() => {
+      expect(
+        screen.getAllByText("Deep linked notification").length,
+      ).toBeGreaterThan(0);
+      expect(screen.getByText(/mentioned you in this issue/)).toBeDefined();
+    });
+
+    rerender(<InboxClient initialSelectedId="missing-notification" />);
+
+    await vi.waitFor(() => {
+      expect(
+        screen.getByText("Notification not found or no longer available."),
+      ).toBeDefined();
+    });
+  });
+
+  it("hides snoozed notifications by default and reveals them via display option", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          notifications: [
+            {
+              id: "n-visible",
+              type: "assigned",
+              actorName: "Ashley Ha",
+              actorImage: null,
+              issueIdentifier: "ENG-196",
+              issueTitle: "Visible notification",
+              issuePriority: "high",
+              readAt: null,
+              createdAt: "2026-01-02T00:00:00.000Z",
+              snoozedUntilAt: null,
+              unsnoozedAt: null,
+            },
+            {
+              id: "n-snoozed",
+              type: "assigned",
+              actorName: "Ashley Ha",
+              actorImage: null,
+              issueIdentifier: "ENG-197",
+              issueTitle: "Snoozed notification",
+              issuePriority: "high",
+              readAt: null,
+              createdAt: "2026-01-01T00:00:00.000Z",
+              snoozedUntilAt: "2999-01-01T00:00:00.000Z",
+              unsnoozedAt: null,
+            },
+          ],
+          unreadCount: 1,
+        }),
+    }) as unknown as typeof fetch;
+
+    cleanup();
+    vi.resetModules();
+    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
+    render(<InboxPage />);
+
+    await vi.waitFor(() => {
+      expect(
+        screen.getAllByText("Visible notification").length,
+      ).toBeGreaterThan(0);
+      expect(screen.queryByText("Snoozed notification")).toBeNull();
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /toggle snoozed notifications visibility/i,
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(
+        screen.getAllByText("Snoozed notification").length,
+      ).toBeGreaterThan(0);
     });
   });
 });

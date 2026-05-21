@@ -19,6 +19,12 @@ export type StatusTransitionPreference =
   | "started"
   | "started-and-completed";
 
+export type InboxDisplayPreferences = {
+  showReadItems: boolean;
+  showUnreadItemsFirst: boolean;
+  showSnoozedItems: boolean;
+};
+
 export type SidebarVisibilitySettings = {
   inbox: boolean;
   myIssues: boolean;
@@ -40,6 +46,7 @@ export type AccountPreferences = {
   openInDesktopApp: boolean;
   sidebarBadgeStyle: SidebarBadgeStyle;
   sidebarVisibility: SidebarVisibilitySettings;
+  inboxDisplay: InboxDisplayPreferences;
   agentPersonalization: {
     instructions: string;
     autoFix: boolean;
@@ -53,9 +60,10 @@ export type AccountPreferences = {
 
 export type AccountPreferencesPatch = Omit<
   Partial<AccountPreferences>,
-  "sidebarVisibility" | "agentPersonalization" | "automations"
+  "sidebarVisibility" | "inboxDisplay" | "agentPersonalization" | "automations"
 > & {
   sidebarVisibility?: Partial<SidebarVisibilitySettings>;
+  inboxDisplay?: Partial<InboxDisplayPreferences>;
   agentPersonalization?: Partial<AccountPreferences["agentPersonalization"]>;
   automations?: Partial<AccountPreferences["automations"]>;
 };
@@ -78,6 +86,11 @@ export const DEFAULT_ACCOUNT_PREFERENCES: AccountPreferences = {
     views: true,
     initiatives: true,
     cycles: true,
+  },
+  inboxDisplay: {
+    showReadItems: true,
+    showUnreadItemsFirst: false,
+    showSnoozedItems: false,
   },
   agentPersonalization: {
     instructions: "",
@@ -160,6 +173,7 @@ export function normalizeAccountPreferences(
   const parsed = asRecord(value);
   const sidebarVisibility = asRecord(parsed.sidebarVisibility);
   const agentPersonalization = asRecord(parsed.agentPersonalization);
+  const inboxDisplay = asRecord(parsed.inboxDisplay);
   const automations = asRecord(parsed.automations);
 
   return {
@@ -224,6 +238,20 @@ export function normalizeAccountPreferences(
           ? sidebarVisibility.cycles
           : DEFAULT_ACCOUNT_PREFERENCES.sidebarVisibility.cycles,
     },
+    inboxDisplay: {
+      showReadItems:
+        typeof inboxDisplay.showReadItems === "boolean"
+          ? inboxDisplay.showReadItems
+          : DEFAULT_ACCOUNT_PREFERENCES.inboxDisplay.showReadItems,
+      showUnreadItemsFirst:
+        typeof inboxDisplay.showUnreadItemsFirst === "boolean"
+          ? inboxDisplay.showUnreadItemsFirst
+          : DEFAULT_ACCOUNT_PREFERENCES.inboxDisplay.showUnreadItemsFirst,
+      showSnoozedItems:
+        typeof inboxDisplay.showSnoozedItems === "boolean"
+          ? inboxDisplay.showSnoozedItems
+          : DEFAULT_ACCOUNT_PREFERENCES.inboxDisplay.showSnoozedItems,
+    },
     agentPersonalization: {
       instructions:
         typeof agentPersonalization.instructions === "string"
@@ -260,6 +288,10 @@ export function mergeAccountPreferences(
     sidebarVisibility: {
       ...current.sidebarVisibility,
       ...patch.sidebarVisibility,
+    },
+    inboxDisplay: {
+      ...current.inboxDisplay,
+      ...patch.inboxDisplay,
     },
     agentPersonalization: {
       ...current.agentPersonalization,

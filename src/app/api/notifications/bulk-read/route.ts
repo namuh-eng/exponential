@@ -1,8 +1,8 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { notification } from "@/lib/db/schema";
-import { and, eq, sql } from "drizzle-orm";
-import { type NextRequest, NextResponse } from "next/server";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
+import { NextResponse } from "next/server";
 
 async function unreadCountFor(userId: string) {
   if (typeof db.select !== "function") return undefined;
@@ -21,36 +21,27 @@ async function unreadCountFor(userId: string) {
   return row?.count ?? 0;
 }
 
-export async function PATCH(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH() {
   const { response: authResponse, session } = await requireApiSession();
-  if (authResponse) {
-    return authResponse;
-  }
-
-  const { id } = await params;
+  if (authResponse) return authResponse;
 
   const updated = await db
     .update(notification)
     .set({ readAt: new Date() })
     .where(
-      and(eq(notification.id, id), eq(notification.userId, session.user.id)),
+      and(
+        eq(notification.userId, session.user.id),
+        isNull(notification.readAt),
+        ne(notification.type, "comment"),
+      ),
     )
     .returning({ id: notification.id });
-
-  if (updated.length === 0) {
-    return NextResponse.json(
-      { error: "Notification not found" },
-      { status: 404 },
-    );
-  }
 
   const unreadCount = await unreadCountFor(session.user.id);
 
   return NextResponse.json({
     success: true,
+    updatedCount: updated.length,
     ...(unreadCount !== undefined ? { unreadCount } : {}),
   });
 }

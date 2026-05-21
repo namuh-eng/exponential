@@ -26,15 +26,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { response: authResponse, session } = await requireApiSession();
-  if (authResponse) {
-    return authResponse;
-  }
+  if (authResponse) return authResponse;
 
   const { id } = await params;
-
   const updated = await db
     .update(notification)
-    .set({ readAt: new Date() })
+    .set({ readAt: null })
     .where(
       and(eq(notification.id, id), eq(notification.userId, session.user.id)),
     )

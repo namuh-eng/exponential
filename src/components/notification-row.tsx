@@ -34,6 +34,7 @@ interface NotificationRowProps {
   issueTitle: string;
   readAt: string | null;
   createdAt: string;
+  isSnoozed?: boolean;
   isSelected: boolean;
   onClick: (id: string) => void;
 }
@@ -47,6 +48,7 @@ export function NotificationRow({
   issueTitle,
   readAt,
   createdAt,
+  isSnoozed = false,
   isSelected,
   onClick,
 }: NotificationRowProps) {
@@ -56,7 +58,7 @@ export function NotificationRow({
       data-testid="notification-row"
       aria-label={
         issueIdentifier
-          ? `Open ${issueIdentifier} ${issueTitle}`
+          ? `Open notification ${issueIdentifier} ${issueTitle}`
           : `Select notification ${issueTitle}`
       }
       onClick={() => onClick(id)}
@@ -105,10 +107,14 @@ export function NotificationRow({
         </div>
       </div>
 
-      {/* Timestamp */}
-      <span className="shrink-0 pt-0.5 text-[12px] text-[var(--color-text-secondary)]">
-        {formatRelativeTime(createdAt)}
-      </span>
+      <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5 text-[12px] text-[var(--color-text-secondary)]">
+        <span>{formatRelativeTime(createdAt)}</span>
+        {isSnoozed && (
+          <span className="rounded bg-[var(--color-surface-hover)] px-1">
+            Snoozed
+          </span>
+        )}
+      </div>
     </button>
   );
 }
