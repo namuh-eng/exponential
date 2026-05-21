@@ -1,5 +1,6 @@
 "use client";
 
+import { useAppShellContext } from "@/app/(app)/app-shell";
 import {
   ACCOUNT_NOTIFICATION_DOMAINS,
   type AccountNotificationChannelKey,
@@ -9,6 +10,7 @@ import {
   describeNotificationDomainPreferences,
   mergeAccountNotificationSettings,
 } from "@/lib/account-notifications";
+import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -211,9 +213,13 @@ function patchFor(
   return { [domain]: { [key]: value } } as AccountNotificationSettingsPatch;
 }
 
-export function NotificationsOverviewPage() {
+export function NotificationsOverviewPage({
+  workspaceSlug: workspaceSlugProp,
+}: { workspaceSlug?: string | null } = {}) {
   const { settings, saveState, updateSettings } =
     useAccountNotificationsSettings();
+  const shellContext = useAppShellContext();
+  const workspaceSlug = workspaceSlugProp ?? shellContext?.workspaceSlug;
 
   return (
     <div className="max-w-[820px]">
@@ -235,7 +241,10 @@ export function NotificationsOverviewPage() {
             return (
               <Link
                 key={domain}
-                href={`/settings/account/notifications/${domain}`}
+                href={withWorkspaceSlug(
+                  `/settings/account/notifications/${domain}`,
+                  workspaceSlug,
+                )}
                 aria-label={`${metadata.name} notification settings`}
                 className="flex items-center justify-between gap-4 border-b border-[var(--color-border)] px-4 py-4 transition-colors last:border-b-0 hover:bg-[var(--color-surface-hover)]"
               >
@@ -339,9 +348,15 @@ export function NotificationsOverviewPage() {
 
 export function NotificationChannelPage({
   channel,
-}: { channel: AccountNotificationChannelKey | "mobile" }) {
+  workspaceSlug: workspaceSlugProp,
+}: {
+  channel: AccountNotificationChannelKey | "mobile";
+  workspaceSlug?: string | null;
+}) {
   const { settings, saveState, updateSettings } =
     useAccountNotificationsSettings();
+  const shellContext = useAppShellContext();
+  const workspaceSlug = workspaceSlugProp ?? shellContext?.workspaceSlug;
   const activeChannel: AccountNotificationChannelKey =
     channel === "mobile" ? "inbox" : channel;
   const metadata =
@@ -358,7 +373,10 @@ export function NotificationChannelPage({
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
           <Link
-            href="/settings/account/notifications"
+            href={withWorkspaceSlug(
+              "/settings/account/notifications",
+              workspaceSlug,
+            )}
             className="mb-3 inline-flex items-center gap-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
           >
             ← Notifications

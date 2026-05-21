@@ -85,6 +85,9 @@ describe("NotificationsOverviewPage UI", () => {
       screen.getByRole("link", { name: /Inbox notification settings/ }),
     ).toHaveAttribute("href", "/settings/account/notifications/inbox");
     expect(
+      screen.getByRole("link", { name: /Email notification settings/ }),
+    ).toHaveAttribute("href", "/settings/account/notifications/email");
+    expect(
       screen.getByText(
         "Manage email delivery, digests, product updates, and invite mail.",
       ),
@@ -94,6 +97,21 @@ describe("NotificationsOverviewPage UI", () => {
     fireEvent.click(sidebarToggle);
     await waitFor(() =>
       expect(sidebarToggle).toHaveAttribute("aria-checked", "false"),
+    );
+  });
+
+  it("can render workspace-prefixed notification links", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => mockNotificationSettings,
+    } as Response);
+
+    render(<NotificationsOverviewPage workspaceSlug="foreverbrowsing" />);
+    expect(
+      await screen.findByRole("link", { name: /Email notification settings/ }),
+    ).toHaveAttribute(
+      "href",
+      "/foreverbrowsing/settings/account/notifications/email",
     );
   });
 });

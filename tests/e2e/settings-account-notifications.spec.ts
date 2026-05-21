@@ -60,4 +60,37 @@ test.describe("account notification settings", () => {
       page.getByRole("switch", { name: "Daily digest" }),
     ).toHaveAttribute("aria-checked", "false");
   });
+
+  test("keeps workspace context when opening a channel from the overview", async ({
+    page,
+  }) => {
+    await page.goto("/foreverbrowsing/settings/account/notifications");
+    await expect(page.getByText("Notification preferences")).toBeVisible();
+
+    const emailLink = page.getByRole("link", {
+      name: /Email notification settings/,
+    });
+    await expect(emailLink).toHaveAttribute(
+      "href",
+      "/foreverbrowsing/settings/account/notifications/email",
+    );
+
+    await emailLink.click();
+    await expect(page).toHaveURL(
+      /\/foreverbrowsing\/settings\/account\/notifications\/email$/,
+    );
+    await expect(
+      page.getByRole("heading", { name: "Email", exact: true }),
+    ).toBeVisible();
+
+    const backLink = page.getByRole("link", { name: "← Notifications" });
+    await expect(backLink).toHaveAttribute(
+      "href",
+      "/foreverbrowsing/settings/account/notifications",
+    );
+    await backLink.click();
+    await expect(page).toHaveURL(
+      /\/foreverbrowsing\/settings\/account\/notifications$/,
+    );
+  });
 });
