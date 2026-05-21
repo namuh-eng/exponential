@@ -8,6 +8,7 @@ vi.mock("@/lib/auth-client", () => ({
 
 import AccountSecurityPage from "@/app/(app)/settings/account/security/page";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -145,10 +146,13 @@ describe("AccountSecurityPage component", () => {
     ).not.toBeDisabled();
   });
 
-  it("adds and revokes passkeys instead of rendering a permanent disabled stub", async () => {
-    const promptMock = vi.fn(() => "Work laptop");
-    vi.stubGlobal("prompt", promptMock);
-    enrollPasskeyMock.mockResolvedValueOnce({ id: "passkey-1" });
+  it("adds and revokes passkeys through a visible naming dialog", async () => {
+    let finishEnrollment!: (value: { id: string }) => void;
+    enrollPasskeyMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishEnrollment = resolve;
+      }),
+    );
 
     const fetchMock = vi
       .fn()
@@ -198,9 +202,27 @@ describe("AccountSecurityPage component", () => {
 
     fireEvent.click(addPasskey);
 
+    expect(
+      screen.getByRole("dialog", { name: "Add passkey" }),
+    ).toBeInTheDocument();
+    const nameInput = screen.getByLabelText("Passkey name");
+    fireEvent.change(nameInput, { target: { value: "Work laptop" } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(
+      await screen.findByText("Starting passkey enrollment…"),
+    ).toBeInTheDocument();
+    await act(async () => {
+      finishEnrollment({ id: "passkey-1" });
+    });
+
     await screen.findByText("Passkey added.");
     expect(enrollPasskeyMock).toHaveBeenCalledWith("Work laptop");
+    expect(screen.queryByRole("dialog", { name: "Add passkey" })).toBeNull();
     expect(screen.getByText("Work laptop")).toBeInTheDocument();
+    expect(
+      screen.getByText(/singleDevice · Device-bound · internal/),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
@@ -208,6 +230,35 @@ describe("AccountSecurityPage component", () => {
       action: "revokePasskey",
       passkeyId: "passkey-1",
     });
+  });
+
+  it("shows inline feedback when passkey enrollment is cancelled or fails", async () => {
+    enrollPasskeyMock.mockRejectedValueOnce(
+      new Error("Passkey enrollment was cancelled."),
+    );
+    mockSecurityFetch(securityPayload());
+
+    render(<AccountSecurityPage />);
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Add passkey",
+      }),
+    );
+    fireEvent.change(screen.getByLabelText("Passkey name"), {
+      target: { value: "Work laptop" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(
+      await screen.findByText("Passkey enrollment was cancelled."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/No passkeys have been added yet/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Add passkey" }),
+    ).toBeInTheDocument();
   });
 
   it("explains unavailable WebAuthn instead of showing an enabled passkey action", async () => {

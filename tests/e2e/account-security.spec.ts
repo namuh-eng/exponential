@@ -42,6 +42,12 @@ test.describe("Account security and access", () => {
     await expect(
       page.getByRole("button", { name: "Add passkey" }),
     ).toBeEnabled();
+    await page.getByRole("button", { name: "Add passkey" }).click();
+    await expect(
+      page.getByRole("dialog", { name: "Add passkey" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByText("Passkey enrollment cancelled.")).toBeVisible();
     await expect(
       page.getByText(/No passkeys have been added yet/i),
     ).toBeVisible();
