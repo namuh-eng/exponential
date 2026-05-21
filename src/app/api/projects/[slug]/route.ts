@@ -24,18 +24,40 @@ import {
   readProjectSettings,
 } from "@/lib/project-detail";
 import {
-  DEFAULT_PROJECT_STATUSES,
+  findProjectStatusConfig,
+  isDefaultProjectStatusKey,
   readProjectStatusSettings,
 } from "@/lib/project-status-settings";
 import { getWorkspaceSlugFromPath } from "@/lib/workspace-paths";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
-const DEFAULT_PROJECT_STATUS_KEYS = new Set(
-  DEFAULT_PROJECT_STATUSES.map((status) => status.key),
-);
-
 const PROJECT_PRIORITIES = new Set(["none", "urgent", "high", "medium", "low"]);
+
+function resolveProjectStatusKey(
+  projectStatus: string,
+  projectSettings: { projectStatusKey: string | null },
+  workspaceSettings: unknown,
+) {
+  const configuredStatus = findProjectStatusConfig(
+    workspaceSettings,
+    projectSettings.projectStatusKey,
+  );
+
+  return configuredStatus?.key ?? projectStatus;
+}
+
+function statusDisplay(workspaceSettings: unknown, key: string) {
+  return (
+    findProjectStatusConfig(workspaceSettings, key) ?? {
+      key,
+      name: key.replace(/^./, (char) => char.toUpperCase()),
+      color: "#6b6f76",
+      icon: "•",
+      isDefault: isDefaultProjectStatusKey(key),
+    }
+  );
+}
 
 function uniqueStrings(values: unknown): string[] {
   if (!Array.isArray(values)) return [];
@@ -103,28 +125,6 @@ async function resolveProjectWorkspaceId(userId: string, request: Request) {
   return findDefaultWorkspaceId(userId);
 }
 
-async function getWorkspaceProjectStatuses(workspaceId: string) {
-  const [workspaceRecord] = await db
-    .select({ settings: workspace.settings })
-    .from(workspace)
-    .where(eq(workspace.id, workspaceId))
-    .limit(1);
-
-  return readProjectStatusSettings(workspaceRecord?.settings);
-}
-
-function resolveProjectStatusKey(
-  dbStatus: string,
-  settingsStatusKey: string | null,
-  availableStatusKeys: Set<string>,
-) {
-  if (settingsStatusKey && availableStatusKeys.has(settingsStatusKey)) {
-    return settingsStatusKey;
-  }
-
-  return dbStatus;
-}
-
 async function findProjectInWorkspace(workspaceId: string, slug: string) {
   const projects = await db
     .select()
@@ -150,15 +150,6 @@ async function buildProjectResponse(
   }
 
   const settings = readProjectSettings(proj.settings);
-  const projectStatuses = await getWorkspaceProjectStatuses(workspaceId);
-  const projectStatusKeys = new Set(
-    projectStatuses.map((status) => status.key),
-  );
-  const effectiveProjectStatus = resolveProjectStatusKey(
-    proj.status,
-    settings.projectStatusKey,
-    projectStatusKeys,
-  );
 
   const [
     leadData,
@@ -169,6 +160,7 @@ async function buildProjectResponse(
     workspaceTeams,
     workspaceLabels,
     projectIssues,
+    workspaceRows,
   ] = await Promise.all([
     proj.leadId
       ? db
@@ -242,6 +234,11 @@ async function buildProjectResponse(
       .leftJoin(team, eq(issue.teamId, team.id))
       .where(eq(issue.projectId, proj.id))
       .orderBy(asc(workflowState.position), desc(issue.createdAt)),
+    db
+      .select({ settings: workspace.settings })
+      .from(workspace)
+      .where(eq(workspace.id, workspaceId))
+      .limit(1),
   ]);
 
   const projectIssueIds = projectIssues.map((projectIssue) => projectIssue.id);
@@ -357,6 +354,22 @@ async function buildProjectResponse(
     (projectIssue) => projectIssue.completedAt !== null,
   ).length;
   const selectedLabelIds = new Set(settings.labelIds);
+  const workspaceSettings = workspaceRows[0]?.settings ?? {};
+  const effectiveStatusKey = resolveProjectStatusKey(
+    proj.status,
+    settings,
+    workspaceSettings,
+  );
+  const effectiveStatus = statusDisplay(workspaceSettings, effectiveStatusKey);
+  const availableStatuses = readProjectStatusSettings(workspaceSettings).map(
+    (status) => ({
+      key: status.key,
+      name: status.name,
+      color: status.color,
+      icon: status.icon,
+      isDefault: status.isDefault,
+    }),
+  );
 
   return {
     status: 200 as const,
@@ -367,11 +380,11 @@ async function buildProjectResponse(
         description: proj.description,
         icon: proj.icon,
         slug: proj.slug,
-        status: effectiveProjectStatus,
-        statusLabel:
-          projectStatuses.find(
-            (status) => status.key === effectiveProjectStatus,
-          )?.name ?? effectiveProjectStatus,
+        status: effectiveStatusKey,
+        statusLabel: effectiveStatus.name,
+        statusColor: effectiveStatus.color,
+        statusIcon: effectiveStatus.icon,
+        statusIsDefault: effectiveStatus.isDefault,
         priority: proj.priority,
         startDate: proj.startDate,
         targetDate: proj.targetDate,
@@ -386,8 +399,8 @@ async function buildProjectResponse(
       availableMembers: workspaceMembers,
       availableTeams: workspaceTeams,
       availableLabels: workspaceLabels,
+      availableStatuses,
       slackChannel: settings.slackChannel,
-      projectStatuses,
       resources: settings.resources
         .slice()
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
@@ -481,6 +494,7 @@ export async function PATCH(
     workspaceLabels,
     currentProjectMembers,
     currentProjectTeams,
+    workspaceRows,
   ] = await Promise.all([
     db
       .select({ id: user.id })
@@ -503,6 +517,11 @@ export async function PATCH(
       .select({ teamId: projectTeam.teamId })
       .from(projectTeam)
       .where(eq(projectTeam.projectId, proj.id)),
+    db
+      .select({ settings: workspace.settings })
+      .from(workspace)
+      .where(eq(workspace.id, workspaceId))
+      .limit(1),
   ]);
 
   const validMemberIds = new Set(
@@ -520,37 +539,36 @@ export async function PATCH(
   const currentProjectTeamIds = currentProjectTeams.map(
     (projectTeamRow) => projectTeamRow.teamId,
   );
+  const workspaceSettings = workspaceRows[0]?.settings ?? {};
+  const configuredStatuses = readProjectStatusSettings(workspaceSettings);
+  const configuredStatusKeys = new Set(
+    configuredStatuses.map((status) => status.key),
+  );
 
   let replaceMemberIds: string[] | null = null;
   let replaceTeamIds: string[] | null = null;
   let propertiesTouched = false;
 
   if (typeof body.status === "string") {
-    const projectStatuses = await getWorkspaceProjectStatuses(workspaceId);
-    const projectStatusKeys = new Set(
-      projectStatuses.map((status) => status.key),
-    );
-
-    if (!projectStatusKeys.has(body.status)) {
+    const requestedStatus = body.status.trim();
+    if (!configuredStatusKeys.has(requestedStatus)) {
       return NextResponse.json(
-        { error: "Project status is not available in this workspace" },
+        { error: "Project status is not configured for this workspace" },
         { status: 400 },
       );
     }
 
-    const currentEffectiveStatus = resolveProjectStatusKey(
-      proj.status,
-      currentSettings.projectStatusKey,
-      projectStatusKeys,
-    );
-
-    if (body.status !== currentEffectiveStatus) {
-      if (DEFAULT_PROJECT_STATUS_KEYS.has(body.status)) {
-        nextProjectValues.status = body.status as typeof proj.status;
-        nextSettings.projectStatusKey = null;
-      } else {
-        nextSettings.projectStatusKey = body.status;
+    if (isDefaultProjectStatusKey(requestedStatus)) {
+      if (requestedStatus !== proj.status) {
+        nextProjectValues.status = requestedStatus;
+        propertiesTouched = true;
       }
+      if (nextSettings.projectStatusKey !== null) {
+        nextSettings.projectStatusKey = null;
+        propertiesTouched = true;
+      }
+    } else if (nextSettings.projectStatusKey !== requestedStatus) {
+      nextSettings.projectStatusKey = requestedStatus;
       propertiesTouched = true;
     }
   }
@@ -745,6 +763,7 @@ export async function PATCH(
     replaceTeamIds !== null ||
     activityEntries.length > 0 ||
     nextSettings.slackChannel !== currentSettings.slackChannel ||
+    nextSettings.projectStatusKey !== currentSettings.projectStatusKey ||
     nextSettings.labelIds.join(",") !== currentSettings.labelIds.join(",") ||
     nextSettings.projectStatusKey !== currentSettings.projectStatusKey ||
     nextSettings.resources.length !== currentSettings.resources.length;

@@ -32,7 +32,10 @@ interface ProjectDetail {
   icon: string | null;
   slug: string;
   status: string;
-  statusLabel?: string;
+  statusLabel: string;
+  statusColor: string;
+  statusIcon: string;
+  statusIsDefault: boolean;
   priority: "none" | "urgent" | "high" | "medium" | "low";
   startDate: string | null;
   targetDate: string | null;
@@ -73,6 +76,13 @@ interface ProjectResponse {
   availableMembers: { id: string; name: string; image?: string | null }[];
   availableTeams: { id: string; name: string; key: string }[];
   availableLabels: { id: string; name: string; color: string }[];
+  availableStatuses: {
+    key: string;
+    name: string;
+    color: string;
+    icon: string;
+    isDefault: boolean;
+  }[];
   slackChannel: string | null;
   projectStatuses?: {
     key: string;
@@ -283,9 +293,7 @@ export function ProjectDetailPage() {
   const summaryItems = [
     {
       label: "Status",
-      value:
-        project.statusLabel ??
-        project.status.replace(/^./, (char) => char.toUpperCase()),
+      value: project.statusLabel,
     },
     {
       label: "Priority",
@@ -346,11 +354,6 @@ export function ProjectDetailPage() {
       setShowUpdateComposer(false);
       setActiveTab("activity");
     }
-  }
-
-  function openCreateIssue(defaults: CreateIssueDefaults = {}) {
-    setCreateIssueDefaults(defaults);
-    setShowCreateIssue(true);
   }
 
   async function refreshProject() {
@@ -495,10 +498,10 @@ export function ProjectDetailPage() {
         teams={data.teams}
         labels={data.labels}
         slackChannel={data.slackChannel}
-        availableStatuses={data.projectStatuses}
         availableMembers={data.availableMembers}
         availableTeams={data.availableTeams}
         availableLabels={data.availableLabels}
+        availableStatuses={data.availableStatuses}
         onSave={handleSaveProperties}
       />
 

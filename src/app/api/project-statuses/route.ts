@@ -12,8 +12,6 @@ import {
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
-type ProjectStatusDbValue = (typeof DEFAULT_PROJECT_STATUSES)[number]["key"];
-
 type WorkspaceAccess = {
   workspaceId: string;
   role: string;
@@ -22,23 +20,6 @@ type WorkspaceAccess = {
 
 function canManageProjectStatuses(role: string) {
   return role === "owner" || role === "admin";
-}
-
-function toStatusCounts(
-  rows: { status: ProjectStatusDbValue; settings: unknown }[],
-) {
-  const countsByKey = new Map<string, number>();
-
-  for (const row of rows) {
-    const effectiveStatus =
-      readProjectSettings(row.settings).projectStatusKey ?? row.status;
-    countsByKey.set(
-      effectiveStatus,
-      (countsByKey.get(effectiveStatus) ?? 0) + 1,
-    );
-  }
-
-  return countsByKey;
 }
 
 async function getWorkspaceAccess(
@@ -72,7 +53,14 @@ async function getProjectCounts(workspaceId: string) {
     .from(project)
     .where(eq(project.workspaceId, workspaceId));
 
-  return toStatusCounts(rows);
+  const countsByKey = new Map<string, number>();
+  for (const row of rows) {
+    const settings = readProjectSettings(row.settings);
+    const key = settings.projectStatusKey ?? row.status;
+    countsByKey.set(key, (countsByKey.get(key) ?? 0) + 1);
+  }
+
+  return countsByKey;
 }
 
 function buildStatuses(settings: unknown, countsByKey: Map<string, number>) {
@@ -116,8 +104,6 @@ export async function GET() {
       readOnly: false,
       customStatusesSupported: true,
       canManage: canManageProjectStatuses(access.role),
-      limitation:
-        "Custom project statuses are configurable in settings; project records still store the default lifecycle values.",
     });
   } catch {
     return NextResponse.json(

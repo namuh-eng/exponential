@@ -8,13 +8,7 @@ import type { FilterCondition } from "@/components/filter-bar";
 export type ViewEntityType = "issues" | "projects";
 export type ViewScope = "team" | "workspace";
 export type ViewLayout = "list" | "board" | "timeline";
-export type ProjectViewStatusFilter =
-  | "all"
-  | "planned"
-  | "started"
-  | "paused"
-  | "completed"
-  | "canceled";
+export type ProjectViewStatusFilter = "all" | (string & {});
 export type ProjectViewSortOption =
   | "created-desc"
   | "created-asc"

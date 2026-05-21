@@ -10,19 +10,36 @@ type ProjectStatus = string;
 type ProjectStatusOption = {
   key: string;
   name: string;
-  color?: string;
-  icon?: string;
+  color: string;
+  icon: string;
+  isDefault?: boolean;
 };
 
 type ProjectPriority = "none" | "urgent" | "high" | "medium" | "low";
 
-const defaultStatusOptions: ProjectStatusOption[] = [
-  { key: "planned", name: "Planned" },
-  { key: "started", name: "In Progress" },
-  { key: "paused", name: "Paused" },
-  { key: "completed", name: "Completed" },
-  { key: "canceled", name: "Canceled" },
-];
+const fallbackStatusLabels: Record<string, string> = {
+  planned: "Planned",
+  started: "In Progress",
+  paused: "Paused",
+  completed: "Completed",
+  canceled: "Canceled",
+};
+
+function getStatusOption(
+  status: ProjectStatus,
+  availableStatuses: ProjectStatusOption[],
+) {
+  return (
+    availableStatuses.find((option) => option.key === status) ?? {
+      key: status,
+      name:
+        fallbackStatusLabels[status] ??
+        status.replace(/^./, (char) => char.toUpperCase()),
+      color: "#6b6f76",
+      icon: "•",
+    }
+  );
+}
 
 const priorityLabels: Record<ProjectPriority, string> = {
   none: "No priority",
@@ -109,6 +126,7 @@ export interface ProjectPropertiesProps {
   availableMembers: { id: string; name: string; image?: string | null }[];
   availableTeams: { id: string; name: string; key: string }[];
   availableLabels: { id: string; name: string; color: string }[];
+  availableStatuses?: ProjectStatusOption[];
   onSave?: (values: ProjectPropertiesSaveInput) => Promise<void> | void;
 }
 
@@ -125,7 +143,7 @@ function EditProjectPropertiesModal({
   availableMembers,
   availableTeams,
   availableLabels,
-  availableStatuses = defaultStatusOptions,
+  availableStatuses = [],
   onClose,
   onSave,
 }: ProjectPropertiesProps & {
@@ -235,9 +253,17 @@ function EditProjectPropertiesModal({
               }
               className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
             >
-              {availableStatuses.map((status) => (
-                <option key={status.key} value={status.key}>
-                  {status.name}
+              {(availableStatuses.length > 0
+                ? availableStatuses
+                : Object.entries(fallbackStatusLabels).map(([key, name]) => ({
+                    key,
+                    name,
+                    color: "#6b6f76",
+                    icon: "•",
+                  }))
+              ).map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.icon} {option.name}
                 </option>
               ))}
             </select>
@@ -439,12 +465,11 @@ export function ProjectProperties({
   availableMembers,
   availableTeams,
   availableLabels,
-  availableStatuses = defaultStatusOptions,
+  availableStatuses = [],
   onSave,
 }: ProjectPropertiesProps) {
   const [showEditor, setShowEditor] = useState(false);
-  const statusLabel =
-    availableStatuses.find((option) => option.key === status)?.name ?? status;
+  const statusOption = getStatusOption(status, availableStatuses);
 
   return (
     <>
@@ -465,7 +490,16 @@ export function ProjectProperties({
         </div>
 
         <PropertyRow label="Status">
-          <span>{statusLabel}</span>
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+            style={{
+              backgroundColor: `${statusOption.color}22`,
+              color: statusOption.color,
+            }}
+          >
+            <span>{statusOption.icon}</span>
+            {statusOption.name}
+          </span>
         </PropertyRow>
 
         <PropertyRow label="Priority">

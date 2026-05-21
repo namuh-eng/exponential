@@ -13,8 +13,14 @@ import {
   projectTemplate,
   team,
   user,
+  workspace,
 } from "@/lib/db/schema";
 import { readProjectSettings } from "@/lib/project-detail";
+import {
+  findProjectStatusConfig,
+  isDefaultProjectStatusKey,
+  readProjectStatusSettings,
+} from "@/lib/project-status-settings";
 import { readProjectTemplateSettings } from "@/lib/project-template-settings";
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -48,6 +54,13 @@ export async function GET(request?: Request) {
   if (!workspaceId) {
     return NextResponse.json({ projects: [] });
   }
+
+  const workspaceRows = await db
+    .select({ settings: workspace.settings })
+    .from(workspace)
+    .where(eq(workspace.id, workspaceId))
+    .limit(1);
+  const workspaceSettings = workspaceRows[0]?.settings ?? {};
 
   // Get all projects for this workspace with lead info
   const projects = await db
@@ -162,6 +175,13 @@ export async function GET(request?: Request) {
   }
 
   const result = projects.map((p) => {
+    const projectSettings = readProjectSettings(p.settings);
+    const statusConfig =
+      findProjectStatusConfig(
+        workspaceSettings,
+        projectSettings.projectStatusKey,
+      ) ?? findProjectStatusConfig(workspaceSettings, p.status);
+    const effectiveStatus = statusConfig?.key ?? p.status;
     const prog = progressMap[p.id];
     const progress =
       prog && prog.total > 0
@@ -174,7 +194,12 @@ export async function GET(request?: Request) {
       description: p.description,
       icon: p.icon,
       slug: p.slug,
-      status: readProjectSettings(p.settings).projectStatusKey ?? p.status,
+      status: effectiveStatus,
+      statusLabel:
+        statusConfig?.name ??
+        p.status.replace(/^./, (char) => char.toUpperCase()),
+      statusColor: statusConfig?.color ?? "#6b6f76",
+      statusIcon: statusConfig?.icon ?? "•",
       priority: p.priority,
       health: "No updates",
       lead: p.leadName ? { name: p.leadName, image: p.leadImage } : null,
@@ -200,6 +225,13 @@ export async function POST(request: Request) {
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
   }
+
+  const workspaceRows = await db
+    .select({ settings: workspace.settings })
+    .from(workspace)
+    .where(eq(workspace.id, workspaceId))
+    .limit(1);
+  const workspaceSettings = workspaceRows[0]?.settings ?? {};
 
   const body = await request.json();
   const templateId =
@@ -240,6 +272,20 @@ export async function POST(request: Request) {
     typeof body.description === "string" && body.description.trim()
       ? body.description.trim()
       : selectedTemplate?.description || null;
+  const requestedStatus =
+    typeof body.status === "string" && body.status.trim()
+      ? body.status.trim()
+      : "planned";
+  const configuredStatusKeys = new Set(
+    readProjectStatusSettings(workspaceSettings).map((status) => status.key),
+  );
+
+  if (!configuredStatusKeys.has(requestedStatus)) {
+    return NextResponse.json(
+      { error: "Project status is not configured for this workspace" },
+      { status: 400 },
+    );
+  }
 
   if (!name) {
     return NextResponse.json(
@@ -417,13 +463,22 @@ export async function POST(request: Request) {
         name,
         description,
         slug: finalSlug,
-        status: templateSettings.status ?? undefined,
         priority: templateSettings.priority ?? undefined,
         workspaceId,
         leadId: session.user.id,
+        status: isDefaultProjectStatusKey(requestedStatus)
+          ? requestedStatus
+          : "planned",
         settings:
-          linkedLabelIds.size > 0
-            ? { labelIds: Array.from(linkedLabelIds) }
+          linkedLabelIds.size > 0 || !isDefaultProjectStatusKey(requestedStatus)
+            ? {
+                ...(linkedLabelIds.size > 0
+                  ? { labelIds: Array.from(linkedLabelIds) }
+                  : {}),
+                ...(!isDefaultProjectStatusKey(requestedStatus)
+                  ? { projectStatusKey: requestedStatus }
+                  : {}),
+              }
             : undefined,
       })
       .returning();
