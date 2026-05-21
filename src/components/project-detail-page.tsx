@@ -326,6 +326,11 @@ export function ProjectDetailPage() {
     }
   }
 
+  function openCreateIssue(defaults: CreateIssueDefaults = {}) {
+    setCreateIssueDefaults(defaults);
+    setShowCreateIssue(true);
+  }
+
   async function refreshProject() {
     const res = await fetch(projectApiPath());
     if (!res.ok) {
@@ -763,9 +768,24 @@ export function ProjectDetailPage() {
             {activeTab === "issues" ? (
               <SectionCard title="Issues">
                 {data.issueGroups.length === 0 ? (
-                  <p className="text-[13px] text-[var(--color-text-secondary)]">
-                    No issues in this project.
-                  </p>
+                  <div className="rounded-lg border border-dashed border-[var(--color-border)] px-6 py-8 text-center">
+                    <p className="text-[13px] font-medium text-[var(--color-text-primary)]">
+                      No issues in this project yet.
+                    </p>
+                    <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
+                      Create the first issue from this project to keep planning
+                      context attached.
+                    </p>
+                    {createIssueTeam ? (
+                      <button
+                        type="button"
+                        onClick={() => openCreateIssue()}
+                        className="mt-4 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+                      >
+                        Create issue
+                      </button>
+                    ) : null}
+                  </div>
                 ) : (
                   <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
                     {data.issueGroups.map((group) => (
@@ -780,11 +800,10 @@ export function ProjectDetailPage() {
                           onAddIssue={
                             createIssueTeam
                               ? () => {
-                                  setCreateIssueDefaults({
+                                  openCreateIssue({
                                     stateId: group.state.id,
                                     stateName: group.state.name,
                                   });
-                                  setShowCreateIssue(true);
                                 }
                               : undefined
                           }

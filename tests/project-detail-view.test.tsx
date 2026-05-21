@@ -100,6 +100,36 @@ const mockProjectData = {
   },
 };
 
+const mockCreateIssueOptions = {
+  team: { id: "team-1", name: "Engineering", key: "ENG" },
+  statuses: [
+    {
+      id: "state-1",
+      name: "In Progress",
+      category: "started",
+      color: "#3b82f6",
+    },
+    {
+      id: "state-backlog",
+      name: "Backlog",
+      category: "backlog",
+      color: "#6b7280",
+    },
+  ],
+  priorities: [
+    { value: "none", label: "No priority" },
+    { value: "medium", label: "Medium" },
+  ],
+  assignees: [{ id: "user-1", name: "Ashley", image: null }],
+  labels: [],
+  projects: [{ id: "project-1", name: "Agent Speed", icon: "⚡" }],
+};
+
+function setEditableValue(element: HTMLElement, value: string) {
+  element.textContent = value;
+  fireEvent.input(element);
+}
+
 describe("ProjectDetailPage UI", () => {
   afterEach(() => {
     cleanup();
@@ -184,6 +214,174 @@ describe("ProjectDetailPage UI", () => {
 
     expect(screen.getByText("Optimize SVG")).toBeInTheDocument();
     expect(screen.getByText("ENG-1")).toBeInTheDocument();
+  });
+
+  it("lets empty project issue tabs create the first project issue and refreshes the list", async () => {
+    const emptyProjectData = {
+      ...mockProjectData,
+      issueGroups: [],
+      progress: {
+        total: 0,
+        completed: 0,
+        percentage: 0,
+        assignees: [],
+        labels: [],
+      },
+    };
+    const refreshedProjectData = {
+      ...mockProjectData,
+      issueGroups: [
+        {
+          state: {
+            id: "state-backlog",
+            name: "Backlog",
+            category: "backlog",
+            color: "#6b7280",
+          },
+          issues: [
+            {
+              id: "iss-2",
+              identifier: "ENG-2",
+              title: "Plan first project issue",
+              priority: "none",
+              assignee: null,
+              createdAt: "2026-04-24T00:00:00Z",
+              href: "/team/ENG/issue/iss-2",
+              labels: [],
+            },
+          ],
+        },
+      ],
+      progress: {
+        total: 1,
+        completed: 0,
+        percentage: 0,
+        assignees: [],
+        labels: [],
+      },
+    };
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input, init) => {
+        const url = String(input);
+
+        if (url === "/api/projects/agent-speed" && !init) {
+          return {
+            ok: true,
+            json: async () =>
+              fetchSpy.mock.calls.filter(
+                ([calledUrl, calledInit]) =>
+                  String(calledUrl) === "/api/projects/agent-speed" &&
+                  !calledInit,
+              ).length === 1
+                ? emptyProjectData
+                : refreshedProjectData,
+          } as Response;
+        }
+
+        if (url === "/api/teams/ENG/create-issue-options") {
+          return {
+            ok: true,
+            json: async () => mockCreateIssueOptions,
+          } as Response;
+        }
+
+        if (url === "/api/issue-templates?teamKey=ENG") {
+          return {
+            ok: true,
+            json: async () => ({ templates: [] }),
+          } as Response;
+        }
+
+        if (url === "/api/issues" && init?.method === "POST") {
+          return {
+            ok: true,
+            json: async () => ({ id: "iss-2" }),
+          } as Response;
+        }
+
+        throw new Error(`Unhandled fetch: ${url}`);
+      });
+
+    render(<ProjectDetailPage />);
+    await screen.findByText("Agent Speed");
+
+    fireEvent.click(screen.getByRole("button", { name: "Issues" }));
+
+    expect(
+      screen.getByText("No issues in this project yet."),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create issue" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Project" })).toHaveTextContent(
+        "Agent Speed",
+      );
+    });
+
+    setEditableValue(
+      screen.getByRole("textbox", { name: "Issue title" }),
+      "Plan first project issue",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Create Issue" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/issues",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"projectId":"project-1"'),
+        }),
+      );
+    });
+    expect(
+      await screen.findByText("Plan first project issue"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("ENG-2")).toBeInTheDocument();
+  });
+
+  it("keeps non-empty issue group add buttons project and state prefilled", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url === "/api/projects/agent-speed") {
+        return {
+          ok: true,
+          json: async () => mockProjectData,
+        } as Response;
+      }
+
+      if (url === "/api/teams/ENG/create-issue-options") {
+        return {
+          ok: true,
+          json: async () => mockCreateIssueOptions,
+        } as Response;
+      }
+
+      if (url === "/api/issue-templates?teamKey=ENG") {
+        return {
+          ok: true,
+          json: async () => ({ templates: [] }),
+        } as Response;
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    render(<ProjectDetailPage />);
+    await screen.findByText("Agent Speed");
+
+    fireEvent.click(screen.getByRole("button", { name: "Issues" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add issue" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Status" })).toHaveTextContent(
+        "In Progress",
+      );
+      expect(screen.getByRole("button", { name: "Project" })).toHaveTextContent(
+        "Agent Speed",
+      );
+    });
   });
 
   it("updates project description", async () => {
