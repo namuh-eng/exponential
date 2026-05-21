@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getSessionMock = vi.fn();
-const resolveActiveWorkspaceIdMock = vi.fn();
+const resolveRequestWorkspaceIdMock = vi.fn();
 const currentWorkspaceLimitMock = vi.fn();
 const updateSetMock = vi.fn();
 const updateWhereMock = vi.fn();
+const allowedIpHeaders = { "x-forwarded-for": "203.0.113.42" };
 
 vi.mock("node:crypto", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:crypto")>();
@@ -26,7 +27,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/active-workspace", () => ({
-  resolveActiveWorkspaceId: resolveActiveWorkspaceIdMock,
+  resolveRequestWorkspaceId: resolveRequestWorkspaceIdMock,
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -72,7 +73,7 @@ describe("current workspace security route", () => {
     vi.resetModules();
     vi.clearAllMocks();
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
-    resolveActiveWorkspaceIdMock.mockResolvedValue("workspace-1");
+    resolveRequestWorkspaceIdMock.mockResolvedValue("workspace-1");
     currentWorkspaceLimitMock.mockResolvedValue([
       {
         id: "workspace-1",
@@ -112,7 +113,7 @@ describe("current workspace security route", () => {
   });
 
   it("returns 404 when there is no active workspace", async () => {
-    resolveActiveWorkspaceIdMock.mockResolvedValue(null);
+    resolveRequestWorkspaceIdMock.mockResolvedValue(null);
     const { GET } = await import("@/app/api/workspaces/current/security/route");
 
     const response = await GET(securityRequest());
@@ -188,16 +189,17 @@ describe("current workspace security route", () => {
     });
   });
 
-  it("blocks workspace security API requests from disallowed IPs", async () => {
+  it("denies security API access from disallowed IPs when restrictions are enabled", async () => {
     const { GET } = await import("@/app/api/workspaces/current/security/route");
 
     const response = await GET(
-      securityRequest({ headers: { "x-forwarded-for": "198.51.100.10" } }),
+      securityRequest({ headers: { "x-forwarded-for": "198.51.100.42" } }),
     );
 
     expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toEqual({
-      error: "Access denied by workspace IP restrictions",
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Workspace access denied by IP restrictions",
+      code: "workspace_ip_restricted",
       reason: "ip_not_allowed",
     });
   });
@@ -235,7 +237,7 @@ describe("current workspace security route", () => {
       securityRequest({
         method: "PATCH",
         body: JSON.stringify({ restrictFileUploads: "yes" }),
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...allowedIpHeaders },
       }),
     );
 
@@ -254,7 +256,7 @@ describe("current workspace security route", () => {
       securityRequest({
         method: "PATCH",
         body: JSON.stringify({ approvedEmailDomains: "example.com" }),
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...allowedIpHeaders },
       }),
     );
 
@@ -275,7 +277,7 @@ describe("current workspace security route", () => {
         body: JSON.stringify({
           ipRestrictions: [{ range: "999.0.0.1/33", enabled: true }],
         }),
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...allowedIpHeaders },
       }),
     );
 
@@ -315,7 +317,7 @@ describe("current workspace security route", () => {
             },
           ],
         }),
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...allowedIpHeaders },
       }),
     );
 
@@ -406,7 +408,7 @@ describe("current workspace security route", () => {
       securityRequest({
         method: "PATCH",
         body: JSON.stringify({ permissions: { invitationsRole: "anyone" } }),
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...allowedIpHeaders },
       }),
     );
 

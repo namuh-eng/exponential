@@ -1,13 +1,13 @@
 import { randomBytes } from "node:crypto";
-import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
+import { resolveRequestWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
 import {
-  createIpRestrictionApiResponse,
-  evaluateWorkspaceIpRestrictions,
-  isValidIpOrCidrRange,
-  normalizeIpRange,
+  evaluateWorkspaceIpAccess,
+  isValidCidrRange,
+  normalizeIpRestrictions,
+  workspaceIpRestrictionError,
 } from "@/lib/workspace-ip-restrictions";
 import {
   DEFAULT_WORKSPACE_PERMISSION_SETTINGS,
@@ -80,36 +80,6 @@ const DEFAULT_SECURITY_STATE: WorkspaceSecurityState = {
   ipRestrictions: [],
 };
 
-function normalizeIpRestrictions(value: unknown) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const seenRanges = new Set<string>();
-  const restrictions: IpRestriction[] = [];
-
-  for (const item of value) {
-    const record = asRecord(item);
-    const rawRange = typeof record.range === "string" ? record.range : "";
-    const range = normalizeIpRange(rawRange);
-    if (!range || !isValidIpOrCidrRange(range) || seenRanges.has(range)) {
-      continue;
-    }
-
-    seenRanges.add(range);
-    restrictions.push({
-      range,
-      description:
-        typeof record.description === "string"
-          ? record.description.trim().slice(0, 120)
-          : "",
-      enabled: typeof record.enabled === "boolean" ? record.enabled : true,
-      type: "allow",
-    });
-  }
-
-  return restrictions;
-}
 
 function validateIpRestrictions(value: unknown) {
   if (!Array.isArray(value)) {
@@ -121,7 +91,7 @@ function validateIpRestrictions(value: unknown) {
       return "IP restrictions must contain valid entries";
     }
 
-    if (typeof item.range !== "string" || !isValidIpOrCidrRange(item.range)) {
+    if (typeof item.range !== "string" || !isValidCidrRange(item.range)) {
       return "IP restrictions must use valid IP addresses or CIDR ranges";
     }
 
@@ -214,8 +184,8 @@ function serializeSecurityState(security: WorkspaceSecurityState) {
   };
 }
 
-async function findCurrentWorkspace(userId: string) {
-  const activeWorkspaceId = await resolveActiveWorkspaceId(userId);
+async function findCurrentWorkspace(userId: string, request: Request) {
+  const activeWorkspaceId = await resolveRequestWorkspaceId(userId, request);
   if (!activeWorkspaceId) {
     return null;
   }
@@ -332,7 +302,7 @@ export async function GET(request: Request) {
     return authResponse;
   }
 
-  const currentWorkspace = await findCurrentWorkspace(session.user.id);
+  const currentWorkspace = await findCurrentWorkspace(session.user.id, request);
   if (!currentWorkspace) {
     return NextResponse.json(
       { error: "No active workspace found" },
@@ -340,16 +310,14 @@ export async function GET(request: Request) {
     );
   }
 
-  const ipDecision = evaluateWorkspaceIpRestrictions({
-    settings: currentWorkspace.settings,
-    headers: request.headers,
-  });
-  if (!ipDecision.allowed) {
-    console.warn("workspace_ip_restriction_denied", {
-      workspaceId: currentWorkspace.id,
-      reason: ipDecision.reason,
+  const ipAccess = evaluateWorkspaceIpAccess(
+    request.headers,
+    currentWorkspace.settings,
+  );
+  if (!ipAccess.allowed) {
+    return NextResponse.json(workspaceIpRestrictionError(ipAccess), {
+      status: 403,
     });
-    return createIpRestrictionApiResponse(ipDecision);
   }
 
   const inviteLinkToken = await ensureInviteToken(currentWorkspace);
@@ -371,7 +339,7 @@ export async function PATCH(request: Request) {
     return authResponse;
   }
 
-  const currentWorkspace = await findCurrentWorkspace(session.user.id);
+  const currentWorkspace = await findCurrentWorkspace(session.user.id, request);
   if (!currentWorkspace) {
     return NextResponse.json(
       { error: "No active workspace found" },
@@ -379,16 +347,14 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const ipDecision = evaluateWorkspaceIpRestrictions({
-    settings: currentWorkspace.settings,
-    headers: request.headers,
-  });
-  if (!ipDecision.allowed) {
-    console.warn("workspace_ip_restriction_denied", {
-      workspaceId: currentWorkspace.id,
-      reason: ipDecision.reason,
+  const ipAccess = evaluateWorkspaceIpAccess(
+    request.headers,
+    currentWorkspace.settings,
+  );
+  if (!ipAccess.allowed) {
+    return NextResponse.json(workspaceIpRestrictionError(ipAccess), {
+      status: 403,
     });
-    return createIpRestrictionApiResponse(ipDecision);
   }
 
   if (!isWorkspaceAdminRole(currentWorkspace.role)) {
