@@ -53,6 +53,24 @@ describe("SecurityPage component", () => {
           type: "allow",
         },
       ],
+      saml: {
+        enabled: false,
+        domains: [],
+        idpSsoUrl: "",
+        entityId: "",
+        certificate: "",
+        metadataUrl: "",
+        lastTestedAt: null,
+        status: "not_configured",
+        lastError: null,
+      },
+      scim: {
+        enabled: false,
+        baseUrl: "http://localhost:3015/api/scim/workspace-1",
+        tokens: [],
+        lastSyncAt: null,
+        status: "disabled",
+      },
     },
   };
 
@@ -266,6 +284,88 @@ describe("SecurityPage component", () => {
         method: "PATCH",
         body: expect.stringContaining('"ipRestrictions":[]'),
       }),
+    );
+  });
+
+  it("manages SAML and SCIM in app", async () => {
+    (fetch as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ ok: true, json: async () => mockSecurityData })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          saml: {
+            ...mockSecurityData.security.saml,
+            enabled: true,
+            domains: ["example.com"],
+            idpSsoUrl: "https://idp.example.com/sso",
+            entityId: "https://idp.example.com/entity",
+            certificate: "CERT",
+            status: "configured",
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token: "scim_secret_once",
+          scim: {
+            ...mockSecurityData.security.scim,
+            enabled: true,
+            status: "enabled",
+            tokens: [
+              {
+                id: "token-1",
+                name: "SCIM token",
+                prefix: "scim_secret",
+                createdAt: "2026-05-20T00:00:00.000Z",
+                revokedAt: null,
+                lastUsedAt: null,
+              },
+            ],
+          },
+        }),
+      });
+
+    render(<SecurityPage />);
+    await waitFor(() => screen.getByText("example.com"));
+
+    await userEvent.click(screen.getByText("SAML & SCIM management"));
+    await userEvent.type(
+      screen.getByPlaceholderText("https://idp.example.com/sso"),
+      "https://idp.example.com/sso",
+    );
+    await userEvent.type(
+      screen.getByPlaceholderText("https://idp.example.com/entity"),
+      "https://idp.example.com/entity",
+    );
+    await userEvent.type(
+      screen.getByPlaceholderText("example.com, acme.co"),
+      "example.com",
+    );
+    await userEvent.type(
+      screen.getByPlaceholderText("Paste X.509 certificate"),
+      "CERT",
+    );
+    await userEvent.click(screen.getByLabelText("Enable SAML SSO"));
+    await userEvent.click(screen.getByRole("button", { name: "Save SAML" }));
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/workspaces/current/security/saml",
+      expect.objectContaining({
+        method: "PATCH",
+        body: expect.stringContaining('"enabled":true'),
+      }),
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Generate SCIM token" }),
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/workspaces/current/security/scim",
+      expect.objectContaining({ method: "POST" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/New token \(copy once\)/)).toBeDefined(),
     );
   });
 });

@@ -11,6 +11,37 @@ type IpRestriction = {
   type: "allow";
 };
 
+type SamlSettings = {
+  enabled: boolean;
+  domains: string[];
+  idpSsoUrl: string;
+  entityId: string;
+  certificate: string;
+  metadataUrl: string;
+  lastTestedAt: string | null;
+  status: "not_configured" | "configured" | "verified" | "error";
+  lastError: string | null;
+};
+
+type SamlSavePayload = SamlSettings & { test?: boolean };
+
+type ScimToken = {
+  id: string;
+  name: string;
+  prefix: string;
+  createdAt: string;
+  revokedAt: string | null;
+  lastUsedAt: string | null;
+};
+
+type ScimSettings = {
+  enabled: boolean;
+  baseUrl: string;
+  tokens: ScimToken[];
+  lastSyncAt: string | null;
+  status: "disabled" | "enabled";
+};
+
 type SecuritySettings = {
   inviteLinkEnabled: boolean;
   inviteUrl: string;
@@ -32,10 +63,32 @@ type SecuritySettings = {
   webSearch: boolean;
   hipaa: boolean;
   ipRestrictions: IpRestriction[];
+  saml: SamlSettings;
+  scim: ScimSettings;
+};
+
+const DEFAULT_SAML: SamlSettings = {
+  enabled: false,
+  domains: [],
+  idpSsoUrl: "",
+  entityId: "",
+  certificate: "",
+  metadataUrl: "",
+  lastTestedAt: null,
+  status: "not_configured",
+  lastError: null,
+};
+
+const DEFAULT_SCIM: ScimSettings = {
+  enabled: false,
+  baseUrl: "/api/scim/current",
+  tokens: [],
+  lastSyncAt: null,
+  status: "disabled",
 };
 
 const INVITE_DOCS_URL = "https://linear.app/docs/invite-members";
-const SAML_SCIM_URL = "https://linear.app/docs/saml-and-access-control";
+const SAML_SCIM_DOCS_URL = "https://linear.app/docs/saml-and-access-control";
 
 function Toggle({
   enabled,
@@ -243,6 +296,9 @@ export default function SecurityPage() {
   const [ipDialogOpen, setIpDialogOpen] = useState(false);
   const [ipRangeDraft, setIpRangeDraft] = useState("");
   const [ipDescriptionDraft, setIpDescriptionDraft] = useState("");
+  const [samlScimOpen, setSamlScimOpen] = useState(false);
+  const [samlDraft, setSamlDraft] = useState<SamlSettings | null>(null);
+  const [scimToken, setScimToken] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/workspaces/current/security")
@@ -259,7 +315,10 @@ export default function SecurityPage() {
         setSecurity({
           ...data.security,
           ipRestrictions: data.security.ipRestrictions ?? [],
+          saml: data.security.saml ?? DEFAULT_SAML,
+          scim: data.security.scim ?? DEFAULT_SCIM,
         });
+        setSamlDraft(data.security.saml ?? DEFAULT_SAML);
       })
       .catch((error: Error) => {
         setErrorMessage(error.message);
@@ -305,7 +364,10 @@ export default function SecurityPage() {
         setSecurity({
           ...data.security,
           ipRestrictions: data.security.ipRestrictions ?? [],
+          saml: data.security.saml ?? DEFAULT_SAML,
+          scim: data.security.scim ?? DEFAULT_SCIM,
         });
+        setSamlDraft(data.security.saml ?? DEFAULT_SAML);
         setStatusMessage(
           options?.successMessage ?? "Security settings updated.",
         );
@@ -338,6 +400,126 @@ export default function SecurityPage() {
       setErrorMessage("Unable to copy the invite link.");
     }
   }, [security?.inviteUrl]);
+
+  const saveSaml = useCallback(
+    async (draft: SamlSavePayload, successMessage = "SAML settings saved.") => {
+      setSaving(true);
+      setErrorMessage(null);
+      setStatusMessage(null);
+      try {
+        const response = await fetch("/api/workspaces/current/security/saml", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(draft),
+        });
+        const data = (await response.json().catch(() => null)) as {
+          error?: string;
+          saml?: SamlSettings;
+        } | null;
+        if (!response.ok || !data?.saml) {
+          setErrorMessage(data?.error ?? "Unable to save SAML settings.");
+          return false;
+        }
+        setSecurity((current) =>
+          current ? { ...current, saml: data.saml as SamlSettings } : current,
+        );
+        setSamlDraft(data.saml);
+        setStatusMessage(successMessage);
+        return true;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [],
+  );
+
+  const updateScim = useCallback(async (enabled: boolean) => {
+    setSaving(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      const response = await fetch("/api/workspaces/current/security/scim", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      const data = (await response.json().catch(() => null)) as {
+        error?: string;
+        scim?: ScimSettings;
+      } | null;
+      if (!response.ok || !data?.scim) {
+        setErrorMessage(data?.error ?? "Unable to update SCIM settings.");
+        return;
+      }
+      setSecurity((current) =>
+        current ? { ...current, scim: data.scim as ScimSettings } : current,
+      );
+      setStatusMessage(
+        enabled ? "SCIM provisioning enabled." : "SCIM provisioning disabled.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  const generateScimToken = useCallback(async () => {
+    setSaving(true);
+    setErrorMessage(null);
+    setScimToken(null);
+    try {
+      const response = await fetch("/api/workspaces/current/security/scim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "SCIM token" }),
+      });
+      const data = (await response.json().catch(() => null)) as {
+        error?: string;
+        token?: string;
+        scim?: ScimSettings;
+      } | null;
+      if (!response.ok || !data?.token || !data?.scim) {
+        setErrorMessage(data?.error ?? "Unable to generate SCIM token.");
+        return;
+      }
+      setSecurity((current) =>
+        current ? { ...current, scim: data.scim as ScimSettings } : current,
+      );
+      setScimToken(data.token);
+      await copyText(data.token).catch(() => undefined);
+      setStatusMessage(
+        "SCIM token generated and copied. Copy it now; it will not be shown again.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  const revokeScimToken = useCallback(async (tokenId: string) => {
+    setSaving(true);
+    setErrorMessage(null);
+    try {
+      const response = await fetch(
+        `/api/workspaces/current/security/scim/tokens/${tokenId}`,
+        {
+          method: "DELETE",
+        },
+      );
+      const data = (await response.json().catch(() => null)) as {
+        error?: string;
+        scim?: ScimSettings;
+      } | null;
+      if (!response.ok || !data?.scim) {
+        setErrorMessage(data?.error ?? "Unable to revoke SCIM token.");
+        return;
+      }
+      setSecurity((current) =>
+        current ? { ...current, scim: data.scim as ScimSettings } : current,
+      );
+      setStatusMessage("SCIM token revoked.");
+    } finally {
+      setSaving(false);
+    }
+  }, []);
 
   if (loading) {
     return (
@@ -687,14 +869,233 @@ export default function SecurityPage() {
         </SettingRow>
 
         <div className="border-b border-[var(--color-border)] py-3">
-          <a
-            href={SAML_SCIM_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="text-[13px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+          <button
+            type="button"
+            onClick={() => {
+              setSamlDraft(security.saml);
+              setSamlScimOpen((open) => !open);
+              setErrorMessage(null);
+            }}
+            className="flex w-full items-center justify-between text-left text-[13px] text-[var(--color-text-primary)] hover:text-[var(--color-accent)]"
           >
-            SAML & SCIM ↗
-          </a>
+            <span>
+              SAML & SCIM management
+              <span className="ml-2 text-[12px] text-[var(--color-text-tertiary)]">
+                {security.saml.enabled
+                  ? "SAML enabled"
+                  : "Configure SSO and provisioning"}
+              </span>
+            </span>
+            <span aria-hidden="true">{samlScimOpen ? "−" : "+"}</span>
+          </button>
+
+          {samlScimOpen && samlDraft ? (
+            <div className="mt-4 space-y-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+              <div>
+                <div className="mb-1 text-[13px] font-medium text-[var(--color-text-primary)]">
+                  SAML SSO
+                </div>
+                <p className="mb-3 text-[12px] text-[var(--color-text-tertiary)]">
+                  Configure identity provider details for workspace login. ACS
+                  URL:{" "}
+                  <code className="text-[var(--color-text-secondary)]">
+                    /api/auth/saml/callback
+                  </code>
+                  . SP entity ID:{" "}
+                  <code className="text-[var(--color-text-secondary)]">
+                    exponential:
+                    {security.inviteUrl.split("/").at(2) ?? "workspace"}
+                  </code>
+                  .{" "}
+                  <a
+                    href={SAML_SCIM_DOCS_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[var(--color-accent)] hover:underline"
+                  >
+                    Docs ↗
+                  </a>
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block text-[12px] text-[var(--color-text-secondary)]">
+                    IdP SSO URL
+                    <input
+                      value={samlDraft.idpSsoUrl}
+                      onChange={(event) =>
+                        setSamlDraft({
+                          ...samlDraft,
+                          idpSsoUrl: event.target.value,
+                        })
+                      }
+                      placeholder="https://idp.example.com/sso"
+                      className="mt-1.5 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+                    />
+                  </label>
+                  <label className="block text-[12px] text-[var(--color-text-secondary)]">
+                    IdP entity ID
+                    <input
+                      value={samlDraft.entityId}
+                      onChange={(event) =>
+                        setSamlDraft({
+                          ...samlDraft,
+                          entityId: event.target.value,
+                        })
+                      }
+                      placeholder="https://idp.example.com/entity"
+                      className="mt-1.5 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+                    />
+                  </label>
+                  <label className="block text-[12px] text-[var(--color-text-secondary)]">
+                    Metadata URL (optional)
+                    <input
+                      value={samlDraft.metadataUrl}
+                      onChange={(event) =>
+                        setSamlDraft({
+                          ...samlDraft,
+                          metadataUrl: event.target.value,
+                        })
+                      }
+                      placeholder="https://idp.example.com/metadata"
+                      className="mt-1.5 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+                    />
+                  </label>
+                  <label className="block text-[12px] text-[var(--color-text-secondary)]">
+                    Allowed domains
+                    <input
+                      value={samlDraft.domains.join(", ")}
+                      onChange={(event) =>
+                        setSamlDraft({
+                          ...samlDraft,
+                          domains: event.target.value
+                            .split(",")
+                            .map(normalizeDomain)
+                            .filter(Boolean),
+                        })
+                      }
+                      placeholder="example.com, acme.co"
+                      className="mt-1.5 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+                    />
+                  </label>
+                </div>
+                <label className="mt-3 block text-[12px] text-[var(--color-text-secondary)]">
+                  Certificate
+                  <textarea
+                    value={samlDraft.certificate}
+                    onChange={(event) =>
+                      setSamlDraft({
+                        ...samlDraft,
+                        certificate: event.target.value,
+                      })
+                    }
+                    placeholder="Paste X.509 certificate"
+                    rows={4}
+                    className="mt-1.5 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+                  />
+                </label>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Toggle
+                    enabled={samlDraft.enabled}
+                    disabled={saving}
+                    onChange={(value) =>
+                      setSamlDraft({ ...samlDraft, enabled: value })
+                    }
+                    label="Enable SAML SSO"
+                  />
+                  <span className="text-[12px] text-[var(--color-text-tertiary)]">
+                    Status: {security.saml.status.replace("_", " ")}
+                    {security.saml.lastTestedAt
+                      ? ` · tested ${new Date(security.saml.lastTestedAt).toLocaleString()}`
+                      : ""}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void saveSaml(samlDraft)}
+                    className="ml-auto rounded-md bg-[var(--color-accent)] px-3 py-2 text-[12px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Save SAML
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() =>
+                      void saveSaml(
+                        { ...samlDraft, test: true },
+                        "SAML connection test passed.",
+                      )
+                    }
+                    className="rounded-md border border-[var(--color-border)] px-3 py-2 text-[12px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Test connection
+                  </button>
+                </div>
+              </div>
+
+              <div className="border-t border-[var(--color-border)] pt-4">
+                <div className="mb-1 text-[13px] font-medium text-[var(--color-text-primary)]">
+                  SCIM provisioning
+                </div>
+                <p className="mb-3 text-[12px] text-[var(--color-text-tertiary)]">
+                  Base URL:{" "}
+                  <code className="text-[var(--color-text-secondary)]">
+                    {security.scim.baseUrl}
+                  </code>
+                  . Generated bearer tokens are shown once and then stored
+                  hashed.
+                </p>
+                <div className="mb-3 flex items-center gap-3">
+                  <Toggle
+                    enabled={security.scim.enabled}
+                    disabled={saving}
+                    onChange={(value) => void updateScim(value)}
+                    label="Enable SCIM provisioning"
+                  />
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void generateScimToken()}
+                    className="rounded-md border border-[var(--color-border)] px-3 py-2 text-[12px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Generate SCIM token
+                  </button>
+                </div>
+                {scimToken ? (
+                  <div className="mb-3 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-[12px] text-[var(--color-text-secondary)]">
+                    New token (copy once): <code>{scimToken}</code>
+                  </div>
+                ) : null}
+                {security.scim.tokens.length ? (
+                  <div className="space-y-2">
+                    {security.scim.tokens.map((token) => (
+                      <div
+                        key={token.id}
+                        className="flex items-center justify-between gap-3 rounded-md border border-[var(--color-border)] px-3 py-2 text-[12px]"
+                      >
+                        <span className="text-[var(--color-text-secondary)]">
+                          {token.name} · {token.prefix}… ·{" "}
+                          {token.revokedAt ? "revoked" : "active"}
+                        </span>
+                        {!token.revokedAt ? (
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => void revokeScimToken(token.id)}
+                            className="text-[#f1a3a8] hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Revoke
+                          </button>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-[12px] text-[var(--color-text-tertiary)]">
+                    No SCIM tokens generated
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <SectionHeader>Workspace management</SectionHeader>

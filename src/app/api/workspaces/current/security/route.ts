@@ -12,6 +12,11 @@ import {
   isWorkspaceAdminRole,
   readPermissionLevel,
 } from "@/lib/workspace-permissions";
+import {
+  normalizeDomains,
+  readWorkspaceSamlScimSettings,
+  toPublicSamlScim,
+} from "@/lib/workspace-saml-scim";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -69,25 +74,6 @@ const DEFAULT_SECURITY_STATE: WorkspaceSecurityState = {
   hipaa: false,
   ipRestrictions: [],
 };
-
-function normalizeDomain(value: string) {
-  return value.trim().toLowerCase().replace(/^@+/, "");
-}
-
-function normalizeDomains(value: unknown) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return Array.from(
-    new Set(
-      value
-        .filter((domain): domain is string => typeof domain === "string")
-        .map(normalizeDomain)
-        .filter((domain) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)),
-    ),
-  );
-}
 
 function isValidCidrRange(value: string) {
   const trimmed = value.trim();
@@ -310,12 +296,23 @@ function buildInviteUrl(request: Request, inviteLinkToken: string) {
   return url.toString();
 }
 
+function buildScimBaseUrl(request: Request, workspaceId: string) {
+  const url = new URL(request.url);
+  return `${url.origin}/api/scim/${workspaceId}`;
+}
+
 function buildResponse(
   request: Request,
   currentWorkspace: CurrentWorkspaceRecord,
   inviteLinkToken: string,
 ) {
   const securityState = readWorkspaceSecurityState(currentWorkspace.settings);
+  const samlScim = toPublicSamlScim(
+    readWorkspaceSamlScimSettings(
+      currentWorkspace.settings,
+      buildScimBaseUrl(request, currentWorkspace.id),
+    ),
+  );
   const { permissions } = securityState;
 
   return {
@@ -326,6 +323,8 @@ function buildResponse(
         currentWorkspace.approvedEmailDomains,
       ),
       ...securityState,
+      saml: samlScim.saml,
+      scim: samlScim.scim,
       capabilities: {
         canInviteMembers: canPerformWorkspacePermission(
           currentWorkspace.role,
@@ -558,9 +557,13 @@ export async function PATCH(request: Request) {
       : (currentWorkspace.inviteLinkEnabled ?? true);
   const inviteLinkToken =
     currentWorkspace.inviteLinkToken ?? createInviteToken();
+  const currentSettings = asRecord(currentWorkspace.settings);
   const settings = {
-    ...asRecord(currentWorkspace.settings),
-    security: serializeSecurityState(nextSecurity),
+    ...currentSettings,
+    security: {
+      ...asRecord(currentSettings.security),
+      ...serializeSecurityState(nextSecurity),
+    },
   };
 
   await db

@@ -161,6 +161,24 @@ describe("current workspace security route", () => {
             type: "allow",
           },
         ],
+        saml: {
+          enabled: false,
+          domains: [],
+          idpSsoUrl: "",
+          entityId: "",
+          certificate: "",
+          metadataUrl: "",
+          lastTestedAt: null,
+          status: "not_configured",
+          lastError: null,
+        },
+        scim: {
+          enabled: false,
+          baseUrl: "https://app.test/api/scim/workspace-1",
+          tokens: [],
+          lastSyncAt: null,
+          status: "disabled",
+        },
       },
     });
   });
