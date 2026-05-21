@@ -1,7 +1,12 @@
 "use client";
 
+import { useAppShellContext } from "@/app/(app)/app-shell";
 import { IssueRow, priorityMap } from "@/components/issue-row";
-import { useSearchParams } from "next/navigation";
+import {
+  getWorkspaceSlugFromPath,
+  withWorkspaceSlug,
+} from "@/lib/workspace-paths";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 type StatusCategory =
@@ -20,13 +25,19 @@ interface SearchResult {
   stateName: string;
   stateCategory: StatusCategory;
   stateColor: string;
-  assigneeName?: string;
-  assigneeImage?: string;
+  teamKey: string;
+  assigneeName?: string | null;
+  assigneeImage?: string | null;
   createdAt: string;
 }
 
 function SearchContent() {
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const shellContext = useAppShellContext();
+  const workspaceSlug =
+    shellContext?.workspaceSlug ?? getWorkspaceSlugFromPath(pathname);
+  const workspaceId = shellContext?.workspaceId;
   const query = searchParams.get("q") || "";
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -37,12 +48,17 @@ function SearchContent() {
       return;
     }
 
+    const apiParams = new URLSearchParams({ q: query });
+    if (workspaceId) {
+      apiParams.set("workspaceId", workspaceId);
+    }
+
     setLoading(true);
-    fetch(`/api/issues/search?q=${encodeURIComponent(query)}`)
+    fetch(`/api/issues/search?${apiParams.toString()}`)
       .then((res) => res.json())
       .then((data) => setResults(data))
       .finally(() => setLoading(false));
-  }, [query]);
+  }, [query, workspaceId]);
 
   return (
     <div className="flex h-full flex-col">
@@ -72,10 +88,13 @@ function SearchContent() {
                 priority={priorityMap[issue.priority] ?? 0}
                 statusCategory={issue.stateCategory}
                 statusColor={issue.stateColor}
-                assigneeName={issue.assigneeName}
-                assigneeImage={issue.assigneeImage}
+                assigneeName={issue.assigneeName ?? undefined}
+                assigneeImage={issue.assigneeImage ?? undefined}
                 createdAt={issue.createdAt}
-                href={`/issue/${issue.id}`}
+                href={withWorkspaceSlug(
+                  `/team/${issue.teamKey}/issue/${issue.identifier}`,
+                  workspaceSlug,
+                )}
                 labels={[]}
               />
             ))}

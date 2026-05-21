@@ -4,6 +4,11 @@ const getSessionMock = vi.fn();
 const membershipsLimitMock = vi.fn();
 const teamsWhereMock = vi.fn();
 const issuesLimitMock = vi.fn();
+const resolveRequestWorkspaceIdMock = vi.fn();
+
+vi.mock("@/lib/active-workspace", () => ({
+  resolveRequestWorkspaceId: resolveRequestWorkspaceIdMock,
+}));
 
 vi.mock("@/lib/auth", () => ({
   auth: {
@@ -42,14 +47,15 @@ vi.mock("@/lib/db", () => ({
 
       // search issues
       if (selection && "identifier" in selection) {
+        const query = {
+          innerJoin: vi.fn(() => query),
+          leftJoin: vi.fn(() => query),
+          where: vi.fn(() => query),
+          orderBy: vi.fn(() => query),
+          limit: vi.fn().mockResolvedValue(issuesLimitMock()),
+        };
         return {
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue(issuesLimitMock()),
-              }),
-            }),
-          }),
+          from: vi.fn(() => query),
         };
       }
 
@@ -71,10 +77,23 @@ describe("issues search route", () => {
     vi.resetModules();
     vi.clearAllMocks();
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
+    resolveRequestWorkspaceIdMock.mockResolvedValue("workspace-1");
     membershipsLimitMock.mockReturnValue([{ workspaceId: "workspace-1" }]);
     teamsWhereMock.mockReturnValue([{ id: "team-1" }]);
     issuesLimitMock.mockReturnValue([
-      { id: "issue-1", identifier: "ENG-1", title: "Search target" },
+      {
+        id: "issue-1",
+        identifier: "ENG-1",
+        title: "Search target",
+        priority: "high",
+        createdAt: new Date("2026-05-20T00:00:00Z"),
+        teamKey: "ENG",
+        stateName: "In Progress",
+        stateCategory: "started",
+        stateColor: "#000000",
+        assigneeName: "Test User",
+        assigneeImage: null,
+      },
     ]);
   });
 
@@ -95,7 +114,28 @@ describe("issues search route", () => {
     expect(response.status).toBe(200);
     const payload = await response.json();
     expect(payload.length).toBe(1);
-    expect(payload[0].identifier).toBe("ENG-1");
+    expect(payload[0]).toMatchObject({
+      identifier: "ENG-1",
+      teamKey: "ENG",
+      stateName: "In Progress",
+      stateCategory: "started",
+      stateColor: "#000000",
+      assigneeName: "Test User",
+    });
+  });
+
+  it("honors explicit workspace scope through memberships", async () => {
+    const { GET } = await import("@/app/api/issues/search/route");
+
+    const response = await GET(
+      new Request("http://localhost?q=Search&workspaceId=workspace-1"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(membershipsLimitMock).toHaveBeenCalled();
+    expect(resolveRequestWorkspaceIdMock).not.toHaveBeenCalled();
+    const payload = await response.json();
+    expect(payload[0].teamKey).toBe("ENG");
   });
 
   it("returns empty array for missing query", async () => {
