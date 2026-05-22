@@ -362,7 +362,6 @@ export async function POST(request: Request) {
       milestones.findIndex((item) => item.name === milestone.name) === index,
   );
 
-
   const requestedLabelIds: string[] = Array.from(
     new Set([
       ...templateSettings.labelIds,

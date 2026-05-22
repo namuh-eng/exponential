@@ -271,8 +271,6 @@ export function ProjectsPage({
 
               {templateSelect}
 
-              {templateSelect}
-
               {availableLabels.length > 0 && (
                 <label className="flex flex-col gap-1 text-[12px] text-[var(--color-text-secondary)]">
                   Project labels
@@ -513,8 +511,6 @@ export function ProjectsPage({
               rows={3}
               className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
             />
-
-            {templateSelect}
 
             {templateSelect}
 
