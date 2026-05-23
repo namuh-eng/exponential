@@ -324,6 +324,35 @@ paths:
                 $ref: '#/components/schemas/AccountProfileResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /account/notifications:
+    get:
+      operationId: getAccountNotifications
+      responses:
+        '200':
+          description: Account notification settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountNotificationsResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: updateAccountNotifications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAccountNotificationsRequest'
+      responses:
+        '200':
+          description: Updated account notification settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountNotificationsResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /account/profile/workspace:
     delete:
       operationId: leaveAccountWorkspace
@@ -1536,6 +1565,20 @@ components:
         location: { type: string }
         timezone: { type: string }
         showLocalTime: { type: boolean }
+    AccountNotificationsResponse:
+      type: object
+      required: [accountNotifications]
+      properties:
+        accountNotifications:
+          type: object
+          additionalProperties: true
+    UpdateAccountNotificationsRequest:
+      type: object
+      required: [accountNotifications]
+      properties:
+        accountNotifications:
+          type: object
+          additionalProperties: true
     LeaveWorkspaceResponse:
       type: object
       required: [success, redirectTo]

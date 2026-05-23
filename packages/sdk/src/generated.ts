@@ -177,6 +177,22 @@ export interface paths {
     patch: operations["updateAccountProfile"];
     trace?: never;
   };
+  "/account/notifications": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getAccountNotifications"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations["updateAccountNotifications"];
+    trace?: never;
+  };
   "/account/profile/workspace": {
     parameters: {
       query?: never;
@@ -934,6 +950,16 @@ export interface components {
       location?: string;
       timezone?: string;
       showLocalTime?: boolean;
+    };
+    AccountNotificationsResponse: {
+      accountNotifications: {
+        [key: string]: unknown;
+      };
+    };
+    UpdateAccountNotificationsRequest: {
+      accountNotifications: {
+        [key: string]: unknown;
+      };
     };
     LeaveWorkspaceResponse: {
       success: boolean;
@@ -2334,6 +2360,52 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["AccountProfileResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getAccountNotifications: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Account notification settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccountNotificationsResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateAccountNotifications: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateAccountNotificationsRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated account notification settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccountNotificationsResponse"];
         };
       };
       default: components["responses"]["Problem"];

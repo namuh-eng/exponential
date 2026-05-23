@@ -68,6 +68,8 @@ func (h Handler) Routes() chi.Router {
 	r.Patch("/profile", h.UpdateProfile)
 	r.Get("/preferences", h.GetPreferences)
 	r.Patch("/preferences", h.UpdatePreferences)
+	r.Get("/notifications", h.GetNotifications)
+	r.Patch("/notifications", h.UpdateNotifications)
 	r.Delete("/profile/workspace", h.LeaveWorkspace)
 	return r
 }
@@ -188,6 +190,53 @@ func (h Handler) LeaveWorkspace(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, &http.Cookie{Name: "activeWorkspaceId", Value: "", Path: "/", MaxAge: -1, SameSite: http.SameSiteLaxMode})
 	}
 	problem.JSON(w, 200, leaveWorkspacePayload{Success: true, RedirectTo: redirectTo})
+}
+
+func (h Handler) GetNotifications(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	settings, err := h.userSettings(r, p.UserID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "User not found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Get notification settings failed", err.Error())
+		return
+	}
+	problem.JSON(w, 200, map[string]any{"accountNotifications": readAccountNotifications(settings)})
+}
+
+func (h Handler) UpdateNotifications(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	settings, err := h.userSettings(r, p.UserID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "User not found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Update notification settings failed", err.Error())
+		return
+	}
+	var input map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		problem.Write(w, 400, "Invalid JSON", err.Error())
+		return
+	}
+	patch, ok := input["accountNotifications"].(map[string]any)
+	if !ok || patch == nil {
+		problem.Write(w, 400, "accountNotifications is required", "")
+		return
+	}
+	nextNotifications := mergeRecords(readAccountNotifications(settings), patch)
+	nextNotifications = normalizeAccountNotifications(nextNotifications)
+	nextSettings := asMap(settings)
+	nextSettings["accountNotifications"] = nextNotifications
+	body, _ := json.Marshal(nextSettings)
+	if _, err := h.DB.Exec(r.Context(), `update "user" set settings=$1::jsonb, updated_at=now() where id=$2`, body, p.UserID); err != nil {
+		problem.Write(w, 500, "Update notification settings failed", err.Error())
+		return
+	}
+	problem.JSON(w, 200, map[string]any{"accountNotifications": nextNotifications})
 }
 
 func (h Handler) GetPreferences(w http.ResponseWriter, r *http.Request) {
@@ -350,4 +399,71 @@ func leaveWorkspaceRedirect(nextWorkspaceID *string) string {
 		return "/create-workspace"
 	}
 	return "/"
+}
+
+func readAccountNotifications(settings []byte) map[string]any {
+	root := asMap(settings)
+	return normalizeAccountNotifications(asRecord(root["accountNotifications"]))
+}
+
+func normalizeAccountNotifications(value map[string]any) map[string]any {
+	defaults := defaultAccountNotifications()
+	merged := mergeRecords(defaults, value)
+	if updates, ok := merged["updatesFromLinear"].(map[string]any); ok {
+		if _, exists := updates["changelogNewsletter"]; !exists {
+			if newsletter, ok := updates["newsletter"].(bool); ok {
+				updates["changelogNewsletter"] = newsletter
+			}
+		}
+	}
+	merged["channels"] = normalizeNotificationChannels(asRecord(merged["channels"]))
+	return merged
+}
+
+func normalizeNotificationChannels(value map[string]any) map[string]any {
+	defaults := defaultNotificationChannels()
+	return mergeRecords(defaults, value)
+}
+
+func defaultAccountNotifications() map[string]any {
+	return map[string]any{
+		"channels":          defaultNotificationChannels(),
+		"inbox":             map[string]any{"assignedToMe": true, "mentionsAndReplies": true, "subscribedIssues": true, "teamUpdates": true},
+		"email":             map[string]any{"issueActivity": true, "mentionsAndReplies": true, "dailyDigest": false, "weeklyDigest": true, "productUpdates": false, "workspaceInvites": true},
+		"desktop":           map[string]any{"enabled": true, "permission": "default", "issueActivity": true, "mentionsAndReplies": true, "reminders": true, "sound": false},
+		"slack":             map[string]any{"enabled": false, "destination": "not_connected", "mentionsAndReplies": true, "assignedToMe": false, "triageActivity": false, "projectUpdates": false},
+		"updatesFromLinear": map[string]any{"showInSidebar": true, "changelogNewsletter": false, "marketing": false},
+		"other":             map[string]any{"inviteAccepted": true, "privacyAndLegalUpdates": true, "dpa": false},
+	}
+}
+
+func defaultNotificationChannels() map[string]any {
+	events := []string{"assignments", "statusChanges", "mentions", "comments", "dueDates", "relations", "triage", "projectUpdates", "teamUpdates", "productUpdates", "workspaceAdmin"}
+	out := map[string]any{}
+	for _, channel := range []string{"desktop", "mobile", "email", "slack"} {
+		channelEvents := map[string]any{}
+		for _, event := range events {
+			channelEvents[event] = true
+		}
+		if channel == "slack" {
+			channelEvents["assignments"] = false
+		}
+		out[channel] = map[string]any{"events": channelEvents}
+	}
+	return out
+}
+
+func mergeRecords(current map[string]any, patch map[string]any) map[string]any {
+	out := map[string]any{}
+	for k, v := range current {
+		out[k] = v
+	}
+	for k, v := range patch {
+		if sub, ok := v.(map[string]any); ok {
+			out[k] = mergeRecords(asRecord(out[k]), sub)
+		} else {
+			out[k] = v
+		}
+	}
+	return out
 }

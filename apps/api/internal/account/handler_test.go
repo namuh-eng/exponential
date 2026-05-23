@@ -26,3 +26,20 @@ func TestLeaveWorkspaceRedirect(t *testing.T) {
 		t.Fatalf("next workspace redirect = %q", got)
 	}
 }
+
+func TestReadAccountNotificationsDefaultsAndPatch(t *testing.T) {
+	settings := []byte(`{"accountNotifications":{"updatesFromLinear":{"showInSidebar":false},"email":{"dailyDigest":true}}}`)
+	got := readAccountNotifications(settings)
+	updates := got["updatesFromLinear"].(map[string]any)
+	if updates["showInSidebar"] != false {
+		t.Fatalf("showInSidebar = %#v", updates["showInSidebar"])
+	}
+	email := got["email"].(map[string]any)
+	if email["dailyDigest"] != true || email["weeklyDigest"] != true {
+		t.Fatalf("email settings = %#v", email)
+	}
+	channels := got["channels"].(map[string]any)
+	if channels["desktop"] == nil || channels["slack"] == nil {
+		t.Fatalf("channels missing defaults = %#v", channels)
+	}
+}
