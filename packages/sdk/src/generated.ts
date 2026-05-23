@@ -313,6 +313,22 @@ export interface paths {
     patch: operations["updateDocumentTemplate"];
     trace?: never;
   };
+  "/integrations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["listIntegrations"];
+    put?: never;
+    post?: never;
+    delete: operations["deleteIntegration"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/labels": {
     parameters: {
       query?: never;
@@ -871,6 +887,36 @@ export interface components {
       name?: string;
       description?: string;
       content?: string;
+    };
+    IntegrationSetupRequirement: {
+      type: string;
+      message: string;
+    };
+    IntegrationActions: {
+      canConnect: boolean;
+      canManage: boolean;
+      canDisconnect: boolean;
+    };
+    Integration: {
+      /** @enum {string} */
+      provider: "github" | "slack" | "zendesk";
+      name: string;
+      description: string;
+      /** Format: uuid */
+      id: string | null;
+      status: string;
+      displayName: string | null;
+      externalId: string | null;
+      /** Format: date-time */
+      connectedAt: string | null;
+      setupRequirement:
+        | components["schemas"]["IntegrationSetupRequirement"]
+        | null;
+      actions: components["schemas"]["IntegrationActions"];
+    };
+    IntegrationListResponse: {
+      canManageIntegrations: boolean;
+      integrations: components["schemas"]["Integration"][];
     };
     Label: {
       /** Format: uuid */
@@ -2237,6 +2283,50 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["DocumentTemplateResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  listIntegrations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Workspace integrations */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntegrationListResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  deleteIntegration: {
+    parameters: {
+      query: {
+        provider: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted integration */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
         };
       };
       default: components["responses"]["Problem"];

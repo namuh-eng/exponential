@@ -71,6 +71,11 @@ async function main() {
     return;
   }
 
+  if (resource === "integrations") {
+    await integrationCommand();
+    return;
+  }
+
   if (resource === "account") {
     await accountCommand();
     return;
@@ -411,6 +416,24 @@ async function documentCommand() {
       "/document-templates/{id}",
       { params: { path: { id } } },
     );
+    printResult(data, error, response.status);
+    return;
+  }
+
+  usage();
+}
+
+async function integrationCommand() {
+  if (action === "list") {
+    const { data, error, response } = await client.GET("/integrations");
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "disconnect") {
+    const { data, error, response } = await client.DELETE("/integrations", {
+      params: { query: { provider: requireOption(args, "provider") } },
+    });
     printResult(data, error, response.status);
     return;
   }
@@ -868,6 +891,8 @@ function usage(): never {
   exponential documents create-template --name <name> --content <markdown>
   exponential documents update-template --id <id> [--name <name>] [--content <markdown>]
   exponential documents delete-template --id <id>
+  exponential integrations list
+  exponential integrations disconnect --provider slack|github|zendesk
   exponential account profile
   exponential account preferences
   exponential notifications list

@@ -516,6 +516,34 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /integrations:
+    get:
+      operationId: listIntegrations
+      responses:
+        '200':
+          description: Workspace integrations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationListResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deleteIntegration
+      parameters:
+        - name: provider
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Deleted integration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /labels:
     get:
       operationId: listLabels
@@ -1461,6 +1489,44 @@ components:
         name: { type: string }
         description: { type: string }
         content: { type: string }
+    IntegrationSetupRequirement:
+      type: object
+      required: [type, message]
+      properties:
+        type: { type: string }
+        message: { type: string }
+    IntegrationActions:
+      type: object
+      required: [canConnect, canManage, canDisconnect]
+      properties:
+        canConnect: { type: boolean }
+        canManage: { type: boolean }
+        canDisconnect: { type: boolean }
+    Integration:
+      type: object
+      required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions]
+      properties:
+        provider: { type: string, enum: [github, slack, zendesk] }
+        name: { type: string }
+        description: { type: string }
+        id: { type: [string, 'null'], format: uuid }
+        status: { type: string }
+        displayName: { type: [string, 'null'] }
+        externalId: { type: [string, 'null'] }
+        connectedAt: { type: [string, 'null'], format: date-time }
+        setupRequirement:
+          anyOf:
+            - $ref: '#/components/schemas/IntegrationSetupRequirement'
+            - type: 'null'
+        actions: { $ref: '#/components/schemas/IntegrationActions' }
+    IntegrationListResponse:
+      type: object
+      required: [canManageIntegrations, integrations]
+      properties:
+        canManageIntegrations: { type: boolean }
+        integrations:
+          type: array
+          items: { $ref: '#/components/schemas/Integration' }
     Label:
       type: object
       required: [id, name, color, scope, issueCount, createdAt, updatedAt]
