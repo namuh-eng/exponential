@@ -56,6 +56,18 @@ services:
       - ./infra/kratos:/etc/config/kratos:ro
     command: serve --dev --config /etc/config/kratos/kratos.yml
 
+  api-migrate:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    entrypoint: ["exponential-migrate"]
+    environment:
+      EXPONENTIAL_API_DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/exponential?sslmode=disable
+      MIGRATIONS_DIR: /migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build:
       context: .
@@ -75,6 +87,8 @@ services:
         condition: service_healthy
       kratos:
         condition: service_started
+      api-migrate:
+        condition: service_completed_successfully
 
   web:
     image: node:20-alpine
