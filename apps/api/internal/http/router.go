@@ -5,11 +5,14 @@ import (
 	stdhttp "net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/namuh-eng/exponential/apps/api/internal/auth"
+	"github.com/namuh-eng/exponential/apps/api/internal/issues"
 	"go.uber.org/zap"
 )
 
-// NewRouter wires the API routes that exist during Phase 0 scaffolding.
-func NewRouter(logger *zap.Logger) stdhttp.Handler {
+// NewRouter wires API routes.
+func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 	r := chi.NewRouter()
 	r.Get("/healthz", func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -17,6 +20,14 @@ func NewRouter(logger *zap.Logger) stdhttp.Handler {
 		if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
 			logger.Error("write health response", zap.Error(err))
 		}
+	})
+
+	authMiddleware := auth.Middleware{DB: db}
+	r.Route("/v1", func(v1 chi.Router) {
+		v1.Group(func(protected chi.Router) {
+			protected.Use(authMiddleware.Require)
+			protected.Mount("/issues", issues.Handler{DB: db}.Routes())
+		})
 	})
 	return r
 }

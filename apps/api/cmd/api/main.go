@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/namuh-eng/exponential/apps/api/internal/config"
+	"github.com/namuh-eng/exponential/apps/api/internal/database"
 	httpserver "github.com/namuh-eng/exponential/apps/api/internal/http"
 	"github.com/namuh-eng/exponential/apps/api/internal/logging"
 	"go.uber.org/zap"
@@ -23,9 +24,15 @@ func main() {
 	}
 	defer func() { _ = logger.Sync() }()
 
+	db, err := database.Open(context.Background(), cfg.DatabaseURL)
+	if err != nil {
+		logger.Fatal("database connection failed", zap.Error(err))
+	}
+	defer db.Close()
+
 	server := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           httpserver.NewRouter(logger),
+		Handler:           httpserver.NewRouter(logger, db),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

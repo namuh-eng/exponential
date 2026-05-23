@@ -1,0 +1,205 @@
+openapi: 3.1.0
+info:
+  title: Exponential Headless API
+  version: 0.1.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+servers:
+  - url: http://localhost:3016/v1
+security:
+  - bearerAuth: []
+paths:
+  /issues:
+    get:
+      operationId: listIssues
+      summary: List issues in the authenticated workspace
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: team_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Issues page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueListResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createIssue
+      summary: Create an issue
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIssueRequest'
+      responses:
+        '201':
+          description: Created issue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        default:
+          $ref: '#/components/responses/Problem'
+  /issues/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getIssue
+      responses:
+        '200':
+          description: Issue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        default:
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: updateIssue
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateIssueRequest'
+      responses:
+        '200':
+          description: Updated issue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deleteIssue
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: { type: boolean }
+        default:
+          $ref: '#/components/responses/Problem'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: lin_api or pat
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      schema: { type: string, minLength: 1, maxLength: 255 }
+  responses:
+    Problem:
+      description: RFC 7807 problem response
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+    IssuePriority:
+      type: string
+      enum: [none, urgent, high, medium, low]
+    Issue:
+      type: object
+      required: [id, number, identifier, title, team_id, state_id, creator_id, priority, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: integer }
+        identifier: { type: string }
+        title: { type: string }
+        description: { type: [string, 'null'] }
+        team_id: { type: string, format: uuid }
+        state_id: { type: string, format: uuid }
+        assignee_id: { type: [string, 'null'] }
+        creator_id: { type: string }
+        priority: { $ref: '#/components/schemas/IssuePriority' }
+        estimate: { type: [number, 'null'] }
+        parent_issue_id: { type: [string, 'null'], format: uuid }
+        project_id: { type: [string, 'null'], format: uuid }
+        project_milestone_id: { type: [string, 'null'], format: uuid }
+        cycle_id: { type: [string, 'null'], format: uuid }
+        due_date: { type: [string, 'null'], format: date-time }
+        sort_order: { type: number }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        archived_at: { type: [string, 'null'], format: date-time }
+        canceled_at: { type: [string, 'null'], format: date-time }
+        completed_at: { type: [string, 'null'], format: date-time }
+    IssueListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Issue' }
+        next_cursor: { type: [string, 'null'] }
+    CreateIssueRequest:
+      type: object
+      required: [title, team_id]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 500 }
+        description: { type: [string, 'null'] }
+        team_id: { type: string, format: uuid }
+        state_id: { type: [string, 'null'], format: uuid }
+        priority: { $ref: '#/components/schemas/IssuePriority' }
+        assignee_id: { type: [string, 'null'] }
+        project_id: { type: [string, 'null'], format: uuid }
+        project_milestone_id: { type: [string, 'null'], format: uuid }
+        cycle_id: { type: [string, 'null'], format: uuid }
+        parent_issue_id: { type: [string, 'null'], format: uuid }
+        estimate: { type: [number, 'null'] }
+        due_date: { type: [string, 'null'], format: date }
+    UpdateIssueRequest:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 500 }
+        description: { type: [string, 'null'] }
+        state_id: { type: string, format: uuid }
+        priority: { $ref: '#/components/schemas/IssuePriority' }
+        assignee_id: { type: [string, 'null'] }
+        project_id: { type: [string, 'null'], format: uuid }
+        project_milestone_id: { type: [string, 'null'], format: uuid }
+        cycle_id: { type: [string, 'null'], format: uuid }
+        parent_issue_id: { type: [string, 'null'], format: uuid }
+        estimate: { type: [number, 'null'] }
+        due_date: { type: [string, 'null'], format: date }
+        sort_order: { type: number }
+        archive: { type: boolean }
