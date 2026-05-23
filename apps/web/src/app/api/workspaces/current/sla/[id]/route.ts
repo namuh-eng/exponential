@@ -3,6 +3,11 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
 import {
+  createHeadlessWorkspacesClient,
+  headlessWorkspacesEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
+import {
   normalizeSlaPolicyInput,
   readSlaSettings,
   serializeSlaSettings,
@@ -75,6 +80,42 @@ async function policyId({ params }: Params) {
 }
 
 export async function PATCH(request: Request, context: Params) {
+  const { response, session } = await requireApiSession();
+  if (response || !session) {
+    return (
+      response ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    );
+  }
+
+  if (headlessWorkspacesEnabled()) {
+    const workspaceId =
+      "apiKey" in session
+        ? session.apiKey.workspaceId
+        : await resolveActiveWorkspaceId(session.user.id);
+    if (workspaceId) {
+      const id = await policyId(context);
+      const body = await request.json().catch(() => null);
+      const token = await mintInternalApiToken({
+        userId: session.user.id,
+        workspaceId,
+      });
+      const client = createHeadlessWorkspacesClient(token);
+      const { data, error, response } = await client.PATCH(
+        "/workspaces/current/sla/{id}",
+        {
+          params: { path: { id } },
+          body: body as never,
+        },
+      );
+      if (error) {
+        return NextResponse.json(error, {
+          status: (response as Response).status,
+        });
+      }
+      return NextResponse.json(data, { status: (response as Response).status });
+    }
+  }
+
   const { error, access } = await loadAccess();
   if (error || !access) return error;
   if (!canManage(access.memberRole)) {
@@ -113,6 +154,40 @@ export async function PATCH(request: Request, context: Params) {
 }
 
 export async function DELETE(_request: Request, context: Params) {
+  const { response, session } = await requireApiSession();
+  if (response || !session) {
+    return (
+      response ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    );
+  }
+
+  if (headlessWorkspacesEnabled()) {
+    const workspaceId =
+      "apiKey" in session
+        ? session.apiKey.workspaceId
+        : await resolveActiveWorkspaceId(session.user.id);
+    if (workspaceId) {
+      const id = await policyId(context);
+      const token = await mintInternalApiToken({
+        userId: session.user.id,
+        workspaceId,
+      });
+      const client = createHeadlessWorkspacesClient(token);
+      const { data, error, response } = await client.DELETE(
+        "/workspaces/current/sla/{id}",
+        {
+          params: { path: { id } },
+        },
+      );
+      if (error) {
+        return NextResponse.json(error, {
+          status: (response as Response).status,
+        });
+      }
+      return NextResponse.json(data, { status: (response as Response).status });
+    }
+  }
+
   const { error, access } = await loadAccess();
   if (error || !access) return error;
   if (!canManage(access.memberRole)) {

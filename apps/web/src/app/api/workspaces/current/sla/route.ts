@@ -4,6 +4,11 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
 import {
+  createHeadlessWorkspacesClient,
+  headlessWorkspacesEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
+import {
   normalizeSlaPolicyInput,
   readSlaSettings,
   serializeSlaSettings,
@@ -78,6 +83,36 @@ function canManage(role: Access["memberRole"]) {
 }
 
 export async function GET() {
+  const { response, session } = await requireApiSession();
+  if (response || !session) {
+    return (
+      response ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    );
+  }
+
+  if (headlessWorkspacesEnabled()) {
+    const workspaceId =
+      "apiKey" in session
+        ? session.apiKey.workspaceId
+        : await resolveActiveWorkspaceId(session.user.id);
+    if (workspaceId) {
+      const token = await mintInternalApiToken({
+        userId: session.user.id,
+        workspaceId,
+      });
+      const client = createHeadlessWorkspacesClient(token);
+      const { data, error, response } = await client.GET(
+        "/workspaces/current/sla",
+      );
+      if (error) {
+        return NextResponse.json(error, {
+          status: (response as Response).status,
+        });
+      }
+      return NextResponse.json(data, { status: (response as Response).status });
+    }
+  }
+
   const { error, access } = await loadAccess();
   if (error || !access) return error;
 
@@ -90,6 +125,40 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const { response, session } = await requireApiSession();
+  if (response || !session) {
+    return (
+      response ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    );
+  }
+
+  if (headlessWorkspacesEnabled()) {
+    const workspaceId =
+      "apiKey" in session
+        ? session.apiKey.workspaceId
+        : await resolveActiveWorkspaceId(session.user.id);
+    if (workspaceId) {
+      const body = await request.json().catch(() => null);
+      const token = await mintInternalApiToken({
+        userId: session.user.id,
+        workspaceId,
+      });
+      const client = createHeadlessWorkspacesClient(token);
+      const { data, error, response } = await client.POST(
+        "/workspaces/current/sla",
+        {
+          body: body as never,
+        },
+      );
+      if (error) {
+        return NextResponse.json(error, {
+          status: (response as Response).status,
+        });
+      }
+      return NextResponse.json(data, { status: (response as Response).status });
+    }
+  }
+
   const { error, access } = await loadAccess();
   if (error || !access) return error;
   if (!canManage(access.memberRole)) {
