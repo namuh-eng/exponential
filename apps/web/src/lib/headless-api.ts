@@ -11,6 +11,10 @@ export function headlessIssueBulkEnabled() {
   return process.env.EXPONENTIAL_HEADLESS_ISSUE_BULK === "true";
 }
 
+export function headlessAccountNotificationsEnabled() {
+  return process.env.EXPONENTIAL_HEADLESS_ACCOUNT_NOTIFICATIONS === "true";
+}
+
 export function headlessViewsEnabled() {
   return process.env.EXPONENTIAL_HEADLESS_VIEWS === "true";
 }
@@ -45,6 +49,10 @@ export function createHeadlessIssuesClient(token: string) {
 }
 
 export function createHeadlessIssueBulkClient(token: string) {
+  return createHeadlessClient(token);
+}
+
+export function createHeadlessAccountNotificationsClient(token: string) {
   return createHeadlessClient(token);
 }
 
