@@ -22,3 +22,10 @@ func TestNullableTrim(t *testing.T) {
 		t.Fatalf("trim = %#v", got)
 	}
 }
+
+func TestUniqueStrings(t *testing.T) {
+	got := uniqueStrings([]string{" a ", "a", "", "b"})
+	if len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Fatalf("unique strings = %#v", got)
+	}
+}

@@ -53,6 +53,20 @@ type labelRequest struct {
 	ConvertToGroup bool    `json:"convertToGroup"`
 }
 
+type bulkRequest struct {
+	Action             string   `json:"action"`
+	LabelIDs           []string `json:"labelIds"`
+	DestinationLabelID *string  `json:"destinationLabelId"`
+	TeamID             *string  `json:"teamId"`
+}
+
+type bulkResponse struct {
+	Success            bool    `json:"success"`
+	UpdatedCount       int     `json:"updatedCount,omitempty"`
+	DestinationLabelID *string `json:"destinationLabelId,omitempty"`
+	MergedCount        int     `json:"mergedCount,omitempty"`
+}
+
 type ProjectLabel struct {
 	ID           string  `json:"id"`
 	Name         string  `json:"name"`
@@ -80,6 +94,7 @@ func (h Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.List)
 	r.Post("/", h.Create)
+	r.Post("/bulk", h.Bulk)
 	r.Patch("/{id}", h.Update)
 	r.Delete("/{id}", h.Delete)
 	return r
@@ -312,6 +327,148 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	problem.JSON(w, 200, map[string]bool{"success": true})
 }
 
+func (h Handler) Bulk(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	var input bulkRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		problem.Write(w, 400, "Invalid JSON", err.Error())
+		return
+	}
+	labelIDs := uniqueStrings(input.LabelIDs)
+	if strings.TrimSpace(input.Action) == "" {
+		problem.Write(w, 400, "Action is required", "")
+		return
+	}
+	if len(labelIDs) == 0 {
+		problem.Write(w, 400, "Select at least one label", "")
+		return
+	}
+	if err := h.requireLabels(r.Context(), p.WorkspaceID, labelIDs); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			problem.Write(w, 404, "One or more labels were not found", "")
+			return
+		}
+		problem.Write(w, 500, "Bulk label action failed", err.Error())
+		return
+	}
+	switch input.Action {
+	case "archive", "unarchive":
+		archivedAt := any(nil)
+		if input.Action == "archive" {
+			archivedAt = time.Now()
+		}
+		if _, err := h.DB.Exec(r.Context(), `update label set archived_at=$1, updated_at=now() where workspace_id=$2::uuid and id=any($3::uuid[])`, archivedAt, p.WorkspaceID, labelIDs); err != nil {
+			problem.Write(w, 500, "Bulk label action failed", err.Error())
+			return
+		}
+		problem.JSON(w, 200, bulkResponse{Success: true, UpdatedCount: len(labelIDs)})
+	case "delete":
+		tx, err := h.DB.Begin(r.Context())
+		if err != nil {
+			problem.Write(w, 500, "Bulk label action failed", err.Error())
+			return
+		}
+		defer func() { _ = tx.Rollback(r.Context()) }()
+		if _, err := tx.Exec(r.Context(), `delete from issue_label where label_id=any($1::uuid[])`, labelIDs); err != nil {
+			problem.Write(w, 500, "Bulk label action failed", err.Error())
+			return
+		}
+		if _, err := tx.Exec(r.Context(), `delete from label where workspace_id=$1::uuid and id=any($2::uuid[])`, p.WorkspaceID, labelIDs); err != nil {
+			problem.Write(w, 500, "Bulk label action failed", err.Error())
+			return
+		}
+		if err := tx.Commit(r.Context()); err != nil {
+			problem.Write(w, 500, "Bulk label action failed", err.Error())
+			return
+		}
+		problem.JSON(w, 200, bulkResponse{Success: true, UpdatedCount: len(labelIDs)})
+	case "convertToGroup":
+		if _, err := h.DB.Exec(r.Context(), `update label set parent_label_id=null, color='#6b6f76', updated_at=now() where workspace_id=$1::uuid and id=any($2::uuid[])`, p.WorkspaceID, labelIDs); err != nil {
+			problem.Write(w, 500, "Bulk label action failed", err.Error())
+			return
+		}
+		problem.JSON(w, 200, bulkResponse{Success: true, UpdatedCount: len(labelIDs)})
+	case "rescope":
+		teamID := nullableTrim(input.TeamID)
+		if teamID != nil {
+			if ok, err := h.teamInWorkspace(r.Context(), p.WorkspaceID, *teamID); err != nil {
+				problem.Write(w, 500, "Bulk label action failed", err.Error())
+				return
+			} else if !ok {
+				problem.Write(w, 404, "Team not found", "")
+				return
+			}
+		}
+		if _, err := h.DB.Exec(r.Context(), `update label set team_id=$1::uuid, updated_at=now() where workspace_id=$2::uuid and id=any($3::uuid[])`, teamID, p.WorkspaceID, labelIDs); err != nil {
+			problem.Write(w, 500, "Bulk label action failed", err.Error())
+			return
+		}
+		problem.JSON(w, 200, bulkResponse{Success: true, UpdatedCount: len(labelIDs)})
+	case "merge":
+		h.bulkMerge(w, r, p.WorkspaceID, labelIDs, nullableTrim(input.DestinationLabelID))
+	default:
+		problem.Write(w, 400, "Unsupported action", "")
+	}
+}
+
+func (h Handler) bulkMerge(w http.ResponseWriter, r *http.Request, workspaceID string, labelIDs []string, destinationID *string) {
+	if destinationID == nil {
+		problem.Write(w, 400, "destinationLabelId is required", "")
+		return
+	}
+	sourceIDs := []string{}
+	for _, id := range labelIDs {
+		if id != *destinationID {
+			sourceIDs = append(sourceIDs, id)
+		}
+	}
+	if len(sourceIDs) == 0 {
+		problem.Write(w, 400, "Choose at least one source label", "")
+		return
+	}
+	if err := h.requireLabels(r.Context(), workspaceID, []string{*destinationID}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			problem.Write(w, 404, "Destination label not found", "")
+			return
+		}
+		problem.Write(w, 500, "Bulk label action failed", err.Error())
+		return
+	}
+	tx, err := h.DB.Begin(r.Context())
+	if err != nil {
+		problem.Write(w, 500, "Bulk label action failed", err.Error())
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	if _, err := tx.Exec(r.Context(), `
+		delete from issue_label src
+		where src.label_id=any($1::uuid[])
+		  and exists (
+		    select 1 from issue_label dst
+		    where dst.label_id=$2::uuid and dst.issue_id=src.issue_id
+		  )`, sourceIDs, *destinationID); err != nil {
+		problem.Write(w, 500, "Bulk label action failed", err.Error())
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `update issue_label set label_id=$1::uuid where label_id=any($2::uuid[])`, *destinationID, sourceIDs); err != nil {
+		problem.Write(w, 500, "Bulk label action failed", err.Error())
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `delete from label where id=any($1::uuid[]) and workspace_id=$2::uuid`, sourceIDs, workspaceID); err != nil {
+		problem.Write(w, 500, "Bulk label action failed", err.Error())
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `update label set updated_at=now() where id=$1::uuid and workspace_id=$2::uuid`, *destinationID, workspaceID); err != nil {
+		problem.Write(w, 500, "Bulk label action failed", err.Error())
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		problem.Write(w, 500, "Bulk label action failed", err.Error())
+		return
+	}
+	problem.JSON(w, 200, bulkResponse{Success: true, DestinationLabelID: destinationID, MergedCount: len(sourceIDs)})
+}
+
 func (h Handler) ListProjectLabels(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
 	rows, err := h.DB.Query(r.Context(), `select pl.id::text,pl.name,pl.color,pl.description,count(pr.id)::int,pl.created_at,pl.updated_at from project_label pl left join project pr on pr.workspace_id=$1::uuid and (pr.settings->'labelIds') ? pl.id::text where pl.workspace_id=$1::uuid group by pl.id order by pl.name`, p.WorkspaceID)
@@ -466,6 +623,16 @@ func (h Handler) teamInWorkspace(ctx context.Context, workspaceID, teamID string
 	}
 	return err == nil, err
 }
+func (h Handler) requireLabels(ctx context.Context, workspaceID string, labelIDs []string) error {
+	var count int
+	if err := h.DB.QueryRow(ctx, `select count(*)::int from label where workspace_id=$1::uuid and id=any($2::uuid[])`, workspaceID, labelIDs).Scan(&count); err != nil {
+		return err
+	}
+	if count != len(labelIDs) {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
 func (h Handler) currentLabelTeam(ctx context.Context, workspaceID, id string) (*string, error) {
 	var teamID *string
 	err := h.DB.QueryRow(ctx, `select team_id::text from label where id=$1::uuid and workspace_id=$2::uuid`, id, workspaceID).Scan(&teamID)
@@ -507,6 +674,19 @@ func value(v *string) string {
 		return ""
 	}
 	return *v
+}
+func uniqueStrings(values []string) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" || seen[trimmed] {
+			continue
+		}
+		seen[trimmed] = true
+		out = append(out, trimmed)
+	}
+	return out
 }
 
 var hexColorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)

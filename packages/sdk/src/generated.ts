@@ -379,6 +379,22 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/labels/bulk": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["bulkLabelAction"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/labels/{id}": {
     parameters: {
       query?: never;
@@ -1001,6 +1017,28 @@ export interface components {
       teamId?: string | null;
       archived?: boolean;
       convertToGroup?: boolean;
+    };
+    BulkLabelRequest: {
+      /** @enum {string} */
+      action:
+        | "archive"
+        | "unarchive"
+        | "delete"
+        | "convertToGroup"
+        | "rescope"
+        | "merge";
+      labelIds: string[];
+      /** Format: uuid */
+      destinationLabelId?: string | null;
+      /** Format: uuid */
+      teamId?: string | null;
+    };
+    BulkLabelResponse: {
+      success: boolean;
+      updatedCount?: number;
+      /** Format: uuid */
+      destinationLabelId?: string | null;
+      mergedCount?: number;
     };
     ProjectLabel: {
       /** Format: uuid */
@@ -2522,6 +2560,31 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["LabelResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  bulkLabelAction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["BulkLabelRequest"];
+      };
+    };
+    responses: {
+      /** @description Bulk label action result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BulkLabelResponse"];
         };
       };
       default: components["responses"]["Problem"];

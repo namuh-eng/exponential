@@ -642,6 +642,24 @@ paths:
                 $ref: '#/components/schemas/LabelResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /labels/bulk:
+    post:
+      operationId: bulkLabelAction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkLabelRequest'
+      responses:
+        '200':
+          description: Bulk label action result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkLabelResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /labels/{id}:
     parameters:
       - name: id
@@ -1635,6 +1653,24 @@ components:
         teamId: { type: [string, 'null'], format: uuid }
         archived: { type: boolean }
         convertToGroup: { type: boolean }
+    BulkLabelRequest:
+      type: object
+      required: [action, labelIds]
+      properties:
+        action: { type: string, enum: [archive, unarchive, delete, convertToGroup, rescope, merge] }
+        labelIds:
+          type: array
+          items: { type: string, format: uuid }
+        destinationLabelId: { type: [string, 'null'], format: uuid }
+        teamId: { type: [string, 'null'], format: uuid }
+    BulkLabelResponse:
+      type: object
+      required: [success]
+      properties:
+        success: { type: boolean }
+        updatedCount: { type: integer }
+        destinationLabelId: { type: [string, 'null'], format: uuid }
+        mergedCount: { type: integer }
     ProjectLabel:
       type: object
       required: [id, name, color, projectCount, createdAt, updatedAt]

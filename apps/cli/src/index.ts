@@ -535,6 +535,23 @@ async function labelCommand() {
     return;
   }
 
+  if (action === "bulk") {
+    const labelIds = requireOption(args, "label-ids")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+    const { data, error, response } = await client.POST("/labels/bulk", {
+      body: {
+        action: requireOption(args, "action") as never,
+        labelIds,
+        destinationLabelId: readOption(args, "destination-label-id"),
+        teamId: readOption(args, "team-id"),
+      },
+    });
+    printResult(data, error, response.status);
+    return;
+  }
+
   usage();
 }
 
@@ -928,6 +945,7 @@ function usage(): never {
   exponential labels create --name <name> [--color #6b6f76] [--team-id <uuid>]
   exponential labels update --id <uuid> [--name <name>] [--color #6b6f76]
   exponential labels delete --id <uuid>
+  exponential labels bulk --action archive|unarchive|delete|convertToGroup|rescope|merge --label-ids <ids>
   exponential emojis list
   exponential emojis create --name <name> --image-url <url-or-data-url>
   exponential emojis delete --id <id>
