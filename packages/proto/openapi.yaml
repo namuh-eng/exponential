@@ -99,6 +99,163 @@ paths:
                   success: { type: boolean }
         default:
           $ref: '#/components/responses/Problem'
+  /workspaces:
+    get:
+      operationId: listWorkspaces
+      summary: List workspaces for the authenticated principal
+      responses:
+        '200':
+          description: Workspace memberships
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/WorkspaceMembership' }
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createWorkspace
+      summary: Create a workspace with a default team and workflow states
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkspaceRequest'
+      responses:
+        '201':
+          description: Created workspace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateWorkspaceResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /workspaces/current:
+    get:
+      operationId: getCurrentWorkspace
+      responses:
+        '200':
+          description: Current workspace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentWorkspaceResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: updateCurrentWorkspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWorkspaceRequest'
+      responses:
+        '200':
+          description: Updated current workspace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentWorkspaceResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deleteCurrentWorkspace
+      responses:
+        '200':
+          description: Deleted current workspace
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, redirectTo]
+                properties:
+                  success: { type: boolean }
+                  redirectTo: { type: string }
+        default:
+          $ref: '#/components/responses/Problem'
+  /workspaces/members:
+    get:
+      operationId: listWorkspaceMembers
+      responses:
+        '200':
+          description: Active members and pending invitations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceMembersResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: updateWorkspaceMemberOrInvitation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MutateWorkspaceMemberRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: resendWorkspaceInvitation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MutateWorkspaceMemberRequest'
+      responses:
+        '200':
+          description: Resent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: removeWorkspaceMemberOrInvitation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MutateWorkspaceMemberRequest'
+      responses:
+        '200':
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /workspaces/invite:
+    post:
+      operationId: inviteWorkspaceMembers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteWorkspaceMembersRequest'
+      responses:
+        '200':
+          description: Invite results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteWorkspaceMembersResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /sync/ws:
     get:
       operationId: watchSync
@@ -151,6 +308,144 @@ components:
         title: { type: string }
         status: { type: integer }
         detail: { type: string }
+    WorkspaceRole:
+      type: string
+      enum: [owner, admin, member, guest]
+    WorkspaceMembership:
+      type: object
+      required: [workspaceId, role, workspaceName, workspaceSlug]
+      properties:
+        workspaceId: { type: string, format: uuid }
+        role: { $ref: '#/components/schemas/WorkspaceRole' }
+        workspaceName: { type: string }
+        workspaceSlug: { type: string }
+    Workspace:
+      type: object
+      required: [id, name, urlSlug, region, fiscalMonth, welcomeMessage, plan]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        urlSlug: { type: string }
+        logo: { type: [string, 'null'] }
+        region: { type: string }
+        fiscalMonth: { type: string }
+        welcomeMessage: { type: string }
+        plan: { type: string }
+    WorkspaceSummary:
+      type: object
+      required: [id, name, urlSlug, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        urlSlug: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TeamSummary:
+      type: object
+      required: [id, name, key, workspaceId]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        key: { type: string }
+        workspaceId: { type: string, format: uuid }
+    CreateWorkspaceRequest:
+      type: object
+      required: [name, urlSlug]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        urlSlug: { type: string, minLength: 2, maxLength: 63 }
+    CreateWorkspaceResponse:
+      type: object
+      required: [workspace, team]
+      properties:
+        workspace: { $ref: '#/components/schemas/WorkspaceSummary' }
+        team: { $ref: '#/components/schemas/TeamSummary' }
+    CurrentWorkspaceResponse:
+      type: object
+      required: [workspace]
+      properties:
+        workspace: { $ref: '#/components/schemas/Workspace' }
+    UpdateWorkspaceRequest:
+      type: object
+      properties:
+        name: { type: string }
+        urlSlug: { type: string }
+        logo: { type: [string, 'null'] }
+        fiscalMonth: { type: string }
+        welcomeMessage: { type: string }
+    WorkspaceMember:
+      type: object
+      required: [id, kind, name, email, role, status, teams, joinedAt]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [member, invitation] }
+        userId: { type: [string, 'null'] }
+        name: { type: string }
+        email: { type: string }
+        image: { type: [string, 'null'] }
+        role: { $ref: '#/components/schemas/WorkspaceRole' }
+        status: { type: string, enum: [active, pending] }
+        teams:
+          type: array
+          items: { type: string }
+        joinedAt: { type: string, format: date-time }
+        lastSeenAt: { type: [string, 'null'], format: date-time }
+        pronouns: { type: string }
+        title: { type: string }
+        location: { type: string }
+        timezone: { type: string }
+        showLocalTime: { type: boolean }
+    WorkspaceMembersResponse:
+      type: object
+      required: [workspaceId, currentUserId, viewerRole, canInviteMembers, members]
+      properties:
+        workspaceId: { type: string, format: uuid }
+        currentUserId: { type: string }
+        viewerRole: { $ref: '#/components/schemas/WorkspaceRole' }
+        canInviteMembers: { type: boolean }
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/WorkspaceMember' }
+    MutateWorkspaceMemberRequest:
+      type: object
+      required: [kind, id]
+      properties:
+        kind: { type: string, enum: [member, invitation] }
+        id: { type: string }
+        role: { $ref: '#/components/schemas/WorkspaceRole' }
+        action: { type: string, enum: [resend] }
+    InviteWorkspaceMembersRequest:
+      type: object
+      required: [invites]
+      properties:
+        workspaceId: { type: string, format: uuid }
+        invites:
+          type: array
+          items:
+            type: object
+            required: [email, role]
+            properties:
+              email: { type: string, format: email }
+              role: { type: string, enum: [admin, member, guest] }
+    InviteResult:
+      type: object
+      required: [email, status]
+      properties:
+        email: { type: string }
+        status: { type: string, enum: [sent, failed] }
+        error: { type: string }
+    InviteWorkspaceMembersResponse:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/InviteResult' }
+    SuccessResponse:
+      type: object
+      required: [success]
+      properties:
+        success: { type: boolean }
     IssuePriority:
       type: string
       enum: [none, urgent, high, medium, low]
