@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/namuh-eng/exponential/apps/api/internal/account"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/comments"
 	"github.com/namuh-eng/exponential/apps/api/internal/emojis"
@@ -49,6 +50,7 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 			protected.Post("/issues/{id}/comments", commentsHandler.CreateForIssue)
 			protected.Post("/issues/{id}/reactions", commentsHandler.ToggleIssueReaction)
 			protected.Delete("/issues/{id}/reactions", commentsHandler.DeleteIssueReaction)
+			protected.Mount("/account", account.Handler{DB: db}.Routes())
 			protected.Patch("/comments/{id}", commentsHandler.Update)
 			protected.Mount("/custom-emojis", emojis.Handler{DB: db}.Routes())
 			protected.Delete("/comments/{id}", commentsHandler.Delete)

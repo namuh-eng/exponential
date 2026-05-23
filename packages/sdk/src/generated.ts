@@ -76,6 +76,55 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/account": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Account route namespace; concrete resources are under /account/profile and /account/preferences. */
+    get: operations["accountNamespace"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/account/profile": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getAccountProfile"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations["updateAccountProfile"];
+    trace?: never;
+  };
+  "/account/preferences": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getAccountPreferences"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations["updateAccountPreferences"];
+    trace?: never;
+  };
   "/comments/{id}": {
     parameters: {
       query?: never;
@@ -432,6 +481,46 @@ export interface components {
       title: string;
       status: number;
       detail?: string;
+    };
+    AccountProfile: {
+      name: string;
+      email: string;
+      username: string;
+      pronouns: string;
+      title: string;
+      location: string;
+      timezone: string;
+      showLocalTime: boolean;
+      image?: string | null;
+    };
+    WorkspaceAccess: {
+      /** Format: uuid */
+      currentWorkspaceId?: string | null;
+      currentWorkspaceName?: string | null;
+    };
+    AccountProfileResponse: {
+      profile: components["schemas"]["AccountProfile"];
+      workspaceAccess: components["schemas"]["WorkspaceAccess"];
+    };
+    UpdateAccountProfileRequest: {
+      name: string;
+      username?: string;
+      image?: string | null;
+      pronouns?: string;
+      title?: string;
+      location?: string;
+      timezone?: string;
+      showLocalTime?: boolean;
+    };
+    AccountPreferencesResponse: {
+      accountPreferences: {
+        [key: string]: unknown;
+      };
+    };
+    UpdateAccountPreferencesRequest: {
+      accountPreferences: {
+        [key: string]: unknown;
+      };
     };
     CommentUser: {
       name: string;
@@ -1171,6 +1260,110 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ReactionSummaryList"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  accountNamespace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      default: components["responses"]["Problem"];
+    };
+  };
+  getAccountProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Account profile */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccountProfileResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateAccountProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateAccountProfileRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated account profile */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccountProfileResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getAccountPreferences: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Account preferences */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccountPreferencesResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateAccountPreferences: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateAccountPreferencesRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated account preferences */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccountPreferencesResponse"];
         };
       };
       default: components["responses"]["Problem"];

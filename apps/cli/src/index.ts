@@ -51,6 +51,11 @@ async function main() {
     return;
   }
 
+  if (resource === "account") {
+    await accountCommand();
+    return;
+  }
+
   if (resource !== "issues") {
     usage();
   }
@@ -175,6 +180,22 @@ async function workspaceCommand() {
     const { data, error, response } = await client.POST("/workspaces/invite", {
       body: { invites: [{ email, role }] },
     });
+    printResult(data, error, response.status);
+    return;
+  }
+
+  usage();
+}
+
+async function accountCommand() {
+  if (action === "profile") {
+    const { data, error, response } = await client.GET("/account/profile");
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "preferences") {
+    const { data, error, response } = await client.GET("/account/preferences");
     printResult(data, error, response.status);
     return;
   }
@@ -508,7 +529,9 @@ function usage(): never {
   exponential labels delete --id <uuid>
   exponential emojis list
   exponential emojis create --name <name> --image-url <url-or-data-url>
-  exponential emojis delete --id <id>`);
+  exponential emojis delete --id <id>
+  exponential account profile
+  exponential account preferences`);
   process.exit(1);
 }
 

@@ -162,6 +162,71 @@ paths:
                 $ref: '#/components/schemas/ReactionSummaryList'
         default:
           $ref: '#/components/responses/Problem'
+  /account:
+    get:
+      operationId: accountNamespace
+      summary: Account route namespace; concrete resources are under /account/profile and /account/preferences.
+      responses:
+        default:
+          $ref: '#/components/responses/Problem'
+  /account/profile:
+    get:
+      operationId: getAccountProfile
+      responses:
+        '200':
+          description: Account profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountProfileResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: updateAccountProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAccountProfileRequest'
+      responses:
+        '200':
+          description: Updated account profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountProfileResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /account/preferences:
+    get:
+      operationId: getAccountPreferences
+      responses:
+        '200':
+          description: Account preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountPreferencesResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: updateAccountPreferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAccountPreferencesRequest'
+      responses:
+        '200':
+          description: Updated account preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountPreferencesResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /comments/{id}:
     parameters:
       - name: id
@@ -838,6 +903,56 @@ components:
         title: { type: string }
         status: { type: integer }
         detail: { type: string }
+    AccountProfile:
+      type: object
+      required: [name, email, username, pronouns, title, location, timezone, showLocalTime]
+      properties:
+        name: { type: string }
+        email: { type: string }
+        username: { type: string }
+        pronouns: { type: string }
+        title: { type: string }
+        location: { type: string }
+        timezone: { type: string }
+        showLocalTime: { type: boolean }
+        image: { type: [string, 'null'] }
+    WorkspaceAccess:
+      type: object
+      properties:
+        currentWorkspaceId: { type: [string, 'null'], format: uuid }
+        currentWorkspaceName: { type: [string, 'null'] }
+    AccountProfileResponse:
+      type: object
+      required: [profile, workspaceAccess]
+      properties:
+        profile: { $ref: '#/components/schemas/AccountProfile' }
+        workspaceAccess: { $ref: '#/components/schemas/WorkspaceAccess' }
+    UpdateAccountProfileRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        username: { type: string }
+        image: { type: [string, 'null'] }
+        pronouns: { type: string }
+        title: { type: string }
+        location: { type: string }
+        timezone: { type: string }
+        showLocalTime: { type: boolean }
+    AccountPreferencesResponse:
+      type: object
+      required: [accountPreferences]
+      properties:
+        accountPreferences:
+          type: object
+          additionalProperties: true
+    UpdateAccountPreferencesRequest:
+      type: object
+      required: [accountPreferences]
+      properties:
+        accountPreferences:
+          type: object
+          additionalProperties: true
     CommentUser:
       type: object
       required: [name]
