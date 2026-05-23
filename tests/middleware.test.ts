@@ -299,7 +299,9 @@ describe("Auth proxy", () => {
     "/foreverbrowsing/projects/all",
     "/foreverbrowsing/project/roadmap",
     "/foreverbrowsing/project/roadmap/overview",
-    "/foreverbrowsing/cycles",
+    // NOTE: /foreverbrowsing/cycles is intentionally NOT in this list — the
+    // proxy redirects it to /foreverbrowsing/team/ENG/cycles. See the
+    // "redirects workspace cycles shortcut" test below for that path.
     "/foreverbrowsing/team/ENG/cycles",
     "/foreverbrowsing/team/ENG/cycles/cycle-1",
     "/foreverbrowsing/team/ENG/projects",

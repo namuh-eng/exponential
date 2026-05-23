@@ -17,6 +17,16 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+// The cycle detail page reads the active workspace slug from the app shell
+// context, not from route params (params only carries it through to the
+// shell). Mock the shell so the test can drive both cases.
+vi.mock("@/app/(app)/app-shell", () => ({
+  useAppShellContext: () =>
+    mockParams.workspaceSlug
+      ? { workspaceSlug: mockParams.workspaceSlug }
+      : null,
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     children,

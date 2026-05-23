@@ -1021,7 +1021,7 @@ describe("IssueDetailView relation management", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: "Add relation" })[2]);
     fireEvent.change(
-      screen.getByLabelText("Search issue to add Duplicate relation"),
+      screen.getByLabelText("Search issues to add Duplicate relation"),
       { target: { value: "ENG-3" } },
     );
 
@@ -1045,7 +1045,7 @@ describe("IssueDetailView relation management", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Remove Duplicate relation to ENG-3",
+        name: "Remove relation ENG-3",
       }),
     );
 

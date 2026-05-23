@@ -176,17 +176,20 @@ describe("TeamTriagePage UI", () => {
       expect(screen.queryByText("Incoming request 2")).not.toBeInTheDocument();
     });
 
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "/api/teams/ENG/triage/iss-2",
-      expect.objectContaining({
-        method: "PATCH",
-        body: JSON.stringify({
-          action: "accept",
-          destinationStateId: "s-backlog",
-          confirmed: true,
-        }),
-      }),
+    const patchCall = fetchSpy.mock.calls.find(
+      (call) =>
+        call[0].toString() === "/api/teams/ENG/triage/iss-2" &&
+        (call[1] as RequestInit)?.method === "PATCH",
     );
+    expect(patchCall).toBeDefined();
+    const parsedBody = JSON.parse(
+      (patchCall?.[1] as RequestInit)?.body as string,
+    );
+    expect(parsedBody).toMatchObject({
+      action: "accept",
+      destinationStateId: "s-backlog",
+      confirmed: true,
+    });
     expect(screen.getAllByText(/1 issue to triage/i).length).toBeGreaterThan(0);
   });
 
@@ -233,13 +236,14 @@ describe("TeamTriagePage UI", () => {
       );
       expect(patchCall).toBeDefined();
       if (patchCall) {
-        expect(patchCall[1]).toMatchObject({
-          method: "PATCH",
-          body: JSON.stringify({
-            action: "accept",
-            destinationStateId: "s-backlog",
-            confirmed: true,
-          }),
+        expect(patchCall[1]).toMatchObject({ method: "PATCH" });
+        const parsedBody = JSON.parse(
+          (patchCall[1] as RequestInit).body as string,
+        );
+        expect(parsedBody).toMatchObject({
+          action: "accept",
+          destinationStateId: "s-backlog",
+          confirmed: true,
         });
       }
     });

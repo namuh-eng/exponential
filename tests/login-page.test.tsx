@@ -99,7 +99,12 @@ describe("Login page", () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        providers: { google: false, email: false, passkey: false },
+        providers: {
+          google: false,
+          googleAllowed: false,
+          email: false,
+          passkey: false,
+        },
         workspace: {
           slug: "foreverbrowsing",
           authentication: { google: false, emailPasskey: false },

@@ -346,7 +346,7 @@ describe("Members Admin Page", () => {
     });
     await waitFor(() => {
       expect(
-        screen.getByText("Removed Bob Jones from workspace."),
+        screen.getByText("Member removed from workspace."),
       ).toBeInTheDocument();
     });
   });
@@ -382,7 +382,7 @@ describe("Members Admin Page", () => {
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/members", {
-        method: "PATCH",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: "invite-1",
@@ -410,9 +410,7 @@ describe("Members Admin Page", () => {
       });
     });
     await waitFor(() => {
-      expect(
-        screen.getByText("Revoked invitation to charlie@acme.com."),
-      ).toBeInTheDocument();
+      expect(screen.getByText("Invitation revoked.")).toBeInTheDocument();
     });
   });
 

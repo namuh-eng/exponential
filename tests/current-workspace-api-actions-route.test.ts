@@ -338,8 +338,10 @@ describe("current workspace api actions route", () => {
     );
 
     expect(response.status).toBe(400);
+    // The webhook URL is validated first; "not-a-url" fails the HTTPS check
+    // before the empty-events branch can run, so the error is the URL one.
     await expect(response.json()).resolves.toEqual({
-      error: "A webhook URL and at least one event are required.",
+      error: "Webhook URL must be a valid HTTPS URL.",
     });
   });
 

@@ -21,7 +21,7 @@ describe("public homepage route", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "Purpose-built for planning and building products",
+        name: "The product development system for teams and agents",
       }),
     ).toBeDefined();
     expect(

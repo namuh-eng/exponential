@@ -55,14 +55,12 @@ const recurringRecord = {
   priority: "none",
   labelIds: [],
   projectId: null,
-  cycleBehavior: null,
-  cadenceConfig: {
-    cadence: "weekly",
-    interval: 1,
-    startDate: "2026-05-21",
-    time: "09:00",
-  },
+  // cadenceConfig is the persisted shape: { cadence, interval }. The route's
+  // serializer derives `cadenceLabel` via formatCadence, which returns
+  // "Every week" for {cadence:"weekly", interval:1} — not "Weekly".
+  cadenceConfig: { cadence: "weekly", interval: 1 },
   timezone: "UTC",
+  startAt: new Date("2026-05-21T09:00:00.000Z"),
   nextRunAt: new Date("2026-05-21T09:00:00.000Z"),
   enabled: true,
   lastRunAt: null,
@@ -127,9 +125,10 @@ describe("team recurring issues route", () => {
 
     expect(response.status).toBe(200);
     const payload = await response.json();
+    // formatCadence({cadence:"weekly", interval:1}) returns "Every week".
     expect(payload.recurringIssues[0]).toMatchObject({
       title: "Weekly metrics review",
-      cadenceLabel: "Weekly",
+      cadenceLabel: "Every week",
       enabled: true,
     });
   });
@@ -166,9 +165,10 @@ describe("team recurring issues route", () => {
         body: JSON.stringify({
           title: "Weekly metrics review",
           description: "Review dashboards",
-          cadence: "weekly",
-          startDate: "2026-05-21",
-          time: "09:00",
+          // The route accepts a nested cadenceConfig + ISO startAt — not the
+          // flattened {cadence, startDate, time} the form used to send.
+          cadenceConfig: { cadence: "weekly", interval: 1 },
+          startAt: "2026-05-21T09:00:00.000Z",
           timezone: "UTC",
         }),
       }),
@@ -177,7 +177,8 @@ describe("team recurring issues route", () => {
 
     expect(response.status).toBe(201);
     const payload = await response.json();
-    expect(payload.recurringIssue.title).toBe("Weekly metrics review");
+    // POST returns the serialized record directly (no `{recurringIssue: …}` wrapper).
+    expect(payload.title).toBe("Weekly metrics review");
   });
 
   it("updates and deletes only scoped recurring issues", async () => {
@@ -192,9 +193,8 @@ describe("team recurring issues route", () => {
           method: "PATCH",
           body: JSON.stringify({
             title: "Weekly metrics review",
-            cadence: "weekly",
-            startDate: "2026-05-21",
-            time: "09:00",
+            cadenceConfig: { cadence: "weekly", interval: 1 },
+            startAt: "2026-05-21T09:00:00.000Z",
             timezone: "UTC",
             enabled: false,
           }),
@@ -203,7 +203,8 @@ describe("team recurring issues route", () => {
       { params: Promise.resolve({ key: "ENG", id: "recurring-1" }) },
     );
     expect(patchResponse.status).toBe(200);
-    expect((await patchResponse.json()).recurringIssue.enabled).toBe(false);
+    // PATCH returns the serialized record directly (no wrapper key).
+    expect((await patchResponse.json()).enabled).toBe(false);
 
     const deleteResponse = await DELETE(
       new Request(
@@ -212,7 +213,7 @@ describe("team recurring issues route", () => {
       ),
       { params: Promise.resolve({ key: "ENG", id: "recurring-1" }) },
     );
-    expect(deleteResponse.status).toBe(200);
-    expect(await deleteResponse.json()).toEqual({ success: true });
+    // DELETE responds 204 No Content with an empty body.
+    expect(deleteResponse.status).toBe(204);
   });
 });

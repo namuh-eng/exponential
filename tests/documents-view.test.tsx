@@ -145,48 +145,66 @@ describe("DocumentsSettingsPage component", () => {
   });
 
   it("validates, creates, edits, and deletes a document template", async () => {
-    fetchMock
-      .mockResolvedValueOnce({
+    let templateState = {
+      id: "template-1",
+      name: "Spec template",
+      description: "Product specs",
+      content: "Problem\nProposal",
+      createdAt: "2026-05-20T00:00:00.000Z",
+      updatedAt: "2026-05-20T00:00:00.000Z",
+    };
+    let templateExists = false;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/document-settings" && !init?.method) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            documents: {
+              defaultVisibility: "workspace",
+              autoLinkProjectDocuments: true,
+              templates: [],
+              folders: [],
+            },
+          }),
+        });
+      }
+      if (url === "/api/document-templates" && init?.method === "POST") {
+        templateExists = true;
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ template: templateState }),
+        });
+      }
+      if (
+        url?.startsWith("/api/document-templates/") &&
+        init?.method === "PATCH"
+      ) {
+        const body = JSON.parse(init.body as string);
+        templateState = {
+          ...templateState,
+          ...body,
+          updatedAt: "2026-05-20T01:00:00.000Z",
+        };
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ template: templateState }),
+        });
+      }
+      if (
+        url?.startsWith("/api/document-templates/") &&
+        init?.method === "DELETE"
+      ) {
+        templateExists = false;
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ success: true }),
+        });
+      }
+      return Promise.resolve({
         ok: true,
-        json: async () => ({
-          documents: {
-            defaultVisibility: "workspace",
-            autoLinkProjectDocuments: true,
-            templates: [],
-            folders: [],
-          },
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          template: {
-            id: "template-1",
-            name: "Spec template",
-            description: "Product specs",
-            content: "Problem\nProposal",
-            createdAt: "2026-05-20T00:00:00.000Z",
-            updatedAt: "2026-05-20T00:00:00.000Z",
-          },
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          template: {
-            id: "template-1",
-            name: "Edited spec template",
-            description: "Product specs",
-            content: "Problem\nProposal\nDecision",
-            createdAt: "2026-05-20T00:00:00.000Z",
-            updatedAt: "2026-05-20T01:00:00.000Z",
-          },
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true }),
+        json: async () => ({}),
       });
+    });
 
     render(<DocumentsSettingsPage />);
 
@@ -199,7 +217,7 @@ describe("DocumentsSettingsPage component", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Save template" }));
     expect(
-      await screen.findByText("Template name is required."),
+      (await screen.findAllByText("Template name is required."))[0],
     ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Template name"), {
@@ -207,7 +225,7 @@ describe("DocumentsSettingsPage component", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Save template" }));
     expect(
-      await screen.findByText("Template content is required."),
+      (await screen.findAllByText("Template content is required."))[0],
     ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Description"), {
@@ -246,48 +264,63 @@ describe("DocumentsSettingsPage component", () => {
   });
 
   it("creates, edits, and deletes a common folder", async () => {
-    fetchMock
-      .mockResolvedValueOnce({
+    let folderState = {
+      id: "folder-1",
+      name: "Runbooks",
+      description: "Operational docs",
+      color: "green",
+      createdAt: "2026-05-20T00:00:00.000Z",
+      updatedAt: "2026-05-20T00:00:00.000Z",
+    };
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/document-settings" && !init?.method) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            documents: {
+              defaultVisibility: "workspace",
+              autoLinkProjectDocuments: true,
+              templates: [],
+              folders: [],
+            },
+          }),
+        });
+      }
+      if (url === "/api/document-folders" && init?.method === "POST") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ folder: folderState }),
+        });
+      }
+      if (
+        url?.startsWith("/api/document-folders/") &&
+        init?.method === "PATCH"
+      ) {
+        const body = JSON.parse(init.body as string);
+        folderState = {
+          ...folderState,
+          ...body,
+          updatedAt: "2026-05-20T01:00:00.000Z",
+        };
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ folder: folderState }),
+        });
+      }
+      if (
+        url?.startsWith("/api/document-folders/") &&
+        init?.method === "DELETE"
+      ) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ success: true }),
+        });
+      }
+      return Promise.resolve({
         ok: true,
-        json: async () => ({
-          documents: {
-            defaultVisibility: "workspace",
-            autoLinkProjectDocuments: true,
-            templates: [],
-            folders: [],
-          },
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          folder: {
-            id: "folder-1",
-            name: "Runbooks",
-            description: "Operational docs",
-            color: "green",
-            createdAt: "2026-05-20T00:00:00.000Z",
-            updatedAt: "2026-05-20T00:00:00.000Z",
-          },
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          folder: {
-            id: "folder-1",
-            name: "Team runbooks",
-            description: "Operational docs",
-            color: "purple",
-            createdAt: "2026-05-20T00:00:00.000Z",
-            updatedAt: "2026-05-20T01:00:00.000Z",
-          },
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true }),
+        json: async () => ({}),
       });
+    });
 
     render(<DocumentsSettingsPage />);
 
@@ -296,7 +329,7 @@ describe("DocumentsSettingsPage component", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Save folder" }));
     expect(
-      await screen.findByText("Folder name is required."),
+      (await screen.findAllByText("Folder name is required."))[0],
     ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Folder name"), {
@@ -333,10 +366,12 @@ describe("DocumentsSettingsPage component", () => {
   });
 
   it("shows a recoverable load error", async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: false,
-      json: async () => ({ error: "boom" }),
-    });
+    fetchMock.mockImplementation(() =>
+      Promise.resolve({
+        ok: false,
+        json: async () => ({ error: "boom" }),
+      }),
+    );
 
     render(<DocumentsSettingsPage />);
 

@@ -2,16 +2,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const authPostMock = vi.hoisted(() => vi.fn());
 const authGetMock = vi.hoisted(() => vi.fn());
-const isWorkspaceAuthMethodAllowedForEmailMock = vi.hoisted(() => vi.fn());
+const resolveWorkspaceAuthPolicyMock = vi.hoisted(() => vi.fn());
+const isWorkspaceAuthMethodAllowedMock = vi.hoisted(() => vi.fn());
 const verificationLimitMock = vi.hoisted(() => vi.fn());
+
+// Sentinel object returned by resolveWorkspaceAuthPolicy. The route only
+// passes it back to isWorkspaceAuthMethodAllowed, so it doesn't need to match
+// the real WorkspaceAuthPolicy shape — only to be identifiable in assertions.
+const SENTINEL_POLICY = { __policy: "sentinel" };
 
 vi.mock("@/lib/auth", () => ({ auth: {} }));
 vi.mock("better-auth/next-js", () => ({
   toNextJsHandler: vi.fn(() => ({ GET: authGetMock, POST: authPostMock })),
 }));
-vi.mock("@/lib/workspace-auth-settings", () => ({
-  isWorkspaceAuthMethodAllowedForEmail:
-    isWorkspaceAuthMethodAllowedForEmailMock,
+vi.mock("@/lib/workspace-auth-methods", () => ({
+  resolveWorkspaceAuthPolicy: resolveWorkspaceAuthPolicyMock,
+  isWorkspaceAuthMethodAllowed: isWorkspaceAuthMethodAllowedMock,
 }));
 vi.mock("@/lib/db", () => ({
   db: {
@@ -29,12 +35,15 @@ describe("auth catch-all workspace policy", () => {
     vi.clearAllMocks();
     authPostMock.mockResolvedValue(new Response(JSON.stringify({ ok: true })));
     authGetMock.mockResolvedValue(new Response(null, { status: 302 }));
-    isWorkspaceAuthMethodAllowedForEmailMock.mockResolvedValue(true);
+    // Default: a workspace policy exists and allows everything. Individual
+    // tests flip isWorkspaceAuthMethodAllowed to false to assert the 403 path.
+    resolveWorkspaceAuthPolicyMock.mockResolvedValue(SENTINEL_POLICY);
+    isWorkspaceAuthMethodAllowedMock.mockReturnValue(true);
     verificationLimitMock.mockResolvedValue([]);
   });
 
   it("rejects direct magic-link requests when email/passkey is disabled for a member", async () => {
-    isWorkspaceAuthMethodAllowedForEmailMock.mockResolvedValue(false);
+    isWorkspaceAuthMethodAllowedMock.mockReturnValue(false);
     const { POST } = await import("@/app/api/auth/[...all]/route");
 
     const response = await POST(
@@ -51,17 +60,20 @@ describe("auth catch-all workspace policy", () => {
     await expect(response.json()).resolves.toMatchObject({
       code: "WORKSPACE_AUTH_METHOD_DISABLED",
     });
-    expect(isWorkspaceAuthMethodAllowedForEmailMock).toHaveBeenCalledWith({
-      method: "emailPasskey",
+    expect(resolveWorkspaceAuthPolicyMock).toHaveBeenCalledWith({
       callbackUrl: "https://app.test/foreverbrowsing/inbox",
-      email: "member@example.com",
       baseUrl: "https://app.test",
+      email: "member@example.com",
     });
+    expect(isWorkspaceAuthMethodAllowedMock).toHaveBeenCalledWith(
+      SENTINEL_POLICY,
+      "emailPasskey",
+    );
     expect(authPostMock).not.toHaveBeenCalled();
   });
 
   it("delegates direct magic-link requests when the role is exempt", async () => {
-    isWorkspaceAuthMethodAllowedForEmailMock.mockResolvedValue(true);
+    isWorkspaceAuthMethodAllowedMock.mockReturnValue(true);
     const { POST } = await import("@/app/api/auth/[...all]/route");
     const request = new Request(
       "https://app.test/api/auth/sign-in/magic-link",
@@ -81,7 +93,7 @@ describe("auth catch-all workspace policy", () => {
   });
 
   it("rejects direct Google id-token sign-in when Google is disabled for a member", async () => {
-    isWorkspaceAuthMethodAllowedForEmailMock.mockResolvedValue(false);
+    isWorkspaceAuthMethodAllowedMock.mockReturnValue(false);
     const { POST } = await import("@/app/api/auth/[...all]/route");
 
     const response = await POST(
@@ -96,12 +108,17 @@ describe("auth catch-all workspace policy", () => {
     );
 
     expect(response.status).toBe(403);
-    expect(isWorkspaceAuthMethodAllowedForEmailMock).toHaveBeenCalledWith({
-      method: "google",
+    // Social sign-in flow doesn't extract an email from the id-token, so
+    // resolveWorkspaceAuthPolicy is called with email undefined.
+    expect(resolveWorkspaceAuthPolicyMock).toHaveBeenCalledWith({
       callbackUrl: "https://app.test/foreverbrowsing/inbox",
-      email: "member@example.com",
       baseUrl: "https://app.test",
+      email: undefined,
     });
+    expect(isWorkspaceAuthMethodAllowedMock).toHaveBeenCalledWith(
+      SENTINEL_POLICY,
+      "google",
+    );
     expect(authPostMock).not.toHaveBeenCalled();
   });
 
@@ -109,7 +126,7 @@ describe("auth catch-all workspace policy", () => {
     verificationLimitMock.mockResolvedValue([
       { value: JSON.stringify({ email: "member@example.com" }) },
     ]);
-    isWorkspaceAuthMethodAllowedForEmailMock.mockResolvedValue(false);
+    isWorkspaceAuthMethodAllowedMock.mockReturnValue(false);
     const { GET } = await import("@/app/api/auth/[...all]/route");
 
     const response = await GET(
@@ -119,12 +136,15 @@ describe("auth catch-all workspace policy", () => {
     );
 
     expect(response.status).toBe(403);
-    expect(isWorkspaceAuthMethodAllowedForEmailMock).toHaveBeenCalledWith({
-      method: "emailPasskey",
+    expect(resolveWorkspaceAuthPolicyMock).toHaveBeenCalledWith({
       callbackUrl: "https://app.test/foreverbrowsing/inbox",
-      email: "member@example.com",
       baseUrl: "https://app.test",
+      email: undefined,
     });
+    expect(isWorkspaceAuthMethodAllowedMock).toHaveBeenCalledWith(
+      SENTINEL_POLICY,
+      "emailPasskey",
+    );
     expect(authGetMock).not.toHaveBeenCalled();
   });
 });

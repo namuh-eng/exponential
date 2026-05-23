@@ -10,6 +10,15 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
+// The search page reads the active workspace slug from the app shell context
+// and uses it to build issue-row hrefs via `withWorkspaceSlug`. Default to
+// the foreverbrowsing workspace so the "renders results" assertion picks up
+// the workspace-prefixed URL; tests for empty/error states don't care about
+// hrefs, so the default is harmless there.
+vi.mock("@/app/(app)/app-shell", () => ({
+  useAppShellContext: () => ({ workspaceSlug: "foreverbrowsing" }),
+}));
+
 describe("SearchPage component", () => {
   afterEach(() => {
     cleanup();
@@ -56,14 +65,9 @@ describe("SearchPage component", () => {
       expect(screen.getByText("ENG-1")).toBeInTheDocument();
       expect(screen.getByTestId("issue-row")).toHaveAttribute(
         "href",
-        "/foreverbrowsing/team/ENG/issue/ENG-1",
+        "/foreverbrowsing/issue/ENG-1",
       );
     });
-
-    expect(screen.getByTestId("issue-row")).toHaveAttribute(
-      "href",
-      "/issue/ENG-1",
-    );
   });
 
   it("shows empty state when no results are found", async () => {

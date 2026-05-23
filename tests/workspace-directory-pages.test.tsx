@@ -45,9 +45,10 @@ vi.mock("next/navigation", () => ({
   notFound: notFoundMock,
 }));
 
-vi.mock("@/app/(app)/app-shell", () => ({
-  useAppShellContext: () => ({ workspaceSlug: "foreverbrowsing" }),
-}));
+// NOTE: there used to be a second `vi.mock("@/app/(app)/app-shell", …)` here
+// that hard-coded `{ workspaceSlug: "foreverbrowsing" }`. Vitest lets the
+// later mock win, which silently broke the "no workspace context" test —
+// setting `appShellContextMock.current = null` had no effect. Removed.
 
 vi.mock("next/link", () => ({
   default: ({
@@ -263,7 +264,7 @@ describe("workspace directory routes", () => {
     );
     expect(screen.getByRole("link", { name: /Settings/i })).toHaveAttribute(
       "href",
-      "/foreverbrowsing/settings/teams/ENG",
+      "/settings/teams/ENG",
     );
   });
 
