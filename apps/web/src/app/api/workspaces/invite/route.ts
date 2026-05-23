@@ -4,6 +4,11 @@ import { buildAppUrl, getRequestAppUrl } from "@/lib/app-url";
 import { db } from "@/lib/db";
 import { member, user, workspace, workspaceInvitation } from "@/lib/db/schema";
 import { sendInvitationEmail } from "@/lib/email";
+import {
+  createHeadlessWorkspacesClient,
+  headlessWorkspacesEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { createInviteToken } from "@/lib/invite-tokens";
 import {
   canPerformWorkspacePermission,
@@ -36,6 +41,22 @@ export async function POST(request: Request) {
       { error: "Workspace ID and at least one invite are required" },
       { status: 400 },
     );
+  }
+
+  if (headlessWorkspacesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessWorkspacesClient(token);
+    const { data, error, response } = await client.POST("/workspaces/invite", {
+      body: body as never,
+    });
+    if (error)
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   // Verify the user is a member of the workspace and load security policy.

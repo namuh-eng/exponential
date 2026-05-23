@@ -14,6 +14,11 @@ import {
   workspaceInvitation,
 } from "@/lib/db/schema";
 import { sendInvitationEmail } from "@/lib/email";
+import {
+  createHeadlessWorkspacesClient,
+  headlessWorkspacesEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { createInviteToken } from "@/lib/invite-tokens";
 import {
   canPerformWorkspacePermission,
@@ -89,6 +94,20 @@ export async function GET() {
       { error: "No active workspace found" },
       { status: 404 },
     );
+  }
+
+  if (headlessWorkspacesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: authSession.user.id,
+      workspaceId: access.workspaceId,
+    });
+    const client = createHeadlessWorkspacesClient(token);
+    const { data, error, response } = await client.GET("/workspaces/members");
+    if (error)
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   const activeMembers = await db
@@ -249,6 +268,25 @@ export async function PATCH(request: Request) {
     role?: WorkspaceRole;
     action?: "resend";
   } | null;
+
+  if (headlessWorkspacesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: authSession.user.id,
+      workspaceId: access.workspaceId,
+    });
+    const client = createHeadlessWorkspacesClient(token);
+    const { data, error, response } = await client.PATCH(
+      "/workspaces/members",
+      {
+        body: body as never,
+      },
+    );
+    if (error)
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
 
   if (!body?.id || (body.kind !== "member" && body.kind !== "invitation")) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
@@ -416,6 +454,22 @@ export async function POST(request: Request) {
     action?: "resend";
   } | null;
 
+  if (headlessWorkspacesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: authSession.user.id,
+      workspaceId: access.workspaceId,
+    });
+    const client = createHeadlessWorkspacesClient(token);
+    const { data, error, response } = await client.POST("/workspaces/members", {
+      body: body as never,
+    });
+    if (error)
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   if (body?.kind !== "invitation" || !body.id || body.action !== "resend") {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
@@ -496,6 +550,25 @@ export async function DELETE(request: Request) {
     kind?: "member" | "invitation";
     id?: string;
   } | null;
+
+  if (headlessWorkspacesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: authSession.user.id,
+      workspaceId: access.workspaceId,
+    });
+    const client = createHeadlessWorkspacesClient(token);
+    const { data, error, response } = await client.DELETE(
+      "/workspaces/members",
+      {
+        body: body as never,
+      } as never,
+    );
+    if (error)
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
 
   if (!body?.id || (body.kind !== "member" && body.kind !== "invitation")) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
