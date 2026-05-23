@@ -2,6 +2,11 @@ import { requireApiSession } from "@/lib/api-auth";
 import { cycleRangesOverlap, parseCycleDateInput } from "@/lib/cycle-utils";
 import { db } from "@/lib/db";
 import { cycle, issue, workflowState } from "@/lib/db/schema";
+import {
+  createHeadlessTeamsClient,
+  headlessTeamsEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { findAccessibleTeam } from "@/lib/teams";
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -22,6 +27,22 @@ export async function GET(
   });
   if (!teamRecord) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
+  }
+
+  if (headlessTeamsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: teamRecord.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const { data, error, response } = await client.GET("/teams/{key}/cycles", {
+      params: { path: { key } },
+    });
+    if (error)
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   const hierarchyTeamIds = teamRecord.hierarchyTeamIds ?? [teamRecord.id];
@@ -123,6 +144,23 @@ export async function POST(
   const teamId = teamRecord.id;
 
   const body = await request.json();
+
+  if (headlessTeamsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: teamRecord.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const { data, error, response } = await client.POST("/teams/{key}/cycles", {
+      params: { path: { key } },
+      body: body as never,
+    });
+    if (error)
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
   const startDate =
     typeof body.startDate === "string"
       ? parseCycleDateInput(body.startDate)

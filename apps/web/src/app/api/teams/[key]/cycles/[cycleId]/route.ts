@@ -2,6 +2,11 @@ import { requireApiSession } from "@/lib/api-auth";
 import { cycleRangesOverlap, parseCycleDateInput } from "@/lib/cycle-utils";
 import { db } from "@/lib/db";
 import { cycle, issue, project, user, workflowState } from "@/lib/db/schema";
+import {
+  createHeadlessTeamsClient,
+  headlessTeamsEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { getLabelsForIssues } from "@/lib/issue-labels";
 import { findAccessibleTeam } from "@/lib/teams";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
@@ -246,6 +251,26 @@ export async function PATCH(
   }
   const teamId = teamRecord.id;
 
+  if (headlessTeamsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: teamRecord.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const { data, error, response } = await client.PATCH(
+      "/teams/{key}/cycles/{cycle_id}",
+      {
+        params: { path: { key, cycle_id: cycleId } },
+        body: body as never,
+      },
+    );
+    if (error)
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   const existingCycles = await db
     .select({
       id: cycle.id,
@@ -351,6 +376,25 @@ export async function DELETE(
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
   const teamId = teamRecord.id;
+
+  if (headlessTeamsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: teamRecord.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const { data, error, response } = await client.DELETE(
+      "/teams/{key}/cycles/{cycle_id}",
+      {
+        params: { path: { key, cycle_id: cycleId } },
+      },
+    );
+    if (error)
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
 
   const existingCycles = await db
     .select({ id: cycle.id })

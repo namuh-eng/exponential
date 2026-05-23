@@ -10,6 +10,11 @@ import {
   user,
   workflowState,
 } from "@/lib/db/schema";
+import {
+  createHeadlessTeamsClient,
+  headlessTeamsEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { isTeamRetired } from "@/lib/team-lifecycle";
 import { findAccessibleTeam } from "@/lib/teams";
 import { and, asc, desc, eq, isNull, or } from "drizzle-orm";
@@ -37,6 +42,25 @@ export async function GET(
       { error: "Retired teams cannot accept new issues" },
       { status: 409 },
     );
+  }
+
+  if (headlessTeamsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: teamContext.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const { data, error, response } = await client.GET(
+      "/teams/{key}/create-issue-options",
+      {
+        params: { path: { key } },
+      },
+    );
+    if (error)
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   const [
