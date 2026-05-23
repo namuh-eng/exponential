@@ -379,6 +379,38 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/slack/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectSlackIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/slack/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectSlackIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/labels": {
     parameters: {
       query?: never;
@@ -1055,6 +1087,16 @@ export interface components {
         | components["schemas"]["IntegrationSetupRequirement"]
         | null;
       actions: components["schemas"]["IntegrationActions"];
+    };
+    SlackConnectResponse: {
+      /** Format: uri */
+      authorizationUrl: string;
+      state: string;
+      workspaceSlug: string;
+    };
+    SlackConfigurationRequiredResponse: {
+      error: string;
+      message: string;
     };
     IntegrationListResponse: {
       canManageIntegrations: boolean;
@@ -2716,6 +2758,57 @@ export interface operations {
     requestBody?: never;
     responses: {
       /** @description Deleted integration */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  connectSlackIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Slack authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SlackConnectResponse"];
+        };
+      };
+      /** @description Slack OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SlackConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectSlackIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Slack disconnected */
       200: {
         headers: {
           [name: string]: unknown;

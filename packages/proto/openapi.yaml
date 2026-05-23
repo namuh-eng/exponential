@@ -615,6 +615,36 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /integrations/slack/connect:
+    post:
+      operationId: connectSlackIntegration
+      responses:
+        '200':
+          description: Slack authorization URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlackConnectResponse'
+        '412':
+          description: Slack OAuth is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlackConfigurationRequiredResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/slack/disconnect:
+    post:
+      operationId: disconnectSlackIntegration
+      responses:
+        '200':
+          description: Slack disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /labels:
     get:
       operationId: listLabels
@@ -1688,6 +1718,19 @@ components:
             - $ref: '#/components/schemas/IntegrationSetupRequirement'
             - type: 'null'
         actions: { $ref: '#/components/schemas/IntegrationActions' }
+    SlackConnectResponse:
+      type: object
+      required: [authorizationUrl, state, workspaceSlug]
+      properties:
+        authorizationUrl: { type: string, format: uri }
+        state: { type: string }
+        workspaceSlug: { type: string }
+    SlackConfigurationRequiredResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error: { type: string }
+        message: { type: string }
     IntegrationListResponse:
       type: object
       required: [canManageIntegrations, integrations]
