@@ -850,6 +850,42 @@ export interface paths {
     patch: operations["reorderSidebarFavorites"];
     trace?: never;
   };
+  "/project-update-configurations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List project update configurations */
+    get: operations["listProjectUpdateConfigurations"];
+    put?: never;
+    /** Create a project update configuration */
+    post: operations["createProjectUpdateConfiguration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/project-update-configurations/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations["deleteProjectUpdateConfiguration"];
+    options?: never;
+    head?: never;
+    patch: operations["updateProjectUpdateConfiguration"];
+    trace?: never;
+  };
   "/projects": {
     parameters: {
       query?: never;
@@ -1822,6 +1858,52 @@ export interface components {
     CreatePersonalAccessTokenResponse: {
       token: components["schemas"]["PersonalAccessToken"];
       value: string;
+    };
+    ProjectUpdateConfiguration: {
+      id: string;
+      name: string;
+      enabled: boolean;
+      /** @enum {string} */
+      cadence: "weekly" | "biweekly" | "monthly";
+      dayOfWeek: number;
+      timeOfDay: string;
+      timezone: string;
+      /** @enum {string} */
+      projectScope: "all" | "active" | "statuses";
+      statusScope: (
+        | "planned"
+        | "started"
+        | "paused"
+        | "completed"
+        | "canceled"
+      )[];
+      shareTargets: ("workspace" | "slack" | "email")[];
+      slackChannel?: string | null;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    ProjectUpdateConfigurationListResponse: {
+      configurations: components["schemas"]["ProjectUpdateConfiguration"][];
+      canManage: boolean;
+    };
+    ProjectUpdateConfigurationResponse: {
+      configuration: components["schemas"]["ProjectUpdateConfiguration"];
+    };
+    ProjectUpdateConfigurationRequest: {
+      name: string;
+      enabled?: boolean;
+      /** @enum {string} */
+      cadence: "weekly" | "biweekly" | "monthly";
+      dayOfWeek: number;
+      timeOfDay: string;
+      timezone?: string;
+      /** @enum {string} */
+      projectScope: "all" | "active" | "statuses";
+      statusScope?: string[];
+      shareTargets: string[];
+      slackChannel?: string | null;
     };
     ProjectTemplateSettings: {
       /** @enum {string|null} */
@@ -4595,6 +4677,102 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SidebarFavoriteListResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  listProjectUpdateConfigurations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Project update configurations */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProjectUpdateConfigurationListResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createProjectUpdateConfiguration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProjectUpdateConfigurationRequest"];
+      };
+    };
+    responses: {
+      /** @description Created project update configuration */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProjectUpdateConfigurationResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  deleteProjectUpdateConfiguration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted project update configuration */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateProjectUpdateConfiguration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProjectUpdateConfigurationRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated project update configuration */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProjectUpdateConfigurationResponse"];
         };
       };
       default: components["responses"]["Problem"];

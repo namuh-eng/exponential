@@ -1231,6 +1231,71 @@ paths:
                 $ref: '#/components/schemas/SidebarFavoriteListResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /project-update-configurations:
+    get:
+      operationId: listProjectUpdateConfigurations
+      summary: List project update configurations
+      responses:
+        '200':
+          description: Project update configurations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectUpdateConfigurationListResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createProjectUpdateConfiguration
+      summary: Create a project update configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectUpdateConfigurationRequest'
+      responses:
+        '201':
+          description: Created project update configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectUpdateConfigurationResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /project-update-configurations/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      operationId: updateProjectUpdateConfiguration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectUpdateConfigurationRequest'
+      responses:
+        '200':
+          description: Updated project update configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectUpdateConfigurationResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deleteProjectUpdateConfiguration
+      responses:
+        '200':
+          description: Deleted project update configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /projects:
     get:
       operationId: listProjects
@@ -2692,6 +2757,58 @@ components:
       properties:
         token: { $ref: '#/components/schemas/PersonalAccessToken' }
         value: { type: string }
+    ProjectUpdateConfiguration:
+      type: object
+      required: [id, name, enabled, cadence, dayOfWeek, timeOfDay, timezone, projectScope, statusScope, shareTargets, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        enabled: { type: boolean }
+        cadence: { type: string, enum: [weekly, biweekly, monthly] }
+        dayOfWeek: { type: integer, minimum: 1, maximum: 7 }
+        timeOfDay: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+        timezone: { type: string }
+        projectScope: { type: string, enum: [all, active, statuses] }
+        statusScope:
+          type: array
+          items: { type: string, enum: [planned, started, paused, completed, canceled] }
+        shareTargets:
+          type: array
+          items: { type: string, enum: [workspace, slack, email] }
+        slackChannel: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ProjectUpdateConfigurationListResponse:
+      type: object
+      required: [configurations, canManage]
+      properties:
+        configurations:
+          type: array
+          items: { $ref: '#/components/schemas/ProjectUpdateConfiguration' }
+        canManage: { type: boolean }
+    ProjectUpdateConfigurationResponse:
+      type: object
+      required: [configuration]
+      properties:
+        configuration: { $ref: '#/components/schemas/ProjectUpdateConfiguration' }
+    ProjectUpdateConfigurationRequest:
+      type: object
+      required: [name, cadence, dayOfWeek, timeOfDay, projectScope, shareTargets]
+      properties:
+        name: { type: string }
+        enabled: { type: boolean }
+        cadence: { type: string, enum: [weekly, biweekly, monthly] }
+        dayOfWeek: { type: integer, minimum: 1, maximum: 7 }
+        timeOfDay: { type: string }
+        timezone: { type: string }
+        projectScope: { type: string, enum: [all, active, statuses] }
+        statusScope:
+          type: array
+          items: { type: string }
+        shareTargets:
+          type: array
+          items: { type: string }
+        slackChannel: { type: [string, 'null'] }
     ProjectTemplateSettings:
       type: object
       required: [status, priority, labelIds, milestones]
