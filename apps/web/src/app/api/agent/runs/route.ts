@@ -4,6 +4,11 @@ import { createAgentRun, listAgentRuns } from "@/lib/agent-runs";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
+import {
+  createHeadlessAgentRunsClient,
+  headlessAgentRunsEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { findAccessibleTeam } from "@/lib/teams";
 import {
   canUseWorkspaceAgents,
@@ -51,6 +56,21 @@ export async function GET() {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
   }
 
+  if (headlessAgentRunsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessAgentRunsClient(token);
+    const { data, error, response } = await client.GET("/agent/runs");
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   const capability = await resolveWorkspaceAgentCapability({
     workspaceId,
     userId: session.user.id,
@@ -71,6 +91,29 @@ export async function POST(request: Request) {
   const workspaceId = await resolveActiveWorkspaceId(session.user.id);
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
+  }
+
+  if (headlessAgentRunsEnabled()) {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessAgentRunsClient(token);
+    const { data, error, response } = await client.POST("/agent/runs", {
+      body: body as never,
+    });
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   const capability = await resolveWorkspaceAgentCapability({
