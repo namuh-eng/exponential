@@ -117,6 +117,10 @@ export function headlessInboundEnabled() {
   return process.env.EXPONENTIAL_HEADLESS_INBOUND === "true";
 }
 
+export function headlessInitiativesEnabled() {
+  return process.env.EXPONENTIAL_HEADLESS_INITIATIVES === "true";
+}
+
 export function createHeadlessClient(token: string) {
   return createExponentialClient({
     baseUrl: process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1",
@@ -234,6 +238,10 @@ export function createHeadlessProjectsClient(token: string) {
 
 export function createHeadlessInboundClient() {
   return createHeadlessClient("");
+}
+
+export function createHeadlessInitiativesClient(token: string) {
+  return createHeadlessClient(token);
 }
 
 export async function mintInternalApiToken(input: {

@@ -12,6 +12,11 @@ import {
   workspace,
 } from "@/lib/db/schema";
 import {
+  createHeadlessInitiativesClient,
+  headlessInitiativesEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
+import {
   isInitiativeHealth,
   readInitiativeSettings,
 } from "@/lib/initiative-detail";
@@ -29,6 +34,21 @@ export async function GET(request: Request) {
   const workspaceId = await resolveRequestWorkspaceId(session.user.id, request);
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
+  }
+
+  if (headlessInitiativesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessInitiativesClient(token);
+    const { data, error, response } = await client.GET("/initiatives");
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   const [workspaceRecord] = await db
@@ -151,6 +171,24 @@ export async function POST(request: Request) {
   const workspaceId = await resolveRequestWorkspaceId(session.user.id, request);
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
+  }
+
+  if (headlessInitiativesEnabled()) {
+    const body = await request.json();
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessInitiativesClient(token);
+    const { data, error, response } = await client.POST("/initiatives", {
+      body,
+    });
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   const [workspaceRecord] = await db

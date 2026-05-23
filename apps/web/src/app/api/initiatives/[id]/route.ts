@@ -14,6 +14,11 @@ import {
   workspace,
 } from "@/lib/db/schema";
 import {
+  createHeadlessInitiativesClient,
+  headlessInitiativesEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
+import {
   type InitiativeHealth,
   type InitiativeUpdateHealth,
   isInitiativeHealth,
@@ -318,6 +323,23 @@ export async function GET(
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
   }
 
+  if (headlessInitiativesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessInitiativesClient(token);
+    const { data, error, response } = await client.GET("/initiatives/{id}", {
+      params: { path: { id } },
+    });
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   const initiativeSettings =
     await readCurrentWorkspaceInitiativeSettings(workspaceId);
   if (!initiativeSettings.enabled) {
@@ -350,6 +372,24 @@ export async function PATCH(
 
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
+  }
+
+  if (headlessInitiativesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessInitiativesClient(token);
+    const { data, error, response } = await client.PATCH("/initiatives/{id}", {
+      params: { path: { id } },
+      body,
+    });
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   const initiativeSettings =
@@ -877,6 +917,23 @@ export async function DELETE(
 
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
+  }
+
+  if (headlessInitiativesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessInitiativesClient(token);
+    const { data, error, response } = await client.DELETE("/initiatives/{id}", {
+      params: { path: { id } },
+    });
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   const initiativeSettings =

@@ -2454,6 +2454,83 @@ paths:
                 $ref: '#/components/schemas/WorkspaceAiSettingsResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /initiatives:
+    get:
+      operationId: listInitiatives
+      responses:
+        '200':
+          description: Initiatives for the current workspace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListInitiativesResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createInitiative
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInitiativeRequest'
+      responses:
+        '201':
+          description: Created initiative
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Initiative'
+        default:
+          $ref: '#/components/responses/Problem'
+  /initiatives/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getInitiative
+      responses:
+        '200':
+          description: Initiative detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitiativeDetailResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: updateInitiative
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateInitiativeRequest'
+      responses:
+        '200':
+          description: Updated initiative detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitiativeDetailResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deleteInitiative
+      responses:
+        '200':
+          description: Initiative deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: { type: boolean }
+        default:
+          $ref: '#/components/responses/Problem'
   /workspaces/current/initiatives-settings:
     get:
       operationId: getCurrentWorkspaceInitiativeSettings
@@ -4540,6 +4617,156 @@ components:
         aiSettings:
           type: object
           additionalProperties: true
+    InitiativeUser:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        image: { type: [string, 'null'] }
+    InitiativeTeam:
+      type: object
+      required: [id, name, key]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        key: { type: string }
+        icon: { type: [string, 'null'] }
+    InitiativeProject:
+      type: object
+      required: [id, name, status]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        status: { type: string }
+        icon: { type: [string, 'null'] }
+        slug: { type: string }
+        issueCount: { type: integer }
+        completedIssueCount: { type: integer }
+    InitiativeMini:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        status: { type: string }
+        parentInitiativeId: { type: [string, 'null'], format: uuid }
+    Initiative:
+      type: object
+      required: [id, name, status, health, workspaceId, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        status: { type: string, enum: [planned, active, completed] }
+        ownerId: { type: [string, 'null'] }
+        owner:
+          oneOf:
+            - $ref: '#/components/schemas/InitiativeUser'
+            - type: 'null'
+        teams:
+          type: array
+          items: { $ref: '#/components/schemas/InitiativeTeam' }
+        startDate: { type: [string, 'null'] }
+        targetDate: { type: [string, 'null'] }
+        timeframe: { type: [string, 'null'] }
+        health: { type: string, enum: [unknown, onTrack, atRisk, offTrack] }
+        settings:
+          type: object
+          additionalProperties: true
+        workspaceId: { type: string, format: uuid }
+        parentInitiativeId: { type: [string, 'null'], format: uuid }
+        parentInitiative:
+          oneOf:
+            - $ref: '#/components/schemas/InitiativeMini'
+            - type: 'null'
+        childInitiatives:
+          type: array
+          items: { $ref: '#/components/schemas/InitiativeMini' }
+        projectCount: { type: integer }
+        completedProjectCount: { type: integer }
+        latestUpdate: {}
+        activeProjectHealthRollup: {}
+        createdAt: { type: string }
+        updatedAt: { type: string }
+    ListInitiativesResponse:
+      type: object
+      required: [initiatives, workspaceMembers, workspaceTeams, initiativesSettings]
+      properties:
+        initiatives:
+          type: array
+          items: { $ref: '#/components/schemas/Initiative' }
+        workspaceMembers:
+          type: array
+          items: { $ref: '#/components/schemas/InitiativeUser' }
+        workspaceTeams:
+          type: array
+          items: { $ref: '#/components/schemas/InitiativeTeam' }
+        initiativesSettings: { $ref: '#/components/schemas/WorkspaceInitiativeSettings' }
+    InitiativeDetailResponse:
+      type: object
+      required: [initiative, projects, availableProjects, workspaceMembers, workspaceTeams, availableParentInitiatives, updates, activity]
+      properties:
+        initiative: { $ref: '#/components/schemas/Initiative' }
+        projects:
+          type: array
+          items: { $ref: '#/components/schemas/InitiativeProject' }
+        availableProjects:
+          type: array
+          items: { $ref: '#/components/schemas/InitiativeProject' }
+        workspaceMembers:
+          type: array
+          items: { $ref: '#/components/schemas/InitiativeUser' }
+        workspaceTeams:
+          type: array
+          items: { $ref: '#/components/schemas/InitiativeTeam' }
+        availableParentInitiatives:
+          type: array
+          items: { $ref: '#/components/schemas/InitiativeMini' }
+        updates:
+          type: array
+          items: {}
+        activity:
+          type: array
+          items: {}
+    CreateInitiativeRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: [string, 'null'] }
+        status: { type: string, enum: [planned, active, completed] }
+        health: { type: string, enum: [unknown, onTrack, atRisk, offTrack] }
+        startDate: { type: [string, 'null'] }
+        targetDate: { type: [string, 'null'] }
+        timeframe: { type: [string, 'null'] }
+        ownerId: { type: [string, 'null'] }
+        parentInitiativeId: { type: [string, 'null'], format: uuid }
+        teamIds:
+          type: array
+          items: { type: string, format: uuid }
+    UpdateInitiativeRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        status: { type: string, enum: [planned, active, completed] }
+        health: { type: string, enum: [unknown, onTrack, atRisk, offTrack] }
+        startDate: { type: [string, 'null'] }
+        targetDate: { type: [string, 'null'] }
+        timeframe: { type: [string, 'null'] }
+        ownerId: { type: [string, 'null'] }
+        parentInitiativeId: { type: [string, 'null'], format: uuid }
+        teamIds:
+          type: array
+          items: { type: string, format: uuid }
+        childInitiativeId: { type: string, format: uuid }
+        removeChildInitiativeId: { type: string, format: uuid }
+        initiativeUpdate: { type: string }
+        updateHealth: { type: string, enum: [onTrack, atRisk, offTrack] }
+        addProjectId: { type: string, format: uuid }
+        removeProjectId: { type: string, format: uuid }
     WorkspaceInitiativeSettings:
       type: object
       required: [enabled, projectRollups, visibility, roadmapMode]

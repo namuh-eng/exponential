@@ -1595,6 +1595,40 @@ export interface paths {
     patch: operations["updateCurrentWorkspaceAiSettings"];
     trace?: never;
   };
+  "/initiatives": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["listInitiatives"];
+    put?: never;
+    post: operations["createInitiative"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/initiatives/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    get: operations["getInitiative"];
+    put?: never;
+    post?: never;
+    delete: operations["deleteInitiative"];
+    options?: never;
+    head?: never;
+    patch: operations["updateInitiative"];
+    trace?: never;
+  };
   "/workspaces/current/initiatives-settings": {
     parameters: {
       query?: never;
@@ -3209,6 +3243,126 @@ export interface components {
       aiSettings: {
         [key: string]: unknown;
       };
+    };
+    InitiativeUser: {
+      id: string;
+      name: string;
+      image?: string | null;
+    };
+    InitiativeTeam: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      key: string;
+      icon?: string | null;
+    };
+    InitiativeProject: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      status: string;
+      icon?: string | null;
+      slug?: string;
+      issueCount?: number;
+      completedIssueCount?: number;
+    };
+    InitiativeMini: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      status?: string;
+      /** Format: uuid */
+      parentInitiativeId?: string | null;
+    };
+    Initiative: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      description?: string | null;
+      /** @enum {string} */
+      status: "planned" | "active" | "completed";
+      ownerId?: string | null;
+      owner?: components["schemas"]["InitiativeUser"] | null;
+      teams?: components["schemas"]["InitiativeTeam"][];
+      startDate?: string | null;
+      targetDate?: string | null;
+      timeframe?: string | null;
+      /** @enum {string} */
+      health: "unknown" | "onTrack" | "atRisk" | "offTrack";
+      settings?: {
+        [key: string]: unknown;
+      };
+      /** Format: uuid */
+      workspaceId: string;
+      /** Format: uuid */
+      parentInitiativeId?: string | null;
+      parentInitiative?: components["schemas"]["InitiativeMini"] | null;
+      childInitiatives?: components["schemas"]["InitiativeMini"][];
+      projectCount?: number;
+      completedProjectCount?: number;
+      latestUpdate?: unknown;
+      activeProjectHealthRollup?: unknown;
+      createdAt: string;
+      updatedAt: string;
+    };
+    ListInitiativesResponse: {
+      initiatives: components["schemas"]["Initiative"][];
+      workspaceMembers: components["schemas"]["InitiativeUser"][];
+      workspaceTeams: components["schemas"]["InitiativeTeam"][];
+      initiativesSettings: components["schemas"]["WorkspaceInitiativeSettings"];
+    };
+    InitiativeDetailResponse: {
+      initiative: components["schemas"]["Initiative"];
+      projects: components["schemas"]["InitiativeProject"][];
+      availableProjects: components["schemas"]["InitiativeProject"][];
+      workspaceMembers: components["schemas"]["InitiativeUser"][];
+      workspaceTeams: components["schemas"]["InitiativeTeam"][];
+      availableParentInitiatives: components["schemas"]["InitiativeMini"][];
+      updates: unknown[];
+      activity: unknown[];
+    };
+    CreateInitiativeRequest: {
+      name: string;
+      description?: string | null;
+      /** @enum {string} */
+      status?: "planned" | "active" | "completed";
+      /** @enum {string} */
+      health?: "unknown" | "onTrack" | "atRisk" | "offTrack";
+      startDate?: string | null;
+      targetDate?: string | null;
+      timeframe?: string | null;
+      ownerId?: string | null;
+      /** Format: uuid */
+      parentInitiativeId?: string | null;
+      teamIds?: string[];
+    };
+    UpdateInitiativeRequest: {
+      name?: string;
+      description?: string | null;
+      /** @enum {string} */
+      status?: "planned" | "active" | "completed";
+      /** @enum {string} */
+      health?: "unknown" | "onTrack" | "atRisk" | "offTrack";
+      startDate?: string | null;
+      targetDate?: string | null;
+      timeframe?: string | null;
+      ownerId?: string | null;
+      /** Format: uuid */
+      parentInitiativeId?: string | null;
+      teamIds?: string[];
+      /** Format: uuid */
+      childInitiativeId?: string;
+      /** Format: uuid */
+      removeChildInitiativeId?: string;
+      initiativeUpdate?: string;
+      /** @enum {string} */
+      updateHealth?: "onTrack" | "atRisk" | "offTrack";
+      /** Format: uuid */
+      addProjectId?: string;
+      /** Format: uuid */
+      removeProjectId?: string;
+    } & {
+      [key: string]: unknown;
     };
     WorkspaceInitiativeSettings: {
       enabled: boolean;
@@ -7309,6 +7463,127 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["WorkspaceAiSettingsResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  listInitiatives: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Initiatives for the current workspace */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ListInitiativesResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createInitiative: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateInitiativeRequest"];
+      };
+    };
+    responses: {
+      /** @description Created initiative */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Initiative"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getInitiative: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Initiative detail */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InitiativeDetailResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  deleteInitiative: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Initiative deleted */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            success: boolean;
+          };
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateInitiative: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateInitiativeRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated initiative detail */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InitiativeDetailResponse"];
         };
       };
       default: components["responses"]["Problem"];
