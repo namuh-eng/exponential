@@ -1177,6 +1177,24 @@ export interface paths {
     patch: operations["updateTeamStatus"];
     trace?: never;
   };
+  "/teams/{key}/slack-notifications": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    get: operations["getTeamSlackNotifications"];
+    put?: never;
+    post?: never;
+    delete: operations["deleteTeamSlackNotifications"];
+    options?: never;
+    head?: never;
+    patch: operations["updateTeamSlackNotifications"];
+    trace?: never;
+  };
   "/teams/{key}/recurring-issues": {
     parameters: {
       query?: never;
@@ -2578,6 +2596,50 @@ export interface components {
       id: string;
       /** Format: uuid */
       replacementStatusId?: string;
+    };
+    SlackNotificationEvent: {
+      id: string;
+      label: string;
+      description: string;
+    };
+    TeamSlackWorkspaceIntegration: {
+      /** Format: uuid */
+      id: string;
+      status: string;
+      displayName: string | null;
+      /** Format: date-time */
+      connectedAt: string | null;
+    };
+    TeamSlackNotificationsSettings: {
+      channelId: string;
+      channelName: string;
+      enabled: boolean;
+      events: string[];
+      /** Format: date-time */
+      updatedAt: string | null;
+    };
+    TeamSlackNotificationsResponse: {
+      team: {
+        /** Format: uuid */
+        id: string;
+        key: string;
+        name: string;
+      };
+      workspaceSlack:
+        | components["schemas"]["TeamSlackWorkspaceIntegration"]
+        | null;
+      canManageSlackNotifications: boolean;
+      availableEvents: components["schemas"]["SlackNotificationEvent"][];
+      settings: components["schemas"]["TeamSlackNotificationsSettings"];
+    };
+    TeamSlackNotificationsSettingsResponse: {
+      settings: components["schemas"]["TeamSlackNotificationsSettings"];
+    };
+    TeamSlackNotificationsRequest: {
+      channelId?: string;
+      channelName?: string;
+      enabled?: boolean;
+      events?: string[];
     };
     RecurringIssue: {
       /** Format: uuid */
@@ -6073,6 +6135,79 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["TeamStatusesResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getTeamSlackNotifications: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Team Slack notification settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TeamSlackNotificationsResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  deleteTeamSlackNotifications: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted team Slack notification settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateTeamSlackNotifications: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TeamSlackNotificationsRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated team Slack notification settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TeamSlackNotificationsSettingsResponse"];
         };
       };
       default: components["responses"]["Problem"];

@@ -2,6 +2,11 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { teamNotificationIntegration } from "@/lib/db/schema";
 import {
+  createHeadlessTeamsClient,
+  headlessTeamsEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
+import {
   SLACK_NOTIFICATION_EVENTS,
   canManageIntegrations,
   findSlackWorkspaceIntegration,
@@ -52,6 +57,24 @@ export async function GET(request: Request, context: Params) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
+  if (headlessTeamsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: access.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const { data, error, response } = await client.GET(
+      "/teams/{key}/slack-notifications",
+      { params: { path: { key } } },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   const [workspaceSlack, settings] = await Promise.all([
     findSlackWorkspaceIntegration(access.workspaceId),
     findTeamSlackSettings(team.id),
@@ -94,6 +117,28 @@ export async function PATCH(request: Request, context: Params) {
   const team = await findTeamForSlackSettings(key, access.workspaceId);
   if (!team) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
+  }
+
+  if (headlessTeamsEnabled()) {
+    const body = await request.json().catch(() => null);
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: access.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const { data, error, response } = await client.PATCH(
+      "/teams/{key}/slack-notifications",
+      {
+        params: { path: { key } },
+        body: body as never,
+      },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   const workspaceSlack = await findSlackWorkspaceIntegration(
@@ -198,6 +243,24 @@ export async function DELETE(request: Request, context: Params) {
   const team = await findTeamForSlackSettings(key, access.workspaceId);
   if (!team) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
+  }
+
+  if (headlessTeamsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: access.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const { data, error, response } = await client.DELETE(
+      "/teams/{key}/slack-notifications",
+      { params: { path: { key } } },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   await db

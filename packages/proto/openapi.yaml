@@ -1780,6 +1780,51 @@ paths:
                 $ref: '#/components/schemas/TeamStatusesResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /teams/{key}/slack-notifications:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getTeamSlackNotifications
+      responses:
+        '200':
+          description: Team Slack notification settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamSlackNotificationsResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: updateTeamSlackNotifications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamSlackNotificationsRequest'
+      responses:
+        '200':
+          description: Updated team Slack notification settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamSlackNotificationsSettingsResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deleteTeamSlackNotifications
+      responses:
+        '200':
+          description: Deleted team Slack notification settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /teams/{key}/recurring-issues:
     parameters:
       - name: key
@@ -3733,6 +3778,66 @@ components:
       properties:
         id: { type: string, format: uuid }
         replacementStatusId: { type: string, format: uuid }
+    SlackNotificationEvent:
+      type: object
+      required: [id, label, description]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        description: { type: string }
+    TeamSlackWorkspaceIntegration:
+      type: object
+      required: [id, status, displayName, connectedAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string }
+        displayName: { type: [string, 'null'] }
+        connectedAt: { type: [string, 'null'], format: date-time }
+    TeamSlackNotificationsSettings:
+      type: object
+      required: [channelId, channelName, enabled, events, updatedAt]
+      properties:
+        channelId: { type: string }
+        channelName: { type: string }
+        enabled: { type: boolean }
+        events:
+          type: array
+          items: { type: string }
+        updatedAt: { type: [string, 'null'], format: date-time }
+    TeamSlackNotificationsResponse:
+      type: object
+      required: [team, workspaceSlack, canManageSlackNotifications, availableEvents, settings]
+      properties:
+        team:
+          type: object
+          required: [id, key, name]
+          properties:
+            id: { type: string, format: uuid }
+            key: { type: string }
+            name: { type: string }
+        workspaceSlack:
+          anyOf:
+            - $ref: '#/components/schemas/TeamSlackWorkspaceIntegration'
+            - type: 'null'
+        canManageSlackNotifications: { type: boolean }
+        availableEvents:
+          type: array
+          items: { $ref: '#/components/schemas/SlackNotificationEvent' }
+        settings: { $ref: '#/components/schemas/TeamSlackNotificationsSettings' }
+    TeamSlackNotificationsSettingsResponse:
+      type: object
+      required: [settings]
+      properties:
+        settings: { $ref: '#/components/schemas/TeamSlackNotificationsSettings' }
+    TeamSlackNotificationsRequest:
+      type: object
+      properties:
+        channelId: { type: string }
+        channelName: { type: string }
+        enabled: { type: boolean }
+        events:
+          type: array
+          items: { type: string }
     RecurringIssue:
       type: object
       required: [id, workspaceId, teamId, title, priority, labelIds, cadenceConfig, timezone, nextRunAt, enabled, createdAt, updatedAt, cadenceLabel]
