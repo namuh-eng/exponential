@@ -9,6 +9,11 @@ import {
   workflowState,
 } from "@/lib/db/schema";
 import {
+  createHeadlessTeamsClient,
+  headlessTeamsEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
+import {
   buildAnalyticsResponse,
   normalizeAnalyticsQuery,
 } from "@/lib/team-analytics";
@@ -32,6 +37,30 @@ export async function GET(
 
   if (!teamRecord) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
+  }
+
+  if (headlessTeamsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: teamRecord.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const searchParams = new URL(request.url).searchParams;
+    const { data, error, response } = await client.GET(
+      "/teams/{key}/analytics",
+      {
+        params: {
+          path: { key },
+          query: Object.fromEntries(searchParams.entries()) as never,
+        },
+      },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   const hierarchyTeamIds = teamRecord.hierarchyTeamIds ?? [teamRecord.id];

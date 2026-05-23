@@ -57,6 +57,7 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/", h.Create)
 	r.Get("/{key}/create-issue-options", h.CreateIssueOptions)
 	r.Get("/{key}/context", h.Context)
+	r.Get("/{key}/analytics", h.Analytics)
 	r.Get("/{key}/display-options", h.GetDisplayOptions)
 	r.Put("/{key}/display-options", h.UpdateDisplayOptions)
 	r.Get("/{key}/issues", h.Issues)

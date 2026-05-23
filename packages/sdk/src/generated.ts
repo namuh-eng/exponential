@@ -1141,6 +1141,32 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/teams/{key}/analytics": {
+    parameters: {
+      query?: {
+        measure?: string;
+        slice?: string;
+        segment?: string;
+        range?: string;
+        status?: string;
+        project?: string;
+        label?: string;
+      };
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    get: operations["getTeamAnalytics"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/teams/{key}/issues": {
     parameters: {
       query?: never;
@@ -2553,6 +2579,42 @@ export interface components {
     };
     CreateTeamResponse: {
       team: components["schemas"]["Team"];
+    };
+    TeamAnalyticsResponse: {
+      team: {
+        [key: string]: unknown;
+      };
+      query: {
+        [key: string]: unknown;
+      };
+      controls: {
+        [key: string]: unknown;
+      };
+      filters: {
+        [key: string]: unknown;
+      };
+      summary: {
+        [key: string]: unknown;
+      };
+      chart: {
+        [key: string]: unknown;
+      };
+      metricCards: unknown[];
+      trend: {
+        [key: string]: unknown;
+      };
+      tableRows: {
+        [key: string]: unknown;
+      }[];
+      cycleMetrics: {
+        [key: string]: unknown;
+      }[];
+      emptyState: string | null;
+      actions: {
+        [key: string]: unknown;
+      };
+    } & {
+      [key: string]: unknown;
     };
     TeamStatusBehavior: {
       /** @enum {string} */
@@ -6006,6 +6068,37 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["TeamContextResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getTeamAnalytics: {
+    parameters: {
+      query?: {
+        measure?: string;
+        slice?: string;
+        segment?: string;
+        range?: string;
+        status?: string;
+        project?: string;
+        label?: string;
+      };
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Team analytics */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TeamAnalyticsResponse"];
         };
       };
       default: components["responses"]["Problem"];

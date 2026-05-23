@@ -1682,6 +1682,44 @@ paths:
                 $ref: '#/components/schemas/TeamContextResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /teams/{key}/analytics:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+      - name: measure
+        in: query
+        schema: { type: string }
+      - name: slice
+        in: query
+        schema: { type: string }
+      - name: segment
+        in: query
+        schema: { type: string }
+      - name: range
+        in: query
+        schema: { type: string }
+      - name: status
+        in: query
+        schema: { type: string }
+      - name: project
+        in: query
+        schema: { type: string }
+      - name: label
+        in: query
+        schema: { type: string }
+    get:
+      operationId: getTeamAnalytics
+      responses:
+        '200':
+          description: Team analytics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamAnalyticsResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /teams/{key}/issues:
     parameters:
       - name: key
@@ -3752,6 +3790,49 @@ components:
       required: [team]
       properties:
         team: { $ref: '#/components/schemas/Team' }
+    TeamAnalyticsResponse:
+      type: object
+      additionalProperties: true
+      required: [team, query, controls, filters, summary, chart, metricCards, trend, tableRows, cycleMetrics, emptyState, actions]
+      properties:
+        team:
+          type: object
+          additionalProperties: true
+        query:
+          type: object
+          additionalProperties: true
+        controls:
+          type: object
+          additionalProperties: true
+        filters:
+          type: object
+          additionalProperties: true
+        summary:
+          type: object
+          additionalProperties: true
+        chart:
+          type: object
+          additionalProperties: true
+        metricCards:
+          type: array
+          items: {}
+        trend:
+          type: object
+          additionalProperties: true
+        tableRows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        cycleMetrics:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        emptyState: { type: [string, 'null'] }
+        actions:
+          type: object
+          additionalProperties: true
     TeamStatusBehavior:
       type: object
       additionalProperties: true
