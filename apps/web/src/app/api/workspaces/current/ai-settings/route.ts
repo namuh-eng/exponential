@@ -3,6 +3,11 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
 import {
+  createHeadlessWorkspacesClient,
+  headlessWorkspacesEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
+import {
   WORKSPACE_AGENT_GUIDANCE_MAX_LENGTH,
   buildWorkspaceAiSettingsPatch,
   canUseWorkspaceAgents,
@@ -66,6 +71,26 @@ export async function GET() {
     return authResponse;
   }
 
+  if (headlessWorkspacesEnabled()) {
+    const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+    if (workspaceId) {
+      const token = await mintInternalApiToken({
+        userId: session.user.id,
+        workspaceId,
+      });
+      const client = createHeadlessWorkspacesClient(token);
+      const { data, error, response } = await client.GET(
+        "/workspaces/current/ai-settings",
+      );
+      if (error) {
+        return NextResponse.json(error, {
+          status: (response as Response).status,
+        });
+      }
+      return NextResponse.json(data, { status: (response as Response).status });
+    }
+  }
+
   const currentWorkspace = await findCurrentWorkspace(session.user.id);
   if (!currentWorkspace) {
     return NextResponse.json(
@@ -85,6 +110,28 @@ export async function PATCH(request: Request) {
   const { response: authResponse, session } = await requireApiSession();
   if (authResponse) {
     return authResponse;
+  }
+
+  if (headlessWorkspacesEnabled()) {
+    const workspaceId = await resolveActiveWorkspaceId(session.user.id);
+    if (workspaceId) {
+      const body = await request.json().catch(() => null);
+      const token = await mintInternalApiToken({
+        userId: session.user.id,
+        workspaceId,
+      });
+      const client = createHeadlessWorkspacesClient(token);
+      const { data, error, response } = await client.PATCH(
+        "/workspaces/current/ai-settings",
+        { body: body as never },
+      );
+      if (error) {
+        return NextResponse.json(error, {
+          status: (response as Response).status,
+        });
+      }
+      return NextResponse.json(data, { status: (response as Response).status });
+    }
   }
 
   const currentWorkspace = await findCurrentWorkspace(session.user.id);
