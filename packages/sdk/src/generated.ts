@@ -275,6 +275,22 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/auth/saml/discovery": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["discoverSamlUrl"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/auth/provider-capabilities": {
     parameters: {
       query?: never;
@@ -1306,6 +1322,16 @@ export interface components {
       completedLast30Days: components["schemas"]["AnalyticsCompletedTeamCount"][];
       activeIssues: components["schemas"]["AnalyticsActiveTeamCount"][];
       period: string;
+    };
+    SamlDiscoveryRequest: {
+      email: string;
+      isDesktop?: boolean;
+      type?: string;
+      callbackURL?: string;
+    };
+    SamlDiscoveryResponse: {
+      /** Format: uri */
+      url: string;
     };
     AccountProviderCapability: {
       supported: boolean;
@@ -3169,6 +3195,31 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
+      default: components["responses"]["Problem"];
+    };
+  };
+  discoverSamlUrl: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SamlDiscoveryRequest"];
+      };
+    };
+    responses: {
+      /** @description Discovered SAML URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SamlDiscoveryResponse"];
+        };
+      };
       default: components["responses"]["Problem"];
     };
   };

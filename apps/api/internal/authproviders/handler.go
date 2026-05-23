@@ -1,10 +1,12 @@
 package authproviders
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -39,6 +41,7 @@ type capabilitiesResponse struct {
 func (h Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/provider-capabilities", h.ProviderCapabilities)
+	r.Post("/saml/discovery", h.SAMLDiscovery)
 	return r
 }
 
@@ -61,6 +64,33 @@ func (h Handler) ProviderCapabilities(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	problem.JSON(w, 200, capabilitiesResponse{Providers: providers, Workspace: policy})
+}
+
+type samlDiscoveryRequest struct {
+	Email string `json:"email"`
+}
+
+func (h Handler) SAMLDiscovery(w http.ResponseWriter, r *http.Request) {
+	var input samlDiscoveryRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		problem.JSON(w, 400, map[string]string{"error": "Request body must be valid JSON."})
+		return
+	}
+	domain := extractEmailDomain(input.Email)
+	if domain == "" {
+		problem.JSON(w, 400, map[string]string{"error": "Enter a valid email address."})
+		return
+	}
+	discoveredURL, err := h.discoverSAMLURL(r.Context(), domain)
+	if err != nil {
+		problem.Write(w, 500, "Discover SAML URL failed", err.Error())
+		return
+	}
+	if discoveredURL == "" {
+		problem.JSON(w, 404, map[string]string{"error": "No SAML SSO enabled workspace could be found."})
+		return
+	}
+	problem.JSON(w, 200, map[string]string{"url": discoveredURL})
 }
 
 func accountProviderCapability(configured bool, label string) providerCapability {
@@ -195,4 +225,99 @@ func boolValueDefault(value any, fallback bool) bool {
 		return b
 	}
 	return fallback
+}
+
+func extractEmailDomain(email string) string {
+	normalized := strings.ToLower(strings.TrimSpace(email))
+	parts := strings.Split(normalized, "@")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || !strings.Contains(parts[1], ".") || strings.ContainsAny(normalized, " \t\n") {
+		return ""
+	}
+	domain := parts[1]
+	if ok, _ := regexp.MatchString(`^[a-z0-9.-]+\.[a-z]{2,}$`, domain); !ok {
+		return ""
+	}
+	return domain
+}
+
+func (h Handler) discoverSAMLURL(ctx context.Context, domain string) (string, error) {
+	rows, err := h.DB.Query(ctx, `select coalesce(settings,'{}'::jsonb) from workspace`)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var raw []byte
+		if err := rows.Scan(&raw); err != nil {
+			return "", err
+		}
+		settings := readSAMLDiscoverySettings(raw)
+		if !settings.enabled || settings.url == "" || !containsString(settings.domains, domain) {
+			continue
+		}
+		parsed, err := url.Parse(settings.url)
+		if err == nil && parsed.Host != "" && (parsed.Scheme == "http" || parsed.Scheme == "https") {
+			return parsed.String(), nil
+		}
+	}
+	return "", rows.Err()
+}
+
+type samlDiscoverySettings struct {
+	enabled bool
+	domains []string
+	url     string
+}
+
+func readSAMLDiscoverySettings(raw []byte) samlDiscoverySettings {
+	root := map[string]any{}
+	_ = json.Unmarshal(raw, &root)
+	security := asRecordAny(root["security"])
+	saml := asRecordAny(firstNonNilAuth(security["saml"], root["saml"], root["sso"]))
+	return samlDiscoverySettings{enabled: boolValueDefault(saml["enabled"], false), domains: normalizeSAMLDiscoveryDomains(firstNonNilAuth(saml["domains"], saml["emailDomains"])), url: firstStringAuth(saml["idpSsoUrl"], saml["ssoUrl"], saml["ssoURL"], saml["url"])}
+}
+
+func normalizeSAMLDiscoveryDomains(value any) []string {
+	items, ok := value.([]any)
+	if !ok {
+		return []string{}
+	}
+	seen := map[string]bool{}
+	out := []string{}
+	for _, item := range items {
+		domain := strings.TrimLeft(strings.ToLower(strings.TrimSpace(firstStringAuth(item))), "@")
+		if ok, _ := regexp.MatchString(`^[a-z0-9.-]+\.[a-z]{2,}$`, domain); !ok || seen[domain] {
+			continue
+		}
+		seen[domain] = true
+		out = append(out, domain)
+	}
+	return out
+}
+
+func firstNonNilAuth(values ...any) any {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
+	}
+	return nil
+}
+
+func firstStringAuth(values ...any) string {
+	for _, value := range values {
+		if s, ok := value.(string); ok {
+			return strings.TrimSpace(s)
+		}
+	}
+	return ""
+}
+
+func containsString(values []string, needle string) bool {
+	for _, value := range values {
+		if value == needle {
+			return true
+		}
+	}
+	return false
 }

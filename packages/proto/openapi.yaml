@@ -420,6 +420,24 @@ paths:
       responses:
         default:
           $ref: '#/components/responses/Problem'
+  /auth/saml/discovery:
+    post:
+      operationId: discoverSamlUrl
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SamlDiscoveryRequest'
+      responses:
+        '200':
+          description: Discovered SAML URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamlDiscoveryResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /auth/provider-capabilities:
     get:
       operationId: getAuthProviderCapabilities
@@ -2045,6 +2063,19 @@ components:
           type: array
           items: { $ref: '#/components/schemas/AnalyticsActiveTeamCount' }
         period: { type: string }
+    SamlDiscoveryRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string }
+        isDesktop: { type: boolean }
+        type: { type: string }
+        callbackURL: { type: string }
+    SamlDiscoveryResponse:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, format: uri }
     AccountProviderCapability:
       type: object
       required: [supported, configured, devLinking, unavailableReason]

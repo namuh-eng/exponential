@@ -31,3 +31,19 @@ func TestAccountProviderCapability(t *testing.T) {
 		t.Fatalf("capability = %#v", got)
 	}
 }
+
+func TestExtractEmailDomain(t *testing.T) {
+	if got := extractEmailDomain("Person@Example.com"); got != "example.com" {
+		t.Fatalf("domain = %q", got)
+	}
+	if got := extractEmailDomain("not-an-email"); got != "" {
+		t.Fatalf("invalid domain = %q", got)
+	}
+}
+
+func TestReadSAMLDiscoverySettings(t *testing.T) {
+	settings := readSAMLDiscoverySettings([]byte(`{"saml":{"enabled":true,"domains":["Example.com"],"ssoUrl":"https://idp.example.com/saml"}}`))
+	if !settings.enabled || settings.url != "https://idp.example.com/saml" || len(settings.domains) != 1 || settings.domains[0] != "example.com" {
+		t.Fatalf("settings = %#v", settings)
+	}
+}
