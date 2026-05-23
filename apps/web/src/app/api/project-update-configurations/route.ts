@@ -3,6 +3,11 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
 import {
+  createHeadlessProjectUpdateConfigurationsClient,
+  headlessProjectUpdateConfigurationsEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
+import {
   readProjectUpdateConfigurations,
   validateProjectUpdateConfigurationInput,
   writeProjectUpdateConfigurations,
@@ -56,6 +61,23 @@ export async function GET() {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
   }
 
+  if (headlessProjectUpdateConfigurationsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: access.workspaceId,
+    });
+    const client = createHeadlessProjectUpdateConfigurationsClient(token);
+    const { data, error, response } = await client.GET(
+      "/project-update-configurations",
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   return NextResponse.json({
     configurations: readProjectUpdateConfigurations(access.settings),
     canManage: canManageProjectUpdates(access.role),
@@ -71,6 +93,30 @@ export async function POST(request: Request) {
   const access = await getWorkspaceAccess(session.user.id);
   if (!access) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
+  }
+
+  if (headlessProjectUpdateConfigurationsEnabled()) {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: access.workspaceId,
+    });
+    const client = createHeadlessProjectUpdateConfigurationsClient(token);
+    const { data, error, response } = await client.POST(
+      "/project-update-configurations",
+      { body: body as never },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   if (!canManageProjectUpdates(access.role)) {

@@ -3,6 +3,11 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
 import {
+  createHeadlessProjectUpdateConfigurationsClient,
+  headlessProjectUpdateConfigurationsEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
+import {
   readProjectUpdateConfigurations,
   validateProjectUpdateConfigurationInput,
   writeProjectUpdateConfigurations,
@@ -59,6 +64,31 @@ export async function PATCH(
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
   }
 
+  const { id } = await params;
+  if (headlessProjectUpdateConfigurationsEnabled()) {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: access.workspaceId,
+    });
+    const client = createHeadlessProjectUpdateConfigurationsClient(token);
+    const { data, error, response } = await client.PATCH(
+      "/project-update-configurations/{id}",
+      { params: { path: { id } }, body: body as never },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   if (!canManageProjectUpdates(access.role)) {
     return NextResponse.json(
       { error: "Only workspace admins can manage project updates" },
@@ -73,7 +103,6 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { id } = await params;
   const current = readProjectUpdateConfigurations(access.settings);
   const existing = current.find((configuration) => configuration.id === id);
   if (!existing) {
@@ -125,6 +154,25 @@ export async function DELETE(
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
   }
 
+  const { id } = await params;
+  if (headlessProjectUpdateConfigurationsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: access.workspaceId,
+    });
+    const client = createHeadlessProjectUpdateConfigurationsClient(token);
+    const { data, error, response } = await client.DELETE(
+      "/project-update-configurations/{id}",
+      { params: { path: { id } } },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   if (!canManageProjectUpdates(access.role)) {
     return NextResponse.json(
       { error: "Only workspace admins can manage project updates" },
@@ -132,7 +180,6 @@ export async function DELETE(
     );
   }
 
-  const { id } = await params;
   const current = readProjectUpdateConfigurations(access.settings);
   if (!current.some((configuration) => configuration.id === id)) {
     return NextResponse.json(
