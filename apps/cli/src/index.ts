@@ -31,6 +31,11 @@ async function main() {
     return;
   }
 
+  if (resource === "project-statuses") {
+    await projectStatusCommand();
+    return;
+  }
+
   if (resource === "cycles") {
     await cycleCommand();
     return;
@@ -473,6 +478,25 @@ async function projectCommand() {
   usage();
 }
 
+async function projectStatusCommand() {
+  if (action === "list") {
+    const { data, error, response } = await client.GET("/project-statuses");
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "update") {
+    const statuses = JSON.parse(requireOption(args, "statuses-json"));
+    const { data, error, response } = await client.PATCH("/project-statuses", {
+      body: { statuses },
+    });
+    printResult(data, error, response.status);
+    return;
+  }
+
+  usage();
+}
+
 async function tokenCommand() {
   if (action === "list") {
     const { data, error, response } = await client.GET(
@@ -538,6 +562,8 @@ function usage(): never {
   exponential projects create --name <name> [--slug <slug>] [--team-keys ENG,DES]
   exponential projects update --slug <slug> [--name <name>] [--new-slug <slug>]
   exponential projects delete --slug <slug>
+  exponential project-statuses list
+  exponential project-statuses update --statuses-json '<json-array>'
   exponential cycles list --team-key <key>
   exponential cycles create --team-key <key> --start-date YYYY-MM-DD --end-date YYYY-MM-DD
   exponential cycles update --team-key <key> --id <uuid> [--name <name>]

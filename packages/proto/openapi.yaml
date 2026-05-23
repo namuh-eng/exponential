@@ -539,6 +539,37 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /project-statuses:
+    get:
+      operationId: listProjectStatuses
+      summary: List configurable project statuses for the authenticated workspace
+      responses:
+        '200':
+          description: Project statuses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectStatusListResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: updateProjectStatuses
+      summary: Replace configurable project statuses for the authenticated workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectStatusesRequest'
+      responses:
+        '200':
+          description: Updated project statuses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectStatusListResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /projects:
     get:
       operationId: listProjects
@@ -1202,6 +1233,39 @@ components:
       properties:
         token: { $ref: '#/components/schemas/PersonalAccessToken' }
         value: { type: string }
+    ProjectStatusConfig:
+      type: object
+      required: [id, key, name, description, color, icon, position, isDefault, projectCount]
+      properties:
+        id: { type: string }
+        key: { type: string }
+        name: { type: string }
+        description: { type: string }
+        color:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+        icon: { type: string, minLength: 1, maxLength: 4 }
+        position: { type: integer }
+        isDefault: { type: boolean }
+        projectCount: { type: integer }
+    ProjectStatusListResponse:
+      type: object
+      required: [statuses, totalProjects, readOnly, customStatusesSupported, canManage]
+      properties:
+        statuses:
+          type: array
+          items: { $ref: '#/components/schemas/ProjectStatusConfig' }
+        totalProjects: { type: integer }
+        readOnly: { type: boolean }
+        customStatusesSupported: { type: boolean }
+        canManage: { type: boolean }
+    UpdateProjectStatusesRequest:
+      type: object
+      required: [statuses]
+      properties:
+        statuses:
+          type: array
+          items: { $ref: '#/components/schemas/ProjectStatusConfig' }
     ProjectStatus:
       type: string
       enum: [planned, started, paused, completed, canceled]

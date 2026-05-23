@@ -329,6 +329,24 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/project-statuses": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List configurable project statuses for the authenticated workspace */
+    get: operations["listProjectStatuses"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Replace configurable project statuses for the authenticated workspace */
+    patch: operations["updateProjectStatuses"];
+    trace?: never;
+  };
   "/projects": {
     parameters: {
       query?: never;
@@ -744,6 +762,27 @@ export interface components {
     CreatePersonalAccessTokenResponse: {
       token: components["schemas"]["PersonalAccessToken"];
       value: string;
+    };
+    ProjectStatusConfig: {
+      id: string;
+      key: string;
+      name: string;
+      description: string;
+      color: string;
+      icon: string;
+      position: number;
+      isDefault: boolean;
+      projectCount: number;
+    };
+    ProjectStatusListResponse: {
+      statuses: components["schemas"]["ProjectStatusConfig"][];
+      totalProjects: number;
+      readOnly: boolean;
+      customStatusesSupported: boolean;
+      canManage: boolean;
+    };
+    UpdateProjectStatusesRequest: {
+      statuses: components["schemas"]["ProjectStatusConfig"][];
     };
     /** @enum {string} */
     ProjectStatus: "planned" | "started" | "paused" | "completed" | "canceled";
@@ -1886,6 +1925,52 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  listProjectStatuses: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Project statuses */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProjectStatusListResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateProjectStatuses: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateProjectStatusesRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated project statuses */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProjectStatusListResponse"];
         };
       };
       default: components["responses"]["Problem"];
