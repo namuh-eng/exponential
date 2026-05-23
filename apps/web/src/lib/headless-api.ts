@@ -69,6 +69,10 @@ export function headlessNotificationsEnabled() {
   return process.env.EXPONENTIAL_HEADLESS_NOTIFICATIONS === "true";
 }
 
+export function headlessLabelsEnabled() {
+  return process.env.EXPONENTIAL_HEADLESS_LABELS === "true";
+}
+
 export function createHeadlessClient(token: string) {
   return createExponentialClient({
     baseUrl: process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1",
@@ -137,6 +141,10 @@ export function createHeadlessProjectTemplatesClient(token: string) {
 }
 
 export function createHeadlessNotificationsClient(token: string) {
+  return createHeadlessClient(token);
+}
+
+export function createHeadlessLabelsClient(token: string) {
   return createHeadlessClient(token);
 }
 

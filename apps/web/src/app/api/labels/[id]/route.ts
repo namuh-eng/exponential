@@ -2,6 +2,11 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issueLabel, label, team } from "@/lib/db/schema";
+import {
+  createHeadlessLabelsClient,
+  headlessLabelsEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { validateScopedParentLabel } from "@/lib/label-parent-validation";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -34,6 +39,23 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await request.json();
+
+  if (headlessLabelsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessLabelsClient(token);
+    const { data, error, response } = await client.PATCH("/labels/{id}", {
+      params: { path: { id } },
+      body: body as never,
+    });
+    if (error)
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
 
   const updates: Partial<typeof label.$inferInsert> = { updatedAt: new Date() };
   if (body.name !== undefined) {

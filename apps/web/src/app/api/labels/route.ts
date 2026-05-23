@@ -2,6 +2,11 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issueLabel, label, team } from "@/lib/db/schema";
+import {
+  createHeadlessLabelsClient,
+  headlessLabelsEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { validateScopedParentLabel } from "@/lib/label-parent-validation";
 import { and, asc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -21,6 +26,23 @@ export async function GET(
   }
 
   const { searchParams } = new URL(request.url);
+
+  if (headlessLabelsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessLabelsClient(token);
+    const query = Object.fromEntries(searchParams.entries());
+    const { data, error, response } = await client.GET("/labels", {
+      params: { query },
+    } as never);
+    if (error)
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
   const scope = searchParams.get("scope") ?? "workspace";
   const teamId = searchParams.get("teamId");
   const includeArchived = searchParams.get("includeArchived") === "true";
@@ -110,6 +132,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
   }
   const body = await request.json();
+
+  if (headlessLabelsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessLabelsClient(token);
+    const { data, error, response } = await client.POST("/labels", {
+      body: body as never,
+    });
+    if (error)
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
   const { name, color, description, parentLabelId, teamId } = body;
   const trimmedName = typeof name === "string" ? name.trim() : "";
 

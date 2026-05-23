@@ -2,6 +2,11 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issueLabel, label, team } from "@/lib/db/schema";
+import {
+  createHeadlessLabelsClient,
+  headlessLabelsEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { and, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -37,6 +42,22 @@ export async function POST(request: Request) {
     destinationLabelId?: unknown;
     teamId?: unknown;
   };
+  if (headlessLabelsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessLabelsClient(token);
+    const { data, error, response } = await client.POST("/labels/bulk", {
+      body: body as never,
+    });
+    if (error)
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   const action = body.action;
   const labelIds = uniqueStrings(body.labelIds);
 
