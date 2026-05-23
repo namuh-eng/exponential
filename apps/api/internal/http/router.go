@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
+	"github.com/namuh-eng/exponential/apps/api/internal/comments"
 	"github.com/namuh-eng/exponential/apps/api/internal/issues"
 	"github.com/namuh-eng/exponential/apps/api/internal/observability"
 	"github.com/namuh-eng/exponential/apps/api/internal/projects"
@@ -38,9 +39,16 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 	})
 
 	authMiddleware := auth.Middleware{DB: db}
+	commentsHandler := comments.Handler{DB: db}
 	r.Route("/v1", func(v1 chi.Router) {
 		v1.Group(func(protected chi.Router) {
 			protected.Use(authMiddleware.Require)
+			protected.Post("/issues/{id}/comments", commentsHandler.CreateForIssue)
+			protected.Post("/issues/{id}/reactions", commentsHandler.ToggleIssueReaction)
+			protected.Delete("/issues/{id}/reactions", commentsHandler.DeleteIssueReaction)
+			protected.Patch("/comments/{id}", commentsHandler.Update)
+			protected.Delete("/comments/{id}", commentsHandler.Delete)
+			protected.Post("/comments/{id}/reactions", commentsHandler.ToggleCommentReaction)
 			protected.Mount("/issues", issues.Handler{DB: db}.Routes())
 			protected.Mount("/personal-access-tokens", tokens.Handler{DB: db}.Routes())
 			protected.Mount("/projects", projects.Handler{DB: db}.Routes())

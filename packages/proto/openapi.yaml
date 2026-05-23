@@ -99,6 +99,126 @@ paths:
                   success: { type: boolean }
         default:
           $ref: '#/components/responses/Problem'
+  /issues/{id}/comments:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: createIssueComment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCommentRequest'
+      responses:
+        '201':
+          description: Created comment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        default:
+          $ref: '#/components/responses/Problem'
+  /issues/{id}/reactions:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: toggleIssueReaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReactionRequest'
+      responses:
+        '200':
+          description: Issue reaction summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReactionSummaryList'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deleteIssueReaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReactionRequest'
+      responses:
+        '200':
+          description: Issue reaction summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReactionSummaryList'
+        default:
+          $ref: '#/components/responses/Problem'
+  /comments/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      operationId: updateComment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCommentRequest'
+      responses:
+        '200':
+          description: Updated comment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deleteComment
+      responses:
+        '200':
+          description: Deleted comment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /comments/{id}/reactions:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: toggleCommentReaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReactionRequest'
+      responses:
+        '200':
+          description: Comment reaction summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReactionSummaryList'
+        default:
+          $ref: '#/components/responses/Problem'
   /personal-access-tokens:
     get:
       operationId: listPersonalAccessTokens
@@ -533,6 +653,55 @@ components:
         title: { type: string }
         status: { type: integer }
         detail: { type: string }
+    CommentUser:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        image: { type: [string, 'null'] }
+    ReactionSummary:
+      type: object
+      required: [emoji, count]
+      properties:
+        emoji: { type: string }
+        count: { type: integer }
+        reacted: { type: boolean }
+        reactedByMe: { type: boolean }
+    ReactionSummaryList:
+      type: array
+      items: { $ref: '#/components/schemas/ReactionSummary' }
+    Comment:
+      type: object
+      required: [id, body, issue_id, user_id, user, owned_by_me, can_edit, can_delete, reactions, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        body: { type: string }
+        issue_id: { type: string, format: uuid }
+        user_id: { type: string }
+        user: { $ref: '#/components/schemas/CommentUser' }
+        owned_by_me: { type: boolean }
+        can_edit: { type: boolean }
+        can_delete: { type: boolean }
+        reactions:
+          type: array
+          items: { $ref: '#/components/schemas/ReactionSummary' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CreateCommentRequest:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1 }
+    UpdateCommentRequest:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1 }
+    ReactionRequest:
+      type: object
+      required: [emoji]
+      properties:
+        emoji: { type: string, minLength: 1, maxLength: 50 }
     PersonalAccessToken:
       type: object
       required: [id, name, token_prefix, scopes, created_at]

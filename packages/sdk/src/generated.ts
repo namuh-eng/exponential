@@ -40,6 +40,78 @@ export interface paths {
     patch: operations["updateIssue"];
     trace?: never;
   };
+  "/issues/{id}/comments": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createIssueComment"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/issues/{id}/reactions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["toggleIssueReaction"];
+    delete: operations["deleteIssueReaction"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/comments/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations["deleteComment"];
+    options?: never;
+    head?: never;
+    patch: operations["updateComment"];
+    trace?: never;
+  };
+  "/comments/{id}/reactions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["toggleCommentReaction"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/personal-access-tokens": {
     parameters: {
       query?: never;
@@ -258,6 +330,43 @@ export interface components {
       title: string;
       status: number;
       detail?: string;
+    };
+    CommentUser: {
+      name: string;
+      image?: string | null;
+    };
+    ReactionSummary: {
+      emoji: string;
+      count: number;
+      reacted?: boolean;
+      reactedByMe?: boolean;
+    };
+    ReactionSummaryList: components["schemas"]["ReactionSummary"][];
+    Comment: {
+      /** Format: uuid */
+      id: string;
+      body: string;
+      /** Format: uuid */
+      issue_id: string;
+      user_id: string;
+      user: components["schemas"]["CommentUser"];
+      owned_by_me: boolean;
+      can_edit: boolean;
+      can_delete: boolean;
+      reactions: components["schemas"]["ReactionSummary"][];
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    CreateCommentRequest: {
+      body: string;
+    };
+    UpdateCommentRequest: {
+      body: string;
+    };
+    ReactionRequest: {
+      emoji: string;
     };
     PersonalAccessToken: {
       /** Format: uuid */
@@ -784,6 +893,164 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Issue"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createIssueComment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateCommentRequest"];
+      };
+    };
+    responses: {
+      /** @description Created comment */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Comment"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  toggleIssueReaction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReactionRequest"];
+      };
+    };
+    responses: {
+      /** @description Issue reaction summary */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReactionSummaryList"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  deleteIssueReaction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReactionRequest"];
+      };
+    };
+    responses: {
+      /** @description Issue reaction summary */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReactionSummaryList"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  deleteComment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted comment */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateComment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateCommentRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated comment */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Comment"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  toggleCommentReaction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReactionRequest"];
+      };
+    };
+    responses: {
+      /** @description Comment reaction summary */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReactionSummaryList"];
         };
       };
       default: components["responses"]["Problem"];

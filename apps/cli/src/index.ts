@@ -36,6 +36,11 @@ async function main() {
     return;
   }
 
+  if (resource === "comments") {
+    await commentCommand();
+    return;
+  }
+
   if (resource !== "issues") {
     usage();
   }
@@ -160,6 +165,52 @@ async function workspaceCommand() {
     const { data, error, response } = await client.POST("/workspaces/invite", {
       body: { invites: [{ email, role }] },
     });
+    printResult(data, error, response.status);
+    return;
+  }
+
+  usage();
+}
+
+async function commentCommand() {
+  if (action === "create") {
+    const issueId = requireOption(args, "issue-id");
+    const body = requireOption(args, "body");
+    const { data, error, response } = await client.POST(
+      "/issues/{id}/comments",
+      { params: { path: { id: issueId } }, body: { body } },
+    );
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "update") {
+    const id = requireOption(args, "id");
+    const body = requireOption(args, "body");
+    const { data, error, response } = await client.PATCH("/comments/{id}", {
+      params: { path: { id } },
+      body: { body },
+    });
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "delete") {
+    const id = requireOption(args, "id");
+    const { data, error, response } = await client.DELETE("/comments/{id}", {
+      params: { path: { id } },
+    });
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "react") {
+    const id = requireOption(args, "id");
+    const emoji = requireOption(args, "emoji");
+    const { data, error, response } = await client.POST(
+      "/comments/{id}/reactions",
+      { params: { path: { id } }, body: { emoji } },
+    );
     printResult(data, error, response.status);
     return;
   }
@@ -352,7 +403,11 @@ function usage(): never {
   exponential cycles list --team-key <key>
   exponential cycles create --team-key <key> --start-date YYYY-MM-DD --end-date YYYY-MM-DD
   exponential cycles update --team-key <key> --id <uuid> [--name <name>]
-  exponential cycles delete --team-key <key> --id <uuid>`);
+  exponential cycles delete --team-key <key> --id <uuid>
+  exponential comments create --issue-id <id-or-identifier> --body <text>
+  exponential comments update --id <uuid> --body <text>
+  exponential comments delete --id <uuid>
+  exponential comments react --id <uuid> --emoji <emoji>`);
   process.exit(1);
 }
 
