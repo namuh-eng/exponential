@@ -7,6 +7,10 @@ import {
   workflowState,
   workspace,
 } from "@/lib/db/schema";
+import {
+  createHeadlessInboundClient,
+  headlessInboundEnabled,
+} from "@/lib/headless-api";
 import { normalizeIssueDescriptionHtml } from "@/lib/issue-description";
 import { insertIssueHistoryEvent } from "@/lib/issue-history";
 import {
@@ -31,6 +35,26 @@ function stringValue(value: unknown) {
 }
 
 export async function POST(request: Request) {
+  if (headlessInboundEnabled()) {
+    const body = (await request
+      .json()
+      .catch(() => null)) as InboundEmailPayload | null;
+    const client = createHeadlessInboundClient();
+    const { data, error, response } = await client.POST("/inbound/team-email", {
+      body: body as never,
+      headers: {
+        "x-inbound-email-secret":
+          request.headers.get("x-inbound-email-secret") ?? "",
+      },
+    } as never);
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   if (!isInboundEmailRequestAuthorized(request.headers)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
