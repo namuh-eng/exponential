@@ -137,6 +137,8 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/", h.Create)
 	r.Get("/current", h.GetCurrent)
 	r.Patch("/current", h.UpdateCurrent)
+	r.Get("/current/security", h.GetCurrentSecurity)
+	r.Patch("/current/security", h.UpdateCurrentSecurity)
 	r.Get("/current/billing", h.GetBilling)
 	r.Patch("/current/billing", h.UpdateBilling)
 	r.Delete("/current", h.DeleteCurrent)

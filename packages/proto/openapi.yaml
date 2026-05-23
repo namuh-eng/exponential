@@ -2381,6 +2381,30 @@ paths:
                 $ref: '#/components/schemas/CreateWorkspaceResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /workspaces/current/security:
+    get:
+      operationId: getCurrentWorkspaceSecurity
+      responses:
+        '200':
+          description: Current workspace security settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceSecurityResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateCurrentWorkspaceSecurity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateWorkspaceSecurityRequest' }
+      responses:
+        '200':
+          description: Updated current workspace security settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceSecurityResponse' }
+        default: { $ref: '#/components/responses/Problem' }
   /workspaces/current/security/saml:
     patch:
       operationId: updateCurrentWorkspaceSaml
@@ -4570,6 +4594,36 @@ components:
         role: { $ref: '#/components/schemas/WorkspaceRole' }
         workspaceName: { type: string }
         workspaceSlug: { type: string }
+    WorkspaceSecurityResponse:
+      type: object
+      required: [security]
+      properties:
+        security:
+          type: object
+          additionalProperties: true
+    UpdateWorkspaceSecurityRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        inviteLinkEnabled: { type: boolean }
+        approvedEmailDomains:
+          type: array
+          items: { type: string }
+        authentication:
+          type: object
+          additionalProperties: true
+        permissions:
+          type: object
+          additionalProperties: true
+        restrictFileUploads: { type: boolean }
+        improveAi: { type: boolean }
+        webSearch: { type: boolean }
+        hipaa: { type: boolean }
+        ipRestrictions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
     WorkspaceImportPreviewRequest:
       type: object
       required: [csv, teamId, mapping]

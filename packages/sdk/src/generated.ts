@@ -1513,6 +1513,22 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/workspaces/current/security": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getCurrentWorkspaceSecurity"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations["updateCurrentWorkspaceSecurity"];
+    trace?: never;
+  };
   "/workspaces/current/security/saml": {
     parameters: {
       query?: never;
@@ -3170,6 +3186,30 @@ export interface components {
       role: components["schemas"]["WorkspaceRole"];
       workspaceName: string;
       workspaceSlug: string;
+    };
+    WorkspaceSecurityResponse: {
+      security: {
+        [key: string]: unknown;
+      };
+    };
+    UpdateWorkspaceSecurityRequest: {
+      inviteLinkEnabled?: boolean;
+      approvedEmailDomains?: string[];
+      authentication?: {
+        [key: string]: unknown;
+      };
+      permissions?: {
+        [key: string]: unknown;
+      };
+      restrictFileUploads?: boolean;
+      improveAi?: boolean;
+      webSearch?: boolean;
+      hipaa?: boolean;
+      ipRestrictions?: {
+        [key: string]: unknown;
+      }[];
+    } & {
+      [key: string]: unknown;
     };
     WorkspaceImportPreviewRequest: {
       csv: string;
@@ -7539,6 +7579,52 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["CreateWorkspaceResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getCurrentWorkspaceSecurity: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current workspace security settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceSecurityResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateCurrentWorkspaceSecurity: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateWorkspaceSecurityRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated current workspace security settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceSecurityResponse"];
         };
       };
       default: components["responses"]["Problem"];
