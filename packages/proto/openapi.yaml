@@ -394,6 +394,37 @@ paths:
                 $ref: '#/components/schemas/AccountPreferencesResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /agent/runs:
+    get:
+      operationId: listAgentRuns
+      summary: List workspace agent runs
+      responses:
+        '200':
+          description: Agent runs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRunListResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createAgentRun
+      summary: Create an agent run
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentRunRequest'
+      responses:
+        '201':
+          description: Created agent run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRunResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /analytics:
     get:
       operationId: analyticsNamespace
@@ -2323,6 +2354,81 @@ components:
       properties:
         slug: { type: string }
         authentication: { $ref: '#/components/schemas/WorkspaceAuthenticationSettings' }
+    AgentGuidanceEntry:
+      type: object
+      required: [Source, Label, Instructions]
+      properties:
+        Source: { type: string }
+        Label: { type: string }
+        Instructions: { type: string }
+    AgentGuidance:
+      type: object
+      required: [entries, effectiveInstructions, autoFixEnabled]
+      properties:
+        entries:
+          type: array
+          items: { $ref: '#/components/schemas/AgentGuidanceEntry' }
+        effectiveInstructions: { type: string }
+        autoFixEnabled: { type: boolean }
+        teamKey: { type: [string, 'null'] }
+    AgentSuggestion:
+      type: object
+      required: [id, title, summary, target, contextUrl, status]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        target: { type: string }
+        contextUrl: { type: string }
+        isExternalContext: { type: boolean }
+        status: { type: string, enum: [open, accepted, declined] }
+    AgentRun:
+      type: object
+      required: [id, title, prompt, teamKey, promptConfig, context, status, owner, target, createdAt, updatedAt, output, logs, suggestions]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        prompt: { type: string }
+        teamKey: { type: string }
+        promptConfig:
+          type: object
+          required: [guidance]
+          properties:
+            guidance: { $ref: '#/components/schemas/AgentGuidance' }
+        context: { type: string }
+        status: { type: string, enum: [queued, running, needs_review, completed] }
+        owner: { type: string }
+        target: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        output: { type: string }
+        logs:
+          type: array
+          items: { type: string }
+        suggestions:
+          type: array
+          items: { $ref: '#/components/schemas/AgentSuggestion' }
+    AgentRunListResponse:
+      type: object
+      required: [runs, canCreateRuns]
+      properties:
+        runs:
+          type: array
+          items: { $ref: '#/components/schemas/AgentRun' }
+        canCreateRuns: { type: boolean }
+    AgentRunResponse:
+      type: object
+      required: [run]
+      properties:
+        run: { $ref: '#/components/schemas/AgentRun' }
+    CreateAgentRunRequest:
+      type: object
+      required: [title, prompt]
+      properties:
+        title: { type: string }
+        prompt: { type: string }
+        teamKey: { type: string }
+        context: { type: string }
     AuthProviderCapabilitiesResponse:
       type: object
       required: [providers, workspace]

@@ -225,6 +225,24 @@ export interface paths {
     patch: operations["updateAccountPreferences"];
     trace?: never;
   };
+  "/agent/runs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List workspace agent runs */
+    get: operations["listAgentRuns"];
+    put?: never;
+    /** Create an agent run */
+    post: operations["createAgentRun"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/analytics": {
     parameters: {
       query?: never;
@@ -1473,6 +1491,61 @@ export interface components {
     AuthProviderWorkspace: {
       slug: string;
       authentication: components["schemas"]["WorkspaceAuthenticationSettings"];
+    };
+    AgentGuidanceEntry: {
+      Source: string;
+      Label: string;
+      Instructions: string;
+    };
+    AgentGuidance: {
+      entries: components["schemas"]["AgentGuidanceEntry"][];
+      effectiveInstructions: string;
+      autoFixEnabled: boolean;
+      teamKey?: string | null;
+    };
+    AgentSuggestion: {
+      id: string;
+      title: string;
+      summary: string;
+      target: string;
+      contextUrl: string;
+      isExternalContext?: boolean;
+      /** @enum {string} */
+      status: "open" | "accepted" | "declined";
+    };
+    AgentRun: {
+      id: string;
+      title: string;
+      prompt: string;
+      teamKey: string;
+      promptConfig: {
+        guidance: components["schemas"]["AgentGuidance"];
+      };
+      context: string;
+      /** @enum {string} */
+      status: "queued" | "running" | "needs_review" | "completed";
+      owner: string;
+      target: string;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+      output: string;
+      logs: string[];
+      suggestions: components["schemas"]["AgentSuggestion"][];
+    };
+    AgentRunListResponse: {
+      runs: components["schemas"]["AgentRun"][];
+      canCreateRuns: boolean;
+    };
+    AgentRunResponse: {
+      run: components["schemas"]["AgentRun"];
+    };
+    CreateAgentRunRequest: {
+      title: string;
+      prompt: string;
+      teamKey?: string;
+      context?: string;
     };
     AuthProviderCapabilitiesResponse: {
       providers: {
@@ -3533,6 +3606,52 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["AccountPreferencesResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  listAgentRuns: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Agent runs */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AgentRunListResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createAgentRun: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateAgentRunRequest"];
+      };
+    };
+    responses: {
+      /** @description Created agent run */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AgentRunResponse"];
         };
       };
       default: components["responses"]["Problem"];
