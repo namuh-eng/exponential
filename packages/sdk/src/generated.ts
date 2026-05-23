@@ -1513,6 +1513,22 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/workspaces/current/api": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getCurrentWorkspaceApi"];
+    put?: never;
+    post: operations["mutateCurrentWorkspaceApi"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations["updateCurrentWorkspaceApiSettings"];
+    trace?: never;
+  };
   "/workspaces/current/security": {
     parameters: {
       query?: never;
@@ -3186,6 +3202,33 @@ export interface components {
       role: components["schemas"]["WorkspaceRole"];
       workspaceName: string;
       workspaceSlug: string;
+    };
+    WorkspaceApiResponse: {
+      api: {
+        [key: string]: unknown;
+      };
+      createdCredential?: {
+        [key: string]: unknown;
+      };
+    };
+    UpdateWorkspaceApiSettingsRequest: {
+      /** @enum {string} */
+      permissionLevel: "admins" | "members" | "anyone";
+    };
+    WorkspaceApiActionRequest: {
+      action: string;
+      id?: string;
+      name?: string;
+      label?: string;
+      url?: string;
+      events?: string[];
+      enabled?: boolean;
+      redirectUrl?: string;
+      redirectUrls?: string[];
+      scopes?: string[];
+      description?: string;
+    } & {
+      [key: string]: unknown;
     };
     WorkspaceSecurityResponse: {
       security: {
@@ -7579,6 +7622,77 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["CreateWorkspaceResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getCurrentWorkspaceApi: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current workspace API settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceApiResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  mutateCurrentWorkspaceApi: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["WorkspaceApiActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Mutated workspace API resources */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceApiResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateCurrentWorkspaceApiSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateWorkspaceApiSettingsRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated workspace API settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceApiResponse"];
         };
       };
       default: components["responses"]["Problem"];

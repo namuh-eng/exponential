@@ -2381,6 +2381,44 @@ paths:
                 $ref: '#/components/schemas/CreateWorkspaceResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /workspaces/current/api:
+    get:
+      operationId: getCurrentWorkspaceApi
+      responses:
+        '200':
+          description: Current workspace API settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceApiResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateCurrentWorkspaceApiSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateWorkspaceApiSettingsRequest' }
+      responses:
+        '200':
+          description: Updated workspace API settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceApiResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: mutateCurrentWorkspaceApi
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkspaceApiActionRequest' }
+      responses:
+        '200':
+          description: Mutated workspace API resources
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceApiResponse' }
+        default: { $ref: '#/components/responses/Problem' }
   /workspaces/current/security:
     get:
       operationId: getCurrentWorkspaceSecurity
@@ -4594,6 +4632,43 @@ components:
         role: { $ref: '#/components/schemas/WorkspaceRole' }
         workspaceName: { type: string }
         workspaceSlug: { type: string }
+    WorkspaceApiResponse:
+      type: object
+      required: [api]
+      properties:
+        api:
+          type: object
+          additionalProperties: true
+        createdCredential:
+          type: object
+          additionalProperties: true
+    UpdateWorkspaceApiSettingsRequest:
+      type: object
+      required: [permissionLevel]
+      properties:
+        permissionLevel: { type: string, enum: [admins, members, anyone] }
+    WorkspaceApiActionRequest:
+      type: object
+      additionalProperties: true
+      required: [action]
+      properties:
+        action: { type: string }
+        id: { type: string }
+        name: { type: string }
+        label: { type: string }
+        url: { type: string }
+        events:
+          type: array
+          items: { type: string }
+        enabled: { type: boolean }
+        redirectUrl: { type: string }
+        redirectUrls:
+          type: array
+          items: { type: string }
+        scopes:
+          type: array
+          items: { type: string }
+        description: { type: string }
     WorkspaceSecurityResponse:
       type: object
       required: [security]

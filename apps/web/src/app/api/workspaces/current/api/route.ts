@@ -27,6 +27,11 @@ import {
 import { db } from "@/lib/db";
 import { apiKey, member, user, webhook, workspace } from "@/lib/db/schema";
 import {
+  createHeadlessWorkspacesClient,
+  headlessWorkspacesEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
+import {
   evaluateWorkspaceIpAccess,
   workspaceIpRestrictionError,
 } from "@/lib/workspace-ip-restrictions";
@@ -223,6 +228,23 @@ export async function GET(request?: Request) {
     return error;
   }
 
+  if (headlessWorkspacesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: access.userId,
+      workspaceId: access.workspaceId,
+    });
+    const client = createHeadlessWorkspacesClient(token);
+    const { data, error, response } = await client.GET(
+      "/workspaces/current/api",
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   return NextResponse.json({
     api: await buildApiPayload(access),
   });
@@ -249,6 +271,26 @@ export async function PATCH(request: Request) {
     );
   }
   const permissionLevel = body.permissionLevel;
+
+  if (headlessWorkspacesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: access.userId,
+      workspaceId: access.workspaceId,
+    });
+    const client = createHeadlessWorkspacesClient(token);
+    const { data, error, response } = await client.PATCH(
+      "/workspaces/current/api",
+      {
+        body: { permissionLevel },
+      },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
 
   const currentSettings = asRecord(access.settings);
   const currentSecurity = asRecord(currentSettings.security);
@@ -347,6 +389,26 @@ export async function POST(request: Request) {
 
   if (!body?.action) {
     return NextResponse.json({ error: "Action is required." }, { status: 400 });
+  }
+
+  if (headlessWorkspacesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: access.userId,
+      workspaceId: access.workspaceId,
+    });
+    const client = createHeadlessWorkspacesClient(token);
+    const { data, error, response } = await client.POST(
+      "/workspaces/current/api",
+      {
+        body: body as never,
+      },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   const permissionLevel = readPermissionLevel(
