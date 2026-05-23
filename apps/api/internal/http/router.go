@@ -8,18 +8,28 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/issues"
+	"github.com/namuh-eng/exponential/apps/api/internal/observability"
 	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
 	"go.uber.org/zap"
 )
 
 // NewRouter wires API routes.
 func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
+	metrics := &observability.Metrics{}
 	r := chi.NewRouter()
+	r.Use(observability.RequestLogger(logger, metrics))
 	r.Get("/healthz", func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(stdhttp.StatusOK)
 		if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
 			logger.Error("write health response", zap.Error(err))
+		}
+	})
+	r.Get("/metrics/red", func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(stdhttp.StatusOK)
+		if err := json.NewEncoder(w).Encode(observability.Snapshot(metrics)); err != nil {
+			logger.Error("write metrics response", zap.Error(err))
 		}
 	})
 
