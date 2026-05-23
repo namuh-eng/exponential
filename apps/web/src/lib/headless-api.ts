@@ -23,6 +23,10 @@ export function headlessAccountProfileEnabled() {
   return process.env.EXPONENTIAL_HEADLESS_ACCOUNT_PROFILE === "true";
 }
 
+export function headlessAccountWorkspaceLeaveEnabled() {
+  return process.env.EXPONENTIAL_HEADLESS_ACCOUNT_WORKSPACE_LEAVE === "true";
+}
+
 export function headlessViewsEnabled() {
   return process.env.EXPONENTIAL_HEADLESS_VIEWS === "true";
 }
@@ -69,6 +73,10 @@ export function createHeadlessAccountPreferencesClient(token: string) {
 }
 
 export function createHeadlessAccountProfileClient(token: string) {
+  return createHeadlessClient(token);
+}
+
+export function createHeadlessAccountWorkspaceLeaveClient(token: string) {
   return createHeadlessClient(token);
 }
 
