@@ -2,6 +2,11 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { recurringIssue, workflowState } from "@/lib/db/schema";
 import {
+  createHeadlessTeamsClient,
+  headlessTeamsEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
+import {
   type RecurringIssueCadenceConfig,
   computeNextRunAt,
   formatCadence,
@@ -147,6 +152,24 @@ export async function GET(
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
+  if (headlessTeamsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: teamRecord.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const { data, error, response } = await client.GET(
+      "/teams/{key}/recurring-issues",
+      { params: { path: { key } } },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   const records = await db
     .select()
     .from(recurringIssue)
@@ -176,6 +199,28 @@ export async function POST(
   });
   if (!teamRecord) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
+  }
+
+  if (headlessTeamsEnabled()) {
+    const body = await request.json().catch(() => ({}));
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: teamRecord.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const { data, error, response } = await client.POST(
+      "/teams/{key}/recurring-issues",
+      {
+        params: { path: { key } },
+        body: body as never,
+      },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   const body = (await request.json().catch(() => ({}))) as RecurringIssueInput;

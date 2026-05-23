@@ -2,6 +2,11 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { recurringIssue } from "@/lib/db/schema";
 import {
+  createHeadlessTeamsClient,
+  headlessTeamsEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
+import {
   type RecurringIssueCadenceConfig,
   computeNextRunAt,
   formatCadence,
@@ -81,6 +86,28 @@ export async function PATCH(
       { error: "Recurring issue not found" },
       { status: 404 },
     );
+  }
+
+  if (headlessTeamsEnabled()) {
+    const body = await request.json().catch(() => ({}));
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: record.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const { data, error, response } = await client.PATCH(
+      "/teams/{key}/recurring-issues/{id}",
+      {
+        params: { path: { key, id } },
+        body: body as never,
+      },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   const body = (await request.json().catch(() => ({}))) as UpdateInput;
@@ -219,6 +246,24 @@ export async function DELETE(
       { error: "Recurring issue not found" },
       { status: 404 },
     );
+  }
+
+  if (headlessTeamsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: record.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const { error, response } = await client.DELETE(
+      "/teams/{key}/recurring-issues/{id}",
+      { params: { path: { key, id } } },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return new NextResponse(null, { status: (response as Response).status });
   }
 
   await db

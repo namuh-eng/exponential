@@ -1122,6 +1122,43 @@ export interface paths {
     patch: operations["updateTeamStatus"];
     trace?: never;
   };
+  "/teams/{key}/recurring-issues": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    get: operations["listTeamRecurringIssues"];
+    put?: never;
+    post: operations["createTeamRecurringIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/teams/{key}/recurring-issues/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations["deleteTeamRecurringIssue"];
+    options?: never;
+    head?: never;
+    patch: operations["updateTeamRecurringIssue"];
+    trace?: never;
+  };
   "/teams/{key}/cycles": {
     parameters: {
       query?: never;
@@ -2486,6 +2523,71 @@ export interface components {
       id: string;
       /** Format: uuid */
       replacementStatusId?: string;
+    };
+    RecurringIssue: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      workspaceId: string;
+      /** Format: uuid */
+      teamId: string;
+      creatorId?: string | null;
+      title: string;
+      description?: string | null;
+      /** Format: uuid */
+      stateId?: string | null;
+      assigneeId?: string | null;
+      /** @enum {string} */
+      priority: "none" | "urgent" | "high" | "medium" | "low";
+      labelIds: string[];
+      /** Format: uuid */
+      projectId?: string | null;
+      cadenceConfig: {
+        [key: string]: unknown;
+      };
+      timezone: string;
+      /** Format: date-time */
+      startAt?: string | null;
+      /** Format: date-time */
+      nextRunAt: string;
+      enabled: boolean;
+      /** Format: date-time */
+      lastRunAt?: string | null;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+      cadenceLabel: string;
+    };
+    RecurringIssueListResponse: {
+      team: {
+        /** Format: uuid */
+        id: string;
+        name: string;
+        key: string;
+      };
+      recurringIssues: components["schemas"]["RecurringIssue"][];
+    };
+    RecurringIssueRequest: {
+      title?: string;
+      description?: string | null;
+      cadenceConfig?: {
+        [key: string]: unknown;
+      };
+      /** Format: date-time */
+      startAt?: string | null;
+      timezone?: string;
+      enabled?: boolean;
+      /** Format: uuid */
+      stateId?: string | null;
+      assigneeId?: string | null;
+      /** @enum {string} */
+      priority?: "none" | "urgent" | "high" | "medium" | "low";
+      labelIds?: string[];
+      /** Format: uuid */
+      projectId?: string | null;
+    } & {
+      [key: string]: unknown;
     };
     CreateIssueOptionsTeam: {
       /** Format: uuid */
@@ -5805,6 +5907,106 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["TeamStatusesResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  listTeamRecurringIssues: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Team recurring issues */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RecurringIssueListResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createTeamRecurringIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RecurringIssueRequest"];
+      };
+    };
+    responses: {
+      /** @description Created recurring issue */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RecurringIssue"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  deleteTeamRecurringIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted recurring issue */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateTeamRecurringIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RecurringIssueRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated recurring issue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RecurringIssue"];
         };
       };
       default: components["responses"]["Problem"];

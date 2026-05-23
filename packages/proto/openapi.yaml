@@ -1719,6 +1719,74 @@ paths:
                 $ref: '#/components/schemas/TeamStatusesResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /teams/{key}/recurring-issues:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listTeamRecurringIssues
+      responses:
+        '200':
+          description: Team recurring issues
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringIssueListResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createTeamRecurringIssue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecurringIssueRequest'
+      responses:
+        '201':
+          description: Created recurring issue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringIssue'
+        default:
+          $ref: '#/components/responses/Problem'
+  /teams/{key}/recurring-issues/{id}:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      operationId: updateTeamRecurringIssue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecurringIssueRequest'
+      responses:
+        '200':
+          description: Updated recurring issue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringIssue'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deleteTeamRecurringIssue
+      responses:
+        '204':
+          description: Deleted recurring issue
+        default:
+          $ref: '#/components/responses/Problem'
   /teams/{key}/cycles:
     parameters:
       - name: key
@@ -3604,6 +3672,63 @@ components:
       properties:
         id: { type: string, format: uuid }
         replacementStatusId: { type: string, format: uuid }
+    RecurringIssue:
+      type: object
+      required: [id, workspaceId, teamId, title, priority, labelIds, cadenceConfig, timezone, nextRunAt, enabled, createdAt, updatedAt, cadenceLabel]
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        teamId: { type: string, format: uuid }
+        creatorId: { type: [string, 'null'] }
+        title: { type: string }
+        description: { type: [string, 'null'] }
+        stateId: { type: [string, 'null'], format: uuid }
+        assigneeId: { type: [string, 'null'] }
+        priority: { type: string, enum: [none, urgent, high, medium, low] }
+        labelIds:
+          type: array
+          items: { type: string }
+        projectId: { type: [string, 'null'], format: uuid }
+        cadenceConfig: { type: object, additionalProperties: true }
+        timezone: { type: string }
+        startAt: { type: [string, 'null'], format: date-time }
+        nextRunAt: { type: string, format: date-time }
+        enabled: { type: boolean }
+        lastRunAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        cadenceLabel: { type: string }
+    RecurringIssueListResponse:
+      type: object
+      required: [team, recurringIssues]
+      properties:
+        team:
+          type: object
+          required: [id, name, key]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            key: { type: string }
+        recurringIssues:
+          type: array
+          items: { $ref: '#/components/schemas/RecurringIssue' }
+    RecurringIssueRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        title: { type: string, minLength: 1, maxLength: 500 }
+        description: { type: [string, 'null'] }
+        cadenceConfig: { type: object, additionalProperties: true }
+        startAt: { type: [string, 'null'], format: date-time }
+        timezone: { type: string }
+        enabled: { type: boolean }
+        stateId: { type: [string, 'null'], format: uuid }
+        assigneeId: { type: [string, 'null'] }
+        priority: { type: string, enum: [none, urgent, high, medium, low] }
+        labelIds:
+          type: array
+          items: { type: string }
+        projectId: { type: [string, 'null'], format: uuid }
     CreateIssueOptionsTeam:
       type: object
       required: [id, name, key, cyclesEnabled, estimateType]
