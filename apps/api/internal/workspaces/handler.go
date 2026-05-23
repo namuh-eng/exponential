@@ -3,12 +3,15 @@ package workspaces
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -143,6 +146,10 @@ func (h Handler) Routes() chi.Router {
 	r.Delete("/members", h.RemoveMemberOrInvitation)
 	r.Post("/invite", h.Invite)
 	r.Post("/imports/preview", h.PreviewImport)
+	r.Patch("/current/security/saml", h.UpdateSAML)
+	r.Patch("/current/security/scim", h.UpdateSCIM)
+	r.Post("/current/security/scim", h.CreateSCIMToken)
+	r.Delete("/current/security/scim/tokens/{tokenId}", h.RevokeSCIMToken)
 	r.Get("/current/applications", h.ListApplications)
 	r.Delete("/current/applications/{id}", h.DeleteApplication)
 	r.Get("/current/sla", h.GetSLA)
@@ -523,6 +530,187 @@ type applicationOwner struct {
 type permissionGroup struct {
 	Label        string   `json:"label"`
 	Descriptions []string `json:"descriptions"`
+}
+
+type samlSettings struct {
+	Enabled      bool     `json:"enabled"`
+	Domains      []string `json:"domains"`
+	IDPSSOURL    string   `json:"idpSsoUrl"`
+	EntityID     string   `json:"entityId"`
+	Certificate  string   `json:"certificate"`
+	MetadataURL  string   `json:"metadataUrl"`
+	LastTestedAt *string  `json:"lastTestedAt"`
+	Status       string   `json:"status"`
+	LastError    *string  `json:"lastError"`
+}
+
+type scimToken struct {
+	ID         string  `json:"id"`
+	Name       string  `json:"name"`
+	Prefix     string  `json:"prefix"`
+	TokenHash  string  `json:"tokenHash,omitempty"`
+	CreatedAt  string  `json:"createdAt"`
+	RevokedAt  *string `json:"revokedAt"`
+	LastUsedAt *string `json:"lastUsedAt"`
+}
+
+type publicScimToken struct {
+	ID         string  `json:"id"`
+	Name       string  `json:"name"`
+	Prefix     string  `json:"prefix"`
+	CreatedAt  string  `json:"createdAt"`
+	RevokedAt  *string `json:"revokedAt"`
+	LastUsedAt *string `json:"lastUsedAt"`
+}
+
+type scimSettings struct {
+	Enabled    bool        `json:"enabled"`
+	BaseURL    string      `json:"baseUrl"`
+	Tokens     []scimToken `json:"tokens"`
+	LastSyncAt *string     `json:"lastSyncAt"`
+	Status     string      `json:"status"`
+}
+
+type publicScimSettings struct {
+	Enabled    bool              `json:"enabled"`
+	BaseURL    string            `json:"baseUrl"`
+	Tokens     []publicScimToken `json:"tokens"`
+	LastSyncAt *string           `json:"lastSyncAt"`
+	Status     string            `json:"status"`
+}
+
+func (h Handler) UpdateSAML(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	if !isManager(p.Role) {
+		problem.Write(w, 403, "You do not have permission to manage SAML settings", "")
+		return
+	}
+	settings, err := h.workspaceSettings(r.Context(), p.WorkspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "No active workspace found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Update SAML settings failed", err.Error())
+		return
+	}
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		problem.Write(w, 400, "Invalid JSON body", err.Error())
+		return
+	}
+	saml := normalizeSAMLInput(body, readSAMLSettings(settings))
+	if validation := validateSAMLSettings(saml); validation != "" {
+		problem.Write(w, 400, validation, "")
+		return
+	}
+	security := recordFromAny(settings["security"])
+	security["saml"] = saml
+	settings["security"] = security
+	if err := h.saveWorkspaceSettings(r.Context(), p.WorkspaceID, settings); err != nil {
+		problem.Write(w, 500, "Update SAML settings failed", err.Error())
+		return
+	}
+	problem.JSON(w, 200, map[string]any{"saml": saml})
+}
+
+func (h Handler) UpdateSCIM(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	if !isManager(p.Role) {
+		problem.Write(w, 403, "You do not have permission to manage SCIM settings", "")
+		return
+	}
+	settings, err := h.workspaceSettings(r.Context(), p.WorkspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "No active workspace found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Update SCIM settings failed", err.Error())
+		return
+	}
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		problem.Write(w, 400, "Invalid JSON", err.Error())
+		return
+	}
+	enabled, ok := body["enabled"].(bool)
+	if !ok {
+		problem.Write(w, 400, "SCIM enabled must be a boolean", "")
+		return
+	}
+	scim := readSCIMSettings(settings, scimBaseURL(r, p.WorkspaceID))
+	scim.Enabled = enabled
+	if enabled {
+		scim.Status = "enabled"
+	} else {
+		scim.Status = "disabled"
+	}
+	if err := h.storeSCIMSettings(r.Context(), p.WorkspaceID, settings, scim); err != nil {
+		problem.Write(w, 500, "Update SCIM settings failed", err.Error())
+		return
+	}
+	problem.JSON(w, 200, map[string]any{"scim": publicSCIM(scim)})
+}
+
+func (h Handler) CreateSCIMToken(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	if !isManager(p.Role) {
+		problem.Write(w, 403, "You do not have permission to manage SCIM settings", "")
+		return
+	}
+	settings, err := h.workspaceSettings(r.Context(), p.WorkspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "No active workspace found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Create SCIM token failed", err.Error())
+		return
+	}
+	var body map[string]any
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	secret, token := createSCIMToken(asStringValue(body["name"]))
+	scim := readSCIMSettings(settings, scimBaseURL(r, p.WorkspaceID))
+	scim.Enabled = true
+	scim.Status = "enabled"
+	scim.Tokens = append(scim.Tokens, token)
+	if err := h.storeSCIMSettings(r.Context(), p.WorkspaceID, settings, scim); err != nil {
+		problem.Write(w, 500, "Create SCIM token failed", err.Error())
+		return
+	}
+	created := publicToken(token)
+	problem.JSON(w, 200, map[string]any{"token": secret, "scim": publicSCIM(scim), "created": created})
+}
+
+func (h Handler) RevokeSCIMToken(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	if !isManager(p.Role) {
+		problem.Write(w, 403, "You do not have permission to manage SCIM settings", "")
+		return
+	}
+	settings, err := h.workspaceSettings(r.Context(), p.WorkspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "No active workspace found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Revoke SCIM token failed", err.Error())
+		return
+	}
+	tokenID := chi.URLParam(r, "tokenId")
+	scim := readSCIMSettings(settings, scimBaseURL(r, p.WorkspaceID))
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	for idx := range scim.Tokens {
+		if scim.Tokens[idx].ID == tokenID && scim.Tokens[idx].RevokedAt == nil {
+			scim.Tokens[idx].RevokedAt = &now
+		}
+	}
+	if err := h.storeSCIMSettings(r.Context(), p.WorkspaceID, settings, scim); err != nil {
+		problem.Write(w, 500, "Revoke SCIM token failed", err.Error())
+		return
+	}
+	problem.JSON(w, 200, map[string]any{"scim": publicSCIM(scim)})
 }
 
 func (h Handler) ListApplications(w http.ResponseWriter, r *http.Request) {
@@ -2388,4 +2576,213 @@ func formatOptionalTime(value *time.Time) *string {
 	}
 	formatted := value.UTC().Format(time.RFC3339)
 	return &formatted
+}
+
+func readSAMLSettings(settings map[string]any) samlSettings {
+	security := recordFromAny(settings["security"])
+	saml := recordFromAny(firstNonNil(security["saml"], settings["saml"], settings["sso"]))
+	url := firstString(saml["idpSsoUrl"], saml["ssoUrl"], saml["ssoURL"], saml["url"])
+	hasConfig := url != "" || asStringValue(saml["entityId"]) != "" || asStringValue(saml["certificate"]) != "" || asStringValue(saml["metadataUrl"]) != ""
+	return samlSettings{Enabled: boolFromAny(saml["enabled"], false), Domains: normalizeSAMLDomainList(firstNonNil(saml["domains"], saml["emailDomains"])), IDPSSOURL: url, EntityID: asStringValue(saml["entityId"]), Certificate: asStringValue(saml["certificate"]), MetadataURL: asStringValue(saml["metadataUrl"]), LastTestedAt: nullableStringPtr(saml["lastTestedAt"]), Status: samlStatus(saml["status"], hasConfig), LastError: nullableStringPtr(saml["lastError"])}
+}
+
+func normalizeSAMLInput(input map[string]any, current samlSettings) samlSettings {
+	next := current
+	if v, ok := input["enabled"].(bool); ok {
+		next.Enabled = v
+	}
+	if _, ok := input["domains"]; ok {
+		next.Domains = normalizeSAMLDomainList(input["domains"])
+	}
+	if _, ok := input["idpSsoUrl"]; ok {
+		next.IDPSSOURL = strings.TrimSpace(asStringValue(input["idpSsoUrl"]))
+	}
+	if _, ok := input["entityId"]; ok {
+		next.EntityID = strings.TrimSpace(asStringValue(input["entityId"]))
+	}
+	if _, ok := input["certificate"]; ok {
+		next.Certificate = strings.TrimSpace(asStringValue(input["certificate"]))
+	}
+	if _, ok := input["metadataUrl"]; ok {
+		next.MetadataURL = strings.TrimSpace(asStringValue(input["metadataUrl"]))
+	}
+	if next.IDPSSOURL == "" && next.MetadataURL == "" && next.EntityID == "" && next.Certificate == "" {
+		next.Status = "not_configured"
+		next.LastError = nil
+	} else if input["status"] == "verified" || input["test"] == true {
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		next.Status = "verified"
+		next.LastTestedAt = &now
+		next.LastError = nil
+	} else if next.Status == "not_configured" {
+		next.Status = "configured"
+	}
+	return next
+}
+
+func validateSAMLSettings(settings samlSettings) string {
+	if err := validateHTTPURL(settings.IDPSSOURL, "IdP SSO URL", settings.Enabled); err != "" {
+		return err
+	}
+	if err := validateHTTPURL(settings.MetadataURL, "Metadata URL", false); err != "" {
+		return err
+	}
+	if settings.Enabled && len(settings.Domains) == 0 {
+		return "At least one SAML email domain is required before enabling SAML."
+	}
+	if settings.Enabled && strings.TrimSpace(settings.EntityID) == "" {
+		return "IdP entity ID is required before enabling SAML."
+	}
+	if settings.Enabled && strings.TrimSpace(settings.Certificate) == "" && strings.TrimSpace(settings.MetadataURL) == "" {
+		return "Certificate or metadata URL is required before enabling SAML."
+	}
+	return ""
+}
+
+func validateHTTPURL(value string, label string, required bool) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		if required {
+			return label + " is required."
+		}
+		return ""
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return label + " must be a valid URL."
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return label + " must be an http or https URL."
+	}
+	return ""
+}
+
+func normalizeSAMLDomainList(value any) []string {
+	items, ok := value.([]any)
+	if !ok {
+		return []string{}
+	}
+	seen := map[string]bool{}
+	out := []string{}
+	for _, item := range items {
+		domain := normalizeSAMLDomain(asStringValue(item))
+		if domain != "" && !seen[domain] {
+			seen[domain] = true
+			out = append(out, domain)
+		}
+	}
+	return out
+}
+
+func normalizeSAMLDomain(value string) string {
+	domain := strings.TrimLeft(strings.ToLower(strings.TrimSpace(value)), "@")
+	if ok, _ := regexp.MatchString(`^[a-z0-9.-]+\.[a-z]{2,}$`, domain); !ok {
+		return ""
+	}
+	return domain
+}
+
+func samlStatus(value any, hasConfig bool) string {
+	if s, ok := value.(string); ok && (s == "configured" || s == "verified" || s == "error") {
+		return s
+	}
+	if hasConfig {
+		return "configured"
+	}
+	return "not_configured"
+}
+
+func readSCIMSettings(settings map[string]any, baseURL string) scimSettings {
+	security := recordFromAny(settings["security"])
+	scim := recordFromAny(firstNonNil(security["scim"], settings["scim"]))
+	enabled := boolFromAny(scim["enabled"], false)
+	storedBase := asStringValue(scim["baseUrl"])
+	if storedBase == "" {
+		storedBase = baseURL
+	}
+	status := "disabled"
+	if enabled {
+		status = "enabled"
+	}
+	return scimSettings{Enabled: enabled, BaseURL: storedBase, Tokens: readSCIMTokens(scim["tokens"]), LastSyncAt: nullableStringPtr(scim["lastSyncAt"]), Status: status}
+}
+
+func readSCIMTokens(value any) []scimToken {
+	items, ok := value.([]any)
+	if !ok {
+		return []scimToken{}
+	}
+	out := []scimToken{}
+	for _, item := range items {
+		record := recordFromAny(item)
+		id := asStringValue(record["id"])
+		hash := asStringValue(record["tokenHash"])
+		if id == "" || hash == "" {
+			continue
+		}
+		out = append(out, scimToken{ID: id, Name: nonEmptyString(record["name"], "SCIM token"), Prefix: nonEmptyString(record["prefix"], "scim_••••••"), TokenHash: hash, CreatedAt: nonEmptyString(record["createdAt"], time.Unix(0, 0).UTC().Format(time.RFC3339)), RevokedAt: nullableStringPtr(record["revokedAt"]), LastUsedAt: nullableStringPtr(record["lastUsedAt"])})
+	}
+	return out
+}
+
+func createSCIMToken(name string) (string, scimToken) {
+	secretBytes := make([]byte, 24)
+	_, _ = rand.Read(secretBytes)
+	secret := "scim_" + base64.RawURLEncoding.EncodeToString(secretBytes)
+	idBytes := make([]byte, 12)
+	_, _ = rand.Read(idBytes)
+	name = truncate(strings.TrimSpace(name), 80)
+	if name == "" {
+		name = "SCIM token"
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	return secret, scimToken{ID: hex.EncodeToString(idBytes), Name: name, Prefix: secret[:12], TokenHash: hashSCIMToken(secret), CreatedAt: now}
+}
+
+func hashSCIMToken(secret string) string {
+	sum := sha256.Sum256([]byte(secret))
+	return hex.EncodeToString(sum[:])
+}
+
+func (h Handler) storeSCIMSettings(ctx context.Context, workspaceID string, settings map[string]any, scim scimSettings) error {
+	security := recordFromAny(settings["security"])
+	security["scim"] = scim
+	settings["security"] = security
+	return h.saveWorkspaceSettings(ctx, workspaceID, settings)
+}
+
+func (h Handler) saveWorkspaceSettings(ctx context.Context, workspaceID string, settings map[string]any) error {
+	raw, _ := json.Marshal(settings)
+	_, err := h.DB.Exec(ctx, `update workspace set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, raw, workspaceID)
+	return err
+}
+
+func publicSCIM(scim scimSettings) publicScimSettings {
+	tokens := []publicScimToken{}
+	for _, token := range scim.Tokens {
+		tokens = append(tokens, publicToken(token))
+	}
+	return publicScimSettings{Enabled: scim.Enabled, BaseURL: scim.BaseURL, Tokens: tokens, LastSyncAt: scim.LastSyncAt, Status: scim.Status}
+}
+func publicToken(token scimToken) publicScimToken {
+	return publicScimToken{ID: token.ID, Name: token.Name, Prefix: token.Prefix, CreatedAt: token.CreatedAt, RevokedAt: token.RevokedAt, LastUsedAt: token.LastUsedAt}
+}
+func nullableStringPtr(value any) *string {
+	if s := strings.TrimSpace(asStringValue(value)); s != "" {
+		return &s
+	}
+	return nil
+}
+func scimBaseURL(r *http.Request, workspaceID string) string {
+	return strings.TrimRight(requestOrigin(r), "/") + "/api/scim/" + workspaceID
+}
+func requestOrigin(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if forwarded := r.Header.Get("X-Forwarded-Proto"); forwarded != "" {
+		scheme = strings.Split(forwarded, ",")[0]
+	}
+	return scheme + "://" + r.Host
 }

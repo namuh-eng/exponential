@@ -911,6 +911,56 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/workspaces/current/security/saml": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations["updateCurrentWorkspaceSaml"];
+    trace?: never;
+  };
+  "/workspaces/current/security/scim": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createCurrentWorkspaceScimToken"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations["updateCurrentWorkspaceScim"];
+    trace?: never;
+  };
+  "/workspaces/current/security/scim/tokens/{tokenId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        tokenId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations["revokeCurrentWorkspaceScimToken"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/workspaces/current/applications": {
     parameters: {
       query?: never;
@@ -1918,6 +1968,53 @@ export interface components {
     };
     WorkspaceImportPreviewResponse: {
       preview: components["schemas"]["WorkspaceImportPreviewRow"][];
+    };
+    SamlSettings: {
+      enabled: boolean;
+      domains: string[];
+      idpSsoUrl: string;
+      entityId: string;
+      certificate: string;
+      metadataUrl: string;
+      /** Format: date-time */
+      lastTestedAt: string | null;
+      /** @enum {string} */
+      status: "not_configured" | "configured" | "verified" | "error";
+      lastError: string | null;
+    };
+    SamlSettingsPatch: {
+      [key: string]: unknown;
+    };
+    SamlSettingsResponse: {
+      saml: components["schemas"]["SamlSettings"];
+    };
+    PublicScimToken: {
+      id: string;
+      name: string;
+      prefix: string;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      revokedAt: string | null;
+      /** Format: date-time */
+      lastUsedAt: string | null;
+    };
+    PublicScimSettings: {
+      enabled: boolean;
+      baseUrl: string;
+      tokens: components["schemas"]["PublicScimToken"][];
+      /** Format: date-time */
+      lastSyncAt: string | null;
+      /** @enum {string} */
+      status: "disabled" | "enabled";
+    };
+    ScimSettingsResponse: {
+      scim: components["schemas"]["PublicScimSettings"];
+    };
+    CreateScimTokenResponse: {
+      token: string;
+      scim: components["schemas"]["PublicScimSettings"];
+      created: components["schemas"]["PublicScimToken"];
     };
     ApplicationPermissionGroup: {
       label: string;
@@ -4451,6 +4548,108 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["CreateWorkspaceResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateCurrentWorkspaceSaml: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SamlSettingsPatch"];
+      };
+    };
+    responses: {
+      /** @description Updated SAML settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SamlSettingsResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createCurrentWorkspaceScimToken: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": {
+          name?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Created SCIM token */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreateScimTokenResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateCurrentWorkspaceScim: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          enabled: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated SCIM settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ScimSettingsResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  revokeCurrentWorkspaceScimToken: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        tokenId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Revoked SCIM token */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ScimSettingsResponse"];
         };
       };
       default: components["responses"]["Problem"];

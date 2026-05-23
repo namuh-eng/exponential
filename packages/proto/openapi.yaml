@@ -1397,6 +1397,81 @@ paths:
                 $ref: '#/components/schemas/CreateWorkspaceResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /workspaces/current/security/saml:
+    patch:
+      operationId: updateCurrentWorkspaceSaml
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SamlSettingsPatch'
+      responses:
+        '200':
+          description: Updated SAML settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamlSettingsResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /workspaces/current/security/scim:
+    patch:
+      operationId: updateCurrentWorkspaceScim
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        '200':
+          description: Updated SCIM settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScimSettingsResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createCurrentWorkspaceScimToken
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+      responses:
+        '200':
+          description: Created SCIM token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateScimTokenResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /workspaces/current/security/scim/tokens/{tokenId}:
+    parameters:
+      - name: tokenId
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: revokeCurrentWorkspaceScimToken
+      responses:
+        '200':
+          description: Revoked SCIM token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScimSettingsResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /workspaces/current/applications:
     get:
       operationId: listCurrentWorkspaceApplications
@@ -2787,6 +2862,62 @@ components:
         preview:
           type: array
           items: { $ref: '#/components/schemas/WorkspaceImportPreviewRow' }
+    SamlSettings:
+      type: object
+      required: [enabled, domains, idpSsoUrl, entityId, certificate, metadataUrl, lastTestedAt, status, lastError]
+      properties:
+        enabled: { type: boolean }
+        domains:
+          type: array
+          items: { type: string }
+        idpSsoUrl: { type: string }
+        entityId: { type: string }
+        certificate: { type: string }
+        metadataUrl: { type: string }
+        lastTestedAt: { type: [string, 'null'], format: date-time }
+        status: { type: string, enum: [not_configured, configured, verified, error] }
+        lastError: { type: [string, 'null'] }
+    SamlSettingsPatch:
+      type: object
+      additionalProperties: true
+    SamlSettingsResponse:
+      type: object
+      required: [saml]
+      properties:
+        saml: { $ref: '#/components/schemas/SamlSettings' }
+    PublicScimToken:
+      type: object
+      required: [id, name, prefix, createdAt, revokedAt, lastUsedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        prefix: { type: string }
+        createdAt: { type: string, format: date-time }
+        revokedAt: { type: [string, 'null'], format: date-time }
+        lastUsedAt: { type: [string, 'null'], format: date-time }
+    PublicScimSettings:
+      type: object
+      required: [enabled, baseUrl, tokens, lastSyncAt, status]
+      properties:
+        enabled: { type: boolean }
+        baseUrl: { type: string }
+        tokens:
+          type: array
+          items: { $ref: '#/components/schemas/PublicScimToken' }
+        lastSyncAt: { type: [string, 'null'], format: date-time }
+        status: { type: string, enum: [disabled, enabled] }
+    ScimSettingsResponse:
+      type: object
+      required: [scim]
+      properties:
+        scim: { $ref: '#/components/schemas/PublicScimSettings' }
+    CreateScimTokenResponse:
+      type: object
+      required: [token, scim, created]
+      properties:
+        token: { type: string }
+        scim: { $ref: '#/components/schemas/PublicScimSettings' }
+        created: { $ref: '#/components/schemas/PublicScimToken' }
     ApplicationPermissionGroup:
       type: object
       required: [label, descriptions]

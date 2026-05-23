@@ -1,6 +1,9 @@
 package workspaces
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestSanitizeSlug(t *testing.T) {
 	if got := sanitizeSlug(" My Great Workspace! "); got != "my-great-workspace" {
@@ -130,5 +133,23 @@ func TestApplicationScopesAndPermissionGroups(t *testing.T) {
 	groups := buildApplicationPermissionGroups(scopes)
 	if len(groups) != 2 || groups[0].Label != "Issues" || groups[1].Descriptions[0] != "Custom Scope" {
 		t.Fatalf("groups = %#v", groups)
+	}
+}
+
+func TestSAMLAndSCIMSettingsHelpers(t *testing.T) {
+	saml := normalizeSAMLInput(map[string]any{"enabled": true, "domains": []any{"Example.com"}, "idpSsoUrl": "https://idp.example.com/sso", "entityId": "entity", "certificate": "CERT", "test": true}, readSAMLSettings(map[string]any{}))
+	if validation := validateSAMLSettings(saml); validation != "" {
+		t.Fatalf("unexpected validation: %s", validation)
+	}
+	if saml.Status != "verified" || len(saml.Domains) != 1 || saml.Domains[0] != "example.com" {
+		t.Fatalf("saml = %#v", saml)
+	}
+	secret, token := createSCIMToken("Okta")
+	if !strings.HasPrefix(secret, "scim_") || token.TokenHash == "" || token.TokenHash == secret {
+		t.Fatalf("secret/token = %q %#v", secret, token)
+	}
+	public := publicToken(token)
+	if public.ID != token.ID || public.Name != "Okta" {
+		t.Fatalf("public token = %#v", public)
 	}
 }
