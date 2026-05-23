@@ -26,6 +26,11 @@ async function main() {
     return;
   }
 
+  if (resource === "projects") {
+    await projectCommand();
+    return;
+  }
+
   if (resource !== "issues") {
     usage();
   }
@@ -157,6 +162,70 @@ async function workspaceCommand() {
   usage();
 }
 
+async function projectCommand() {
+  if (action === "list") {
+    const { data, error, response } = await client.GET("/projects");
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "get") {
+    const slug = requireOption(args, "slug");
+    const { data, error, response } = await client.GET("/projects/{slug}", {
+      params: { path: { slug } },
+    });
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "create") {
+    const name = requireOption(args, "name");
+    const teamKeys = readOption(args, "team-keys")
+      ?.split(",")
+      .map((key) => key.trim())
+      .filter(Boolean);
+    const { data, error, response } = await client.POST("/projects", {
+      body: {
+        name,
+        slug: readOption(args, "slug"),
+        description: readOption(args, "description"),
+        status: readOption(args, "status") as never,
+        priority: readOption(args, "priority") as never,
+        team_keys: teamKeys,
+      },
+    });
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "update") {
+    const slug = requireOption(args, "slug");
+    const { data, error, response } = await client.PATCH("/projects/{slug}", {
+      params: { path: { slug } },
+      body: {
+        name: readOption(args, "name"),
+        slug: readOption(args, "new-slug"),
+        description: readOption(args, "description"),
+        status: readOption(args, "status") as never,
+        priority: readOption(args, "priority") as never,
+      },
+    });
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "delete") {
+    const slug = requireOption(args, "slug");
+    const { data, error, response } = await client.DELETE("/projects/{slug}", {
+      params: { path: { slug } },
+    });
+    printResult(data, error, response.status);
+    return;
+  }
+
+  usage();
+}
+
 async function tokenCommand() {
   if (action === "list") {
     const { data, error, response } = await client.GET(
@@ -216,7 +285,12 @@ function usage(): never {
   exponential workspaces invite --email <email> [--role member|admin|guest]
   exponential tokens list
   exponential tokens create --name <name> [--scopes read,write]
-  exponential tokens revoke --id <uuid>`);
+  exponential tokens revoke --id <uuid>
+  exponential projects list
+  exponential projects get --slug <slug>
+  exponential projects create --name <name> [--slug <slug>] [--team-keys ENG,DES]
+  exponential projects update --slug <slug> [--name <name>] [--new-slug <slug>]
+  exponential projects delete --slug <slug>`);
   process.exit(1);
 }
 

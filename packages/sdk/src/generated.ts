@@ -74,6 +74,42 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/projects": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List projects in the authenticated workspace */
+    get: operations["listProjects"];
+    put?: never;
+    /** Create a project */
+    post: operations["createProject"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/projects/{slug}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        slug: string;
+      };
+      cookie?: never;
+    };
+    get: operations["getProject"];
+    put?: never;
+    post?: never;
+    delete: operations["deleteProject"];
+    options?: never;
+    head?: never;
+    patch: operations["updateProject"];
+    trace?: never;
+  };
   "/teams": {
     parameters: {
       query?: never;
@@ -209,6 +245,81 @@ export interface components {
     CreatePersonalAccessTokenResponse: {
       token: components["schemas"]["PersonalAccessToken"];
       value: string;
+    };
+    /** @enum {string} */
+    ProjectStatus: "planned" | "started" | "paused" | "completed" | "canceled";
+    /** @enum {string} */
+    ProjectPriority: "none" | "urgent" | "high" | "medium" | "low";
+    ProjectTeam: {
+      /** Format: uuid */
+      id: string;
+      key: string;
+      name: string;
+    };
+    ProjectProgress: {
+      total: number;
+      completed: number;
+      percentage: number;
+    };
+    Project: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      description?: string | null;
+      icon?: string | null;
+      slug: string;
+      status: components["schemas"]["ProjectStatus"];
+      priority: components["schemas"]["ProjectPriority"];
+      lead_id?: string | null;
+      /** Format: uuid */
+      workspace_id: string;
+      /** Format: date-time */
+      start_date?: string | null;
+      /** Format: date-time */
+      target_date?: string | null;
+      /** Format: date-time */
+      completed_at?: string | null;
+      /** Format: date-time */
+      canceled_at?: string | null;
+      teams: components["schemas"]["ProjectTeam"][];
+      progress: components["schemas"]["ProjectProgress"];
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    ProjectListResponse: {
+      projects: components["schemas"]["Project"][];
+    };
+    CreateProjectRequest: {
+      name: string;
+      description?: string | null;
+      icon?: string | null;
+      slug?: string;
+      status?: components["schemas"]["ProjectStatus"];
+      priority?: components["schemas"]["ProjectPriority"];
+      lead_id?: string | null;
+      /** Format: date-time */
+      start_date?: string | null;
+      /** Format: date-time */
+      target_date?: string | null;
+      team_ids?: string[];
+      team_keys?: string[];
+    };
+    UpdateProjectRequest: {
+      name?: string;
+      description?: string | null;
+      icon?: string | null;
+      slug?: string;
+      status?: components["schemas"]["ProjectStatus"];
+      priority?: components["schemas"]["ProjectPriority"];
+      lead_id?: string | null;
+      /** Format: date-time */
+      start_date?: string | null;
+      /** Format: date-time */
+      target_date?: string | null;
+      team_ids?: string[];
+      team_keys?: string[];
     };
     Team: {
       /** Format: uuid */
@@ -660,6 +771,125 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  listProjects: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Projects */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProjectListResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateProjectRequest"];
+      };
+    };
+    responses: {
+      /** @description Created project */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Project"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        slug: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Project */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Project"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  deleteProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        slug: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        slug: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateProjectRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated project */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Project"];
         };
       };
       default: components["responses"]["Problem"];

@@ -145,6 +145,82 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /projects:
+    get:
+      operationId: listProjects
+      summary: List projects in the authenticated workspace
+      responses:
+        '200':
+          description: Projects
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectListResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createProject
+      summary: Create a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+      responses:
+        '201':
+          description: Created project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        default:
+          $ref: '#/components/responses/Problem'
+  /projects/{slug}:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getProject
+      responses:
+        '200':
+          description: Project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        default:
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: updateProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectRequest'
+      responses:
+        '200':
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deleteProject
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /teams:
     get:
       operationId: listTeams
@@ -419,6 +495,93 @@ components:
       properties:
         token: { $ref: '#/components/schemas/PersonalAccessToken' }
         value: { type: string }
+    ProjectStatus:
+      type: string
+      enum: [planned, started, paused, completed, canceled]
+    ProjectPriority:
+      type: string
+      enum: [none, urgent, high, medium, low]
+    ProjectTeam:
+      type: object
+      required: [id, key, name]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string }
+        name: { type: string }
+    ProjectProgress:
+      type: object
+      required: [total, completed, percentage]
+      properties:
+        total: { type: integer }
+        completed: { type: integer }
+        percentage: { type: integer }
+    Project:
+      type: object
+      required: [id, name, slug, status, priority, workspace_id, teams, progress, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        icon: { type: [string, 'null'] }
+        slug: { type: string }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+        priority: { $ref: '#/components/schemas/ProjectPriority' }
+        lead_id: { type: [string, 'null'] }
+        workspace_id: { type: string, format: uuid }
+        start_date: { type: [string, 'null'], format: date-time }
+        target_date: { type: [string, 'null'], format: date-time }
+        completed_at: { type: [string, 'null'], format: date-time }
+        canceled_at: { type: [string, 'null'], format: date-time }
+        teams:
+          type: array
+          items: { $ref: '#/components/schemas/ProjectTeam' }
+        progress: { $ref: '#/components/schemas/ProjectProgress' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ProjectListResponse:
+      type: object
+      required: [projects]
+      properties:
+        projects:
+          type: array
+          items: { $ref: '#/components/schemas/Project' }
+    CreateProjectRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        description: { type: [string, 'null'] }
+        icon: { type: [string, 'null'], maxLength: 10 }
+        slug: { type: string }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+        priority: { $ref: '#/components/schemas/ProjectPriority' }
+        lead_id: { type: [string, 'null'] }
+        start_date: { type: [string, 'null'], format: date-time }
+        target_date: { type: [string, 'null'], format: date-time }
+        team_ids:
+          type: array
+          items: { type: string, format: uuid }
+        team_keys:
+          type: array
+          items: { type: string }
+    UpdateProjectRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        description: { type: [string, 'null'] }
+        icon: { type: [string, 'null'], maxLength: 10 }
+        slug: { type: string }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+        priority: { $ref: '#/components/schemas/ProjectPriority' }
+        lead_id: { type: [string, 'null'] }
+        start_date: { type: [string, 'null'], format: date-time }
+        target_date: { type: [string, 'null'], format: date-time }
+        team_ids:
+          type: array
+          items: { type: string, format: uuid }
+        team_keys:
+          type: array
+          items: { type: string }
     Team:
       type: object
       required: [id, name, key, isPrivate, issueCount, memberCount, currentUserIsMember, createdAt]
