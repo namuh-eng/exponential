@@ -2,6 +2,11 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { projectTemplate } from "@/lib/db/schema";
+import {
+  createHeadlessProjectTemplatesClient,
+  headlessProjectTemplatesEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { buildProjectTemplateSettings } from "@/lib/project-template-settings";
 import { desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -35,6 +40,21 @@ export async function GET() {
   const workspaceId = await resolveActiveWorkspaceId(session.user.id);
   if (!workspaceId) {
     return NextResponse.json({ templates: [] });
+  }
+
+  if (headlessProjectTemplatesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessProjectTemplatesClient(token);
+    const { data, error, response } = await client.GET("/project-templates");
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   const templates = await db
@@ -78,6 +98,23 @@ export async function POST(request: Request) {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  if (headlessProjectTemplatesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessProjectTemplatesClient(token);
+    const { data, error, response } = await client.POST("/project-templates", {
+      body: body as never,
+    });
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   const name = `${body.name ?? ""}`.trim();
