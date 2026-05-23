@@ -89,6 +89,10 @@ export function headlessIntegrationsEnabled() {
   return process.env.EXPONENTIAL_HEADLESS_INTEGRATIONS === "true";
 }
 
+export function headlessAnalyticsEnabled() {
+  return process.env.EXPONENTIAL_HEADLESS_ANALYTICS === "true";
+}
+
 export function createHeadlessClient(token: string) {
   return createExponentialClient({
     baseUrl: process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1",
@@ -177,6 +181,10 @@ export function createHeadlessSidebarFavoritesClient(token: string) {
 }
 
 export function createHeadlessIntegrationsClient(token: string) {
+  return createHeadlessClient(token);
+}
+
+export function createHeadlessAnalyticsClient(token: string) {
   return createHeadlessClient(token);
 }
 

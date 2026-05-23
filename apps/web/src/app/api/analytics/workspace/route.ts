@@ -1,6 +1,11 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { issue, member, team, workflowState } from "@/lib/db/schema";
+import {
+  createHeadlessAnalyticsClient,
+  headlessAnalyticsEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { and, count, desc, eq, gte, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
@@ -23,6 +28,20 @@ export async function GET() {
   }
 
   const workspaceId = membership.workspaceId;
+
+  if (headlessAnalyticsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessAnalyticsClient(token);
+    const { data, error, response } = await client.GET("/analytics/workspace");
+    if (error)
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
 
   // 1. Issues completed across all teams in the last 30 days
   const thirtyDaysAgo = new Date();
