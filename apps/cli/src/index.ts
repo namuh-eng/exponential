@@ -66,6 +66,11 @@ async function main() {
     return;
   }
 
+  if (resource === "documents") {
+    await documentCommand();
+    return;
+  }
+
   if (resource === "account") {
     await accountCommand();
     return;
@@ -262,6 +267,94 @@ async function emojiCommand() {
     const id = requireOption(args, "id");
     const { data, error, response } = await client.DELETE(
       "/custom-emojis/{id}",
+      { params: { path: { id } } },
+    );
+    printResult(data, error, response.status);
+    return;
+  }
+
+  usage();
+}
+
+async function documentCommand() {
+  if (action === "settings") {
+    const { data, error, response } = await client.GET("/document-settings");
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "create-folder") {
+    const { data, error, response } = await client.POST("/document-folders", {
+      body: {
+        name: requireOption(args, "name"),
+        description: readOption(args, "description"),
+        color: readOption(args, "color") as never,
+      },
+    });
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "update-folder") {
+    const id = requireOption(args, "id");
+    const { data, error, response } = await client.PATCH(
+      "/document-folders/{id}",
+      {
+        params: { path: { id } },
+        body: {
+          name: readOption(args, "name"),
+          description: readOption(args, "description"),
+          color: readOption(args, "color") as never,
+        },
+      },
+    );
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "delete-folder") {
+    const id = requireOption(args, "id");
+    const { data, error, response } = await client.DELETE(
+      "/document-folders/{id}",
+      { params: { path: { id } } },
+    );
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "create-template") {
+    const { data, error, response } = await client.POST("/document-templates", {
+      body: {
+        name: requireOption(args, "name"),
+        description: readOption(args, "description"),
+        content: requireOption(args, "content"),
+      },
+    });
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "update-template") {
+    const id = requireOption(args, "id");
+    const { data, error, response } = await client.PATCH(
+      "/document-templates/{id}",
+      {
+        params: { path: { id } },
+        body: {
+          name: readOption(args, "name"),
+          description: readOption(args, "description"),
+          content: readOption(args, "content"),
+        },
+      },
+    );
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "delete-template") {
+    const id = requireOption(args, "id");
+    const { data, error, response } = await client.DELETE(
+      "/document-templates/{id}",
       { params: { path: { id } } },
     );
     printResult(data, error, response.status);
@@ -714,6 +807,13 @@ function usage(): never {
   exponential emojis list
   exponential emojis create --name <name> --image-url <url-or-data-url>
   exponential emojis delete --id <id>
+  exponential documents settings
+  exponential documents create-folder --name <name> [--color gray|blue|green|yellow|orange|purple|pink]
+  exponential documents update-folder --id <id> [--name <name>] [--color gray]
+  exponential documents delete-folder --id <id>
+  exponential documents create-template --name <name> --content <markdown>
+  exponential documents update-template --id <id> [--name <name>] [--content <markdown>]
+  exponential documents delete-template --id <id>
   exponential account profile
   exponential account preferences
   exponential notifications list

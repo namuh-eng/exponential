@@ -9,6 +9,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/account"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/comments"
+	"github.com/namuh-eng/exponential/apps/api/internal/documents"
 	"github.com/namuh-eng/exponential/apps/api/internal/emojis"
 	"github.com/namuh-eng/exponential/apps/api/internal/issues"
 	"github.com/namuh-eng/exponential/apps/api/internal/issuetemplates"
@@ -47,6 +48,7 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 
 	authMiddleware := auth.Middleware{DB: db}
 	commentsHandler := comments.Handler{DB: db}
+	documentsHandler := documents.Handler{DB: db}
 	labelsHandler := labels.Handler{DB: db}
 	r.Route("/v1", func(v1 chi.Router) {
 		v1.Group(func(protected chi.Router) {
@@ -57,6 +59,9 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 			protected.Mount("/account", account.Handler{DB: db}.Routes())
 			protected.Patch("/comments/{id}", commentsHandler.Update)
 			protected.Mount("/custom-emojis", emojis.Handler{DB: db}.Routes())
+			protected.Mount("/document-folders", documentsHandler.FolderRoutes())
+			protected.Mount("/document-settings", documentsHandler.SettingsRoutes())
+			protected.Mount("/document-templates", documentsHandler.TemplateRoutes())
 			protected.Delete("/comments/{id}", commentsHandler.Delete)
 			protected.Post("/comments/{id}/reactions", commentsHandler.ToggleCommentReaction)
 			protected.Mount("/issue-templates", issuetemplates.Handler{DB: db}.Routes())

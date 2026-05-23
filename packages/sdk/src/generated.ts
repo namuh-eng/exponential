@@ -229,6 +229,90 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/document-settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getDocumentSettings"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/document-folders": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createDocumentFolder"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/document-folders/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations["deleteDocumentFolder"];
+    options?: never;
+    head?: never;
+    patch: operations["updateDocumentFolder"];
+    trace?: never;
+  };
+  "/document-templates": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createDocumentTemplate"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/document-templates/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations["deleteDocumentTemplate"];
+    options?: never;
+    head?: never;
+    patch: operations["updateDocumentTemplate"];
+    trace?: never;
+  };
   "/labels": {
     parameters: {
       query?: never;
@@ -695,6 +779,65 @@ export interface components {
     CreateCustomEmojiRequest: {
       name: string;
       imageUrl: string;
+    };
+    DocumentTemplate: {
+      id: string;
+      name: string;
+      description: string;
+      content: string;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    DocumentFolder: {
+      id: string;
+      name: string;
+      description: string;
+      /** @enum {string} */
+      color:
+        | "gray"
+        | "blue"
+        | "green"
+        | "yellow"
+        | "orange"
+        | "purple"
+        | "pink";
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    DocumentSettings: {
+      templates: components["schemas"]["DocumentTemplate"][];
+      folders: components["schemas"]["DocumentFolder"][];
+    };
+    DocumentSettingsResponse: {
+      documents: components["schemas"]["DocumentSettings"];
+    };
+    DocumentFolderResponse: {
+      folder: components["schemas"]["DocumentFolder"];
+    };
+    DocumentTemplateResponse: {
+      template: components["schemas"]["DocumentTemplate"];
+    };
+    DocumentFolderRequest: {
+      name?: string;
+      description?: string;
+      /** @enum {string} */
+      color?:
+        | "gray"
+        | "blue"
+        | "green"
+        | "yellow"
+        | "orange"
+        | "purple"
+        | "pink";
+    };
+    DocumentTemplateRequest: {
+      name?: string;
+      description?: string;
+      content?: string;
     };
     Label: {
       /** Format: uuid */
@@ -1868,6 +2011,177 @@ export interface operations {
           "application/json": {
             ok: boolean;
           };
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getDocumentSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Document settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DocumentSettingsResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createDocumentFolder: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DocumentFolderRequest"];
+      };
+    };
+    responses: {
+      /** @description Created document folder */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DocumentFolderResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  deleteDocumentFolder: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted document folder */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateDocumentFolder: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DocumentFolderRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated document folder */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DocumentFolderResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createDocumentTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DocumentTemplateRequest"];
+      };
+    };
+    responses: {
+      /** @description Created document template */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DocumentTemplateResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  deleteDocumentTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted document template */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateDocumentTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DocumentTemplateRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated document template */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DocumentTemplateResponse"];
         };
       };
       default: components["responses"]["Problem"];

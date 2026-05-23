@@ -400,6 +400,122 @@ paths:
                   ok: { type: boolean }
         default:
           $ref: '#/components/responses/Problem'
+  /document-settings:
+    get:
+      operationId: getDocumentSettings
+      responses:
+        '200':
+          description: Document settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentSettingsResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /document-folders:
+    post:
+      operationId: createDocumentFolder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentFolderRequest'
+      responses:
+        '201':
+          description: Created document folder
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentFolderResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /document-folders/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      operationId: updateDocumentFolder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentFolderRequest'
+      responses:
+        '200':
+          description: Updated document folder
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentFolderResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deleteDocumentFolder
+      responses:
+        '200':
+          description: Deleted document folder
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /document-templates:
+    post:
+      operationId: createDocumentTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentTemplateRequest'
+      responses:
+        '201':
+          description: Created document template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentTemplateResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /document-templates/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      operationId: updateDocumentTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentTemplateRequest'
+      responses:
+        '200':
+          description: Updated document template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentTemplateResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deleteDocumentTemplate
+      responses:
+        '200':
+          description: Deleted document template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /labels:
     get:
       operationId: listLabels
@@ -1215,6 +1331,63 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 32 }
         imageUrl: { type: string }
+    DocumentTemplate:
+      type: object
+      required: [id, name, description, content, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        content: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    DocumentFolder:
+      type: object
+      required: [id, name, description, color, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        color: { type: string, enum: [gray, blue, green, yellow, orange, purple, pink] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    DocumentSettings:
+      type: object
+      required: [templates, folders]
+      properties:
+        templates:
+          type: array
+          items: { $ref: '#/components/schemas/DocumentTemplate' }
+        folders:
+          type: array
+          items: { $ref: '#/components/schemas/DocumentFolder' }
+    DocumentSettingsResponse:
+      type: object
+      required: [documents]
+      properties:
+        documents: { $ref: '#/components/schemas/DocumentSettings' }
+    DocumentFolderResponse:
+      type: object
+      required: [folder]
+      properties:
+        folder: { $ref: '#/components/schemas/DocumentFolder' }
+    DocumentTemplateResponse:
+      type: object
+      required: [template]
+      properties:
+        template: { $ref: '#/components/schemas/DocumentTemplate' }
+    DocumentFolderRequest:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        color: { type: string, enum: [gray, blue, green, yellow, orange, purple, pink] }
+    DocumentTemplateRequest:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        content: { type: string }
     Label:
       type: object
       required: [id, name, color, scope, issueCount, createdAt, updatedAt]
