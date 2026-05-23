@@ -3,6 +3,11 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { workspace } from "@/lib/db/schema";
 import {
+  createHeadlessProjectUpdatesClient,
+  headlessProjectUpdatesEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
+import {
   buildProjectUpdateConfiguration,
   readProjectUpdateConfigurations,
   validateProjectUpdateInput,
@@ -53,6 +58,21 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
   }
 
+  if (headlessProjectUpdatesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessProjectUpdatesClient(token);
+    const { data, error, response } = await client.GET("/project-updates");
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   const settings = await loadWorkspaceSettings(workspaceId);
   return NextResponse.json({
     configurations: readProjectUpdateConfigurations(settings),
@@ -75,6 +95,23 @@ export async function POST(request: Request) {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  if (headlessProjectUpdatesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessProjectUpdatesClient(token);
+    const { data, error, response } = await client.POST("/project-updates", {
+      body: body as never,
+    });
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   const validation = validateProjectUpdateInput(body);

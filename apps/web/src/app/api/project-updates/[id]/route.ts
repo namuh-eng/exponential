@@ -3,6 +3,11 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { workspace } from "@/lib/db/schema";
 import {
+  createHeadlessProjectUpdatesClient,
+  headlessProjectUpdatesEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
+import {
   readProjectUpdateConfigurations,
   updateProjectUpdateConfiguration,
   validateProjectUpdateInput,
@@ -63,6 +68,25 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  const { id } = await params;
+  if (headlessProjectUpdatesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessProjectUpdatesClient(token);
+    const { data, error, response } = await client.PATCH(
+      "/project-updates/{id}",
+      { params: { path: { id } }, body: body as never },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   const validation = validateProjectUpdateInput(body, { partial: true });
   if (!validation.ok) {
     return NextResponse.json(
@@ -71,7 +95,6 @@ export async function PATCH(
     );
   }
 
-  const { id } = await params;
   const settings = await loadWorkspaceSettings(workspaceId);
   const configurations = readProjectUpdateConfigurations(settings);
   const existing = configurations.find(
@@ -119,6 +142,24 @@ export async function DELETE(
   }
 
   const { id } = await params;
+  if (headlessProjectUpdatesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessProjectUpdatesClient(token);
+    const { data, error, response } = await client.DELETE(
+      "/project-updates/{id}",
+      { params: { path: { id } } },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   const settings = await loadWorkspaceSettings(workspaceId);
   const configurations = readProjectUpdateConfigurations(settings);
   const nextConfigurations = configurations.filter(
