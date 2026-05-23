@@ -20,6 +20,11 @@ import {
   user,
   workspace,
 } from "@/lib/db/schema";
+import {
+  createHeadlessAccountSecurityClient,
+  headlessAccountSecurityEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { isPasskeyAuthEnabled } from "@/lib/passkeys";
 import { and, desc, eq, gt, ne } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -567,6 +572,24 @@ export async function GET() {
     return error;
   }
 
+  if (headlessAccountSecurityEnabled()) {
+    const workspaceAccess = await getWorkspaceAccess(authSession.user.id);
+    if (workspaceAccess) {
+      const token = await mintInternalApiToken({
+        userId: authSession.user.id,
+        workspaceId: workspaceAccess.workspaceId,
+      });
+      const client = createHeadlessAccountSecurityClient(token);
+      const { data, error, response } = await client.GET("/account/security");
+      if (error) {
+        return NextResponse.json(error, {
+          status: (response as Response).status,
+        });
+      }
+      return NextResponse.json(data, { status: (response as Response).status });
+    }
+  }
+
   return NextResponse.json(await buildSecurityPayload(authSession));
 }
 
@@ -581,6 +604,26 @@ export async function POST(request: Request) {
     .catch(() => null)) as AccountSecurityAction;
   if (!body?.action) {
     return NextResponse.json({ error: "Action is required." }, { status: 400 });
+  }
+
+  if (headlessAccountSecurityEnabled()) {
+    const workspaceAccess = await getWorkspaceAccess(authSession.user.id);
+    if (workspaceAccess) {
+      const token = await mintInternalApiToken({
+        userId: authSession.user.id,
+        workspaceId: workspaceAccess.workspaceId,
+      });
+      const client = createHeadlessAccountSecurityClient(token);
+      const { data, error, response } = await client.POST("/account/security", {
+        body: body as never,
+      });
+      if (error) {
+        return NextResponse.json(error, {
+          status: (response as Response).status,
+        });
+      }
+      return NextResponse.json(data, { status: (response as Response).status });
+    }
   }
 
   const currentSessionId = getCurrentSessionId(authSession);

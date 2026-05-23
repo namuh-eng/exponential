@@ -251,6 +251,22 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/account/security": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getAccountSecurity"];
+    put?: never;
+    post: operations["updateAccountSecurity"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/account/profile": {
     parameters: {
       query?: never;
@@ -1820,6 +1836,40 @@ export interface components {
       title: string;
       status: number;
       detail?: string;
+    };
+    AccountSecurityResponse: {
+      sessions: {
+        [key: string]: unknown;
+      }[];
+      passkeys: {
+        [key: string]: unknown;
+      }[];
+      authorizedApplications: {
+        [key: string]: unknown;
+      }[];
+      apiKeys: {
+        [key: string]: unknown;
+      }[];
+      canCreateApiKeys: boolean;
+      providers: {
+        [key: string]: unknown;
+      }[];
+      passkeyEnabled: boolean;
+      createdCredential?: {
+        [key: string]: unknown;
+      };
+    } & {
+      [key: string]: unknown;
+    };
+    AccountSecurityActionRequest: {
+      action?: string;
+      passkeyId?: string;
+      sessionId?: string;
+      applicationId?: string;
+      apiKeyId?: string;
+      name?: string;
+    } & {
+      [key: string]: unknown;
     };
     AccountProfile: {
       name: string;
@@ -4589,6 +4639,52 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
+      default: components["responses"]["Problem"];
+    };
+  };
+  getAccountSecurity: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Account security settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccountSecurityResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateAccountSecurity: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AccountSecurityActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated account security settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccountSecurityResponse"];
+        };
+      };
       default: components["responses"]["Problem"];
     };
   };

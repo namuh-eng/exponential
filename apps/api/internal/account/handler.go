@@ -65,6 +65,8 @@ type preferencesPatch struct {
 func (h Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/profile", h.GetProfile)
+	r.Get("/security", h.GetSecurity)
+	r.Post("/security", h.UpdateSecurity)
 	r.Patch("/profile", h.UpdateProfile)
 	r.Get("/preferences", h.GetPreferences)
 	r.Patch("/preferences", h.UpdatePreferences)

@@ -403,6 +403,30 @@ paths:
       responses:
         default:
           $ref: '#/components/responses/Problem'
+  /account/security:
+    get:
+      operationId: getAccountSecurity
+      responses:
+        '200':
+          description: Account security settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountSecurityResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: updateAccountSecurity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountSecurityActionRequest' }
+      responses:
+        '200':
+          description: Updated account security settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountSecurityResponse' }
+        default: { $ref: '#/components/responses/Problem' }
   /account/profile:
     get:
       operationId: getAccountProfile
@@ -2961,6 +2985,41 @@ components:
         title: { type: string }
         status: { type: integer }
         detail: { type: string }
+    AccountSecurityResponse:
+      type: object
+      additionalProperties: true
+      required: [sessions, passkeys, authorizedApplications, apiKeys, canCreateApiKeys, providers, passkeyEnabled]
+      properties:
+        sessions:
+          type: array
+          items: { type: object, additionalProperties: true }
+        passkeys:
+          type: array
+          items: { type: object, additionalProperties: true }
+        authorizedApplications:
+          type: array
+          items: { type: object, additionalProperties: true }
+        apiKeys:
+          type: array
+          items: { type: object, additionalProperties: true }
+        canCreateApiKeys: { type: boolean }
+        providers:
+          type: array
+          items: { type: object, additionalProperties: true }
+        passkeyEnabled: { type: boolean }
+        createdCredential:
+          type: object
+          additionalProperties: true
+    AccountSecurityActionRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        action: { type: string }
+        passkeyId: { type: string }
+        sessionId: { type: string }
+        applicationId: { type: string }
+        apiKeyId: { type: string }
+        name: { type: string }
     AccountProfile:
       type: object
       required: [name, email, username, pronouns, title, location, timezone, showLocalTime]
