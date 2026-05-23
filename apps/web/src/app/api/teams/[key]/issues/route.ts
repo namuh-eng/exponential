@@ -1,3 +1,4 @@
+import { resolveRequestWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
@@ -8,6 +9,11 @@ import {
   user,
   workflowState,
 } from "@/lib/db/schema";
+import {
+  createHeadlessTeamsClient,
+  headlessTeamsEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { getLabelsForIssues } from "@/lib/issue-labels";
 import { findAccessibleTeam } from "@/lib/teams";
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
@@ -29,6 +35,30 @@ export async function GET(
   });
   if (!teamRecord) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
+  }
+
+  if (headlessTeamsEnabled()) {
+    const workspaceId = await resolveRequestWorkspaceId(
+      session.user.id,
+      request,
+    );
+    if (workspaceId) {
+      const token = await mintInternalApiToken({
+        userId: session.user.id,
+        workspaceId,
+      });
+      const client = createHeadlessTeamsClient(token);
+      const { data, error, response } = await client.GET(
+        "/teams/{key}/issues",
+        { params: { path: { key } } },
+      );
+      if (error) {
+        return NextResponse.json(error, {
+          status: (response as Response).status,
+        });
+      }
+      return NextResponse.json(data, { status: (response as Response).status });
+    }
   }
 
   const hierarchyTeamIds = teamRecord.hierarchyTeamIds ?? [teamRecord.id];

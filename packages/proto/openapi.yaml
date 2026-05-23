@@ -1534,6 +1534,23 @@ paths:
                 $ref: '#/components/schemas/TeamContextResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /teams/{key}/issues:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getTeamIssues
+      responses:
+        '200':
+          description: Team issues grouped by workflow state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamIssuesResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /teams/{key}/display-options:
     parameters:
       - name: key
@@ -3335,6 +3352,25 @@ components:
       required: [displayOptions]
       properties:
         displayOptions: {}
+    TeamIssuesResponse:
+      type: object
+      required: [team, groups, filterOptions]
+      properties:
+        team:
+          type: object
+          required: [id, name, key]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            key: { type: string }
+        groups:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        filterOptions:
+          type: object
+          additionalProperties: true
     TeamListResponse:
       type: object
       required: [workspaceId, viewerRole, canManageTeams, teams]

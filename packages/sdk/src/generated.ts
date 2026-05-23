@@ -1028,6 +1028,24 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/teams/{key}/issues": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    get: operations["getTeamIssues"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/teams/{key}/display-options": {
     parameters: {
       query?: never;
@@ -2297,6 +2315,19 @@ export interface components {
     };
     TeamDisplayOptionsResponse: {
       displayOptions: unknown;
+    };
+    TeamIssuesResponse: {
+      team: {
+        id: string;
+        name: string;
+        key: string;
+      };
+      groups: {
+        [key: string]: unknown;
+      }[];
+      filterOptions: {
+        [key: string]: unknown;
+      };
     };
     TeamListResponse: {
       /** Format: uuid */
@@ -5374,6 +5405,29 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["TeamContextResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getTeamIssues: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Team issues grouped by workflow state */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TeamIssuesResponse"];
         };
       };
       default: components["responses"]["Problem"];

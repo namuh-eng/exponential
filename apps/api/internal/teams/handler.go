@@ -59,6 +59,7 @@ func (h Handler) Routes() chi.Router {
 	r.Get("/{key}/context", h.Context)
 	r.Get("/{key}/display-options", h.GetDisplayOptions)
 	r.Put("/{key}/display-options", h.UpdateDisplayOptions)
+	r.Get("/{key}/issues", h.Issues)
 	r.Get("/{key}/cycles", h.ListCycles)
 	r.Post("/{key}/cycles", h.CreateCycle)
 	r.Patch("/{key}/cycles/{cycleID}", h.UpdateCycle)
