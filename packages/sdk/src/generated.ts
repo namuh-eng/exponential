@@ -501,6 +501,39 @@ export interface paths {
     patch: operations["updateProjectStatuses"];
     trace?: never;
   };
+  "/sidebar": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Sidebar route namespace; concrete resources are under /sidebar/favorites. */
+    get: operations["sidebarNamespace"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/sidebar/favorites": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["listSidebarFavorites"];
+    put?: never;
+    post: operations["addSidebarFavorite"];
+    delete: operations["removeSidebarFavorite"];
+    options?: never;
+    head?: never;
+    patch: operations["reorderSidebarFavorites"];
+    trace?: never;
+  };
   "/projects": {
     parameters: {
       query?: never;
@@ -1032,6 +1065,28 @@ export interface components {
     };
     UpdateProjectStatusesRequest: {
       statuses: components["schemas"]["ProjectStatusConfig"][];
+    };
+    /** @enum {string} */
+    SidebarFavoriteObjectType: "project" | "issue" | "view";
+    SidebarFavorite: {
+      id: string;
+      objectType: components["schemas"]["SidebarFavoriteObjectType"];
+      objectId: string;
+      /** Format: date-time */
+      createdAt: string;
+      label: string;
+      href: string;
+      context: string | null;
+    };
+    SidebarFavoriteListResponse: {
+      favorites: components["schemas"]["SidebarFavorite"][];
+    };
+    SidebarFavoriteRequest: {
+      objectType: components["schemas"]["SidebarFavoriteObjectType"];
+      objectId: string;
+    };
+    ReorderSidebarFavoritesRequest: {
+      orderedIds: string[];
     };
     /** @enum {string} */
     ProjectStatus: "planned" | "started" | "paused" | "completed" | "canceled";
@@ -2631,6 +2686,113 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ProjectStatusListResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  sidebarNamespace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      default: components["responses"]["Problem"];
+    };
+  };
+  listSidebarFavorites: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sidebar favorites */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SidebarFavoriteListResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  addSidebarFavorite: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SidebarFavoriteRequest"];
+      };
+    };
+    responses: {
+      /** @description Sidebar favorites */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SidebarFavoriteListResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  removeSidebarFavorite: {
+    parameters: {
+      query: {
+        objectType: components["schemas"]["SidebarFavoriteObjectType"];
+        objectId: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sidebar favorites */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SidebarFavoriteListResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  reorderSidebarFavorites: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReorderSidebarFavoritesRequest"];
+      };
+    };
+    responses: {
+      /** @description Sidebar favorites */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SidebarFavoriteListResponse"];
         };
       };
       default: components["responses"]["Problem"];

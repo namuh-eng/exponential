@@ -818,6 +818,79 @@ paths:
                 $ref: '#/components/schemas/ProjectStatusListResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /sidebar:
+    get:
+      operationId: sidebarNamespace
+      summary: Sidebar route namespace; concrete resources are under /sidebar/favorites.
+      responses:
+        default:
+          $ref: '#/components/responses/Problem'
+  /sidebar/favorites:
+    get:
+      operationId: listSidebarFavorites
+      responses:
+        '200':
+          description: Sidebar favorites
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SidebarFavoriteListResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: addSidebarFavorite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SidebarFavoriteRequest'
+      responses:
+        '201':
+          description: Sidebar favorites
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SidebarFavoriteListResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: reorderSidebarFavorites
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderSidebarFavoritesRequest'
+      responses:
+        '200':
+          description: Sidebar favorites
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SidebarFavoriteListResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: removeSidebarFavorite
+      parameters:
+        - name: objectType
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/SidebarFavoriteObjectType' }
+        - name: objectId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Sidebar favorites
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SidebarFavoriteListResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /projects:
     get:
       operationId: listProjects
@@ -1612,6 +1685,40 @@ components:
         statuses:
           type: array
           items: { $ref: '#/components/schemas/ProjectStatusConfig' }
+    SidebarFavoriteObjectType:
+      type: string
+      enum: [project, issue, view]
+    SidebarFavorite:
+      type: object
+      required: [id, objectType, objectId, createdAt, label, href, context]
+      properties:
+        id: { type: string }
+        objectType: { $ref: '#/components/schemas/SidebarFavoriteObjectType' }
+        objectId: { type: string }
+        createdAt: { type: string, format: date-time }
+        label: { type: string }
+        href: { type: string }
+        context: { type: [string, 'null'] }
+    SidebarFavoriteListResponse:
+      type: object
+      required: [favorites]
+      properties:
+        favorites:
+          type: array
+          items: { $ref: '#/components/schemas/SidebarFavorite' }
+    SidebarFavoriteRequest:
+      type: object
+      required: [objectType, objectId]
+      properties:
+        objectType: { $ref: '#/components/schemas/SidebarFavoriteObjectType' }
+        objectId: { type: string }
+    ReorderSidebarFavoritesRequest:
+      type: object
+      required: [orderedIds]
+      properties:
+        orderedIds:
+          type: array
+          items: { type: string }
     ProjectStatus:
       type: string
       enum: [planned, started, paused, completed, canceled]

@@ -81,6 +81,11 @@ async function main() {
     return;
   }
 
+  if (resource === "favorites") {
+    await favoriteCommand();
+    return;
+  }
+
   if (resource !== "issues") {
     usage();
   }
@@ -222,6 +227,55 @@ async function notificationCommand() {
   if (action === "mark-read") {
     const { data, error, response } = await client.PATCH(
       "/notifications/bulk-read",
+    );
+    printResult(data, error, response.status);
+    return;
+  }
+
+  usage();
+}
+
+async function favoriteCommand() {
+  if (action === "list") {
+    const { data, error, response } = await client.GET("/sidebar/favorites");
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "add") {
+    const { data, error, response } = await client.POST("/sidebar/favorites", {
+      body: {
+        objectType: requireOption(args, "object-type") as never,
+        objectId: requireOption(args, "object-id"),
+      },
+    });
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "reorder") {
+    const orderedIds = requireOption(args, "ordered-ids")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+    const { data, error, response } = await client.PATCH("/sidebar/favorites", {
+      body: { orderedIds },
+    });
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "remove") {
+    const { data, error, response } = await client.DELETE(
+      "/sidebar/favorites",
+      {
+        params: {
+          query: {
+            objectType: requireOption(args, "object-type") as never,
+            objectId: requireOption(args, "object-id"),
+          },
+        },
+      },
     );
     printResult(data, error, response.status);
     return;
@@ -817,7 +871,11 @@ function usage(): never {
   exponential account profile
   exponential account preferences
   exponential notifications list
-  exponential notifications mark-read`);
+  exponential notifications mark-read
+  exponential favorites list
+  exponential favorites add --object-type project|issue|view --object-id <id>
+  exponential favorites reorder --ordered-ids project:id,issue:id
+  exponential favorites remove --object-type project|issue|view --object-id <id>`);
   process.exit(1);
 }
 
