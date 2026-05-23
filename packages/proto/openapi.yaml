@@ -1397,6 +1397,52 @@ paths:
                 $ref: '#/components/schemas/CreateWorkspaceResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /workspaces/current/documents:
+    get:
+      operationId: getCurrentWorkspaceDocuments
+      responses:
+        '200':
+          description: Current workspace document settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceDocumentsResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: updateCurrentWorkspaceDocuments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWorkspaceDocumentsRequest'
+      responses:
+        '200':
+          description: Updated document settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceDocumentsResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createCurrentWorkspaceDocumentTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkspaceDocumentTemplateRequest'
+      responses:
+        '201':
+          description: Created document template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceDocumentsResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /workspaces/current/billing:
     get:
       operationId: getCurrentWorkspaceBilling
@@ -2559,6 +2605,39 @@ components:
         preview:
           type: array
           items: { $ref: '#/components/schemas/WorkspaceImportPreviewRow' }
+    WorkspaceDocumentTemplate:
+      type: object
+      required: [id, name, description]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+    WorkspaceDocumentsSettings:
+      type: object
+      required: [defaultVisibility, autoLinkProjectDocuments, templates]
+      properties:
+        defaultVisibility: { type: string, enum: [workspace, private] }
+        autoLinkProjectDocuments: { type: boolean }
+        templates:
+          type: array
+          items: { $ref: '#/components/schemas/WorkspaceDocumentTemplate' }
+    WorkspaceDocumentsResponse:
+      type: object
+      required: [documents]
+      properties:
+        documents: { $ref: '#/components/schemas/WorkspaceDocumentsSettings' }
+        template: { $ref: '#/components/schemas/WorkspaceDocumentTemplate' }
+    UpdateWorkspaceDocumentsRequest:
+      type: object
+      properties:
+        defaultVisibility: { type: string, enum: [workspace, private] }
+        autoLinkProjectDocuments: { type: boolean }
+    CreateWorkspaceDocumentTemplateRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string }
     BillingPlan:
       type: object
       required: [id, name, price, description, features]

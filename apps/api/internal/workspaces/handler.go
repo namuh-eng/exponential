@@ -141,6 +141,9 @@ func (h Handler) Routes() chi.Router {
 	r.Delete("/members", h.RemoveMemberOrInvitation)
 	r.Post("/invite", h.Invite)
 	r.Post("/imports/preview", h.PreviewImport)
+	r.Get("/current/documents", h.GetDocumentsSettings)
+	r.Patch("/current/documents", h.UpdateDocumentsSettings)
+	r.Post("/current/documents", h.CreateDocumentTemplate)
 	return r
 }
 
@@ -337,6 +340,108 @@ type billingResponse struct {
 	Plans          []billingPlan    `json:"plans"`
 	PaymentMethods []any            `json:"paymentMethods"`
 	Invoices       []any            `json:"invoices"`
+}
+
+type workspaceDocumentTemplate struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+type workspaceDocumentsSettings struct {
+	DefaultVisibility        string                      `json:"defaultVisibility"`
+	AutoLinkProjectDocuments bool                        `json:"autoLinkProjectDocuments"`
+	Templates                []workspaceDocumentTemplate `json:"templates"`
+}
+
+type workspaceDocumentsResponse struct {
+	Documents workspaceDocumentsSettings `json:"documents"`
+	Template  *workspaceDocumentTemplate `json:"template,omitempty"`
+}
+
+type workspaceDocumentsPatch struct {
+	DefaultVisibility        any `json:"defaultVisibility"`
+	AutoLinkProjectDocuments any `json:"autoLinkProjectDocuments"`
+}
+
+type workspaceDocumentTemplateRequest struct {
+	Name        any `json:"name"`
+	Description any `json:"description"`
+}
+
+func (h Handler) GetDocumentsSettings(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	settings, err := h.workspaceSettings(r.Context(), p.WorkspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "No active workspace found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Get document settings failed", err.Error())
+		return
+	}
+	problem.JSON(w, 200, workspaceDocumentsResponse{Documents: normalizeWorkspaceDocuments(settings)})
+}
+
+func (h Handler) UpdateDocumentsSettings(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	settings, err := h.workspaceSettings(r.Context(), p.WorkspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "No active workspace found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Update document settings failed", err.Error())
+		return
+	}
+	var input workspaceDocumentsPatch
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		problem.Write(w, 400, "Invalid JSON", err.Error())
+		return
+	}
+	documents := normalizeWorkspaceDocuments(settings)
+	if v, ok := input.DefaultVisibility.(string); ok && (v == "workspace" || v == "private") {
+		documents.DefaultVisibility = v
+	}
+	if v, ok := input.AutoLinkProjectDocuments.(bool); ok {
+		documents.AutoLinkProjectDocuments = v
+	}
+	if err := h.saveWorkspaceDocuments(r.Context(), p.WorkspaceID, settings, documents); err != nil {
+		problem.Write(w, 500, "Update document settings failed", err.Error())
+		return
+	}
+	problem.JSON(w, 200, workspaceDocumentsResponse{Documents: documents})
+}
+
+func (h Handler) CreateDocumentTemplate(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	settings, err := h.workspaceSettings(r.Context(), p.WorkspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "No active workspace found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Create document template failed", err.Error())
+		return
+	}
+	var input workspaceDocumentTemplateRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		problem.Write(w, 400, "Invalid JSON", err.Error())
+		return
+	}
+	name := truncate(strings.TrimSpace(asStringValue(input.Name)), 120)
+	if name == "" {
+		problem.Write(w, 400, "Template name is required", "")
+		return
+	}
+	documents := normalizeWorkspaceDocuments(settings)
+	template := workspaceDocumentTemplate{ID: createRandomID("doc_tpl"), Name: name, Description: truncate(strings.TrimSpace(asStringValue(input.Description)), 500)}
+	documents.Templates = append([]workspaceDocumentTemplate{template}, documents.Templates...)
+	if err := h.saveWorkspaceDocuments(r.Context(), p.WorkspaceID, settings, documents); err != nil {
+		problem.Write(w, 500, "Create document template failed", err.Error())
+		return
+	}
+	problem.JSON(w, 201, workspaceDocumentsResponse{Documents: documents, Template: &template})
 }
 
 func (h Handler) GetBilling(w http.ResponseWriter, r *http.Request) {
@@ -1289,4 +1394,51 @@ func arrayOrDefault(value any, fallback []any) []any {
 		return items
 	}
 	return fallback
+}
+
+func normalizeWorkspaceDocuments(settings map[string]any) workspaceDocumentsSettings {
+	documents := recordFromAny(settings["documents"])
+	visibility := "workspace"
+	if documents["defaultVisibility"] == "private" {
+		visibility = "private"
+	}
+	autoLink := true
+	if value, ok := documents["autoLinkProjectDocuments"].(bool); ok {
+		autoLink = value
+	}
+	templates := []workspaceDocumentTemplate{}
+	if rawTemplates, ok := documents["templates"].([]any); ok {
+		for _, raw := range rawTemplates {
+			template := recordFromAny(raw)
+			id := asStringValue(template["id"])
+			name := asStringValue(template["name"])
+			if id == "" || name == "" {
+				continue
+			}
+			templates = append(templates, workspaceDocumentTemplate{ID: id, Name: name, Description: asStringValue(template["description"])})
+		}
+	}
+	return workspaceDocumentsSettings{DefaultVisibility: visibility, AutoLinkProjectDocuments: autoLink, Templates: templates}
+}
+
+func (h Handler) saveWorkspaceDocuments(ctx context.Context, workspaceID string, settings map[string]any, documents workspaceDocumentsSettings) error {
+	settings["documents"] = documents
+	body, _ := json.Marshal(settings)
+	_, err := h.DB.Exec(ctx, `update workspace set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, body, workspaceID)
+	return err
+}
+
+func asStringValue(value any) string {
+	if s, ok := value.(string); ok {
+		return s
+	}
+	return ""
+}
+
+func createRandomID(prefix string) string {
+	buf := make([]byte, 8)
+	if _, err := rand.Read(buf); err != nil {
+		return fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
+	}
+	return prefix + "_" + hex.EncodeToString(buf)
 }

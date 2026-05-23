@@ -61,3 +61,11 @@ func TestBillingStateDefaultsAndNormalization(t *testing.T) {
 		t.Fatalf("defaults missing = %#v", state)
 	}
 }
+
+func TestNormalizeWorkspaceDocuments(t *testing.T) {
+	settings := map[string]any{"documents": map[string]any{"defaultVisibility": "private", "autoLinkProjectDocuments": false, "templates": []any{map[string]any{"id": "tpl_1", "name": "Spec", "description": "Template"}, map[string]any{"id": "bad"}}}}
+	got := normalizeWorkspaceDocuments(settings)
+	if got.DefaultVisibility != "private" || got.AutoLinkProjectDocuments || len(got.Templates) != 1 {
+		t.Fatalf("documents = %#v", got)
+	}
+}
