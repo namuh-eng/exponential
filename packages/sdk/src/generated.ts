@@ -943,6 +943,22 @@ export interface paths {
     patch: operations["updateWorkspaceMemberOrInvitation"];
     trace?: never;
   };
+  "/workspaces/imports/preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["previewWorkspaceImport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/workspaces/invite": {
     parameters: {
       query?: never;
@@ -1735,6 +1751,25 @@ export interface components {
       role: components["schemas"]["WorkspaceRole"];
       workspaceName: string;
       workspaceSlug: string;
+    };
+    WorkspaceImportPreviewRequest: {
+      csv: string;
+      /** Format: uuid */
+      teamId: string;
+      mapping: {
+        [key: string]: unknown;
+      };
+    };
+    WorkspaceImportPreviewRow: {
+      row: number;
+      title: string;
+      description: string;
+      priority: string;
+      status: string;
+      errors: string[];
+    };
+    WorkspaceImportPreviewResponse: {
+      preview: components["schemas"]["WorkspaceImportPreviewRow"][];
     };
     Workspace: {
       /** Format: uuid */
@@ -4223,6 +4258,31 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  previewWorkspaceImport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["WorkspaceImportPreviewRequest"];
+      };
+    };
+    responses: {
+      /** @description Workspace import preview */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceImportPreviewResponse"];
         };
       };
       default: components["responses"]["Problem"];

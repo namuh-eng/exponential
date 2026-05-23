@@ -138,7 +138,78 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/members", h.ResendInvitation)
 	r.Delete("/members", h.RemoveMemberOrInvitation)
 	r.Post("/invite", h.Invite)
+	r.Post("/imports/preview", h.PreviewImport)
 	return r
+}
+
+type importPreviewRequest struct {
+	CSV     string         `json:"csv"`
+	TeamID  string         `json:"teamId"`
+	Mapping map[string]any `json:"mapping"`
+}
+
+type importPreviewRow struct {
+	Row         int      `json:"row"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Priority    string   `json:"priority"`
+	Status      string   `json:"status"`
+	Errors      []string `json:"errors"`
+}
+
+func (h Handler) PreviewImport(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	if !isManager(p.Role) {
+		problem.Write(w, 403, "Workspace admin access required", "")
+		return
+	}
+	var input importPreviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		problem.Write(w, 400, "Invalid JSON", err.Error())
+		return
+	}
+	mapping := input.Mapping
+	if mapping == nil {
+		mapping = map[string]any{}
+	}
+	titleColumn := stringFromMap(mapping, "title")
+	if titleColumn == "" {
+		problem.Write(w, 400, "Map a title column before previewing.", "")
+		return
+	}
+	teamID := strings.TrimSpace(input.TeamID)
+	if teamID == "" || !h.teamInWorkspace(r.Context(), teamID, p.WorkspaceID) {
+		problem.Write(w, 400, "Choose a valid target team.", "")
+		return
+	}
+	stateNames, err := h.workflowStateNames(r.Context(), teamID)
+	if err != nil {
+		problem.Write(w, 500, "Preview import failed", err.Error())
+		return
+	}
+	rows := parseImportCSV(input.CSV)
+	if len(rows) == 0 {
+		problem.Write(w, 400, "CSV must include at least one issue row.", "")
+		return
+	}
+	limit := len(rows)
+	if limit > 100 {
+		limit = 100
+	}
+	preview := make([]importPreviewRow, 0, limit)
+	for _, row := range rows[:limit] {
+		title := row.get(titleColumn)
+		status := row.get(stringFromMap(mapping, "status"))
+		errors := []string{}
+		if strings.TrimSpace(title) == "" {
+			errors = append(errors, "Title is required")
+		}
+		if status != "" && !stateNames[strings.ToLower(status)] {
+			errors = append(errors, "Unknown status: "+status)
+		}
+		preview = append(preview, importPreviewRow{Row: row.row, Title: title, Description: row.get(stringFromMap(mapping, "description")), Priority: row.get(stringFromMap(mapping, "priority")), Status: status, Errors: errors})
+	}
+	problem.JSON(w, 200, map[string]any{"preview": preview})
 }
 
 func (h Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -940,4 +1011,80 @@ func (d *timeDest) Scan(src any) error {
 	default:
 		return fmt.Errorf("unsupported timestamp %T", src)
 	}
+}
+
+type importCSVRow struct {
+	row     int
+	headers []string
+	cols    []string
+}
+
+func (r importCSVRow) get(name string) string {
+	if name == "" {
+		return ""
+	}
+	for idx, header := range r.headers {
+		if header == name && idx < len(r.cols) {
+			return r.cols[idx]
+		}
+	}
+	return ""
+}
+
+func parseImportCSV(text string) []importCSVRow {
+	lines := strings.Split(strings.TrimSpace(text), "\n")
+	clean := []string{}
+	for _, line := range lines {
+		line = strings.TrimRight(line, "\r")
+		if strings.TrimSpace(line) != "" {
+			clean = append(clean, line)
+		}
+	}
+	if len(clean) == 0 {
+		return nil
+	}
+	headers := splitImportCSVLine(clean[0])
+	rows := []importCSVRow{}
+	for idx, line := range clean[1:] {
+		rows = append(rows, importCSVRow{row: idx + 2, headers: headers, cols: splitImportCSVLine(line)})
+	}
+	return rows
+}
+
+func splitImportCSVLine(line string) []string {
+	parts := strings.Split(line, ",")
+	for idx, part := range parts {
+		parts[idx] = strings.Trim(strings.TrimSpace(part), "\"")
+	}
+	return parts
+}
+
+func stringFromMap(m map[string]any, key string) string {
+	if value, ok := m[key].(string); ok {
+		return strings.TrimSpace(value)
+	}
+	return ""
+}
+
+func (h Handler) teamInWorkspace(ctx context.Context, teamID string, workspaceID string) bool {
+	var found string
+	err := h.DB.QueryRow(ctx, `select id::text from team where id=$1::uuid and workspace_id=$2::uuid limit 1`, teamID, workspaceID).Scan(&found)
+	return err == nil
+}
+
+func (h Handler) workflowStateNames(ctx context.Context, teamID string) (map[string]bool, error) {
+	rows, err := h.DB.Query(ctx, `select name from workflow_state where team_id=$1::uuid`, teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out[strings.ToLower(name)] = true
+	}
+	return out, rows.Err()
 }

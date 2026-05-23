@@ -22,9 +22,9 @@ func TestValidateSlug(t *testing.T) {
 
 func TestTeamKeyBase(t *testing.T) {
 	cases := map[string]string{
-		"Exponential": "EXP",
+		"Exponential":  "EXP",
 		"Linear Clone": "LCX",
-		"1 2": "WRK",
+		"1 2":          "WRK",
 	}
 	for input, want := range cases {
 		if got := teamKeyBase(input); got != want {
@@ -39,5 +39,15 @@ func TestRoles(t *testing.T) {
 	}
 	if !validRole("guest") || validInviteRole("owner") {
 		t.Fatal("role validation drifted")
+	}
+}
+
+func TestParseImportCSV(t *testing.T) {
+	rows := parseImportCSV("Title,Status\nFix bug,Todo\n,Done")
+	if len(rows) != 2 {
+		t.Fatalf("rows = %#v", rows)
+	}
+	if rows[0].row != 2 || rows[0].get("Title") != "Fix bug" || rows[0].get("Status") != "Todo" {
+		t.Fatalf("first row = %#v", rows[0])
 	}
 }

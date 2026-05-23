@@ -1504,6 +1504,24 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /workspaces/imports/preview:
+    post:
+      operationId: previewWorkspaceImport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkspaceImportPreviewRequest'
+      responses:
+        '200':
+          description: Workspace import preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceImportPreviewResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /workspaces/invite:
     post:
       operationId: inviteWorkspaceMembers
@@ -2484,6 +2502,34 @@ components:
         role: { $ref: '#/components/schemas/WorkspaceRole' }
         workspaceName: { type: string }
         workspaceSlug: { type: string }
+    WorkspaceImportPreviewRequest:
+      type: object
+      required: [csv, teamId, mapping]
+      properties:
+        csv: { type: string }
+        teamId: { type: string, format: uuid }
+        mapping:
+          type: object
+          additionalProperties: true
+    WorkspaceImportPreviewRow:
+      type: object
+      required: [row, title, description, priority, status, errors]
+      properties:
+        row: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        priority: { type: string }
+        status: { type: string }
+        errors:
+          type: array
+          items: { type: string }
+    WorkspaceImportPreviewResponse:
+      type: object
+      required: [preview]
+      properties:
+        preview:
+          type: array
+          items: { $ref: '#/components/schemas/WorkspaceImportPreviewRow' }
     Workspace:
       type: object
       required: [id, name, urlSlug, region, fiscalMonth, welcomeMessage, plan]
