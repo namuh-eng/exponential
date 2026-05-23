@@ -11,6 +11,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/observability"
 	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
 	"github.com/namuh-eng/exponential/apps/api/internal/teams"
+	"github.com/namuh-eng/exponential/apps/api/internal/tokens"
 	"github.com/namuh-eng/exponential/apps/api/internal/workspaces"
 	"go.uber.org/zap"
 )
@@ -40,6 +41,7 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 		v1.Group(func(protected chi.Router) {
 			protected.Use(authMiddleware.Require)
 			protected.Mount("/issues", issues.Handler{DB: db}.Routes())
+			protected.Mount("/personal-access-tokens", tokens.Handler{DB: db}.Routes())
 			protected.Mount("/teams", teams.Handler{DB: db}.Routes())
 			protected.Mount("/workspaces", workspaces.Handler{DB: db}.Routes())
 			protected.Get("/sync/ws", syncapi.Handler{DB: db}.WebSocket)

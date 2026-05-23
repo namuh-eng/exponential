@@ -99,6 +99,52 @@ paths:
                   success: { type: boolean }
         default:
           $ref: '#/components/responses/Problem'
+  /personal-access-tokens:
+    get:
+      operationId: listPersonalAccessTokens
+      responses:
+        '200':
+          description: Personal access tokens
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonalAccessTokenListResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createPersonalAccessToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePersonalAccessTokenRequest'
+      responses:
+        '201':
+          description: Created personal access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatePersonalAccessTokenResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /personal-access-tokens/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      operationId: revokePersonalAccessToken
+      responses:
+        '200':
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /teams:
     get:
       operationId: listTeams
@@ -339,6 +385,40 @@ components:
         title: { type: string }
         status: { type: integer }
         detail: { type: string }
+    PersonalAccessToken:
+      type: object
+      required: [id, name, token_prefix, scopes, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        token_prefix: { type: string }
+        scopes:
+          type: array
+          items: { type: string }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: [string, 'null'], format: date-time }
+        revoked_at: { type: [string, 'null'], format: date-time }
+    PersonalAccessTokenListResponse:
+      type: object
+      required: [tokens]
+      properties:
+        tokens:
+          type: array
+          items: { $ref: '#/components/schemas/PersonalAccessToken' }
+    CreatePersonalAccessTokenRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        scopes:
+          type: array
+          items: { type: string }
+    CreatePersonalAccessTokenResponse:
+      type: object
+      required: [token, value]
+      properties:
+        token: { $ref: '#/components/schemas/PersonalAccessToken' }
+        value: { type: string }
     Team:
       type: object
       required: [id, name, key, isPrivate, issueCount, memberCount, currentUserIsMember, createdAt]

@@ -21,6 +21,11 @@ async function main() {
     return;
   }
 
+  if (resource === "tokens") {
+    await tokenCommand();
+    return;
+  }
+
   if (resource !== "issues") {
     usage();
   }
@@ -152,6 +157,42 @@ async function workspaceCommand() {
   usage();
 }
 
+async function tokenCommand() {
+  if (action === "list") {
+    const { data, error, response } = await client.GET(
+      "/personal-access-tokens",
+    );
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "create") {
+    const name = requireOption(args, "name");
+    const scopes = readOption(args, "scopes")
+      ?.split(",")
+      .map((scope) => scope.trim())
+      .filter(Boolean);
+    const { data, error, response } = await client.POST(
+      "/personal-access-tokens",
+      { body: { name, scopes } },
+    );
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "revoke") {
+    const id = requireOption(args, "id");
+    const { data, error, response } = await client.DELETE(
+      "/personal-access-tokens/{id}",
+      { params: { path: { id } } },
+    );
+    printResult(data, error, response.status);
+    return;
+  }
+
+  usage();
+}
+
 function printResult(data: unknown, error: unknown, status: number) {
   if (error) {
     console.error(JSON.stringify({ status, error }, null, 2));
@@ -172,7 +213,10 @@ function usage(): never {
   exponential workspaces create --name <name> --url-slug <slug>
   exponential workspaces current
   exponential workspaces members
-  exponential workspaces invite --email <email> [--role member|admin|guest]`);
+  exponential workspaces invite --email <email> [--role member|admin|guest]
+  exponential tokens list
+  exponential tokens create --name <name> [--scopes read,write]
+  exponential tokens revoke --id <uuid>`);
   process.exit(1);
 }
 

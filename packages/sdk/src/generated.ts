@@ -40,6 +40,40 @@ export interface paths {
     patch: operations["updateIssue"];
     trace?: never;
   };
+  "/personal-access-tokens": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["listPersonalAccessTokens"];
+    put?: never;
+    post: operations["createPersonalAccessToken"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/personal-access-tokens/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations["revokePersonalAccessToken"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/teams": {
     parameters: {
       query?: never;
@@ -151,6 +185,30 @@ export interface components {
       title: string;
       status: number;
       detail?: string;
+    };
+    PersonalAccessToken: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      token_prefix: string;
+      scopes: string[];
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      last_used_at?: string | null;
+      /** Format: date-time */
+      revoked_at?: string | null;
+    };
+    PersonalAccessTokenListResponse: {
+      tokens: components["schemas"]["PersonalAccessToken"][];
+    };
+    CreatePersonalAccessTokenRequest: {
+      name: string;
+      scopes?: string[];
+    };
+    CreatePersonalAccessTokenResponse: {
+      token: components["schemas"]["PersonalAccessToken"];
+      value: string;
     };
     Team: {
       /** Format: uuid */
@@ -533,6 +591,75 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Issue"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  listPersonalAccessTokens: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Personal access tokens */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PersonalAccessTokenListResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createPersonalAccessToken: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreatePersonalAccessTokenRequest"];
+      };
+    };
+    responses: {
+      /** @description Created personal access token */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreatePersonalAccessTokenResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  revokePersonalAccessToken: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Revoked */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
         };
       };
       default: components["responses"]["Problem"];
