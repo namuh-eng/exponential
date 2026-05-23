@@ -324,6 +324,18 @@ paths:
                 $ref: '#/components/schemas/AccountProfileResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /account/profile/workspace:
+    delete:
+      operationId: leaveAccountWorkspace
+      responses:
+        '200':
+          description: Left active workspace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveWorkspaceResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /account/preferences:
     get:
       operationId: getAccountPreferences
@@ -1494,6 +1506,12 @@ components:
         location: { type: string }
         timezone: { type: string }
         showLocalTime: { type: boolean }
+    LeaveWorkspaceResponse:
+      type: object
+      required: [success, redirectTo]
+      properties:
+        success: { type: boolean }
+        redirectTo: { type: string }
     AccountPreferencesResponse:
       type: object
       required: [accountPreferences]

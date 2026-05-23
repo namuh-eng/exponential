@@ -53,6 +53,11 @@ type preferencesPayload struct {
 	AccountPreferences map[string]any `json:"accountPreferences"`
 }
 
+type leaveWorkspacePayload struct {
+	Success    bool   `json:"success"`
+	RedirectTo string `json:"redirectTo"`
+}
+
 type preferencesPatch struct {
 	AccountPreferences map[string]any `json:"accountPreferences"`
 }
@@ -63,6 +68,7 @@ func (h Handler) Routes() chi.Router {
 	r.Patch("/profile", h.UpdateProfile)
 	r.Get("/preferences", h.GetPreferences)
 	r.Patch("/preferences", h.UpdatePreferences)
+	r.Delete("/profile/workspace", h.LeaveWorkspace)
 	return r
 }
 
@@ -155,6 +161,33 @@ func (h Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	payload.Profile.ShowLocalTime = profile["showLocalTime"].(bool)
 	payload.Profile.Image = image
 	problem.JSON(w, 200, payload)
+}
+
+func (h Handler) LeaveWorkspace(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	if p.WorkspaceID == "" {
+		problem.Write(w, 404, "No active workspace found", "")
+		return
+	}
+
+	if _, err := h.DB.Exec(r.Context(), `delete from member where user_id=$1 and workspace_id=$2::uuid`, p.UserID, p.WorkspaceID); err != nil {
+		problem.Write(w, 500, "Leave workspace failed", err.Error())
+		return
+	}
+
+	nextWorkspaceID, err := h.nextWorkspaceID(r, p.UserID)
+	if err != nil {
+		problem.Write(w, 500, "Leave workspace failed", err.Error())
+		return
+	}
+
+	redirectTo := leaveWorkspaceRedirect(nextWorkspaceID)
+	if nextWorkspaceID != nil {
+		http.SetCookie(w, &http.Cookie{Name: "activeWorkspaceId", Value: *nextWorkspaceID, Path: "/", SameSite: http.SameSiteLaxMode})
+	} else {
+		http.SetCookie(w, &http.Cookie{Name: "activeWorkspaceId", Value: "", Path: "/", MaxAge: -1, SameSite: http.SameSiteLaxMode})
+	}
+	problem.JSON(w, 200, leaveWorkspacePayload{Success: true, RedirectTo: redirectTo})
 }
 
 func (h Handler) GetPreferences(w http.ResponseWriter, r *http.Request) {
@@ -301,4 +334,20 @@ func boolValue(v any) bool { b, ok := v.(bool); return ok && b }
 func isSupportedImage(v string) bool {
 	l := strings.ToLower(v)
 	return strings.HasPrefix(l, "http://") || strings.HasPrefix(l, "https://") || strings.HasPrefix(l, "data:image/png;base64,") || strings.HasPrefix(l, "data:image/jpeg;base64,") || strings.HasPrefix(l, "data:image/jpg;base64,") || strings.HasPrefix(l, "data:image/webp;base64,") || strings.HasPrefix(l, "data:image/gif;base64,") || strings.HasPrefix(l, "data:image/svg+xml;base64,")
+}
+
+func (h Handler) nextWorkspaceID(r *http.Request, userID string) (*string, error) {
+	var workspaceID *string
+	err := h.DB.QueryRow(r.Context(), `select workspace_id::text from member where user_id=$1 order by created_at desc limit 1`, userID).Scan(&workspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return workspaceID, err
+}
+
+func leaveWorkspaceRedirect(nextWorkspaceID *string) string {
+	if nextWorkspaceID == nil || *nextWorkspaceID == "" {
+		return "/create-workspace"
+	}
+	return "/"
 }

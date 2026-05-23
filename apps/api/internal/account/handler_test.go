@@ -16,3 +16,13 @@ func TestNormalizeTimezone(t *testing.T) {
 		t.Fatalf("invalid timezone = %q", got)
 	}
 }
+
+func TestLeaveWorkspaceRedirect(t *testing.T) {
+	if got := leaveWorkspaceRedirect(nil); got != "/create-workspace" {
+		t.Fatalf("nil workspace redirect = %q", got)
+	}
+	workspaceID := "14000000-0000-0000-0000-000000000002"
+	if got := leaveWorkspaceRedirect(&workspaceID); got != "/" {
+		t.Fatalf("next workspace redirect = %q", got)
+	}
+}

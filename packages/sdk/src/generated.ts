@@ -177,6 +177,22 @@ export interface paths {
     patch: operations["updateAccountProfile"];
     trace?: never;
   };
+  "/account/profile/workspace": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations["leaveAccountWorkspace"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/account/preferences": {
     parameters: {
       query?: never;
@@ -886,6 +902,10 @@ export interface components {
       location?: string;
       timezone?: string;
       showLocalTime?: boolean;
+    };
+    LeaveWorkspaceResponse: {
+      success: boolean;
+      redirectTo: string;
     };
     AccountPreferencesResponse: {
       accountPreferences: {
@@ -2272,6 +2292,27 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["AccountProfileResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  leaveAccountWorkspace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Left active workspace */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LeaveWorkspaceResponse"];
         };
       };
       default: components["responses"]["Problem"];
