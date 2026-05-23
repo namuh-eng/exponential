@@ -12,6 +12,11 @@ import {
   user,
   workflowState,
 } from "@/lib/db/schema";
+import {
+  createHeadlessTeamsClient,
+  headlessTeamsEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { getLabelsForIssues } from "@/lib/issue-labels";
 import { readTeamSettings } from "@/lib/team-settings";
 import { findAccessibleTeam } from "@/lib/teams";
@@ -34,6 +39,23 @@ export async function GET(
   });
   if (!teamRecord) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
+  }
+
+  if (headlessTeamsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: teamRecord.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const { data, error, response } = await client.GET("/teams/{key}/triage", {
+      params: { path: { key } },
+    });
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
   }
 
   const hierarchyTeamIds = teamRecord.hierarchyTeamIds ?? [teamRecord.id];

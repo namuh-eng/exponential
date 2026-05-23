@@ -1841,6 +1841,79 @@ paths:
                 $ref: '#/components/schemas/TeamStatusesResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /teams/{key}/triage:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getTeamTriage
+      responses:
+        '200':
+          description: Team triage queue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamTriageResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /teams/{key}/triage/bulk:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      operationId: bulkUpdateTeamTriage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TriageDecisionRequest'
+      responses:
+        '200':
+          description: Bulk triage result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriageDecisionResponse'
+        '207':
+          description: Partial bulk triage result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriageDecisionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /teams/{key}/triage/{issueID}:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+      - name: issueID
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      operationId: updateTeamTriageIssue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TriageDecisionRequest'
+      responses:
+        '200':
+          description: Triage decision result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriageDecisionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /teams/{key}/slack-notifications:
     parameters:
       - name: key
@@ -3948,6 +4021,61 @@ components:
         events:
           type: array
           items: { type: string }
+    TeamTriageResponse:
+      type: object
+      additionalProperties: true
+      required: [team, issues, count, createStateId, createStateName, triageEnabled]
+      properties:
+        team:
+          type: object
+          additionalProperties: true
+        issues:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        count: { type: integer }
+        createStateId: { type: [string, 'null'], format: uuid }
+        createStateName: { type: [string, 'null'] }
+        triageEnabled: { type: boolean }
+        acceptDestinationStates:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        declineDestinationStates:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        metadataOptions:
+          type: object
+          additionalProperties: true
+    TriageDecisionRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        action: { type: string, enum: [accept, decline] }
+        issueIds:
+          type: array
+          items: { type: string, format: uuid }
+        destinationStateId: { type: string, format: uuid }
+        confirmed: { type: boolean }
+        reason: { type: [string, 'null'] }
+        priority: { type: [string, 'null'], enum: [none, urgent, high, medium, low, null] }
+        estimate: { type: [number, 'null'] }
+        labelIds:
+          type: array
+          items: { type: string, format: uuid }
+        cycleId: { type: [string, 'null'], format: uuid }
+        projectId: { type: [string, 'null'], format: uuid }
+        projectMilestoneId: { type: [string, 'null'], format: uuid }
+        assigneeId: { type: [string, 'null'] }
+        comment: { type: [string, 'null'] }
+        subscribe: { type: boolean }
+    TriageDecisionResponse:
+      type: object
+      additionalProperties: true
     RecurringIssue:
       type: object
       required: [id, workspaceId, teamId, title, priority, labelIds, cadenceConfig, timezone, nextRunAt, enabled, createdAt, updatedAt, cadenceLabel]

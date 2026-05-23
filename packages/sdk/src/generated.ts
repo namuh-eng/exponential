@@ -1221,6 +1221,61 @@ export interface paths {
     patch: operations["updateTeamStatus"];
     trace?: never;
   };
+  "/teams/{key}/triage": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    get: operations["getTeamTriage"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/teams/{key}/triage/bulk": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations["bulkUpdateTeamTriage"];
+    trace?: never;
+  };
+  "/teams/{key}/triage/{issueID}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+        issueID: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations["updateTeamTriageIssue"];
+    trace?: never;
+  };
   "/teams/{key}/slack-notifications": {
     parameters: {
       query?: never;
@@ -2725,6 +2780,57 @@ export interface components {
       channelName?: string;
       enabled?: boolean;
       events?: string[];
+    };
+    TeamTriageResponse: {
+      team: {
+        [key: string]: unknown;
+      };
+      issues: {
+        [key: string]: unknown;
+      }[];
+      count: number;
+      /** Format: uuid */
+      createStateId: string | null;
+      createStateName: string | null;
+      triageEnabled: boolean;
+      acceptDestinationStates?: {
+        [key: string]: unknown;
+      }[];
+      declineDestinationStates?: {
+        [key: string]: unknown;
+      }[];
+      metadataOptions?: {
+        [key: string]: unknown;
+      };
+    } & {
+      [key: string]: unknown;
+    };
+    TriageDecisionRequest: {
+      /** @enum {string} */
+      action?: "accept" | "decline";
+      issueIds?: string[];
+      /** Format: uuid */
+      destinationStateId?: string;
+      confirmed?: boolean;
+      reason?: string | null;
+      /** @enum {string|null} */
+      priority?: "none" | "urgent" | "high" | "medium" | "low" | null;
+      estimate?: number | null;
+      labelIds?: string[];
+      /** Format: uuid */
+      cycleId?: string | null;
+      /** Format: uuid */
+      projectId?: string | null;
+      /** Format: uuid */
+      projectMilestoneId?: string | null;
+      assigneeId?: string | null;
+      comment?: string | null;
+      subscribe?: boolean;
+    } & {
+      [key: string]: unknown;
+    };
+    TriageDecisionResponse: {
+      [key: string]: unknown;
     };
     RecurringIssue: {
       /** Format: uuid */
@@ -6278,6 +6384,93 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["TeamStatusesResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getTeamTriage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Team triage queue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TeamTriageResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  bulkUpdateTeamTriage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TriageDecisionRequest"];
+      };
+    };
+    responses: {
+      /** @description Bulk triage result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TriageDecisionResponse"];
+        };
+      };
+      /** @description Partial bulk triage result */
+      207: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TriageDecisionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateTeamTriageIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+        issueID: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TriageDecisionRequest"];
+      };
+    };
+    responses: {
+      /** @description Triage decision result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TriageDecisionResponse"];
         };
       };
       default: components["responses"]["Problem"];
