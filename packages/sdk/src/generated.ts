@@ -76,6 +76,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/issues/bulk": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Bulk update issues in the authenticated workspace */
+    patch: operations["bulkUpdateIssues"];
+    trace?: never;
+  };
   "/issues/search": {
     parameters: {
       query?: never;
@@ -2972,6 +2989,28 @@ export interface components {
       subscribed: boolean;
       watcherCount: number;
     };
+    BulkIssueUpdates: {
+      /** Format: uuid */
+      stateId?: string | null;
+      assigneeId?: string | null;
+      priority?: components["schemas"]["IssuePriority"];
+      labelIds?: string[];
+      /** Format: uuid */
+      projectId?: string | null;
+      /** Format: uuid */
+      cycleId?: string | null;
+      /** Format: date */
+      dueDate?: string | null;
+      archive?: boolean;
+      delete?: boolean;
+    };
+    BulkUpdateIssuesRequest: {
+      issueIds: string[];
+      updates: components["schemas"]["BulkIssueUpdates"];
+    };
+    BulkUpdateIssuesResponse: {
+      updatedCount: number;
+    };
     CreateIssueRequest: {
       title: string;
       description?: string | null;
@@ -3244,6 +3283,31 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ReactionSummaryList"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  bulkUpdateIssues: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["BulkUpdateIssuesRequest"];
+      };
+    };
+    responses: {
+      /** @description Bulk update result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BulkUpdateIssuesResponse"];
         };
       };
       default: components["responses"]["Problem"];

@@ -162,6 +162,25 @@ paths:
                 $ref: '#/components/schemas/ReactionSummaryList'
         default:
           $ref: '#/components/responses/Problem'
+  /issues/bulk:
+    patch:
+      operationId: bulkUpdateIssues
+      summary: Bulk update issues in the authenticated workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkUpdateIssuesRequest'
+      responses:
+        '200':
+          description: Bulk update result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkUpdateIssuesResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /issues/search:
     get:
       operationId: searchIssues
@@ -4118,6 +4137,34 @@ components:
       properties:
         subscribed: { type: boolean }
         watcherCount: { type: integer }
+    BulkIssueUpdates:
+      type: object
+      properties:
+        stateId: { type: [string, 'null'], format: uuid }
+        assigneeId: { type: [string, 'null'] }
+        priority: { $ref: '#/components/schemas/IssuePriority' }
+        labelIds:
+          type: array
+          items: { type: string, format: uuid }
+        projectId: { type: [string, 'null'], format: uuid }
+        cycleId: { type: [string, 'null'], format: uuid }
+        dueDate: { type: [string, 'null'], format: date }
+        archive: { type: boolean }
+        delete: { type: boolean }
+    BulkUpdateIssuesRequest:
+      type: object
+      required: [issueIds, updates]
+      properties:
+        issueIds:
+          type: array
+          maxItems: 200
+          items: { type: string, format: uuid }
+        updates: { $ref: '#/components/schemas/BulkIssueUpdates' }
+    BulkUpdateIssuesResponse:
+      type: object
+      required: [updatedCount]
+      properties:
+        updatedCount: { type: integer }
     CreateIssueRequest:
       type: object
       required: [title, team_id]
