@@ -55,6 +55,13 @@ func (m Middleware) authenticate(ctx context.Context, headers http.Header) (Prin
 
 	hash := sha256.Sum256([]byte(token))
 	keyHash := hex.EncodeToString(hash[:])
+	if strings.HasPrefix(token, "pat_") {
+		return m.authenticatePAT(ctx, keyHash)
+	}
+	return m.authenticateLegacyAPIKey(ctx, keyHash)
+}
+
+func (m Middleware) authenticateLegacyAPIKey(ctx context.Context, keyHash string) (Principal, error) {
 	var p Principal
 	err := m.DB.QueryRow(ctx, `
 		select ak.id::text, ak.user_id, ak.workspace_id::text, m.role::text
@@ -66,6 +73,22 @@ func (m Middleware) authenticate(ctx context.Context, headers http.Header) (Prin
 		return Principal{}, errUnauthorized("invalid token")
 	}
 	_, _ = m.DB.Exec(ctx, `update api_key set last_used_at = now() where id = $1::uuid`, p.APIKeyID)
+	return p, nil
+}
+
+func (m Middleware) authenticatePAT(ctx context.Context, keyHash string) (Principal, error) {
+	var p Principal
+	err := m.DB.QueryRow(ctx, `
+		select pat.id::text, pat.user_id, pat.workspace_id::text, m.role::text
+		from personal_access_token pat
+		join member m on m.user_id = pat.user_id and m.workspace_id = pat.workspace_id
+		where pat.token_hash = $1 and pat.revoked_at is null
+		limit 1`, keyHash).Scan(&p.APIKeyID, &p.UserID, &p.WorkspaceID, &p.Role)
+	if err != nil {
+		return Principal{}, errUnauthorized("invalid token")
+	}
+	_, _ = m.DB.Exec(ctx, `update personal_access_token set last_used_at = now() where id = $1::uuid`, p.APIKeyID)
+	_, _ = m.DB.Exec(ctx, `insert into personal_access_token_audit_log (token_id, user_id, workspace_id, action) values ($1::uuid, $2, $3::uuid, 'used')`, p.APIKeyID, p.UserID, p.WorkspaceID)
 	return p, nil
 }
 
