@@ -1367,6 +1367,42 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/teams/{key}/members": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    get: operations["listTeamMembers"];
+    put?: never;
+    post: operations["updateTeamMembers"];
+    delete: operations["removeTeamMember"];
+    options?: never;
+    head?: never;
+    patch: operations["resendTeamInvitation"];
+    trace?: never;
+  };
+  "/teams/{key}/settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    get: operations["getTeamSettings"];
+    put?: never;
+    post: operations["updateTeamLifecycle"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations["updateTeamSettings"];
+    trace?: never;
+  };
   "/teams/{key}/create-issue-options": {
     parameters: {
       query?: never;
@@ -3243,6 +3279,57 @@ export interface components {
       aiSettings: {
         [key: string]: unknown;
       };
+    };
+    TeamMemberEntry: {
+      id: string;
+      /** @enum {string} */
+      kind: "member" | "invitation";
+      userId?: string | null;
+      name: string;
+      email: string;
+      role: string;
+      status: string;
+      actions: string[];
+      invitedAt?: string | null;
+    };
+    TeamMembersResponse: {
+      members: components["schemas"]["TeamMemberEntry"][];
+    };
+    UpdateTeamMembersRequest: {
+      userIds?: string[];
+      invitationIds?: string[];
+      inviteEmails?: string[];
+      role?: string;
+    };
+    TeamInvitationActionRequest: {
+      invitationId: string;
+      /** @enum {string} */
+      action: "resend";
+    };
+    RemoveTeamMemberRequest: {
+      userId?: string;
+      invitationId?: string;
+    };
+    TeamMembersMutationResponse: {
+      success: boolean;
+      addedUserIds?: string[];
+      updatedInvitationIds?: string[];
+      invitedEmails?: string[];
+      removedUserId?: string;
+      removedInvitationId?: string;
+      members: components["schemas"]["TeamMemberEntry"][];
+    };
+    TeamSettingsResponse: {
+      team: {
+        [key: string]: unknown;
+      };
+    };
+    UpdateTeamSettingsRequest: {
+      [key: string]: unknown;
+    };
+    TeamLifecycleRequest: {
+      /** @enum {string} */
+      action: "leave" | "retire" | "delete" | "restore";
     };
     InitiativeUser: {
       id: string;
@@ -6933,6 +7020,189 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Cycle"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  listTeamMembers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Team members */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TeamMembersResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateTeamMembers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateTeamMembersRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated team members */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TeamMembersMutationResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  removeTeamMember: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RemoveTeamMemberRequest"];
+      };
+    };
+    responses: {
+      /** @description Team member or invitation removed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TeamMembersMutationResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  resendTeamInvitation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TeamInvitationActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Invitation resent */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TeamMembersMutationResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getTeamSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Team settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TeamSettingsResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateTeamLifecycle: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TeamLifecycleRequest"];
+      };
+    };
+    responses: {
+      /** @description Team lifecycle action result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateTeamSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateTeamSettingsRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated team settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TeamSettingsResponse"];
         };
       };
       default: components["responses"]["Problem"];

@@ -9,6 +9,11 @@ import {
   workspaceInvitation,
 } from "@/lib/db/schema";
 import { sendInvitationEmail } from "@/lib/email";
+import {
+  createHeadlessTeamsClient,
+  headlessTeamsEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { createInviteToken, verifyInviteToken } from "@/lib/invite-tokens";
 import { findAccessibleTeam } from "@/lib/teams";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
@@ -179,6 +184,23 @@ export async function GET(
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
+  if (headlessTeamsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: teamRecord.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const { data, error, response } = await client.GET("/teams/{key}/members", {
+      params: { path: { key } },
+    });
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   const members = await listMembers(teamRecord);
 
   return NextResponse.json({ members });
@@ -199,6 +221,28 @@ export async function POST(
     return access.response;
   }
   const teamRecord = access.teamRecord;
+
+  if (headlessTeamsEnabled()) {
+    const body = await request.json().catch(() => ({}));
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: teamRecord.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const { data, error, response } = await client.POST(
+      "/teams/{key}/members",
+      {
+        params: { path: { key } },
+        body,
+      },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
 
   const body = (await request.json().catch(() => null)) as {
     userIds?: unknown;
@@ -467,6 +511,27 @@ export async function PATCH(
     action?: unknown;
   } | null;
 
+  if (headlessTeamsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: teamRecord.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const { data, error, response } = await client.PATCH(
+      "/teams/{key}/members",
+      {
+        params: { path: { key } },
+        body: (body ?? {}) as never,
+      },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   if (typeof body?.invitationId !== "string" || body.action !== "resend") {
     return NextResponse.json(
       { error: "Invalid invitation action" },
@@ -545,6 +610,27 @@ export async function DELETE(
     userId?: unknown;
     invitationId?: unknown;
   } | null;
+
+  if (headlessTeamsEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: teamRecord.workspaceId,
+    });
+    const client = createHeadlessTeamsClient(token);
+    const { data, error, response } = await client.DELETE(
+      "/teams/{key}/members",
+      {
+        params: { path: { key } },
+        body: (body ?? {}) as never,
+      },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
   const userId = typeof body?.userId === "string" ? body.userId : "";
   const invitationId =
     typeof body?.invitationId === "string" ? body.invitationId : "";

@@ -2089,6 +2089,108 @@ paths:
                 $ref: '#/components/schemas/Cycle'
         default:
           $ref: '#/components/responses/Problem'
+  /teams/{key}/members:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listTeamMembers
+      responses:
+        '200':
+          description: Team members
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamMembersResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: updateTeamMembers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTeamMembersRequest' }
+      responses:
+        '200':
+          description: Updated team members
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamMembersMutationResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: resendTeamInvitation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TeamInvitationActionRequest' }
+      responses:
+        '200':
+          description: Invitation resent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamMembersMutationResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: removeTeamMember
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RemoveTeamMemberRequest' }
+      responses:
+        '200':
+          description: Team member or invitation removed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamMembersMutationResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+  /teams/{key}/settings:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getTeamSettings
+      responses:
+        '200':
+          description: Team settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamSettingsResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateTeamSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTeamSettingsRequest' }
+      responses:
+        '200':
+          description: Updated team settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamSettingsResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: updateTeamLifecycle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TeamLifecycleRequest' }
+      responses:
+        '200':
+          description: Team lifecycle action result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        default: { $ref: '#/components/responses/Problem' }
   /teams/{key}/create-issue-options:
     parameters:
       - name: key
@@ -4617,6 +4719,86 @@ components:
         aiSettings:
           type: object
           additionalProperties: true
+    TeamMemberEntry:
+      type: object
+      required: [id, kind, name, email, role, status, actions]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [member, invitation] }
+        userId: { type: [string, 'null'] }
+        name: { type: string }
+        email: { type: string }
+        role: { type: string }
+        status: { type: string }
+        actions:
+          type: array
+          items: { type: string }
+        invitedAt: { type: [string, 'null'] }
+    TeamMembersResponse:
+      type: object
+      required: [members]
+      properties:
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/TeamMemberEntry' }
+    UpdateTeamMembersRequest:
+      type: object
+      properties:
+        userIds:
+          type: array
+          items: { type: string }
+        invitationIds:
+          type: array
+          items: { type: string }
+        inviteEmails:
+          type: array
+          items: { type: string }
+        role: { type: string }
+    TeamInvitationActionRequest:
+      type: object
+      required: [invitationId, action]
+      properties:
+        invitationId: { type: string }
+        action: { type: string, enum: [resend] }
+    RemoveTeamMemberRequest:
+      type: object
+      properties:
+        userId: { type: string }
+        invitationId: { type: string }
+    TeamMembersMutationResponse:
+      type: object
+      required: [success, members]
+      properties:
+        success: { type: boolean }
+        addedUserIds:
+          type: array
+          items: { type: string }
+        updatedInvitationIds:
+          type: array
+          items: { type: string }
+        invitedEmails:
+          type: array
+          items: { type: string }
+        removedUserId: { type: string }
+        removedInvitationId: { type: string }
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/TeamMemberEntry' }
+    TeamSettingsResponse:
+      type: object
+      required: [team]
+      properties:
+        team:
+          type: object
+          additionalProperties: true
+    UpdateTeamSettingsRequest:
+      type: object
+      additionalProperties: true
+    TeamLifecycleRequest:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [leave, retire, delete, restore] }
     InitiativeUser:
       type: object
       required: [id, name]
