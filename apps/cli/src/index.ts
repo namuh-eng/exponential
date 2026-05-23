@@ -26,6 +26,11 @@ async function main() {
     return;
   }
 
+  if (resource === "teams") {
+    await teamCommand();
+    return;
+  }
+
   if (resource === "projects") {
     await projectCommand();
     return;
@@ -258,6 +263,39 @@ async function workspaceCommand() {
     const { data, error, response } = await client.POST("/workspaces/invite", {
       body: { invites: [{ email, role }] },
     });
+    printResult(data, error, response.status);
+    return;
+  }
+
+  usage();
+}
+
+async function teamCommand() {
+  if (action === "list") {
+    const { data, error, response } = await client.GET("/teams");
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "create") {
+    const { data, error, response } = await client.POST("/teams", {
+      body: {
+        name: requireOption(args, "name"),
+        key: readOption(args, "key"),
+        icon: readOption(args, "icon"),
+        isPrivate: readOption(args, "private") === "true",
+      },
+    });
+    printResult(data, error, response.status);
+    return;
+  }
+
+  if (action === "create-issue-options") {
+    const key = requireOption(args, "team-key");
+    const { data, error, response } = await client.GET(
+      "/teams/{key}/create-issue-options",
+      { params: { path: { key } } },
+    );
     printResult(data, error, response.status);
     return;
   }
@@ -914,6 +952,9 @@ function usage(): never {
   exponential workspaces current
   exponential workspaces members
   exponential workspaces invite --email <email> [--role member|admin|guest]
+  exponential teams list
+  exponential teams create --name <name> [--key <key>] [--private true]
+  exponential teams create-issue-options --team-key <key>
   exponential tokens list
   exponential tokens create --name <name> [--scopes read,write]
   exponential tokens revoke --id <uuid>

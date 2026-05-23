@@ -31,3 +31,22 @@ func TestParseCycleDate(t *testing.T) {
 		t.Fatal("expected invalid cycle date")
 	}
 }
+
+func TestEstimateOptions(t *testing.T) {
+	if got := estimateOptions("not_in_use"); len(got) != 0 {
+		t.Fatalf("estimates = %#v", got)
+	}
+	got := estimateOptions("fibonacci")
+	if len(got) != 5 || got[0].Label != "1 point" || got[1].Label != "2 points" {
+		t.Fatalf("estimates = %#v", got)
+	}
+}
+
+func TestCreateIssueOptionStaticLists(t *testing.T) {
+	if len(priorityOptions()) != 5 {
+		t.Fatal("priority options drifted")
+	}
+	if len(dueDatePresets()) != 4 {
+		t.Fatal("due date presets drifted")
+	}
+}

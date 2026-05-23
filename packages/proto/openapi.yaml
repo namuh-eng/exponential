@@ -1137,6 +1137,23 @@ paths:
                 $ref: '#/components/schemas/Cycle'
         default:
           $ref: '#/components/responses/Problem'
+  /teams/{key}/create-issue-options:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getTeamCreateIssueOptions
+      responses:
+        '200':
+          description: Team create issue options
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateIssueOptionsResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /teams/{key}/cycles/{cycle_id}:
     parameters:
       - name: key
@@ -2004,6 +2021,117 @@ components:
       required: [team]
       properties:
         team: { $ref: '#/components/schemas/Team' }
+    CreateIssueOptionsTeam:
+      type: object
+      required: [id, name, key, cyclesEnabled, estimateType]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        key: { type: string }
+        cyclesEnabled: { type: boolean }
+        estimateType: { type: string }
+    CreateIssueOptionStatus:
+      type: object
+      required: [id, name, category, color, isDefault, behavior]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        category: { type: string }
+        color: { type: string }
+        isDefault: { type: [boolean, 'null'] }
+        behavior: { type: object, additionalProperties: true }
+    CreateIssueOptionUser:
+      type: object
+      required: [id, name, image]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        image: { type: [string, 'null'] }
+    CreateIssueOptionLabel:
+      type: object
+      required: [id, name, color]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        color: { type: string }
+    CreateIssueOptionProject:
+      type: object
+      required: [id, name, icon]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        icon: { type: [string, 'null'] }
+    CreateIssueOptionCycle:
+      type: object
+      required: [id, name, number, startDate, endDate]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        number: { type: integer }
+        startDate: { type: string, format: date-time }
+        endDate: { type: string, format: date-time }
+    CreateIssueOptionTemplate:
+      type: object
+      required: [id, name, description, settings]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        settings: { type: object, additionalProperties: true }
+    CreateIssueOptionRelationIssue:
+      type: object
+      required: [id, identifier, title]
+      properties:
+        id: { type: string, format: uuid }
+        identifier: { type: string }
+        title: { type: string }
+    NumberOption:
+      type: object
+      required: [value, label]
+      properties:
+        value: { type: integer }
+        label: { type: string }
+    StringOption:
+      type: object
+      required: [value, label]
+      properties:
+        value: { type: string }
+        label: { type: string }
+    CreateIssueOptionsResponse:
+      type: object
+      required: [team, statuses, priorities, assignees, labels, projects, cycles, estimates, templates, relationIssues, dueDatePresets]
+      properties:
+        team: { $ref: '#/components/schemas/CreateIssueOptionsTeam' }
+        statuses:
+          type: array
+          items: { $ref: '#/components/schemas/CreateIssueOptionStatus' }
+        priorities:
+          type: array
+          items: { $ref: '#/components/schemas/StringOption' }
+        assignees:
+          type: array
+          items: { $ref: '#/components/schemas/CreateIssueOptionUser' }
+        labels:
+          type: array
+          items: { $ref: '#/components/schemas/CreateIssueOptionLabel' }
+        projects:
+          type: array
+          items: { $ref: '#/components/schemas/CreateIssueOptionProject' }
+        cycles:
+          type: array
+          items: { $ref: '#/components/schemas/CreateIssueOptionCycle' }
+        estimates:
+          type: array
+          items: { $ref: '#/components/schemas/NumberOption' }
+        templates:
+          type: array
+          items: { $ref: '#/components/schemas/CreateIssueOptionTemplate' }
+        relationIssues:
+          type: array
+          items: { $ref: '#/components/schemas/CreateIssueOptionRelationIssue' }
+        dueDatePresets:
+          type: array
+          items: { $ref: '#/components/schemas/StringOption' }
     Cycle:
       type: object
       required: [id, number, team_id, start_date, end_date, auto_rollover, issue_count, completed_issue_count, created_at, updated_at]

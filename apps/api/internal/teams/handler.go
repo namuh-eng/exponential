@@ -55,6 +55,7 @@ func (h Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.List)
 	r.Post("/", h.Create)
+	r.Get("/{key}/create-issue-options", h.CreateIssueOptions)
 	r.Get("/{key}/cycles", h.ListCycles)
 	r.Post("/{key}/cycles", h.CreateCycle)
 	r.Patch("/{key}/cycles/{cycleID}", h.UpdateCycle)

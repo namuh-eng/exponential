@@ -672,6 +672,24 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/teams/{key}/create-issue-options": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    get: operations["getTeamCreateIssueOptions"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/teams/{key}/cycles/{cycle_id}": {
     parameters: {
       query?: never;
@@ -1311,6 +1329,88 @@ export interface components {
     };
     CreateTeamResponse: {
       team: components["schemas"]["Team"];
+    };
+    CreateIssueOptionsTeam: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      key: string;
+      cyclesEnabled: boolean;
+      estimateType: string;
+    };
+    CreateIssueOptionStatus: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      category: string;
+      color: string;
+      isDefault: boolean | null;
+      behavior: {
+        [key: string]: unknown;
+      };
+    };
+    CreateIssueOptionUser: {
+      id: string;
+      name: string;
+      image: string | null;
+    };
+    CreateIssueOptionLabel: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      color: string;
+    };
+    CreateIssueOptionProject: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      icon: string | null;
+    };
+    CreateIssueOptionCycle: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      number: number;
+      /** Format: date-time */
+      startDate: string;
+      /** Format: date-time */
+      endDate: string;
+    };
+    CreateIssueOptionTemplate: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      description: string;
+      settings: {
+        [key: string]: unknown;
+      };
+    };
+    CreateIssueOptionRelationIssue: {
+      /** Format: uuid */
+      id: string;
+      identifier: string;
+      title: string;
+    };
+    NumberOption: {
+      value: number;
+      label: string;
+    };
+    StringOption: {
+      value: string;
+      label: string;
+    };
+    CreateIssueOptionsResponse: {
+      team: components["schemas"]["CreateIssueOptionsTeam"];
+      statuses: components["schemas"]["CreateIssueOptionStatus"][];
+      priorities: components["schemas"]["StringOption"][];
+      assignees: components["schemas"]["CreateIssueOptionUser"][];
+      labels: components["schemas"]["CreateIssueOptionLabel"][];
+      projects: components["schemas"]["CreateIssueOptionProject"][];
+      cycles: components["schemas"]["CreateIssueOptionCycle"][];
+      estimates: components["schemas"]["NumberOption"][];
+      templates: components["schemas"]["CreateIssueOptionTemplate"][];
+      relationIssues: components["schemas"]["CreateIssueOptionRelationIssue"][];
+      dueDatePresets: components["schemas"]["StringOption"][];
     };
     Cycle: {
       /** Format: uuid */
@@ -3306,6 +3406,29 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Cycle"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getTeamCreateIssueOptions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Team create issue options */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreateIssueOptionsResponse"];
         };
       };
       default: components["responses"]["Problem"];
