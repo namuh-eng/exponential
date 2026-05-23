@@ -942,6 +942,45 @@ export interface paths {
     patch: operations["updateTeamCycle"];
     trace?: never;
   };
+  "/views": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List custom views in the authenticated workspace */
+    get: operations["listViews"];
+    put?: never;
+    /** Create a custom view */
+    post: operations["createView"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/views/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    /** Get a custom view */
+    get: operations["getView"];
+    put?: never;
+    post?: never;
+    /** Delete a custom view */
+    delete: operations["deleteView"];
+    options?: never;
+    head?: never;
+    /** Update a custom view */
+    patch: operations["updateView"];
+    trace?: never;
+  };
   "/workspaces": {
     parameters: {
       query?: never;
@@ -2299,6 +2338,110 @@ export interface components {
     UpdateWorkspaceBillingRequest: {
       /** @enum {string} */
       plan: "free" | "basic" | "business" | "enterprise";
+    };
+    ViewTeam: {
+      /** Format: uuid */
+      id: string;
+      key: string;
+      name: string;
+    };
+    ViewOwner: {
+      name: string;
+      image?: string | null;
+    };
+    ViewFilterCondition: {
+      type: string;
+      /** @enum {string} */
+      operator: "is" | "isNot";
+      values: string[];
+    };
+    ViewIssueDisplayOptions: {
+      /** @enum {string} */
+      groupBy:
+        | "status"
+        | "priority"
+        | "assignee"
+        | "label"
+        | "project"
+        | "none";
+      /** @enum {string} */
+      subGroupBy:
+        | "status"
+        | "priority"
+        | "assignee"
+        | "label"
+        | "project"
+        | "none";
+      /** @enum {string} */
+      orderBy: "priority" | "created" | "updated" | "manual";
+      displayProperties: {
+        [key: string]: boolean;
+      };
+      showSubIssues: boolean;
+      showTriageIssues: boolean;
+      showEmptyColumns: boolean;
+    };
+    ViewProjectDisplayOptions: {
+      /** @enum {string} */
+      groupBy: "status" | "lead" | "team" | "none";
+      visibleProperties: {
+        [key: string]: boolean;
+      };
+    };
+    ViewFilterState: {
+      /** @enum {string} */
+      entityType: "issues" | "projects";
+      /** @enum {string} */
+      scope: "team" | "workspace";
+      issueFilters: components["schemas"]["ViewFilterCondition"][];
+      issueDisplayOptions: components["schemas"]["ViewIssueDisplayOptions"];
+      projectStatusFilter: string;
+      /** @enum {string} */
+      projectSortBy:
+        | "created-desc"
+        | "created-asc"
+        | "name-asc"
+        | "progress-desc"
+        | "target-date-asc";
+      projectDisplayOptions: components["schemas"]["ViewProjectDisplayOptions"];
+    };
+    View: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      /** @enum {string} */
+      layout: "list" | "board" | "timeline";
+      isPersonal: boolean;
+      filterState: components["schemas"]["ViewFilterState"];
+      /** @enum {string} */
+      entityType: "issues" | "projects";
+      /** @enum {string} */
+      scope: "team" | "workspace";
+      /** Format: uuid */
+      teamId?: string | null;
+      teamKey?: string | null;
+      teamName?: string | null;
+      owner?: components["schemas"]["ViewOwner"] | null;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    ViewListResponse: {
+      views: components["schemas"]["View"][];
+      teams: components["schemas"]["ViewTeam"][];
+    };
+    ViewResponse: {
+      view: components["schemas"]["View"];
+    };
+    ViewRequest: {
+      name?: string;
+      /** @enum {string} */
+      layout?: "list" | "board" | "timeline";
+      isPersonal?: boolean;
+      /** Format: uuid */
+      teamId?: string | null;
+      filterState?: components["schemas"]["ViewFilterState"];
     };
     Workspace: {
       /** Format: uuid */
@@ -4637,6 +4780,125 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Cycle"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  listViews: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Custom views and available teams */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ViewListResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createView: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ViewRequest"];
+      };
+    };
+    responses: {
+      /** @description Created custom view */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ViewResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getView: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Custom view */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ViewResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  deleteView: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted custom view */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateView: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ViewRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated custom view */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ViewResponse"];
         };
       };
       default: components["responses"]["Problem"];

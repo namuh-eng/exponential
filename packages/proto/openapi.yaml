@@ -1408,6 +1408,85 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /views:
+    get:
+      operationId: listViews
+      summary: List custom views in the authenticated workspace
+      responses:
+        '200':
+          description: Custom views and available teams
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ViewListResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createView
+      summary: Create a custom view
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ViewRequest'
+      responses:
+        '201':
+          description: Created custom view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ViewResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /views/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getView
+      summary: Get a custom view
+      responses:
+        '200':
+          description: Custom view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ViewResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: updateView
+      summary: Update a custom view
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ViewRequest'
+      responses:
+        '200':
+          description: Updated custom view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ViewResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deleteView
+      summary: Delete a custom view
+      responses:
+        '200':
+          description: Deleted custom view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /workspaces:
     get:
       operationId: listWorkspaces
@@ -3266,6 +3345,102 @@ components:
       required: [plan]
       properties:
         plan: { type: string, enum: [free, basic, business, enterprise] }
+    ViewTeam:
+      type: object
+      required: [id, key, name]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string }
+        name: { type: string }
+    ViewOwner:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        image: { type: [string, 'null'] }
+    ViewFilterCondition:
+      type: object
+      required: [type, operator, values]
+      properties:
+        type: { type: string }
+        operator: { type: string, enum: [is, isNot] }
+        values:
+          type: array
+          items: { type: string }
+    ViewIssueDisplayOptions:
+      type: object
+      required: [groupBy, subGroupBy, orderBy, displayProperties, showSubIssues, showTriageIssues, showEmptyColumns]
+      properties:
+        groupBy: { type: string, enum: [status, priority, assignee, label, project, none] }
+        subGroupBy: { type: string, enum: [status, priority, assignee, label, project, none] }
+        orderBy: { type: string, enum: [priority, created, updated, manual] }
+        displayProperties:
+          type: object
+          additionalProperties: { type: boolean }
+        showSubIssues: { type: boolean }
+        showTriageIssues: { type: boolean }
+        showEmptyColumns: { type: boolean }
+    ViewProjectDisplayOptions:
+      type: object
+      required: [groupBy, visibleProperties]
+      properties:
+        groupBy: { type: string, enum: [status, lead, team, none] }
+        visibleProperties:
+          type: object
+          additionalProperties: { type: boolean }
+    ViewFilterState:
+      type: object
+      required: [entityType, scope, issueFilters, issueDisplayOptions, projectStatusFilter, projectSortBy, projectDisplayOptions]
+      properties:
+        entityType: { type: string, enum: [issues, projects] }
+        scope: { type: string, enum: [team, workspace] }
+        issueFilters:
+          type: array
+          items: { $ref: '#/components/schemas/ViewFilterCondition' }
+        issueDisplayOptions: { $ref: '#/components/schemas/ViewIssueDisplayOptions' }
+        projectStatusFilter: { type: string }
+        projectSortBy: { type: string, enum: [created-desc, created-asc, name-asc, progress-desc, target-date-asc] }
+        projectDisplayOptions: { $ref: '#/components/schemas/ViewProjectDisplayOptions' }
+    View:
+      type: object
+      required: [id, name, layout, isPersonal, filterState, entityType, scope, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        layout: { type: string, enum: [list, board, timeline] }
+        isPersonal: { type: boolean }
+        filterState: { $ref: '#/components/schemas/ViewFilterState' }
+        entityType: { type: string, enum: [issues, projects] }
+        scope: { type: string, enum: [team, workspace] }
+        teamId: { type: [string, 'null'], format: uuid }
+        teamKey: { type: [string, 'null'] }
+        teamName: { type: [string, 'null'] }
+        owner: { anyOf: [{ $ref: '#/components/schemas/ViewOwner' }, { type: 'null' }] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ViewListResponse:
+      type: object
+      required: [views, teams]
+      properties:
+        views:
+          type: array
+          items: { $ref: '#/components/schemas/View' }
+        teams:
+          type: array
+          items: { $ref: '#/components/schemas/ViewTeam' }
+    ViewResponse:
+      type: object
+      required: [view]
+      properties:
+        view: { $ref: '#/components/schemas/View' }
+    ViewRequest:
+      type: object
+      properties:
+        name: { type: string }
+        layout: { type: string, enum: [list, board, timeline] }
+        isPersonal: { type: boolean }
+        teamId: { type: [string, 'null'], format: uuid }
+        filterState: { $ref: '#/components/schemas/ViewFilterState' }
     Workspace:
       type: object
       required: [id, name, urlSlug, region, fiscalMonth, welcomeMessage, plan]
