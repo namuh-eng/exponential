@@ -32,7 +32,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `PLAYWRIGHT_TEST=true PORT=${port} npm run dev`,
+    command: `PLAYWRIGHT_TEST=true PORT=${port} pnpm dev`,
     port,
     reuseExistingServer: process.env.CI !== "true",
   },

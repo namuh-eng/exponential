@@ -1,6 +1,8 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
-  "organizeImports": { "enabled": true },
+  "organizeImports": {
+    "enabled": true
+  },
   "linter": {
     "enabled": true,
     "rules": {
@@ -34,7 +36,14 @@
       "drizzle",
       "*.d.ts",
       "public",
-      "target-docs"
+      "target-docs",
+      "apps/web/.next",
+      "apps/web/test-results",
+      "apps/web/playwright-report",
+      "apps/web/tests/e2e/.auth",
+      "pnpm-lock.yaml",
+      ".pnpm-store",
+      "**/.pnpm-store"
     ]
   }
 }

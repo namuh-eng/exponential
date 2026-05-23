@@ -43,9 +43,11 @@ function printDockerUnavailable(result) {
   console.error(
     "  2. Use an existing host Postgres/Redis and set DATABASE_URL/REDIS_URL in .env.local",
   );
-  console.error("     Then run: npm run db:push");
   console.error(
-    "  3. If parity QA is only verifying the missing-DB path, leave DB stopped and run npm run dev; it must fail before binding a listener.",
+    "     Then run: npm run db:push (or pnpm db:push from the repo root)",
+  );
+  console.error(
+    "  3. If parity QA is only verifying the missing-DB path, leave DB stopped and run pnpm dev; it must fail before binding a listener.",
   );
   console.error(
     "\nDo not bypass this with SKIP_DB_PREFLIGHT unless you are intentionally debugging routes that do not need the database.\n",
@@ -72,7 +74,7 @@ async function main() {
   compose.on("close", (status) => {
     if (status && status !== 0) {
       console.error(
-        "\nDocker Compose could not start the local services. If Docker is blocked or ports are already in use, use an existing host Postgres/Redis by setting DATABASE_URL/REDIS_URL in .env.local, then run npm run db:push.",
+        "\nDocker Compose could not start the local services. If Docker is blocked or ports are already in use, use an existing host Postgres/Redis by setting DATABASE_URL/REDIS_URL in .env.local, then run npm run db:push (or pnpm db:push from the repo root).",
       );
     }
     process.exit(status ?? 1);

@@ -38,3 +38,7 @@ test.txt
 .cpd-raw-output.txt
 .cpd-report/
 cpd-checklist.md
+
+.pnpm-store/
+apps/web/.turbo/
+apps/web/tests/e2e/.auth/

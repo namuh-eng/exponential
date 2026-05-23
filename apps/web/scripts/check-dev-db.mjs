@@ -4,7 +4,7 @@ import path from "node:path";
 import process from "node:process";
 import { Pool } from "pg";
 
-const ENV_FILES = [".env", ".env.local"];
+const ENV_FILES = ["../../.env", "../../.env.local", ".env", ".env.local"];
 const REQUIRED_TABLES = ["user", "session", "workspace", "member", "team"];
 
 function applyEnvFile(filePath) {
@@ -62,7 +62,7 @@ function redact(url) {
 
 function printSetup() {
   console.error("  make dev-services");
-  console.error("  npm run db:push");
+  console.error("  pnpm db:push");
 }
 
 if (process.env.SKIP_DB_PREFLIGHT === "true") {
@@ -104,11 +104,11 @@ try {
       `Missing required table${missingTables.length === 1 ? "" : "s"}: ${missingTables.join(", ")}`,
     );
     console.error(
-      "Apply the Drizzle schema before npm run dev so authenticated routes and Playwright test sessions can work:",
+      "Apply the Drizzle schema before pnpm dev so authenticated routes and Playwright test sessions can work:",
     );
     printSetup();
     console.error(
-      "\nIf Docker is unavailable, start/use a host Postgres instead, set DATABASE_URL in .env.local, then run npm run db:push.",
+      "\nIf Docker is unavailable, start/use a host Postgres instead, set DATABASE_URL in .env.local, then run npm run db:push (or pnpm db:push from the repo root).",
     );
     process.exitCode = 1;
   }
@@ -117,12 +117,10 @@ try {
 } catch (error) {
   await pool.end().catch(() => undefined);
   console.error(`\nLocal database is unavailable: ${redact(connectionString)}`);
-  console.error(
-    "Start the dev database and apply the schema before npm run dev:",
-  );
+  console.error("Start the dev database and apply the schema before pnpm dev:");
   printSetup();
   console.error(
-    "\nIf Docker is unavailable, start/use a host Postgres instead, set DATABASE_URL in .env.local, then run npm run db:push.",
+    "\nIf Docker is unavailable, start/use a host Postgres instead, set DATABASE_URL in .env.local, then run npm run db:push (or pnpm db:push from the repo root).",
   );
   console.error(
     "Only set SKIP_DB_PREFLIGHT=true when intentionally debugging non-database routes; it can leave the authenticated app half-working.",

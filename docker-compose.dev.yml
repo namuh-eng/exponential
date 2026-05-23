@@ -1,40 +1,113 @@
-# docker-compose.dev.yml — Local development overrides
-# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
-#
-# Differences from production:
-#   - app: built from local Dockerfile instead of pulling from GHCR
-#   - app: source code mounted for hot reload
-#   - postgres: exposed to host (default 5432, override with PG_PORT)
-#   - redis: exposed to host (default 6379, override with REDIS_PORT)
+# docker-compose.dev.yml — Phase 0 local split stack.
+# Usage: docker compose -f docker-compose.dev.yml up --build
 
 services:
-  # ---------------------------------------------------------------------------
-  # App — build locally and mount source for hot reload
-  # ---------------------------------------------------------------------------
-  app:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: exponential
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    ports:
+      - "${PG_PORT:-15532}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d exponential"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-16379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  kratos-migrate:
+    image: oryd/kratos:v1.3.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./infra/kratos:/etc/config/kratos:ro
+    command: migrate sql -e --yes --config /etc/config/kratos/kratos.yml
+
+  kratos:
+    image: oryd/kratos:v1.3.1
+    depends_on:
+      kratos-migrate:
+        condition: service_completed_successfully
+    ports:
+      - "4433:4433"
+      - "4434:4434"
+    volumes:
+      - ./infra/kratos:/etc/config/kratos:ro
+    command: serve --dev --config /etc/config/kratos/kratos.yml
+
+  api:
     build:
       context: .
-      dockerfile: Dockerfile
-    image: exponential:dev
+      dockerfile: infra/docker/api.Dockerfile
+    environment:
+      EXPONENTIAL_API_ADDR: ":3016"
+      EXPONENTIAL_API_DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/exponential?sslmode=disable
+      EXPONENTIAL_API_REDIS_URL: redis://redis:6379
+      EXPONENTIAL_API_KRATOS_URL: http://kratos:4433
+      EXPONENTIAL_API_ENVIRONMENT: development
+    ports:
+      - "3016:3016"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kratos:
+        condition: service_started
+
+  web:
+    image: node:20-alpine
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm install --frozen-lockfile=false && pnpm --filter @exponential/web dev -- --hostname 0.0.0.0"
     environment:
       NODE_ENV: development
+      PORT: 3015
+      SKIP_DB_PREFLIGHT: "true"
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/exponential?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      NEXT_PUBLIC_APP_URL: http://localhost:3015
+      BETTER_AUTH_URL: http://localhost:3015
+    ports:
+      - "3015:3015"
     volumes:
-      # Mount source code for hot reload
-      - .:/app
-      # Prevent host node_modules from overwriting container's
-      - /app/node_modules
-      - /app/.next
+      - .:/workspace
+      - pnpm_store:/root/.local/share/pnpm/store
+      - web_node_modules:/workspace/node_modules
+      - web_app_node_modules:/workspace/apps/web/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+      kratos:
+        condition: service_started
 
-  # ---------------------------------------------------------------------------
-  # Postgres — expose to host (PG_PORT, default 5432)
-  # ---------------------------------------------------------------------------
-  postgres:
-    ports:
-      - "${PG_PORT:-5432}:5432"
-
-  # ---------------------------------------------------------------------------
-  # Redis — expose to host (REDIS_PORT, default 6379)
-  # ---------------------------------------------------------------------------
-  redis:
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+volumes:
+  postgres_data:
+  redis_data:
+  pnpm_store:
+  web_node_modules:
+  web_app_node_modules:

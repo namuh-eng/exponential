@@ -1,4 +1,3 @@
-# Root Dockerfile kept for existing deploy tooling; builds the web app image.
 FROM node:20-alpine AS deps
 RUN corepack enable
 WORKDIR /workspace

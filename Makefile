@@ -1,4 +1,4 @@
-.PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd
+.PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd api-build
 .PHONY: check-header test-header check-verbose test-verbose
 .PHONY: dev-services dev-services-down
 
@@ -6,34 +6,39 @@
 all: check test
 
 # Static analysis: typecheck + lint/format
-check: check-header typecheck lint
+check: check-header typecheck lint api-build
 
 # TypeScript type checking
 typecheck:
 	@. ./hack/run_silent.sh && \
-	run_silent "TypeCheck passed" "npx tsc --noEmit"
+	run_silent "TypeCheck passed" "pnpm typecheck"
 
 # Lint and format check (Biome)
 lint:
 	@. ./hack/run_silent.sh && \
-	run_silent "Lint & Format passed" "npx biome check ."
+	run_silent "Lint & Format passed" "pnpm lint"
+
+# Go API build
+api-build:
+	@. ./hack/run_silent.sh && \
+	run_silent "Go API build passed" "pnpm api:build"
 
 # Auto-fix lint and format issues
 fix:
-	npx biome check --write .
+	pnpm lint:fix
 
 format:
-	npx biome format --write .
+	pnpm format
 
 # Unit tests (Vitest) — only shows failures, summary on success
 test: test-header
 	@. ./hack/run_silent.sh && \
-	run_silent_with_test_count "Unit Tests passed" "TZ=Asia/Seoul npx vitest run" "vitest"
+	run_silent_with_test_count "Unit Tests passed" "TZ=Asia/Seoul pnpm test" "vitest"
 
 # E2E tests (Playwright — requires dev server running)
 test-e2e:
 	@. ./hack/run_silent.sh && \
-	run_silent_with_test_count "E2E Tests passed" "npx playwright test" "playwright"
+	run_silent_with_test_count "E2E Tests passed" "pnpm test:e2e" "playwright"
 
 # Headers
 check-header:
@@ -53,34 +58,34 @@ test-verbose:
 
 # Copy-paste detection (jscpd)
 cpd:
-	npx jscpd
+	pnpm cpd
 
 # Dev server
 dev:
-	npm run dev
+	pnpm dev
 
 # Production build
 build:
-	npm run build
+	pnpm build
 
 # Database migrations
 db-generate:
-	npx drizzle-kit generate --config drizzle.config.ts
+	pnpm db:generate
 
 db-migrate:
-	npx drizzle-kit migrate --config drizzle.config.ts
+	pnpm db:migrate
 
 db-push:
-	npx drizzle-kit push --config drizzle.config.ts
+	pnpm db:push
 
 # Clean build artifacts
 clean:
-	rm -rf .next dist node_modules/.cache
+	rm -rf apps/web/.next apps/web/dist node_modules/.cache apps/web/node_modules/.cache
 
-# Start Postgres + Redis for local development (run alongside npm run dev)
+# Start Postgres + Redis for local development (run alongside pnpm dev)
 dev-services:
-	node scripts/dev-services.mjs
+	pnpm --filter @exponential/web dev-services
 
 # Stop development services
 dev-services-down:
-	docker compose -f docker-compose.yml down
+	docker compose -f docker-compose.dev.yml down
