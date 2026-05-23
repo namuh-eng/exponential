@@ -413,6 +413,32 @@ paths:
                 $ref: '#/components/schemas/WorkspaceAnalyticsResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /auth:
+    get:
+      operationId: authNamespace
+      summary: Auth route namespace; concrete resources are under /auth/provider-capabilities.
+      responses:
+        default:
+          $ref: '#/components/responses/Problem'
+  /auth/provider-capabilities:
+    get:
+      operationId: getAuthProviderCapabilities
+      parameters:
+        - name: callbackUrl
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Auth provider capabilities
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthProviderCapabilitiesResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /comments/{id}:
     parameters:
       - name: id
@@ -1644,6 +1670,45 @@ components:
           type: array
           items: { $ref: '#/components/schemas/AnalyticsActiveTeamCount' }
         period: { type: string }
+    AccountProviderCapability:
+      type: object
+      required: [supported, configured, devLinking, unavailableReason]
+      properties:
+        supported: { type: boolean }
+        configured: { type: boolean }
+        devLinking: { type: boolean }
+        unavailableReason: { type: [string, 'null'] }
+    WorkspaceAuthenticationSettings:
+      type: object
+      required: [google, emailPasskey]
+      properties:
+        google: { type: boolean }
+        emailPasskey: { type: boolean }
+    AuthProviderWorkspace:
+      type: object
+      required: [slug, authentication]
+      properties:
+        slug: { type: string }
+        authentication: { $ref: '#/components/schemas/WorkspaceAuthenticationSettings' }
+    AuthProviderCapabilitiesResponse:
+      type: object
+      required: [providers, workspace]
+      properties:
+        providers:
+          type: object
+          required: [google, github, gitlab, slack, passkey, googleAllowed, emailPasskey]
+          properties:
+            google: { $ref: '#/components/schemas/AccountProviderCapability' }
+            github: { $ref: '#/components/schemas/AccountProviderCapability' }
+            gitlab: { $ref: '#/components/schemas/AccountProviderCapability' }
+            slack: { $ref: '#/components/schemas/AccountProviderCapability' }
+            passkey: { type: boolean }
+            googleAllowed: { type: boolean }
+            emailPasskey: { type: boolean }
+        workspace:
+          anyOf:
+            - $ref: '#/components/schemas/AuthProviderWorkspace'
+            - type: 'null'
     CommentUser:
       type: object
       required: [name]

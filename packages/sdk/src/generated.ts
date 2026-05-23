@@ -258,6 +258,39 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/auth": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Auth route namespace; concrete resources are under /auth/provider-capabilities. */
+    get: operations["authNamespace"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/auth/provider-capabilities": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getAuthProviderCapabilities"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/comments/{id}": {
     parameters: {
       query?: never;
@@ -1026,6 +1059,32 @@ export interface components {
       completedLast30Days: components["schemas"]["AnalyticsCompletedTeamCount"][];
       activeIssues: components["schemas"]["AnalyticsActiveTeamCount"][];
       period: string;
+    };
+    AccountProviderCapability: {
+      supported: boolean;
+      configured: boolean;
+      devLinking: boolean;
+      unavailableReason: string | null;
+    };
+    WorkspaceAuthenticationSettings: {
+      google: boolean;
+      emailPasskey: boolean;
+    };
+    AuthProviderWorkspace: {
+      slug: string;
+      authentication: components["schemas"]["WorkspaceAuthenticationSettings"];
+    };
+    AuthProviderCapabilitiesResponse: {
+      providers: {
+        google: components["schemas"]["AccountProviderCapability"];
+        github: components["schemas"]["AccountProviderCapability"];
+        gitlab: components["schemas"]["AccountProviderCapability"];
+        slack: components["schemas"]["AccountProviderCapability"];
+        passkey: boolean;
+        googleAllowed: boolean;
+        emailPasskey: boolean;
+      };
+      workspace: components["schemas"]["AuthProviderWorkspace"] | null;
     };
     CommentUser: {
       name: string;
@@ -2558,6 +2617,42 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["WorkspaceAnalyticsResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  authNamespace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      default: components["responses"]["Problem"];
+    };
+  };
+  getAuthProviderCapabilities: {
+    parameters: {
+      query?: {
+        callbackUrl?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Auth provider capabilities */
+      200: {
+        headers: {
+          "Cache-Control"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthProviderCapabilitiesResponse"];
         };
       };
       default: components["responses"]["Problem"];

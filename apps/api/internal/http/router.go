@@ -9,6 +9,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/account"
 	"github.com/namuh-eng/exponential/apps/api/internal/analytics"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
+	"github.com/namuh-eng/exponential/apps/api/internal/authproviders"
 	"github.com/namuh-eng/exponential/apps/api/internal/comments"
 	"github.com/namuh-eng/exponential/apps/api/internal/documents"
 	"github.com/namuh-eng/exponential/apps/api/internal/emojis"
@@ -54,6 +55,7 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 	documentsHandler := documents.Handler{DB: db}
 	labelsHandler := labels.Handler{DB: db}
 	r.Route("/v1", func(v1 chi.Router) {
+		v1.Mount("/auth", authproviders.Handler{DB: db}.Routes())
 		v1.Group(func(protected chi.Router) {
 			protected.Use(authMiddleware.Require)
 			protected.Post("/issues/{id}/comments", commentsHandler.CreateForIssue)
