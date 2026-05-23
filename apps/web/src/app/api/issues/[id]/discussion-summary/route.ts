@@ -13,6 +13,11 @@ import {
   buildDiscussionSummaryState,
   generateDiscussionSummary,
 } from "@/lib/discussion-summary";
+import {
+  createHeadlessIssuesClient,
+  headlessIssuesEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { readTeamSettings } from "@/lib/team-settings";
 import { and, asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -108,6 +113,24 @@ export async function GET(
   }
 
   const { id } = await params;
+  if (headlessIssuesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessIssuesClient(token);
+    const { data, error, response } = await client.GET(
+      "/issues/{id}/discussion-summary",
+      { params: { path: { id } } },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   const currentIssue = await findIssueRecord(id, workspaceId);
   if (!currentIssue) {
     return NextResponse.json({ error: "Issue not found" }, { status: 404 });
@@ -152,6 +175,24 @@ export async function POST(
   }
 
   const { id } = await params;
+  if (headlessIssuesEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId,
+    });
+    const client = createHeadlessIssuesClient(token);
+    const { data, error, response } = await client.POST(
+      "/issues/{id}/discussion-summary",
+      { params: { path: { id } } },
+    );
+    if (error) {
+      return NextResponse.json(error, {
+        status: (response as Response).status,
+      });
+    }
+    return NextResponse.json(data, { status: (response as Response).status });
+  }
+
   const currentIssue = await findIssueRecord(id, workspaceId);
   if (!currentIssue) {
     return NextResponse.json({ error: "Issue not found" }, { status: 404 });

@@ -107,6 +107,8 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/", h.Create)
 	r.Patch("/bulk", h.Bulk)
 	r.Get("/search", h.Search)
+	r.Get("/{id}/discussion-summary", h.GetDiscussionSummary)
+	r.Post("/{id}/discussion-summary", h.GenerateDiscussionSummary)
 	r.Get("/{id}/history", h.History)
 	r.Post("/{id}/relations", h.CreateRelation)
 	r.Delete("/{id}/relations/{relationID}", h.DeleteRelation)

@@ -76,6 +76,24 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/issues/{id}/discussion-summary": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    get: operations["getIssueDiscussionSummary"];
+    put?: never;
+    post: operations["generateIssueDiscussionSummary"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/issues/{id}/history": {
     parameters: {
       query?: never;
@@ -3628,6 +3646,27 @@ export interface components {
       subscribed: boolean;
       watcherCount: number;
     };
+    IssueDiscussionSummary: {
+      enabled: boolean;
+      /** @enum {string} */
+      status:
+        | "disabled"
+        | "ineligible"
+        | "ready"
+        | "generating"
+        | "generated"
+        | "stale"
+        | "failed";
+      text: string | null;
+      /** Format: date-time */
+      generatedAt: string | null;
+      generatedBy: string | null;
+      sourceCommentCount: number;
+      sourceCommentVersion: string | null;
+      /** Format: date-time */
+      staleAt: string | null;
+      error: string | null;
+    };
     IssueHistoryActor: {
       id: string;
       name: string | null;
@@ -3959,6 +3998,52 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ReactionSummaryList"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getIssueDiscussionSummary: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Issue discussion summary state */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IssueDiscussionSummary"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  generateIssueDiscussionSummary: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Generated issue discussion summary state */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IssueDiscussionSummary"];
         };
       };
       default: components["responses"]["Problem"];

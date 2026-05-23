@@ -162,6 +162,34 @@ paths:
                 $ref: '#/components/schemas/ReactionSummaryList'
         default:
           $ref: '#/components/responses/Problem'
+  /issues/{id}/discussion-summary:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getIssueDiscussionSummary
+      responses:
+        '200':
+          description: Issue discussion summary state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueDiscussionSummary'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: generateIssueDiscussionSummary
+      responses:
+        '200':
+          description: Generated issue discussion summary state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueDiscussionSummary'
+        default:
+          $ref: '#/components/responses/Problem'
   /issues/{id}/history:
     parameters:
       - name: id
@@ -4994,6 +5022,19 @@ components:
       properties:
         subscribed: { type: boolean }
         watcherCount: { type: integer }
+    IssueDiscussionSummary:
+      type: object
+      required: [enabled, status, text, generatedAt, generatedBy, sourceCommentCount, sourceCommentVersion, staleAt, error]
+      properties:
+        enabled: { type: boolean }
+        status: { type: string, enum: [disabled, ineligible, ready, generating, generated, stale, failed] }
+        text: { type: [string, 'null'] }
+        generatedAt: { type: [string, 'null'], format: date-time }
+        generatedBy: { type: [string, 'null'] }
+        sourceCommentCount: { type: integer }
+        sourceCommentVersion: { type: [string, 'null'] }
+        staleAt: { type: [string, 'null'], format: date-time }
+        error: { type: [string, 'null'] }
     IssueHistoryActor:
       type: object
       required: [id, name, email]
