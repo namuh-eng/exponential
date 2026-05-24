@@ -2,7 +2,7 @@
 const nextConfig = {
   output: "standalone",
   async rewrites() {
-    if (process.env.EXPONENTIAL_HEADLESS_DIRECT_API_REWRITE !== "true") {
+    if (process.env.EXPONENTIAL_HEADLESS_DIRECT_API_REWRITE === "false") {
       return [];
     }
 
