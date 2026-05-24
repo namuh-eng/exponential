@@ -1,4 +1,4 @@
-.PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd api-build api-test api-dockerfile openapi-coverage web-api-empty
+.PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd api-build api-test api-dockerfile ecs-task-definitions openapi-coverage web-api-empty
 .PHONY: check-header test-header check-verbose test-verbose
 .PHONY: dev-services dev-services-down
 
@@ -6,7 +6,7 @@
 all: check test
 
 # Static analysis: typecheck + lint/format
-check: check-header typecheck lint api-build api-dockerfile openapi-coverage web-api-empty
+check: check-header typecheck lint api-build api-dockerfile ecs-task-definitions openapi-coverage web-api-empty
 
 # TypeScript type checking
 typecheck:
@@ -32,6 +32,11 @@ api-test:
 api-dockerfile:
 	@. ./hack/run_silent.sh && \
 	run_silent "API Dockerfile uses distroless image" "bash infra/docker/api.Dockerfile.test.sh"
+
+# ECS task definition shape
+ecs-task-definitions:
+	@. ./hack/run_silent.sh && \
+	run_silent "ECS task definitions are split and CloudWatch-ready" "node scripts/check-ecs-task-definitions.mjs"
 
 # OpenAPI coverage
 openapi-coverage:

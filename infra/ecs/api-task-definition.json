@@ -1,0 +1,67 @@
+{
+  "family": "exponential-api",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "${ECS_EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${ECS_TASK_ROLE_ARN}",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "containerDefinitions": [
+    {
+      "name": "api",
+      "image": "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/exponential-api:${IMAGE_TAG}",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 3016,
+          "hostPort": 3016,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "EXPONENTIAL_API_ADDR",
+          "value": ":3016"
+        },
+        {
+          "name": "EXPONENTIAL_API_ENVIRONMENT",
+          "value": "production"
+        },
+        {
+          "name": "EXPONENTIAL_API_SERVICE_NAME",
+          "value": "exponential-api"
+        },
+        {
+          "name": "EXPONENTIAL_API_OTEL_EXPORTER_OTLP_ENDPOINT",
+          "value": "${OTEL_EXPORTER_OTLP_ENDPOINT}"
+        },
+        {
+          "name": "EXPONENTIAL_API_KRATOS_URL",
+          "value": "${KRATOS_PUBLIC_URL}"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "EXPONENTIAL_API_DATABASE_URL",
+          "valueFrom": "${DATABASE_URL_SECRET_ARN}"
+        },
+        {
+          "name": "EXPONENTIAL_API_REDIS_URL",
+          "valueFrom": "${REDIS_URL_SECRET_ARN}"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/exponential-api",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "api"
+        }
+      }
+    }
+  ]
+}

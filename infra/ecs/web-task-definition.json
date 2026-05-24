@@ -1,0 +1,52 @@
+{
+  "family": "exponential-web",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "${ECS_EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${ECS_TASK_ROLE_ARN}",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "containerDefinitions": [
+    {
+      "name": "web",
+      "image": "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/exponential-web:${IMAGE_TAG}",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "hostPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "PORT", "value": "3000" },
+        { "name": "HOSTNAME", "value": "0.0.0.0" },
+        { "name": "NEXT_PUBLIC_APP_URL", "value": "${PUBLIC_BASE_URL}" },
+        { "name": "EXPONENTIAL_API_URL", "value": "${PUBLIC_BASE_URL}/api" },
+        {
+          "name": "EXPONENTIAL_KRATOS_PUBLIC_URL",
+          "value": "${PUBLIC_BASE_URL}/auth"
+        },
+        { "name": "EXPONENTIAL_HEADLESS_DIRECT_API_REWRITE", "value": "true" },
+        { "name": "EXPONENTIAL_HEADLESS_AUTH_PROVIDERS", "value": "true" }
+      ],
+      "secrets": [
+        { "name": "DATABASE_URL", "valueFrom": "${DATABASE_URL_SECRET_ARN}" },
+        { "name": "REDIS_URL", "valueFrom": "${REDIS_URL_SECRET_ARN}" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/exponential-web",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "web"
+        }
+      }
+    }
+  ]
+}
