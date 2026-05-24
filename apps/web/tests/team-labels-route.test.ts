@@ -79,7 +79,7 @@ describe("team labels API routes", () => {
   });
 
   it("creates labels scoped to the selected team", async () => {
-    const { POST } = await import("@/app/api/teams/[key]/labels/route");
+    const { POST } = await import("@/legacy-api/teams/[key]/labels/route");
 
     const response = await POST(
       new Request("http://localhost/api/teams/ENG/labels", {
@@ -101,7 +101,9 @@ describe("team labels API routes", () => {
 
   it("rejects editing a label that is not in the selected team", async () => {
     selectRowsMock.mockReturnValue([]);
-    const { PATCH } = await import("@/app/api/teams/[key]/labels/[id]/route");
+    const { PATCH } = await import(
+      "@/legacy-api/teams/[key]/labels/[id]/route"
+    );
 
     const response = await PATCH(
       new Request("http://localhost/api/teams/ENG/labels/other-team-label", {
@@ -117,7 +119,7 @@ describe("team labels API routes", () => {
 
   it("updates and deletes labels only through the selected team scope", async () => {
     selectRowsMock.mockReturnValue([{ id: "label-1" }]);
-    const route = await import("@/app/api/teams/[key]/labels/[id]/route");
+    const route = await import("@/legacy-api/teams/[key]/labels/[id]/route");
 
     const patchResponse = await route.PATCH(
       new Request("http://localhost/api/teams/ENG/labels/label-1", {

@@ -80,7 +80,7 @@ describe("project update configurations routes", () => {
       },
     ]);
     const { GET } = await import(
-      "@/app/api/project-update-configurations/route"
+      "@/legacy-api/project-update-configurations/route"
     );
 
     const response = await GET();
@@ -95,7 +95,7 @@ describe("project update configurations routes", () => {
 
   it("creates a valid configuration in workspace settings", async () => {
     const { POST } = await import(
-      "@/app/api/project-update-configurations/route"
+      "@/legacy-api/project-update-configurations/route"
     );
 
     const response = await POST(
@@ -133,7 +133,7 @@ describe("project update configurations routes", () => {
 
   it("rejects invalid scope without losing form-state-safe API errors", async () => {
     const { POST } = await import(
-      "@/app/api/project-update-configurations/route"
+      "@/legacy-api/project-update-configurations/route"
     );
 
     const response = await POST(
@@ -159,7 +159,7 @@ describe("project update configurations routes", () => {
       { workspaceId: "workspace-1", role: "member", settings: {} },
     ]);
     const { POST } = await import(
-      "@/app/api/project-update-configurations/route"
+      "@/legacy-api/project-update-configurations/route"
     );
 
     const response = await POST(jsonRequest({ name: "Nope" }));
@@ -176,7 +176,7 @@ describe("project update configurations routes", () => {
       },
     ]);
     const route = await import(
-      "@/app/api/project-update-configurations/[id]/route"
+      "@/legacy-api/project-update-configurations/[id]/route"
     );
 
     const patchResponse = await route.PATCH(

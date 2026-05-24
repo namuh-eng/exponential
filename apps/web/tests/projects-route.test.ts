@@ -220,7 +220,7 @@ describe("projects collection route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/projects/route");
+    const { GET } = await import("@/legacy-api/projects/route");
 
     const response = await GET();
 
@@ -228,7 +228,7 @@ describe("projects collection route", () => {
   });
 
   it("returns serialized projects with progress and teams", async () => {
-    const { GET } = await import("@/app/api/projects/route");
+    const { GET } = await import("@/legacy-api/projects/route");
 
     const response = await GET();
 
@@ -240,7 +240,7 @@ describe("projects collection route", () => {
   });
 
   it("creates a workspace project without team links when no team context is supplied", async () => {
-    const { POST } = await import("@/app/api/projects/route");
+    const { POST } = await import("@/legacy-api/projects/route");
 
     const response = await POST(
       new Request("http://localhost/api/projects", {
@@ -263,7 +263,7 @@ describe("projects collection route", () => {
   });
 
   it("creates a projectTeam association when teamKey context is supplied", async () => {
-    const { POST } = await import("@/app/api/projects/route");
+    const { POST } = await import("@/legacy-api/projects/route");
 
     const response = await POST(
       new Request("http://localhost/api/projects", {
@@ -283,7 +283,7 @@ describe("projects collection route", () => {
   });
 
   it("applies project template settings and milestones when creating a project", async () => {
-    const { POST } = await import("@/app/api/projects/route");
+    const { POST } = await import("@/legacy-api/projects/route");
 
     const response = await POST(
       new Request("http://localhost/api/projects", {
@@ -332,7 +332,7 @@ describe("projects collection route", () => {
         },
       },
     ]);
-    const { POST } = await import("@/app/api/projects/route");
+    const { POST } = await import("@/legacy-api/projects/route");
 
     const response = await POST(
       new Request("http://localhost/api/projects", {
@@ -352,7 +352,7 @@ describe("projects collection route", () => {
 
   it("rejects project templates outside the active workspace", async () => {
     projectTemplateLimitMock.mockReturnValue([]);
-    const { POST } = await import("@/app/api/projects/route");
+    const { POST } = await import("@/legacy-api/projects/route");
 
     const response = await POST(
       new Request("http://localhost/api/projects", {
@@ -369,7 +369,7 @@ describe("projects collection route", () => {
   });
 
   it("rejects project creation with an unknown custom status", async () => {
-    const { POST } = await import("@/app/api/projects/route");
+    const { POST } = await import("@/legacy-api/projects/route");
 
     const response = await POST(
       new Request("http://localhost/api/projects", {
@@ -392,7 +392,7 @@ describe("projects collection route", () => {
     "rejects %s context outside the active workspace without creating an orphan project",
     async (field, value) => {
       teamLimitMock.mockReturnValue([]);
-      const { POST } = await import("@/app/api/projects/route");
+      const { POST } = await import("@/legacy-api/projects/route");
 
       const response = await POST(
         new Request("http://localhost/api/projects", {

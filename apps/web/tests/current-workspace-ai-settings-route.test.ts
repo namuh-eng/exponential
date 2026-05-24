@@ -1,4 +1,4 @@
-import { GET, PATCH } from "@/app/api/workspaces/current/ai-settings/route";
+import { GET, PATCH } from "@/legacy-api/workspaces/current/ai-settings/route";
 import { db } from "@/lib/db";
 import { member, user, workspace } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";

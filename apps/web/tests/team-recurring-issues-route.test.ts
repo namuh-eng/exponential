@@ -1,8 +1,8 @@
 import {
   DELETE,
   PATCH,
-} from "@/app/api/teams/[key]/recurring-issues/[id]/route";
-import { GET, POST } from "@/app/api/teams/[key]/recurring-issues/route";
+} from "@/legacy-api/teams/[key]/recurring-issues/[id]/route";
+import { GET, POST } from "@/legacy-api/teams/[key]/recurring-issues/route";
 import { db } from "@/lib/db";
 import {
   member,

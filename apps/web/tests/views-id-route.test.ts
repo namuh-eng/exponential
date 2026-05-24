@@ -108,7 +108,7 @@ describe("view detail route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/views/[id]/route");
+    const { GET } = await import("@/legacy-api/views/[id]/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ id: "view-1" }),
@@ -121,7 +121,7 @@ describe("view detail route", () => {
     customViewLimitMock.mockResolvedValue([
       { id: "view-1", workspaceId: "workspace-other" },
     ]);
-    const { GET } = await import("@/app/api/views/[id]/route");
+    const { GET } = await import("@/legacy-api/views/[id]/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ id: "view-1" }),
@@ -131,7 +131,7 @@ describe("view detail route", () => {
   });
 
   it("returns the view detail", async () => {
-    const { GET } = await import("@/app/api/views/[id]/route");
+    const { GET } = await import("@/legacy-api/views/[id]/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ id: "view-1" }),
@@ -143,7 +143,7 @@ describe("view detail route", () => {
   });
 
   it("updates view metadata", async () => {
-    const { PATCH } = await import("@/app/api/views/[id]/route");
+    const { PATCH } = await import("@/legacy-api/views/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost", {
@@ -163,7 +163,7 @@ describe("view detail route", () => {
   });
 
   it("deletes a view", async () => {
-    const { DELETE } = await import("@/app/api/views/[id]/route");
+    const { DELETE } = await import("@/legacy-api/views/[id]/route");
 
     const response = await DELETE(new Request("http://localhost"), {
       params: Promise.resolve({ id: "view-1" }),

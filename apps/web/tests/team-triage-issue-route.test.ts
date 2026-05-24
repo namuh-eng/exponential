@@ -115,7 +115,7 @@ describe("team triage issue route", () => {
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
     const { PATCH } = await import(
-      "@/app/api/teams/[key]/triage/[issueId]/route"
+      "@/legacy-api/teams/[key]/triage/[issueId]/route"
     );
 
     const response = await PATCH(
@@ -131,7 +131,7 @@ describe("team triage issue route", () => {
   it("returns 404 when team is missing", async () => {
     findAccessibleTeamMock.mockResolvedValue(null);
     const { PATCH } = await import(
-      "@/app/api/teams/[key]/triage/[issueId]/route"
+      "@/legacy-api/teams/[key]/triage/[issueId]/route"
     );
 
     const response = await PATCH(
@@ -153,7 +153,7 @@ describe("team triage issue route", () => {
 
   it("requires an explicit destination status", async () => {
     const { PATCH } = await import(
-      "@/app/api/teams/[key]/triage/[issueId]/route"
+      "@/legacy-api/teams/[key]/triage/[issueId]/route"
     );
 
     const response = await PATCH(
@@ -179,7 +179,7 @@ describe("team triage issue route", () => {
       settings: { triageAcceptDestinationStateId: "state-backlog" },
     });
     const { PATCH } = await import(
-      "@/app/api/teams/[key]/triage/[issueId]/route"
+      "@/legacy-api/teams/[key]/triage/[issueId]/route"
     );
 
     const response = await PATCH(
@@ -200,7 +200,7 @@ describe("team triage issue route", () => {
 
   it("requires explicit confirmation", async () => {
     const { PATCH } = await import(
-      "@/app/api/teams/[key]/triage/[issueId]/route"
+      "@/legacy-api/teams/[key]/triage/[issueId]/route"
     );
 
     const response = await PATCH(
@@ -222,7 +222,7 @@ describe("team triage issue route", () => {
 
   it("accepts a triage issue into the requested allowed destination", async () => {
     const { PATCH } = await import(
-      "@/app/api/teams/[key]/triage/[issueId]/route"
+      "@/legacy-api/teams/[key]/triage/[issueId]/route"
     );
 
     const response = await PATCH(
@@ -254,7 +254,7 @@ describe("team triage issue route", () => {
       { id: "issue-1", stateId: "state-canceled" },
     ]);
     const { PATCH } = await import(
-      "@/app/api/teams/[key]/triage/[issueId]/route"
+      "@/legacy-api/teams/[key]/triage/[issueId]/route"
     );
 
     const response = await PATCH(
@@ -284,7 +284,7 @@ describe("team triage issue route", () => {
   it("rejects decisions for issues that are not currently in triage", async () => {
     selectResults = [[{ ...triageIssue, stateCategory: "backlog" }]];
     const { PATCH } = await import(
-      "@/app/api/teams/[key]/triage/[issueId]/route"
+      "@/legacy-api/teams/[key]/triage/[issueId]/route"
     );
 
     const response = await PATCH(
@@ -308,7 +308,7 @@ describe("team triage issue route", () => {
   it("rejects destination statuses outside the team", async () => {
     selectResults = [[triageIssue], []];
     const { PATCH } = await import(
-      "@/app/api/teams/[key]/triage/[issueId]/route"
+      "@/legacy-api/teams/[key]/triage/[issueId]/route"
     );
 
     const response = await PATCH(
@@ -332,7 +332,7 @@ describe("team triage issue route", () => {
   it("rejects destinations that are not allowed for the action", async () => {
     selectResults = [[triageIssue], [canceledDestination]];
     const { PATCH } = await import(
-      "@/app/api/teams/[key]/triage/[issueId]/route"
+      "@/legacy-api/teams/[key]/triage/[issueId]/route"
     );
 
     const response = await PATCH(

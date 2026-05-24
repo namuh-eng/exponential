@@ -1,7 +1,7 @@
 import {
   type IssueTemplateSettings,
   normalizeIssueTemplateSettings,
-} from "@/app/api/issue-templates/route";
+} from "@/legacy-api/issue-templates/route";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issueTemplate } from "@/lib/db/schema";

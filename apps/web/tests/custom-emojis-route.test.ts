@@ -1,5 +1,5 @@
-import { DELETE } from "@/app/api/custom-emojis/[id]/route";
-import { GET, POST } from "@/app/api/custom-emojis/route";
+import { DELETE } from "@/legacy-api/custom-emojis/[id]/route";
+import { GET, POST } from "@/legacy-api/custom-emojis/route";
 import { db } from "@/lib/db";
 import { member, user, workspace } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";

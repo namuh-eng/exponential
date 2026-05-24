@@ -109,7 +109,7 @@ describe("current workspace route", () => {
   });
 
   it("returns the active workspace with normalized settings", async () => {
-    const { GET } = await import("@/app/api/workspaces/current/route");
+    const { GET } = await import("@/legacy-api/workspaces/current/route");
     const response = await GET();
 
     expect(response.status).toBe(200);
@@ -128,7 +128,7 @@ describe("current workspace route", () => {
   });
 
   it("persists workspace updates and merges settings", async () => {
-    const { PATCH } = await import("@/app/api/workspaces/current/route");
+    const { PATCH } = await import("@/legacy-api/workspaces/current/route");
     const response = await PATCH(
       new Request("http://localhost/api/workspaces/current", {
         method: "PATCH",
@@ -171,7 +171,7 @@ describe("current workspace route", () => {
   });
 
   it("deletes the workspace and moves the active cookie to the next membership", async () => {
-    const { DELETE } = await import("@/app/api/workspaces/current/route");
+    const { DELETE } = await import("@/legacy-api/workspaces/current/route");
     const response = await DELETE();
 
     expect(response.status).toBe(200);

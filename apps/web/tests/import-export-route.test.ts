@@ -100,7 +100,7 @@ describe("workspace import/export API", () => {
       },
     ]);
     const { POST } = await import(
-      "@/app/api/workspaces/current/import-export/route"
+      "@/legacy-api/workspaces/current/import-export/route"
     );
 
     const response = await POST(
@@ -127,7 +127,7 @@ describe("workspace import/export API", () => {
       },
     ]);
     const { POST } = await import(
-      "@/app/api/workspaces/current/import-export/route"
+      "@/legacy-api/workspaces/current/import-export/route"
     );
 
     const response = await POST(
@@ -194,7 +194,7 @@ describe("workspace import/export API", () => {
       [],
     );
     const { POST } = await import(
-      "@/app/api/workspaces/current/import-export/route"
+      "@/legacy-api/workspaces/current/import-export/route"
     );
 
     const response = await POST(
@@ -244,7 +244,7 @@ describe("workspace import/export API", () => {
       [{ maxNum: 2 }],
     );
     const { POST } = await import(
-      "@/app/api/workspaces/current/import-export/route"
+      "@/legacy-api/workspaces/current/import-export/route"
     );
 
     const response = await POST(

@@ -98,7 +98,7 @@ describe("team recurring issues route", () => {
       session: null,
     });
     const { GET } = await import(
-      "@/app/api/teams/[key]/recurring-issues/route"
+      "@/legacy-api/teams/[key]/recurring-issues/route"
     );
 
     const response = await GET(
@@ -113,7 +113,7 @@ describe("team recurring issues route", () => {
 
   it("lists recurring issues for an accessible team", async () => {
     const { GET } = await import(
-      "@/app/api/teams/[key]/recurring-issues/route"
+      "@/legacy-api/teams/[key]/recurring-issues/route"
     );
 
     const response = await GET(
@@ -135,7 +135,7 @@ describe("team recurring issues route", () => {
 
   it("validates required fields when creating", async () => {
     const { POST } = await import(
-      "@/app/api/teams/[key]/recurring-issues/route"
+      "@/legacy-api/teams/[key]/recurring-issues/route"
     );
 
     const response = await POST(
@@ -156,7 +156,7 @@ describe("team recurring issues route", () => {
 
   it("creates a recurring issue", async () => {
     const { POST } = await import(
-      "@/app/api/teams/[key]/recurring-issues/route"
+      "@/legacy-api/teams/[key]/recurring-issues/route"
     );
 
     const response = await POST(
@@ -183,7 +183,7 @@ describe("team recurring issues route", () => {
 
   it("updates and deletes only scoped recurring issues", async () => {
     const { PATCH, DELETE } = await import(
-      "@/app/api/teams/[key]/recurring-issues/[id]/route"
+      "@/legacy-api/teams/[key]/recurring-issues/[id]/route"
     );
 
     const patchResponse = await PATCH(

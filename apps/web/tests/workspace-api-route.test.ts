@@ -166,7 +166,7 @@ describe("workspace api route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/workspaces/current/api/route");
+    const { GET } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await GET();
 
@@ -176,7 +176,7 @@ describe("workspace api route", () => {
 
   it("returns 404 when there is no active workspace", async () => {
     resolveActiveWorkspaceIdMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/workspaces/current/api/route");
+    const { GET } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await GET();
 
@@ -190,7 +190,7 @@ describe("workspace api route", () => {
     workspaceAccessLimitMock.mockResolvedValue([
       buildAccess({ memberRole: "member" }),
     ]);
-    const { PATCH } = await import("@/app/api/workspaces/current/api/route");
+    const { PATCH } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/workspaces/current/api", {
@@ -204,7 +204,7 @@ describe("workspace api route", () => {
   });
 
   it("rejects unsupported actions", async () => {
-    const { POST } = await import("@/app/api/workspaces/current/api/route");
+    const { POST } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await POST(
       new Request("http://localhost/api/workspaces/current/api", {
@@ -235,7 +235,7 @@ describe("workspace api route", () => {
         },
       }),
     ]);
-    const { POST } = await import("@/app/api/workspaces/current/api/route");
+    const { POST } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await POST(
       new Request("http://localhost/api/workspaces/current/api", {
@@ -255,7 +255,7 @@ describe("workspace api route", () => {
   });
 
   it("rejects malformed webhook creation requests", async () => {
-    const { POST } = await import("@/app/api/workspaces/current/api/route");
+    const { POST } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await POST(
       new Request("http://localhost/api/workspaces/current/api", {
@@ -298,7 +298,7 @@ describe("workspace api route", () => {
         },
       }),
     ]);
-    const { POST } = await import("@/app/api/workspaces/current/api/route");
+    const { POST } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await POST(
       new Request("http://localhost/api/workspaces/current/api", {
@@ -321,7 +321,7 @@ describe("workspace api route", () => {
   });
 
   it("updates a webhook only within the current workspace", async () => {
-    const { POST } = await import("@/app/api/workspaces/current/api/route");
+    const { POST } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await POST(
       new Request("http://localhost/api/workspaces/current/api", {
@@ -343,7 +343,7 @@ describe("workspace api route", () => {
   });
 
   it("deletes a webhook only within the current workspace", async () => {
-    const { POST } = await import("@/app/api/workspaces/current/api/route");
+    const { POST } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await POST(
       new Request("http://localhost/api/workspaces/current/api", {
@@ -367,7 +367,7 @@ describe("workspace api route", () => {
         },
       }),
     ]);
-    const { POST } = await import("@/app/api/workspaces/current/api/route");
+    const { POST } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await POST(
       new Request("http://localhost/api/workspaces/current/api", {
@@ -384,7 +384,7 @@ describe("workspace api route", () => {
     workspaceAccessLimitMock.mockResolvedValue([
       buildAccess({ memberRole: "member" }),
     ]);
-    const { POST } = await import("@/app/api/workspaces/current/api/route");
+    const { POST } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await POST(
       new Request("http://localhost/api/workspaces/current/api", {

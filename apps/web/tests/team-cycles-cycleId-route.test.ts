@@ -134,7 +134,7 @@ describe("team cycle detail route", () => {
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
     const { GET } = await import(
-      "@/app/api/teams/[key]/cycles/[cycleId]/route"
+      "@/legacy-api/teams/[key]/cycles/[cycleId]/route"
     );
 
     const response = await GET(new Request("http://localhost"), {
@@ -147,7 +147,7 @@ describe("team cycle detail route", () => {
   it("returns 404 when cycle is not found", async () => {
     cyclesLimitMock.mockReturnValue([]);
     const { GET } = await import(
-      "@/app/api/teams/[key]/cycles/[cycleId]/route"
+      "@/legacy-api/teams/[key]/cycles/[cycleId]/route"
     );
 
     const response = await GET(new Request("http://localhost"), {
@@ -159,7 +159,7 @@ describe("team cycle detail route", () => {
 
   it("returns cycle detail with grouped issues", async () => {
     const { GET } = await import(
-      "@/app/api/teams/[key]/cycles/[cycleId]/route"
+      "@/legacy-api/teams/[key]/cycles/[cycleId]/route"
     );
 
     const response = await GET(new Request("http://localhost"), {

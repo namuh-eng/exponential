@@ -114,7 +114,7 @@ describe("issue reactions route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { POST } = await import("@/app/api/issues/[id]/reactions/route");
+    const { POST } = await import("@/legacy-api/issues/[id]/reactions/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues/ENG-1/reactions", {
@@ -128,7 +128,7 @@ describe("issue reactions route", () => {
   });
 
   it("rejects missing emoji values", async () => {
-    const { POST } = await import("@/app/api/issues/[id]/reactions/route");
+    const { POST } = await import("@/legacy-api/issues/[id]/reactions/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues/ENG-1/reactions", {
@@ -146,7 +146,7 @@ describe("issue reactions route", () => {
 
   it("returns 404 when the issue does not exist", async () => {
     issueLimitMock.mockResolvedValue([]);
-    const { POST } = await import("@/app/api/issues/[id]/reactions/route");
+    const { POST } = await import("@/legacy-api/issues/[id]/reactions/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues/ENG-404/reactions", {
@@ -160,7 +160,7 @@ describe("issue reactions route", () => {
   });
 
   it("creates an issue reaction and returns issue-level counts", async () => {
-    const { POST } = await import("@/app/api/issues/[id]/reactions/route");
+    const { POST } = await import("@/legacy-api/issues/[id]/reactions/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues/ENG-1/reactions", {
@@ -184,7 +184,7 @@ describe("issue reactions route", () => {
 
   it("toggles an existing issue reaction off without inserting a duplicate", async () => {
     existingReactionLimitMock.mockResolvedValue([{ id: "reaction-1" }]);
-    const { POST } = await import("@/app/api/issues/[id]/reactions/route");
+    const { POST } = await import("@/legacy-api/issues/[id]/reactions/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues/ENG-1/reactions", {
@@ -199,7 +199,7 @@ describe("issue reactions route", () => {
     expect(insertValuesMock).not.toHaveBeenCalled();
   });
   it("removes an issue reaction idempotently", async () => {
-    const { DELETE } = await import("@/app/api/issues/[id]/reactions/route");
+    const { DELETE } = await import("@/legacy-api/issues/[id]/reactions/route");
 
     const response = await DELETE(
       new Request("http://localhost/api/issues/ENG-1/reactions", {

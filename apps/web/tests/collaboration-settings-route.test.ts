@@ -60,7 +60,7 @@ describe("workspace collaboration settings route", () => {
 
   it("returns normalized asks and pulse settings", async () => {
     const { GET } = await import(
-      "@/app/api/workspaces/current/collaboration/route"
+      "@/legacy-api/workspaces/current/collaboration/route"
     );
 
     const response = await GET();
@@ -96,7 +96,7 @@ describe("workspace collaboration settings route", () => {
 
   it("merges valid updates into workspace settings", async () => {
     const { PATCH } = await import(
-      "@/app/api/workspaces/current/collaboration/route"
+      "@/legacy-api/workspaces/current/collaboration/route"
     );
 
     const response = await PATCH(
@@ -151,7 +151,7 @@ describe("workspace collaboration settings route", () => {
       { id: "workspace-1", role: "member", settings: {} },
     ]);
     const { PATCH } = await import(
-      "@/app/api/workspaces/current/collaboration/route"
+      "@/legacy-api/workspaces/current/collaboration/route"
     );
 
     const response = await PATCH(

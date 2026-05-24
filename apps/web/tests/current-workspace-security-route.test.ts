@@ -105,7 +105,9 @@ describe("current workspace security route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/workspaces/current/security/route");
+    const { GET } = await import(
+      "@/legacy-api/workspaces/current/security/route"
+    );
 
     const response = await GET(securityRequest());
 
@@ -114,7 +116,9 @@ describe("current workspace security route", () => {
 
   it("returns 404 when there is no active workspace", async () => {
     resolveRequestWorkspaceIdMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/workspaces/current/security/route");
+    const { GET } = await import(
+      "@/legacy-api/workspaces/current/security/route"
+    );
 
     const response = await GET(securityRequest());
 
@@ -125,7 +129,9 @@ describe("current workspace security route", () => {
   });
 
   it("returns normalized security settings and invite url", async () => {
-    const { GET } = await import("@/app/api/workspaces/current/security/route");
+    const { GET } = await import(
+      "@/legacy-api/workspaces/current/security/route"
+    );
 
     const response = await GET(securityRequest());
 
@@ -190,7 +196,9 @@ describe("current workspace security route", () => {
   });
 
   it("denies security API access from disallowed IPs when restrictions are enabled", async () => {
-    const { GET } = await import("@/app/api/workspaces/current/security/route");
+    const { GET } = await import(
+      "@/legacy-api/workspaces/current/security/route"
+    );
 
     const response = await GET(
       securityRequest({ headers: { "x-forwarded-for": "198.51.100.42" } }),
@@ -215,7 +223,9 @@ describe("current workspace security route", () => {
         role: "admin",
       },
     ]);
-    const { GET } = await import("@/app/api/workspaces/current/security/route");
+    const { GET } = await import(
+      "@/legacy-api/workspaces/current/security/route"
+    );
 
     const response = await GET(securityRequest());
 
@@ -230,7 +240,7 @@ describe("current workspace security route", () => {
 
   it("rejects invalid patch booleans", async () => {
     const { PATCH } = await import(
-      "@/app/api/workspaces/current/security/route"
+      "@/legacy-api/workspaces/current/security/route"
     );
 
     const response = await PATCH(
@@ -249,7 +259,7 @@ describe("current workspace security route", () => {
 
   it("rejects non-list approved email domains", async () => {
     const { PATCH } = await import(
-      "@/app/api/workspaces/current/security/route"
+      "@/legacy-api/workspaces/current/security/route"
     );
 
     const response = await PATCH(
@@ -268,7 +278,7 @@ describe("current workspace security route", () => {
 
   it("rejects invalid IP restriction ranges", async () => {
     const { PATCH } = await import(
-      "@/app/api/workspaces/current/security/route"
+      "@/legacy-api/workspaces/current/security/route"
     );
 
     const response = await PATCH(
@@ -289,7 +299,7 @@ describe("current workspace security route", () => {
 
   it("updates and normalizes security settings", async () => {
     const { PATCH } = await import(
-      "@/app/api/workspaces/current/security/route"
+      "@/legacy-api/workspaces/current/security/route"
     );
 
     const response = await PATCH(
@@ -401,7 +411,7 @@ describe("current workspace security route", () => {
       },
     ]);
     const { PATCH } = await import(
-      "@/app/api/workspaces/current/security/route"
+      "@/legacy-api/workspaces/current/security/route"
     );
 
     const response = await PATCH(

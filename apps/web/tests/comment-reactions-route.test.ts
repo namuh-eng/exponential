@@ -103,7 +103,7 @@ describe("comment reactions route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { POST } = await import("@/app/api/comments/[id]/reactions/route");
+    const { POST } = await import("@/legacy-api/comments/[id]/reactions/route");
 
     const response = await POST(
       new Request("http://localhost/api/comments/comment-1/reactions", {
@@ -117,7 +117,7 @@ describe("comment reactions route", () => {
   });
 
   it("rejects missing emoji values", async () => {
-    const { POST } = await import("@/app/api/comments/[id]/reactions/route");
+    const { POST } = await import("@/legacy-api/comments/[id]/reactions/route");
 
     const response = await POST(
       new Request("http://localhost/api/comments/comment-1/reactions", {
@@ -135,7 +135,7 @@ describe("comment reactions route", () => {
 
   it("returns 404 when the comment does not exist", async () => {
     commentLimitMock.mockResolvedValue([]);
-    const { POST } = await import("@/app/api/comments/[id]/reactions/route");
+    const { POST } = await import("@/legacy-api/comments/[id]/reactions/route");
 
     const response = await POST(
       new Request("http://localhost/api/comments/missing/reactions", {
@@ -152,7 +152,7 @@ describe("comment reactions route", () => {
   });
 
   it("creates a reaction and returns summarized counts", async () => {
-    const { POST } = await import("@/app/api/comments/[id]/reactions/route");
+    const { POST } = await import("@/legacy-api/comments/[id]/reactions/route");
 
     const response = await POST(
       new Request("http://localhost/api/comments/comment-1/reactions", {
@@ -175,7 +175,7 @@ describe("comment reactions route", () => {
 
   it("toggles an existing reaction off", async () => {
     existingReactionLimitMock.mockResolvedValue([{ id: "reaction-1" }]);
-    const { POST } = await import("@/app/api/comments/[id]/reactions/route");
+    const { POST } = await import("@/legacy-api/comments/[id]/reactions/route");
 
     const response = await POST(
       new Request("http://localhost/api/comments/comment-1/reactions", {

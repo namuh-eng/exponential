@@ -275,7 +275,7 @@ describe("project detail route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/projects/[slug]/route");
+    const { GET } = await import("@/legacy-api/projects/[slug]/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ slug: "ever" }),
@@ -285,7 +285,7 @@ describe("project detail route", () => {
   });
 
   it("returns full project detail payload", async () => {
-    const { GET } = await import("@/app/api/projects/[slug]/route");
+    const { GET } = await import("@/legacy-api/projects/[slug]/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ slug: "ever" }),
@@ -297,7 +297,7 @@ describe("project detail route", () => {
   });
 
   it("uses workspaceSlug query param before default workspace fallback", async () => {
-    const { GET } = await import("@/app/api/projects/[slug]/route");
+    const { GET } = await import("@/legacy-api/projects/[slug]/route");
 
     const response = await GET(
       new Request(
@@ -317,7 +317,7 @@ describe("project detail route", () => {
   });
 
   it("updates project metadata", async () => {
-    const { PATCH } = await import("@/app/api/projects/[slug]/route");
+    const { PATCH } = await import("@/legacy-api/projects/[slug]/route");
 
     const response = await PATCH(
       new Request("http://localhost", {
@@ -367,7 +367,7 @@ describe("project detail route", () => {
         },
       },
     ]);
-    const { PATCH } = await import("@/app/api/projects/[slug]/route");
+    const { PATCH } = await import("@/legacy-api/projects/[slug]/route");
 
     const response = await PATCH(
       new Request("http://localhost", {
@@ -386,7 +386,7 @@ describe("project detail route", () => {
   });
 
   it("deletes a project", async () => {
-    const { DELETE } = await import("@/app/api/projects/[slug]/route");
+    const { DELETE } = await import("@/legacy-api/projects/[slug]/route");
 
     const response = await DELETE(new Request("http://localhost"), {
       params: Promise.resolve({ slug: "ever" }),

@@ -46,7 +46,9 @@ describe("team display options route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/teams/[key]/display-options/route");
+    const { GET } = await import(
+      "@/legacy-api/teams/[key]/display-options/route"
+    );
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ key: "ENG" }),
@@ -57,7 +59,9 @@ describe("team display options route", () => {
 
   it("returns 404 when team is missing", async () => {
     findAccessibleTeamMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/teams/[key]/display-options/route");
+    const { GET } = await import(
+      "@/legacy-api/teams/[key]/display-options/route"
+    );
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ key: "MISSING" }),
@@ -67,7 +71,9 @@ describe("team display options route", () => {
   });
 
   it("returns team display options", async () => {
-    const { GET } = await import("@/app/api/teams/[key]/display-options/route");
+    const { GET } = await import(
+      "@/legacy-api/teams/[key]/display-options/route"
+    );
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ key: "ENG" }),
@@ -79,7 +85,9 @@ describe("team display options route", () => {
   });
 
   it("updates team display options", async () => {
-    const { PUT } = await import("@/app/api/teams/[key]/display-options/route");
+    const { PUT } = await import(
+      "@/legacy-api/teams/[key]/display-options/route"
+    );
 
     const response = await PUT(
       new Request("http://localhost", {

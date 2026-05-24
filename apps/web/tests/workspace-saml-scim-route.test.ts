@@ -72,7 +72,7 @@ describe("workspace SAML/SCIM routes", () => {
       workspaceRecord("member"),
     ]);
     const { PATCH } = await import(
-      "@/app/api/workspaces/current/security/saml/route"
+      "@/legacy-api/workspaces/current/security/saml/route"
     );
 
     const response = await PATCH(
@@ -92,7 +92,7 @@ describe("workspace SAML/SCIM routes", () => {
   it("saves admin SAML settings and marks test success", async () => {
     currentWorkspaceLimitMock.mockResolvedValueOnce([workspaceRecord()]);
     const { PATCH } = await import(
-      "@/app/api/workspaces/current/security/saml/route"
+      "@/legacy-api/workspaces/current/security/saml/route"
     );
 
     const response = await PATCH(
@@ -133,7 +133,7 @@ describe("workspace SAML/SCIM routes", () => {
   it("generates hashed SCIM tokens and returns the secret once", async () => {
     currentWorkspaceLimitMock.mockResolvedValueOnce([workspaceRecord()]);
     const { POST } = await import(
-      "@/app/api/workspaces/current/security/scim/route"
+      "@/legacy-api/workspaces/current/security/scim/route"
     );
 
     const response = await POST(

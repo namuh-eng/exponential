@@ -87,7 +87,7 @@ describe("workspace SLA policy routes", () => {
         },
       },
     ];
-    const { GET } = await import("@/app/api/workspaces/current/sla/route");
+    const { GET } = await import("@/legacy-api/workspaces/current/sla/route");
 
     const response = await GET();
     const payload = await response.json();
@@ -98,7 +98,7 @@ describe("workspace SLA policy routes", () => {
   });
 
   it("creates SLA policy in workspace settings", async () => {
-    const { POST } = await import("@/app/api/workspaces/current/sla/route");
+    const { POST } = await import("@/legacy-api/workspaces/current/sla/route");
 
     const response = await POST(
       request({
@@ -153,7 +153,9 @@ describe("workspace SLA policy routes", () => {
         },
       },
     ];
-    const route = await import("@/app/api/workspaces/current/sla/[id]/route");
+    const route = await import(
+      "@/legacy-api/workspaces/current/sla/[id]/route"
+    );
 
     const patchResponse = await route.PATCH(
       request({
@@ -192,7 +194,7 @@ describe("workspace SLA policy routes", () => {
     accessRows = [
       { workspaceId: "workspace-1", settings: {}, memberRole: "member" },
     ];
-    const { POST } = await import("@/app/api/workspaces/current/sla/route");
+    const { POST } = await import("@/legacy-api/workspaces/current/sla/route");
 
     const response = await POST(request({ name: "Nope" }));
 

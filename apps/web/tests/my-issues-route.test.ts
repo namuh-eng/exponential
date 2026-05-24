@@ -210,7 +210,7 @@ describe("my issues route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/my-issues/route");
+    const { GET } = await import("@/legacy-api/my-issues/route");
 
     const response = await GET(new Request("http://localhost/api/my-issues"));
 
@@ -219,7 +219,7 @@ describe("my issues route", () => {
 
   it("returns 404 when the user has no workspace", async () => {
     membershipsLimitMock.mockResolvedValue([]);
-    const { GET } = await import("@/app/api/my-issues/route");
+    const { GET } = await import("@/legacy-api/my-issues/route");
 
     const response = await GET(new Request("http://localhost/api/my-issues"));
 
@@ -229,7 +229,7 @@ describe("my issues route", () => {
 
   it("returns empty groups when the workspace has no teams", async () => {
     teamsWhereMock.mockResolvedValue([]);
-    const { GET } = await import("@/app/api/my-issues/route");
+    const { GET } = await import("@/legacy-api/my-issues/route");
 
     const response = await GET(new Request("http://localhost/api/my-issues"));
 
@@ -252,7 +252,7 @@ describe("my issues route", () => {
   });
 
   it("returns grouped assigned issues with filter options", async () => {
-    const { GET } = await import("@/app/api/my-issues/route");
+    const { GET } = await import("@/legacy-api/my-issues/route");
 
     const response = await GET(
       new Request("http://localhost/api/my-issues?tab=assigned"),
@@ -360,7 +360,7 @@ describe("my issues route", () => {
         teamId: "team-1",
       },
     ]);
-    const { GET } = await import("@/app/api/my-issues/route");
+    const { GET } = await import("@/legacy-api/my-issues/route");
 
     const response = await GET(
       new Request("http://localhost/api/my-issues?tab=subscribed"),
@@ -408,7 +408,7 @@ describe("my issues route", () => {
         teamId: "team-1",
       },
     ]);
-    const { GET } = await import("@/app/api/my-issues/route");
+    const { GET } = await import("@/legacy-api/my-issues/route");
 
     const response = await GET(
       new Request("http://localhost/api/my-issues?tab=subscribed"),
@@ -434,7 +434,7 @@ describe("my issues route", () => {
 
   it("excludes unsubscribed explicit rows while preserving implicit subscriptions", async () => {
     explicitSubscribedOrderByMock.mockResolvedValue([]);
-    const { GET } = await import("@/app/api/my-issues/route");
+    const { GET } = await import("@/legacy-api/my-issues/route");
 
     const response = await GET(
       new Request("http://localhost/api/my-issues?tab=subscribed"),

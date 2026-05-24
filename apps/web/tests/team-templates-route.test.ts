@@ -82,7 +82,7 @@ describe("team templates route", () => {
 
   it("returns 404 for a missing or inaccessible team", async () => {
     findAccessibleTeamMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/teams/[key]/templates/route");
+    const { GET } = await import("@/legacy-api/teams/[key]/templates/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ key: "ONB" }),
@@ -113,7 +113,7 @@ describe("team templates route", () => {
         },
       },
     ]);
-    const { GET } = await import("@/app/api/teams/[key]/templates/route");
+    const { GET } = await import("@/legacy-api/teams/[key]/templates/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ key: "ENG" }),
@@ -128,7 +128,7 @@ describe("team templates route", () => {
   });
 
   it("creates a team-scoped issue template", async () => {
-    const { POST } = await import("@/app/api/teams/[key]/templates/route");
+    const { POST } = await import("@/legacy-api/teams/[key]/templates/route");
 
     const response = await POST(
       new Request("http://localhost", {
@@ -149,7 +149,7 @@ describe("team templates route", () => {
   });
 
   it("edits a team-scoped issue template", async () => {
-    const { PATCH } = await import("@/app/api/teams/[key]/templates/route");
+    const { PATCH } = await import("@/legacy-api/teams/[key]/templates/route");
 
     const response = await PATCH(
       new Request("http://localhost", {
@@ -171,7 +171,7 @@ describe("team templates route", () => {
   });
 
   it("deletes a team-scoped issue template", async () => {
-    const { DELETE } = await import("@/app/api/teams/[key]/templates/route");
+    const { DELETE } = await import("@/legacy-api/teams/[key]/templates/route");
 
     const response = await DELETE(
       new Request("http://localhost", {

@@ -70,7 +70,7 @@ describe("team context route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/teams/[key]/context/route");
+    const { GET } = await import("@/legacy-api/teams/[key]/context/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ key: "ENG" }),
@@ -81,7 +81,7 @@ describe("team context route", () => {
 
   it("returns 404 when team is not found", async () => {
     findAccessibleTeamMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/teams/[key]/context/route");
+    const { GET } = await import("@/legacy-api/teams/[key]/context/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ key: "MISSING" }),
@@ -91,7 +91,7 @@ describe("team context route", () => {
   });
 
   it("returns team context and all teams in workspace", async () => {
-    const { GET } = await import("@/app/api/teams/[key]/context/route");
+    const { GET } = await import("@/legacy-api/teams/[key]/context/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ key: "ENG" }),

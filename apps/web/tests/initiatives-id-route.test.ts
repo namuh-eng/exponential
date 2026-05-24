@@ -304,7 +304,7 @@ describe("initiative detail route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/initiatives/[id]/route");
+    const { GET } = await import("@/legacy-api/initiatives/[id]/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ id: "init-1" }),
@@ -314,7 +314,7 @@ describe("initiative detail route", () => {
   });
 
   it("returns full initiative detail payload", async () => {
-    const { GET } = await import("@/app/api/initiatives/[id]/route");
+    const { GET } = await import("@/legacy-api/initiatives/[id]/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ id: "init-1" }),
@@ -368,7 +368,7 @@ describe("initiative detail route", () => {
       { settings: { features: { initiatives: { enabled: false } } } },
     ]);
     const { GET, PATCH, DELETE } = await import(
-      "@/app/api/initiatives/[id]/route"
+      "@/legacy-api/initiatives/[id]/route"
     );
 
     let response: Response = await GET(new Request("http://localhost"), {
@@ -398,7 +398,7 @@ describe("initiative detail route", () => {
   });
 
   it("updates an initiative including status updates", async () => {
-    const { PATCH } = await import("@/app/api/initiatives/[id]/route");
+    const { PATCH } = await import("@/legacy-api/initiatives/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost", {
@@ -427,7 +427,7 @@ describe("initiative detail route", () => {
       { id: "init-1", name: "Growth", parentInitiativeId: null },
       { id: "init-child", name: "Child", parentInitiativeId: "init-1" },
     ]);
-    const { PATCH } = await import("@/app/api/initiatives/[id]/route");
+    const { PATCH } = await import("@/legacy-api/initiatives/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost", {
@@ -465,7 +465,7 @@ describe("initiative detail route", () => {
       { id: "init-parent", name: "Parent", parentInitiativeId: null },
       { id: "init-1", name: "Growth", parentInitiativeId: "init-parent" },
     ]);
-    const { PATCH } = await import("@/app/api/initiatives/[id]/route");
+    const { PATCH } = await import("@/legacy-api/initiatives/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost", {
@@ -486,7 +486,7 @@ describe("initiative detail route", () => {
       { id: "init-1", name: "Growth", parentInitiativeId: null },
       { id: "init-child", name: "Child", parentInitiativeId: "init-1" },
     ]);
-    const { PATCH } = await import("@/app/api/initiatives/[id]/route");
+    const { PATCH } = await import("@/legacy-api/initiatives/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost", {
@@ -517,7 +517,7 @@ describe("initiative detail route", () => {
   });
 
   it("deletes an initiative", async () => {
-    const { DELETE } = await import("@/app/api/initiatives/[id]/route");
+    const { DELETE } = await import("@/legacy-api/initiatives/[id]/route");
 
     const response = await DELETE(new Request("http://localhost"), {
       params: Promise.resolve({ id: "init-1" }),

@@ -69,7 +69,7 @@ describe("current workspace initiative settings route", () => {
 
   it("returns defaults and viewer permissions", async () => {
     const { GET } = await import(
-      "@/app/api/workspaces/current/initiatives-settings/route"
+      "@/legacy-api/workspaces/current/initiatives-settings/route"
     );
 
     const response = await GET();
@@ -96,7 +96,7 @@ describe("current workspace initiative settings route", () => {
       },
     ];
     const { PATCH } = await import(
-      "@/app/api/workspaces/current/initiatives-settings/route"
+      "@/legacy-api/workspaces/current/initiatives-settings/route"
     );
 
     const response = await PATCH(
@@ -148,7 +148,7 @@ describe("current workspace initiative settings route", () => {
       { workspaceId: "workspace-1", settings: {}, role: "member" },
     ];
     const { PATCH } = await import(
-      "@/app/api/workspaces/current/initiatives-settings/route"
+      "@/legacy-api/workspaces/current/initiatives-settings/route"
     );
 
     let response = await PATCH(

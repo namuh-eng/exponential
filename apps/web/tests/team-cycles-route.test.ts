@@ -136,7 +136,7 @@ describe("team cycles collection route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/teams/[key]/cycles/route");
+    const { GET } = await import("@/legacy-api/teams/[key]/cycles/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ key: "ENG" }),
@@ -146,7 +146,7 @@ describe("team cycles collection route", () => {
   });
 
   it("returns team cycles", async () => {
-    const { GET } = await import("@/app/api/teams/[key]/cycles/route");
+    const { GET } = await import("@/legacy-api/teams/[key]/cycles/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ key: "ENG" }),
@@ -158,7 +158,7 @@ describe("team cycles collection route", () => {
   });
 
   it("creates a new cycle", async () => {
-    const { POST } = await import("@/app/api/teams/[key]/cycles/route");
+    const { POST } = await import("@/legacy-api/teams/[key]/cycles/route");
     existingCyclesWhereMock.mockReturnValue([]);
 
     const response = await POST(
@@ -188,7 +188,7 @@ describe("team cycles collection route", () => {
         endDate: new Date("2026-04-14"),
       },
     ]);
-    const { POST } = await import("@/app/api/teams/[key]/cycles/route");
+    const { POST } = await import("@/legacy-api/teams/[key]/cycles/route");
 
     const response = await POST(
       new Request("http://localhost", {

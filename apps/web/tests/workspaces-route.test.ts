@@ -98,7 +98,7 @@ describe("workspaces collection route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { POST } = await import("@/app/api/workspaces/route");
+    const { POST } = await import("@/legacy-api/workspaces/route");
 
     const response = await POST(
       new Request("http://localhost", { method: "POST" }),
@@ -108,7 +108,7 @@ describe("workspaces collection route", () => {
   });
 
   it("creates a workspace with default team and owner", async () => {
-    const { POST } = await import("@/app/api/workspaces/route");
+    const { POST } = await import("@/legacy-api/workspaces/route");
 
     const response = await POST(
       new Request("http://localhost/api/workspaces", {
@@ -127,7 +127,7 @@ describe("workspaces collection route", () => {
 
   it("rejects duplicate url slugs", async () => {
     workspaceLimitMock.mockReturnValue([{ id: "ws-existing" }]);
-    const { POST } = await import("@/app/api/workspaces/route");
+    const { POST } = await import("@/legacy-api/workspaces/route");
 
     const response = await POST(
       new Request("http://localhost/api/workspaces", {

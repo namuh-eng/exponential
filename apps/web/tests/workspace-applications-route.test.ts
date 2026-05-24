@@ -86,7 +86,7 @@ describe("Workspace applications API route", () => {
     ];
 
     const { GET } = await import(
-      "@/app/api/workspaces/current/applications/route"
+      "@/legacy-api/workspaces/current/applications/route"
     );
     const response = await GET();
     const data = await response.json();
@@ -111,10 +111,10 @@ describe("Workspace applications API route", () => {
     mocks.accessRows = [{ workspaceId: "workspace-1", memberRole: "member" }];
 
     const listRoute = await import(
-      "@/app/api/workspaces/current/applications/route"
+      "@/legacy-api/workspaces/current/applications/route"
     );
     const deleteRoute = await import(
-      "@/app/api/workspaces/current/applications/[id]/route"
+      "@/legacy-api/workspaces/current/applications/[id]/route"
     );
     const listResponse = await listRoute.GET();
     const deleteResponse = await deleteRoute.DELETE(
@@ -130,7 +130,7 @@ describe("Workspace applications API route", () => {
   it("revokes only an application grant visible in the active workspace", async () => {
     authenticate();
     const { DELETE } = await import(
-      "@/app/api/workspaces/current/applications/[id]/route"
+      "@/legacy-api/workspaces/current/applications/[id]/route"
     );
 
     const response = await DELETE(new Request("http://localhost"), {

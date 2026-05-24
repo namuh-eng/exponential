@@ -144,7 +144,7 @@ describe("views collection route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/views/route");
+    const { GET } = await import("@/legacy-api/views/route");
 
     const response = await GET();
 
@@ -152,7 +152,7 @@ describe("views collection route", () => {
   });
 
   it("returns serialized views and teams", async () => {
-    const { GET } = await import("@/app/api/views/route");
+    const { GET } = await import("@/legacy-api/views/route");
 
     const response = await GET();
 
@@ -172,7 +172,7 @@ describe("views collection route", () => {
       projectSortBy: "created-desc",
       projectDisplayOptions: { groupBy: "status" },
     });
-    const { POST } = await import("@/app/api/views/route");
+    const { POST } = await import("@/legacy-api/views/route");
 
     const response = await POST(
       new Request("http://localhost", {
@@ -202,7 +202,7 @@ describe("views collection route", () => {
   });
 
   it("creates a view", async () => {
-    const { POST } = await import("@/app/api/views/route");
+    const { POST } = await import("@/legacy-api/views/route");
 
     const response = await POST(
       new Request("http://localhost", {

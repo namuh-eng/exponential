@@ -59,7 +59,7 @@ describe("workspace documents route", () => {
 
   it("returns normalized workspace document settings", async () => {
     const { GET } = await import(
-      "@/app/api/workspaces/current/documents/route"
+      "@/legacy-api/workspaces/current/documents/route"
     );
 
     const response = await GET(
@@ -81,7 +81,7 @@ describe("workspace documents route", () => {
 
   it("persists document defaults into workspace settings", async () => {
     const { PATCH } = await import(
-      "@/app/api/workspaces/current/documents/route"
+      "@/legacy-api/workspaces/current/documents/route"
     );
 
     const response = await PATCH(
@@ -102,7 +102,7 @@ describe("workspace documents route", () => {
 
   it("validates and creates document templates", async () => {
     const { POST } = await import(
-      "@/app/api/workspaces/current/documents/route"
+      "@/legacy-api/workspaces/current/documents/route"
     );
 
     const invalid = await POST(

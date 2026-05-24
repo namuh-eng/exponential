@@ -194,7 +194,7 @@ describe("initiatives collection route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/initiatives/route");
+    const { GET } = await import("@/legacy-api/initiatives/route");
 
     const response = await GET(new Request("http://localhost/api/initiatives"));
 
@@ -203,7 +203,7 @@ describe("initiatives collection route", () => {
 
   it("returns 404 when the user has no workspace", async () => {
     resolveRequestWorkspaceIdMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/initiatives/route");
+    const { GET } = await import("@/legacy-api/initiatives/route");
 
     const response = await GET(new Request("http://localhost/api/initiatives"));
 
@@ -212,7 +212,7 @@ describe("initiatives collection route", () => {
   });
 
   it("returns initiatives with project counts", async () => {
-    const { GET } = await import("@/app/api/initiatives/route");
+    const { GET } = await import("@/legacy-api/initiatives/route");
 
     const response = await GET(new Request("http://localhost/api/initiatives"));
 
@@ -269,7 +269,7 @@ describe("initiatives collection route", () => {
     workspaceLimitMock.mockResolvedValue([
       { settings: { features: { initiatives: { enabled: false } } } },
     ]);
-    const { GET, POST } = await import("@/app/api/initiatives/route");
+    const { GET, POST } = await import("@/legacy-api/initiatives/route");
 
     let response: Response = await GET(
       new Request("http://localhost/api/initiatives"),
@@ -309,7 +309,7 @@ describe("initiatives collection route", () => {
         },
       },
     ]);
-    const { GET } = await import("@/app/api/initiatives/route");
+    const { GET } = await import("@/legacy-api/initiatives/route");
 
     const response = await GET(new Request("http://localhost/api/initiatives"));
     const data = await response.json();
@@ -320,7 +320,7 @@ describe("initiatives collection route", () => {
   });
 
   it("rejects creation with missing name", async () => {
-    const { POST } = await import("@/app/api/initiatives/route");
+    const { POST } = await import("@/legacy-api/initiatives/route");
 
     const response = await POST(
       new Request("http://localhost/api/initiatives", {
@@ -337,7 +337,7 @@ describe("initiatives collection route", () => {
 
   it("rejects invalid owner and malformed target dates", async () => {
     ownerLimitMock.mockResolvedValueOnce([]);
-    const { POST } = await import("@/app/api/initiatives/route");
+    const { POST } = await import("@/legacy-api/initiatives/route");
 
     let response = await POST(
       new Request("http://localhost/api/initiatives", {
@@ -379,7 +379,7 @@ describe("initiatives collection route", () => {
         updatedAt: new Date("2026-04-26T00:00:00.000Z"),
       },
     ]);
-    const { POST } = await import("@/app/api/initiatives/route");
+    const { POST } = await import("@/legacy-api/initiatives/route");
 
     const response = await POST(
       new Request("http://localhost/api/initiatives", {

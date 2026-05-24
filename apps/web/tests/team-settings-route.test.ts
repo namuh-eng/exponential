@@ -1,4 +1,4 @@
-import { GET, PATCH, POST } from "@/app/api/teams/[key]/settings/route";
+import { GET, PATCH, POST } from "@/legacy-api/teams/[key]/settings/route";
 import { db } from "@/lib/db";
 import {
   member,

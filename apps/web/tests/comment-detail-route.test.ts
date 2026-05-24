@@ -66,7 +66,7 @@ describe("comment detail route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { PATCH } = await import("@/app/api/comments/[id]/route");
+    const { PATCH } = await import("@/legacy-api/comments/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost", {
@@ -82,7 +82,7 @@ describe("comment detail route", () => {
   });
 
   it("updates a comment", async () => {
-    const { PATCH } = await import("@/app/api/comments/[id]/route");
+    const { PATCH } = await import("@/legacy-api/comments/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost", {
@@ -105,7 +105,7 @@ describe("comment detail route", () => {
       .mockResolvedValueOnce([{ id: "comment-1", userId: "user-1" }])
       .mockResolvedValueOnce([{ storageKey: "file-1" }]);
 
-    const { DELETE } = await import("@/app/api/comments/[id]/route");
+    const { DELETE } = await import("@/legacy-api/comments/[id]/route");
 
     const response = await DELETE(
       new Request("http://localhost", {

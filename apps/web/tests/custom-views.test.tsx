@@ -629,9 +629,9 @@ describe("ViewsPage", () => {
 describe("Views API routes", () => {
   it("export the expected handlers", async () => {
     const fs = await import("node:fs");
-    const listRoute = fs.readFileSync("src/app/api/views/route.ts", "utf-8");
+    const listRoute = fs.readFileSync("src/legacy-api/views/route.ts", "utf-8");
     const detailRoute = fs.readFileSync(
-      "src/app/api/views/[id]/route.ts",
+      "src/legacy-api/views/[id]/route.ts",
       "utf-8",
     );
 

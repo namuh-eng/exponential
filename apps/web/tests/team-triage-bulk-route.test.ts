@@ -102,7 +102,9 @@ describe("team triage bulk route", () => {
       workspaceId: "workspace-1",
       settings: { triageAcceptDestinationStateId: "state-backlog" },
     });
-    const { PATCH } = await import("@/app/api/teams/[key]/triage/bulk/route");
+    const { PATCH } = await import(
+      "@/legacy-api/teams/[key]/triage/bulk/route"
+    );
 
     const response = await PATCH(
       new Request("http://localhost", {
@@ -123,7 +125,9 @@ describe("team triage bulk route", () => {
   });
 
   it("updates triage issues and reports per-issue conflicts", async () => {
-    const { PATCH } = await import("@/app/api/teams/[key]/triage/bulk/route");
+    const { PATCH } = await import(
+      "@/legacy-api/teams/[key]/triage/bulk/route"
+    );
 
     const response = await PATCH(
       new Request("http://localhost", {
@@ -156,7 +160,9 @@ describe("team triage bulk route", () => {
   });
 
   it("rejects bulk decisions without explicit confirmation", async () => {
-    const { PATCH } = await import("@/app/api/teams/[key]/triage/bulk/route");
+    const { PATCH } = await import(
+      "@/legacy-api/teams/[key]/triage/bulk/route"
+    );
 
     const response = await PATCH(
       new Request("http://localhost", {

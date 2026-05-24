@@ -109,7 +109,7 @@ describe("inbound team email route", () => {
   });
 
   it("creates an issue for an enabled team inbound address", async () => {
-    const { POST } = await import("@/app/api/inbound/team-email/route");
+    const { POST } = await import("@/legacy-api/inbound/team-email/route");
 
     const response = await POST(
       new Request("http://localhost/api/inbound/team-email", {
@@ -146,7 +146,7 @@ describe("inbound team email route", () => {
 
   it("rejects inbound email without creating an issue when disabled", async () => {
     teamSettings = { emailEnabled: false };
-    const { POST } = await import("@/app/api/inbound/team-email/route");
+    const { POST } = await import("@/legacy-api/inbound/team-email/route");
 
     const response = await POST(
       new Request("http://localhost/api/inbound/team-email", {

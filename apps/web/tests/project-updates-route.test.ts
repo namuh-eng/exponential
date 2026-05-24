@@ -71,7 +71,7 @@ describe("project update settings routes", () => {
     settingsRowMock.mockReturnValue([
       { settings: { projectUpdateConfigurations: [storedConfiguration] } },
     ]);
-    const { GET } = await import("@/app/api/project-updates/route");
+    const { GET } = await import("@/legacy-api/project-updates/route");
 
     const response = await GET(request());
 
@@ -93,7 +93,7 @@ describe("project update settings routes", () => {
         apiKey: { workspaceId: "api-workspace-1" },
       },
     });
-    const { GET } = await import("@/app/api/project-updates/route");
+    const { GET } = await import("@/legacy-api/project-updates/route");
 
     const response = await GET(request());
 
@@ -102,7 +102,7 @@ describe("project update settings routes", () => {
   });
 
   it("creates validated configurations in workspace settings", async () => {
-    const { POST } = await import("@/app/api/project-updates/route");
+    const { POST } = await import("@/legacy-api/project-updates/route");
 
     const response = await POST(
       request({
@@ -137,7 +137,7 @@ describe("project update settings routes", () => {
   });
 
   it("rejects invalid due time", async () => {
-    const { POST } = await import("@/app/api/project-updates/route");
+    const { POST } = await import("@/legacy-api/project-updates/route");
 
     const response = await POST(
       request({
@@ -162,7 +162,7 @@ describe("project update settings routes", () => {
     settingsRowMock.mockReturnValue([
       { settings: { projectUpdateConfigurations: [storedConfiguration] } },
     ]);
-    const { PATCH } = await import("@/app/api/project-updates/[id]/route");
+    const { PATCH } = await import("@/legacy-api/project-updates/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/project-updates/update-1", {
@@ -188,7 +188,7 @@ describe("project update settings routes", () => {
     settingsRowMock.mockReturnValue([
       { settings: { projectUpdateConfigurations: [storedConfiguration] } },
     ]);
-    const { DELETE } = await import("@/app/api/project-updates/[id]/route");
+    const { DELETE } = await import("@/legacy-api/project-updates/[id]/route");
 
     const response = await DELETE(
       new Request("http://localhost/api/project-updates/update-1", {

@@ -88,7 +88,7 @@ describe("notifications route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/notifications/route");
+    const { GET } = await import("@/legacy-api/notifications/route");
 
     const response = await GET();
 
@@ -97,7 +97,7 @@ describe("notifications route", () => {
   });
 
   it("returns normalized notifications with unread count", async () => {
-    const { GET } = await import("@/app/api/notifications/route");
+    const { GET } = await import("@/legacy-api/notifications/route");
 
     const response = await GET();
 
@@ -140,7 +140,7 @@ describe("notifications route", () => {
 
   it("defaults unread count to zero when the aggregate row is missing", async () => {
     unreadRowsMock.mockResolvedValueOnce([]);
-    const { GET } = await import("@/app/api/notifications/route");
+    const { GET } = await import("@/legacy-api/notifications/route");
 
     const response = await GET();
 

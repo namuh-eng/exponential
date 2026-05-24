@@ -182,7 +182,7 @@ describe("Account Security API Route", () => {
       session: null,
     });
 
-    const { GET } = await import("@/app/api/account/security/route");
+    const { GET } = await import("@/legacy-api/account/security/route");
     const res = await GET();
 
     expect(res.status).toBe(401);
@@ -192,7 +192,7 @@ describe("Account Security API Route", () => {
   it("returns Linear-parity account security resources without secrets", async () => {
     authenticate();
 
-    const { GET } = await import("@/app/api/account/security/route");
+    const { GET } = await import("@/legacy-api/account/security/route");
     const res = await GET();
     const data = await res.json();
     const serialized = JSON.stringify(data);
@@ -238,7 +238,7 @@ describe("Account Security API Route", () => {
       },
     ];
 
-    const { GET } = await import("@/app/api/account/security/route");
+    const { GET } = await import("@/legacy-api/account/security/route");
     const res = await GET();
     const data = await res.json();
 
@@ -270,7 +270,7 @@ describe("Account Security API Route", () => {
   it("blocks self-revoking the current session", async () => {
     authenticate();
 
-    const { POST } = await import("@/app/api/account/security/route");
+    const { POST } = await import("@/legacy-api/account/security/route");
     const res = await POST(
       new Request("http://localhost/api/account/security", {
         method: "POST",
@@ -288,7 +288,7 @@ describe("Account Security API Route", () => {
   it("revokes another session and can revoke all sessions except current", async () => {
     authenticate();
 
-    const { POST } = await import("@/app/api/account/security/route");
+    const { POST } = await import("@/legacy-api/account/security/route");
     const revokeOne = await POST(
       new Request("http://localhost/api/account/security", {
         method: "POST",
@@ -326,7 +326,7 @@ describe("Account Security API Route", () => {
       },
     ];
 
-    const { GET } = await import("@/app/api/account/security/route");
+    const { GET } = await import("@/legacy-api/account/security/route");
     const res = await GET();
     const data = await res.json();
 
@@ -379,7 +379,7 @@ describe("Account Security API Route", () => {
       mocks.authorizedApplicationRows = [];
     });
 
-    const { POST } = await import("@/app/api/account/security/route");
+    const { POST } = await import("@/legacy-api/account/security/route");
     const res = await POST(
       new Request("http://localhost/api/account/security", {
         method: "POST",
@@ -399,7 +399,7 @@ describe("Account Security API Route", () => {
   it("requires an authorized application id before revoking", async () => {
     authenticate();
 
-    const { POST } = await import("@/app/api/account/security/route");
+    const { POST } = await import("@/legacy-api/account/security/route");
     const res = await POST(
       new Request("http://localhost/api/account/security", {
         method: "POST",
@@ -426,7 +426,7 @@ describe("Account Security API Route", () => {
       },
     ];
 
-    const { GET } = await import("@/app/api/account/security/route");
+    const { GET } = await import("@/legacy-api/account/security/route");
     const res = await GET();
     const data = await res.json();
 
@@ -460,7 +460,7 @@ describe("Account Security API Route", () => {
       ];
     });
 
-    const { POST } = await import("@/app/api/account/security/route");
+    const { POST } = await import("@/legacy-api/account/security/route");
     const create = await POST(
       new Request("http://localhost/api/account/security", {
         method: "POST",
@@ -492,7 +492,7 @@ describe("Account Security API Route", () => {
       }),
     );
 
-    const { GET } = await import("@/app/api/account/security/route");
+    const { GET } = await import("@/legacy-api/account/security/route");
     const reload = await GET();
     const reloadData = await reload.json();
 
@@ -518,7 +518,7 @@ describe("Account Security API Route", () => {
       mocks.apiKeyRows = [];
     });
 
-    const { POST } = await import("@/app/api/account/security/route");
+    const { POST } = await import("@/legacy-api/account/security/route");
 
     const revoke = await POST(
       new Request("http://localhost/api/account/security", {
@@ -536,7 +536,7 @@ describe("Account Security API Route", () => {
   it("rejects invalid personal API key input and permission failures", async () => {
     authenticate();
 
-    const { POST } = await import("@/app/api/account/security/route");
+    const { POST } = await import("@/legacy-api/account/security/route");
     const missingName = await POST(
       new Request("http://localhost/api/account/security", {
         method: "POST",

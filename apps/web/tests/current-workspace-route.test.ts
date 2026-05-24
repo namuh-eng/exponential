@@ -134,7 +134,7 @@ describe("current workspace route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/workspaces/current/route");
+    const { GET } = await import("@/legacy-api/workspaces/current/route");
 
     const response = await GET();
 
@@ -143,7 +143,7 @@ describe("current workspace route", () => {
 
   it("returns 404 when there is no active workspace", async () => {
     resolveActiveWorkspaceIdMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/workspaces/current/route");
+    const { GET } = await import("@/legacy-api/workspaces/current/route");
 
     const response = await GET();
 
@@ -154,7 +154,7 @@ describe("current workspace route", () => {
   });
 
   it("returns the current workspace payload", async () => {
-    const { GET } = await import("@/app/api/workspaces/current/route");
+    const { GET } = await import("@/legacy-api/workspaces/current/route");
 
     const response = await GET();
 
@@ -174,7 +174,7 @@ describe("current workspace route", () => {
   });
 
   it("rejects invalid workspace names on patch", async () => {
-    const { PATCH } = await import("@/app/api/workspaces/current/route");
+    const { PATCH } = await import("@/legacy-api/workspaces/current/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/workspaces/current", {
@@ -191,7 +191,7 @@ describe("current workspace route", () => {
   });
 
   it("rejects invalid url slugs without sanitizing", async () => {
-    const { PATCH } = await import("@/app/api/workspaces/current/route");
+    const { PATCH } = await import("@/legacy-api/workspaces/current/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/workspaces/current", {
@@ -211,7 +211,7 @@ describe("current workspace route", () => {
 
   it("rejects duplicate url slugs", async () => {
     duplicateSlugLimitMock.mockResolvedValue([{ id: "workspace-2" }]);
-    const { PATCH } = await import("@/app/api/workspaces/current/route");
+    const { PATCH } = await import("@/legacy-api/workspaces/current/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/workspaces/current", {
@@ -228,7 +228,7 @@ describe("current workspace route", () => {
   });
 
   it("updates workspace settings when patch values are valid", async () => {
-    const { PATCH } = await import("@/app/api/workspaces/current/route");
+    const { PATCH } = await import("@/legacy-api/workspaces/current/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/workspaces/current", {
@@ -284,7 +284,7 @@ describe("current workspace route", () => {
         role: "member",
       },
     ]);
-    const { DELETE } = await import("@/app/api/workspaces/current/route");
+    const { DELETE } = await import("@/legacy-api/workspaces/current/route");
 
     const response = await DELETE();
 
@@ -295,7 +295,7 @@ describe("current workspace route", () => {
   });
 
   it("deletes the workspace and redirects to the next membership", async () => {
-    const { DELETE } = await import("@/app/api/workspaces/current/route");
+    const { DELETE } = await import("@/legacy-api/workspaces/current/route");
 
     const response = await DELETE();
 

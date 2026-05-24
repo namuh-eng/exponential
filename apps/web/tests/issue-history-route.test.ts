@@ -97,7 +97,7 @@ describe("issue history route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/issues/[id]/history/route");
+    const { GET } = await import("@/legacy-api/issues/[id]/history/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ id: "ENG-1" }),
@@ -107,7 +107,7 @@ describe("issue history route", () => {
   });
 
   it("returns persisted history events in chronological order", async () => {
-    const { GET } = await import("@/app/api/issues/[id]/history/route");
+    const { GET } = await import("@/legacy-api/issues/[id]/history/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ id: "ENG-1" }),
@@ -146,7 +146,7 @@ describe("issue history route", () => {
     issueLimitMock.mockResolvedValue([
       { ...issueRecord, workspaceId: "workspace-2" },
     ]);
-    const { GET } = await import("@/app/api/issues/[id]/history/route");
+    const { GET } = await import("@/legacy-api/issues/[id]/history/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ id: "ENG-1" }),
@@ -158,7 +158,7 @@ describe("issue history route", () => {
 
   it("returns a migration fallback when legacy issues have no audit rows", async () => {
     historyOrderByMock.mockResolvedValue([]);
-    const { GET } = await import("@/app/api/issues/[id]/history/route");
+    const { GET } = await import("@/legacy-api/issues/[id]/history/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ id: "ENG-1" }),

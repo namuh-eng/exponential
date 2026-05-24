@@ -92,7 +92,7 @@ describe("document settings API routes", () => {
   });
 
   it("returns document settings scoped to the active workspace", async () => {
-    const { GET } = await import("@/app/api/document-settings/route");
+    const { GET } = await import("@/legacy-api/document-settings/route");
 
     const response = await GET(request("/api/document-settings"));
 
@@ -107,7 +107,7 @@ describe("document settings API routes", () => {
   });
 
   it("validates and creates a document template", async () => {
-    const { POST } = await import("@/app/api/document-templates/route");
+    const { POST } = await import("@/legacy-api/document-templates/route");
 
     const invalid = await POST(
       request("/api/document-templates", { name: " ", content: "Body" }),
@@ -133,7 +133,7 @@ describe("document settings API routes", () => {
 
   it("edits and deletes a document template", async () => {
     const { PATCH, DELETE } = await import(
-      "@/app/api/document-templates/[id]/route"
+      "@/legacy-api/document-templates/[id]/route"
     );
 
     const patchResponse = await PATCH(
@@ -157,7 +157,7 @@ describe("document settings API routes", () => {
   });
 
   it("validates and creates a common folder", async () => {
-    const { POST } = await import("@/app/api/document-folders/route");
+    const { POST } = await import("@/legacy-api/document-folders/route");
 
     const invalid = await POST(request("/api/document-folders", { name: " " }));
     expect(invalid.status).toBe(400);
@@ -179,7 +179,7 @@ describe("document settings API routes", () => {
 
   it("edits and deletes a common folder", async () => {
     const { PATCH, DELETE } = await import(
-      "@/app/api/document-folders/[id]/route"
+      "@/legacy-api/document-folders/[id]/route"
     );
 
     const patchResponse = await PATCH(

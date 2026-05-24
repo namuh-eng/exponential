@@ -58,7 +58,7 @@ describe("issue subscription route", () => {
   });
 
   it("returns subscription state for an accessible issue", async () => {
-    const { GET } = await import("@/app/api/issues/[id]/subscription/route");
+    const { GET } = await import("@/legacy-api/issues/[id]/subscription/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ id: "ENG-1" }),
@@ -77,7 +77,7 @@ describe("issue subscription route", () => {
 
   it("persists subscribe and unsubscribe mutations", async () => {
     const { POST, DELETE } = await import(
-      "@/app/api/issues/[id]/subscription/route"
+      "@/legacy-api/issues/[id]/subscription/route"
     );
 
     const postResponse = await POST(new Request("http://localhost"), {
@@ -107,7 +107,9 @@ describe("issue subscription route", () => {
 
   it("does not expose issues outside the active workspace", async () => {
     issueLimitMock.mockResolvedValue([]);
-    const { POST } = await import("@/app/api/issues/[id]/subscription/route");
+    const { POST } = await import(
+      "@/legacy-api/issues/[id]/subscription/route"
+    );
 
     const response = await POST(new Request("http://localhost"), {
       params: Promise.resolve({ id: "ENG-404" }),

@@ -1,4 +1,4 @@
-import { GET, PATCH } from "@/app/api/account/notifications/route";
+import { GET, PATCH } from "@/legacy-api/account/notifications/route";
 import { db } from "@/lib/db";
 import { user } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";

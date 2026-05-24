@@ -1,4 +1,4 @@
-import { DELETE } from "@/app/api/account/profile/workspace/route";
+import { DELETE } from "@/legacy-api/account/profile/workspace/route";
 import { db } from "@/lib/db";
 import { member, user, workspace } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";

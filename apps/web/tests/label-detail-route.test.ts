@@ -60,7 +60,7 @@ describe("label detail route", () => {
     selectRowsMock
       .mockReturnValueOnce([{ id: "label-1", teamId: null }])
       .mockReturnValueOnce([{ id: "group-1", parentLabelId: null }]);
-    const { PATCH } = await import("@/app/api/labels/[id]/route");
+    const { PATCH } = await import("@/legacy-api/labels/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/labels/label-1", {
@@ -80,7 +80,7 @@ describe("label detail route", () => {
     selectRowsMock
       .mockReturnValueOnce([{ id: "label-1", teamId: "team-1" }])
       .mockReturnValueOnce([{ id: "team-group-1", parentLabelId: null }]);
-    const { PATCH } = await import("@/app/api/labels/[id]/route");
+    const { PATCH } = await import("@/legacy-api/labels/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/labels/label-1", {
@@ -100,7 +100,7 @@ describe("label detail route", () => {
     selectRowsMock
       .mockReturnValueOnce([{ id: "label-1", teamId: "team-1" }])
       .mockReturnValueOnce([]);
-    const { PATCH } = await import("@/app/api/labels/[id]/route");
+    const { PATCH } = await import("@/legacy-api/labels/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/labels/label-1", {
@@ -115,7 +115,7 @@ describe("label detail route", () => {
 
   it("allows clearing a label group", async () => {
     selectRowsMock.mockReturnValue([{ id: "label-1", teamId: null }]);
-    const { PATCH } = await import("@/app/api/labels/[id]/route");
+    const { PATCH } = await import("@/legacy-api/labels/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/labels/label-1", {
@@ -133,7 +133,7 @@ describe("label detail route", () => {
 
   it("rejects self-parenting", async () => {
     selectRowsMock.mockReturnValue([{ id: "label-1", teamId: null }]);
-    const { PATCH } = await import("@/app/api/labels/[id]/route");
+    const { PATCH } = await import("@/legacy-api/labels/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/labels/label-1", {
@@ -151,7 +151,7 @@ describe("label detail route", () => {
       .mockReturnValueOnce([{ id: "label-1", teamId: null }])
       .mockReturnValueOnce([{ id: "child-1", parentLabelId: "label-1" }])
       .mockReturnValueOnce([{ id: "label-1", parentLabelId: null }]);
-    const { PATCH } = await import("@/app/api/labels/[id]/route");
+    const { PATCH } = await import("@/legacy-api/labels/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/labels/label-1", {

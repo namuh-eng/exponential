@@ -188,7 +188,7 @@ describe("current workspace api route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/workspaces/current/api/route");
+    const { GET } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await GET();
 
@@ -197,7 +197,7 @@ describe("current workspace api route", () => {
 
   it("returns 404 when no active workspace exists", async () => {
     resolveRequestWorkspaceIdMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/workspaces/current/api/route");
+    const { GET } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await GET();
 
@@ -223,7 +223,7 @@ describe("current workspace api route", () => {
         memberRole: "owner",
       },
     ]);
-    const { GET } = await import("@/app/api/workspaces/current/api/route");
+    const { GET } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await GET();
 
@@ -260,7 +260,7 @@ describe("current workspace api route", () => {
         memberRole: "owner",
       },
     ]);
-    const { GET } = await import("@/app/api/workspaces/current/api/route");
+    const { GET } = await import("@/legacy-api/workspaces/current/api/route");
 
     const denied = await GET(
       new Request("https://app.test/api/workspaces/current/api", {
@@ -286,7 +286,7 @@ describe("current workspace api route", () => {
     requestHeaders = new Headers({
       authorization: "Bearer not_linear",
     });
-    const { GET } = await import("@/app/api/workspaces/current/api/route");
+    const { GET } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await GET();
 
@@ -301,7 +301,7 @@ describe("current workspace api route", () => {
       authorization: "Bearer lin_api_unknown",
     });
     apiKeyLimitMock.mockResolvedValue([]);
-    const { GET } = await import("@/app/api/workspaces/current/api/route");
+    const { GET } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await GET();
 
@@ -311,7 +311,7 @@ describe("current workspace api route", () => {
   });
 
   it("returns the workspace api payload", async () => {
-    const { GET } = await import("@/app/api/workspaces/current/api/route");
+    const { GET } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await GET();
 
@@ -359,7 +359,7 @@ describe("current workspace api route", () => {
   });
 
   it("rejects invalid webhook URLs without inserting", async () => {
-    const { POST } = await import("@/app/api/workspaces/current/api/route");
+    const { POST } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await POST(
       new Request("http://localhost/api/workspaces/current/api", {
@@ -382,7 +382,7 @@ describe("current workspace api route", () => {
   });
 
   it("requires at least one scoped webhook event", async () => {
-    const { POST } = await import("@/app/api/workspaces/current/api/route");
+    const { POST } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await POST(
       new Request("http://localhost/api/workspaces/current/api", {
@@ -405,7 +405,7 @@ describe("current workspace api route", () => {
   });
 
   it("creates webhooks with normalized HTTPS URL and scoped issue events", async () => {
-    const { POST } = await import("@/app/api/workspaces/current/api/route");
+    const { POST } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await POST(
       new Request("http://localhost/api/workspaces/current/api", {
@@ -441,7 +441,7 @@ describe("current workspace api route", () => {
         memberRole: "member",
       },
     ]);
-    const { PATCH } = await import("@/app/api/workspaces/current/api/route");
+    const { PATCH } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/workspaces/current/api", {
@@ -456,7 +456,7 @@ describe("current workspace api route", () => {
   });
 
   it("rejects invalid permission levels", async () => {
-    const { PATCH } = await import("@/app/api/workspaces/current/api/route");
+    const { PATCH } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/workspaces/current/api", {
@@ -473,7 +473,7 @@ describe("current workspace api route", () => {
   });
 
   it("updates permission level and returns refreshed api payload", async () => {
-    const { PATCH } = await import("@/app/api/workspaces/current/api/route");
+    const { PATCH } = await import("@/legacy-api/workspaces/current/api/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/workspaces/current/api", {

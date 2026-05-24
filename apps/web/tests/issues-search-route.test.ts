@@ -99,7 +99,7 @@ describe("issues search route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/issues/search/route");
+    const { GET } = await import("@/legacy-api/issues/search/route");
 
     const response = await GET(new Request("http://localhost?q=test"));
 
@@ -107,7 +107,7 @@ describe("issues search route", () => {
   });
 
   it("returns results for a valid query", async () => {
-    const { GET } = await import("@/app/api/issues/search/route");
+    const { GET } = await import("@/legacy-api/issues/search/route");
 
     const response = await GET(
       new Request("http://localhost?q=Search&workspaceId=workspace-1"),
@@ -127,7 +127,7 @@ describe("issues search route", () => {
   });
 
   it("returns empty array for missing query", async () => {
-    const { GET } = await import("@/app/api/issues/search/route");
+    const { GET } = await import("@/legacy-api/issues/search/route");
 
     const response = await GET(new Request("http://localhost"));
 

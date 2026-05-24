@@ -131,7 +131,7 @@ describe("issue comments route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { POST } = await import("@/app/api/issues/[id]/comments/route");
+    const { POST } = await import("@/legacy-api/issues/[id]/comments/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues/ISS-1/comments", {
@@ -147,7 +147,7 @@ describe("issue comments route", () => {
 
   it("returns 404 when the issue does not exist", async () => {
     issueLimitMock.mockResolvedValue([]);
-    const { POST } = await import("@/app/api/issues/[id]/comments/route");
+    const { POST } = await import("@/legacy-api/issues/[id]/comments/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues/missing/comments", {
@@ -165,7 +165,7 @@ describe("issue comments route", () => {
   });
 
   it("rejects empty comment bodies when there are no attachments", async () => {
-    const { POST } = await import("@/app/api/issues/[id]/comments/route");
+    const { POST } = await import("@/legacy-api/issues/[id]/comments/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues/ISS-1/comments", {
@@ -183,7 +183,7 @@ describe("issue comments route", () => {
   });
 
   it("creates a json comment and emits deduplicated notifications", async () => {
-    const { POST } = await import("@/app/api/issues/[id]/comments/route");
+    const { POST } = await import("@/legacy-api/issues/[id]/comments/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues/ISS-1/comments", {
@@ -246,7 +246,7 @@ describe("issue comments route", () => {
   it("passes canonical selected mention ids to notification resolution", async () => {
     resolveMentionedUserIdsMock.mockResolvedValue(["sam-2"]);
     getIssueNotificationRecipientsMock.mockResolvedValue(["sam-2", "user-2"]);
-    const { POST } = await import("@/app/api/issues/[id]/comments/route");
+    const { POST } = await import("@/legacy-api/issues/[id]/comments/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues/ISS-1/comments", {

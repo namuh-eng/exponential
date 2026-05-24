@@ -80,7 +80,7 @@ describe("project statuses settings route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/project-statuses/route");
+    const { GET } = await import("@/legacy-api/project-statuses/route");
 
     const response = await GET();
 
@@ -88,7 +88,7 @@ describe("project statuses settings route", () => {
   });
 
   it("returns editable default lifecycle statuses with workspace project counts", async () => {
-    const { GET } = await import("@/app/api/project-statuses/route");
+    const { GET } = await import("@/legacy-api/project-statuses/route");
 
     const response = await GET();
 
@@ -160,7 +160,7 @@ describe("project statuses settings route", () => {
       { status: "started", settings: {} },
       { status: "started", settings: { projectStatusKey: "blocked" } },
     ]);
-    const { GET } = await import("@/app/api/project-statuses/route");
+    const { GET } = await import("@/legacy-api/project-statuses/route");
 
     const response = await GET();
     const payload = await response.json();
@@ -205,7 +205,7 @@ describe("project statuses settings route", () => {
       { status: "started", settings: { projectStatusKey: "blocked" } },
       { status: "started", settings: {} },
     ]);
-    const { GET } = await import("@/app/api/project-statuses/route");
+    const { GET } = await import("@/legacy-api/project-statuses/route");
 
     const response = await GET();
     const payload = await response.json();
@@ -219,7 +219,7 @@ describe("project statuses settings route", () => {
   });
 
   it("persists edited project statuses for admins", async () => {
-    const { PATCH } = await import("@/app/api/project-statuses/route");
+    const { PATCH } = await import("@/legacy-api/project-statuses/route");
 
     const response = await PATCH(
       patchRequest({
@@ -298,7 +298,7 @@ describe("project statuses settings route", () => {
     workspaceAccessMock.mockReturnValue([
       { workspaceId: "workspace-1", role: "member", settings: {} },
     ]);
-    const { PATCH } = await import("@/app/api/project-statuses/route");
+    const { PATCH } = await import("@/legacy-api/project-statuses/route");
 
     const response = await PATCH(patchRequest({ statuses: [] }));
 
@@ -306,7 +306,7 @@ describe("project statuses settings route", () => {
   });
 
   it("validates status names and colors", async () => {
-    const { PATCH } = await import("@/app/api/project-statuses/route");
+    const { PATCH } = await import("@/legacy-api/project-statuses/route");
 
     const response = await PATCH(
       patchRequest({
@@ -324,7 +324,7 @@ describe("project statuses settings route", () => {
 
   it("returns default lifecycle statuses when the user has no active workspace", async () => {
     resolveActiveWorkspaceIdMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/project-statuses/route");
+    const { GET } = await import("@/legacy-api/project-statuses/route");
 
     const response = await GET();
 
@@ -341,7 +341,7 @@ describe("project statuses settings route", () => {
     groupedCountsMock.mockImplementation(() => {
       throw new Error("database unavailable");
     });
-    const { GET } = await import("@/app/api/project-statuses/route");
+    const { GET } = await import("@/legacy-api/project-statuses/route");
 
     const response = await GET();
 

@@ -220,7 +220,7 @@ describe("team cycle detail route", () => {
 
   it("returns cycle detail grouped by workflow state", async () => {
     const { GET } = await import(
-      "@/app/api/teams/[key]/cycles/[cycleId]/route"
+      "@/legacy-api/teams/[key]/cycles/[cycleId]/route"
     );
 
     const response = await GET(
@@ -331,7 +331,7 @@ describe("team cycle detail route", () => {
         }) as never,
     );
     const { PATCH } = await import(
-      "@/app/api/teams/[key]/cycles/[cycleId]/route"
+      "@/legacy-api/teams/[key]/cycles/[cycleId]/route"
     );
 
     const response = await PATCH(
@@ -380,7 +380,7 @@ describe("team cycle detail route", () => {
       );
 
     const { PATCH } = await import(
-      "@/app/api/teams/[key]/cycles/[cycleId]/route"
+      "@/legacy-api/teams/[key]/cycles/[cycleId]/route"
     );
 
     const response = await PATCH(
@@ -408,7 +408,7 @@ describe("team cycle detail route", () => {
 
   it("unlinks issues before deleting a cycle", async () => {
     const { DELETE } = await import(
-      "@/app/api/teams/[key]/cycles/[cycleId]/route"
+      "@/legacy-api/teams/[key]/cycles/[cycleId]/route"
     );
 
     const response = await DELETE(

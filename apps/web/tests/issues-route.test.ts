@@ -249,7 +249,7 @@ describe("issues route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { POST } = await import("@/app/api/issues/route");
+    const { POST } = await import("@/legacy-api/issues/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues", {
@@ -263,7 +263,7 @@ describe("issues route", () => {
   });
 
   it("requires title and teamId", async () => {
-    const { POST } = await import("@/app/api/issues/route");
+    const { POST } = await import("@/legacy-api/issues/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues", {
@@ -281,7 +281,7 @@ describe("issues route", () => {
 
   it("returns 404 when the team is missing", async () => {
     teamLimitMock.mockResolvedValue([]);
-    const { POST } = await import("@/app/api/issues/route");
+    const { POST } = await import("@/legacy-api/issues/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues", {
@@ -297,7 +297,7 @@ describe("issues route", () => {
 
   it("returns 400 when no default workflow state exists", async () => {
     defaultStateLimitMock.mockResolvedValue([]);
-    const { POST } = await import("@/app/api/issues/route");
+    const { POST } = await import("@/legacy-api/issues/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues", {
@@ -314,7 +314,7 @@ describe("issues route", () => {
   });
 
   it("creates an issue with deduped labels and assignment notification", async () => {
-    const { POST } = await import("@/app/api/issues/route");
+    const { POST } = await import("@/legacy-api/issues/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues", {
@@ -396,7 +396,7 @@ describe("issues route", () => {
   });
 
   it("persists composer planning metadata and creation relations", async () => {
-    const { POST } = await import("@/app/api/issues/route");
+    const { POST } = await import("@/legacy-api/issues/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues", {
@@ -449,7 +449,7 @@ describe("issues route", () => {
   });
 
   it("creates a cycle-scoped issue when the cycle belongs to the team", async () => {
-    const { POST } = await import("@/app/api/issues/route");
+    const { POST } = await import("@/legacy-api/issues/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues", {
@@ -488,7 +488,7 @@ describe("issues route", () => {
       },
     ]);
 
-    const { POST } = await import("@/app/api/issues/route");
+    const { POST } = await import("@/legacy-api/issues/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues", {
@@ -523,7 +523,7 @@ describe("issues route", () => {
     ]);
     loadGroupByMock.mockResolvedValue([{ assigneeId: "user-heavy", value: 3 }]);
 
-    const { POST } = await import("@/app/api/issues/route");
+    const { POST } = await import("@/legacy-api/issues/route");
 
     const response = await POST(
       new Request("http://localhost/api/issues", {

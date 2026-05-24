@@ -90,7 +90,7 @@ describe("labels collection route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/labels/route");
+    const { GET } = await import("@/legacy-api/labels/route");
 
     const response = await GET();
 
@@ -98,7 +98,7 @@ describe("labels collection route", () => {
   });
 
   it("returns workspace labels", async () => {
-    const { GET } = await import("@/app/api/labels/route");
+    const { GET } = await import("@/legacy-api/labels/route");
 
     const response = await GET();
 
@@ -110,7 +110,7 @@ describe("labels collection route", () => {
 
   it("creates a label", async () => {
     insertReturningMock.mockReturnValue([{ id: "label-2", name: "Feature" }]);
-    const { POST } = await import("@/app/api/labels/route");
+    const { POST } = await import("@/legacy-api/labels/route");
 
     const response = await POST(
       new Request("http://localhost/api/labels", {
@@ -128,7 +128,7 @@ describe("labels collection route", () => {
     insertReturningMock.mockReturnValue([
       { id: "label-3", name: "Backend", parentLabelId: "group-1" },
     ]);
-    const { POST } = await import("@/app/api/labels/route");
+    const { POST } = await import("@/legacy-api/labels/route");
 
     const response = await POST(
       new Request("http://localhost/api/labels", {
@@ -155,7 +155,7 @@ describe("labels collection route", () => {
         teamId: "team-1",
       },
     ]);
-    const { POST } = await import("@/app/api/labels/route");
+    const { POST } = await import("@/legacy-api/labels/route");
 
     const response = await POST(
       new Request("http://localhost/api/labels", {
@@ -181,7 +181,7 @@ describe("labels collection route", () => {
     selectRowsMock
       .mockReturnValueOnce([{ id: "team-1" }])
       .mockReturnValueOnce([]);
-    const { POST } = await import("@/app/api/labels/route");
+    const { POST } = await import("@/legacy-api/labels/route");
 
     const response = await POST(
       new Request("http://localhost/api/labels", {
@@ -199,7 +199,7 @@ describe("labels collection route", () => {
 
   it("rejects an invalid parent label", async () => {
     selectRowsMock.mockReturnValue([]);
-    const { POST } = await import("@/app/api/labels/route");
+    const { POST } = await import("@/legacy-api/labels/route");
 
     const response = await POST(
       new Request("http://localhost/api/labels", {

@@ -90,7 +90,7 @@ describe("issue templates route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/issue-templates/route");
+    const { GET } = await import("@/legacy-api/issue-templates/route");
 
     const response = await GET();
 
@@ -98,7 +98,7 @@ describe("issue templates route", () => {
   });
 
   it("lists issue templates for the active workspace", async () => {
-    const { GET } = await import("@/app/api/issue-templates/route");
+    const { GET } = await import("@/legacy-api/issue-templates/route");
 
     const response = await GET();
 
@@ -109,7 +109,7 @@ describe("issue templates route", () => {
   });
 
   it("validates required names", async () => {
-    const { POST } = await import("@/app/api/issue-templates/route");
+    const { POST } = await import("@/legacy-api/issue-templates/route");
 
     const response = await POST(
       new Request("http://localhost/api/issue-templates", {
@@ -125,7 +125,7 @@ describe("issue templates route", () => {
   });
 
   it("validates required issue descriptions", async () => {
-    const { POST } = await import("@/app/api/issue-templates/route");
+    const { POST } = await import("@/legacy-api/issue-templates/route");
 
     const response = await POST(
       new Request("http://localhost/api/issue-templates", {
@@ -141,7 +141,7 @@ describe("issue templates route", () => {
   });
 
   it("returns 400 for malformed JSON", async () => {
-    const { POST } = await import("@/app/api/issue-templates/route");
+    const { POST } = await import("@/legacy-api/issue-templates/route");
 
     const response = await POST(
       new Request("http://localhost/api/issue-templates", {
@@ -155,7 +155,7 @@ describe("issue templates route", () => {
   });
 
   it("creates an issue template", async () => {
-    const { POST } = await import("@/app/api/issue-templates/route");
+    const { POST } = await import("@/legacy-api/issue-templates/route");
 
     const response = await POST(
       new Request("http://localhost/api/issue-templates", {
@@ -175,7 +175,7 @@ describe("issue templates route", () => {
   });
 
   it("edits an issue template", async () => {
-    const { PATCH } = await import("@/app/api/issue-templates/[id]/route");
+    const { PATCH } = await import("@/legacy-api/issue-templates/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/issue-templates/template-1", {
@@ -196,7 +196,7 @@ describe("issue templates route", () => {
   });
 
   it("deletes an issue template", async () => {
-    const { DELETE } = await import("@/app/api/issue-templates/[id]/route");
+    const { DELETE } = await import("@/legacy-api/issue-templates/[id]/route");
 
     const response = await DELETE(
       new Request("http://localhost/api/issue-templates/template-1", {

@@ -545,7 +545,7 @@ describe("Triage API route", () => {
   it("filters issues across every triage workflow state", async () => {
     const fs = await import("node:fs");
     const content = fs.readFileSync(
-      "src/app/api/teams/[key]/triage/route.ts",
+      "src/legacy-api/teams/[key]/triage/route.ts",
       "utf-8",
     );
     expect(content).toContain("inArray(issue.stateId, triageStateIds)");

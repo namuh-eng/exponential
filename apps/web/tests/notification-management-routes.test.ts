@@ -55,7 +55,9 @@ describe("notification management routes", () => {
   });
 
   it("marks a notification unread and returns the snooze-aware unread count", async () => {
-    const { PATCH } = await import("@/app/api/notifications/[id]/unread/route");
+    const { PATCH } = await import(
+      "@/legacy-api/notifications/[id]/unread/route"
+    );
 
     const response = await PATCH({} as never, {
       params: Promise.resolve({ id: "notif-1" }),
@@ -74,7 +76,9 @@ describe("notification management routes", () => {
   it("bulk marks only non-comment notifications as read", async () => {
     updateReturningMock.mockResolvedValue([{ id: "assigned-1" }]);
     selectRowsMock.mockResolvedValue([{ count: 2 }]);
-    const { PATCH } = await import("@/app/api/notifications/bulk-read/route");
+    const { PATCH } = await import(
+      "@/legacy-api/notifications/bulk-read/route"
+    );
 
     const response = await PATCH();
 
@@ -97,7 +101,9 @@ describe("notification management routes", () => {
         unsnoozedAt: null,
       },
     ]);
-    const { PATCH } = await import("@/app/api/notifications/[id]/snooze/route");
+    const { PATCH } = await import(
+      "@/legacy-api/notifications/[id]/snooze/route"
+    );
 
     const response = await PATCH(
       new Request("http://localhost/api/notifications/notif-1/snooze", {
@@ -120,7 +126,9 @@ describe("notification management routes", () => {
   });
 
   it("rejects invalid snooze timestamps", async () => {
-    const { PATCH } = await import("@/app/api/notifications/[id]/snooze/route");
+    const { PATCH } = await import(
+      "@/legacy-api/notifications/[id]/snooze/route"
+    );
 
     const response = await PATCH(
       new Request("http://localhost/api/notifications/notif-1/snooze", {

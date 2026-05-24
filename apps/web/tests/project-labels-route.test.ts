@@ -131,7 +131,7 @@ describe("project labels routes", () => {
   });
 
   it("returns project labels with project counts", async () => {
-    const { GET } = await import("@/app/api/project-labels/route");
+    const { GET } = await import("@/legacy-api/project-labels/route");
 
     const response = await GET();
 
@@ -145,7 +145,7 @@ describe("project labels routes", () => {
   });
 
   it("creates project labels in project-label storage", async () => {
-    const { POST } = await import("@/app/api/project-labels/route");
+    const { POST } = await import("@/legacy-api/project-labels/route");
 
     const response = await POST(
       new Request("http://localhost/api/project-labels", {
@@ -171,7 +171,7 @@ describe("project labels routes", () => {
 
   it("rejects duplicate project label names", async () => {
     duplicateRowsMock.mockReturnValue([{ id: "pl-existing" }]);
-    const { POST } = await import("@/app/api/project-labels/route");
+    const { POST } = await import("@/legacy-api/project-labels/route");
 
     const response = await POST(
       new Request("http://localhost/api/project-labels", {
@@ -184,7 +184,7 @@ describe("project labels routes", () => {
   });
 
   it("updates project labels without touching issue labels", async () => {
-    const { PATCH } = await import("@/app/api/project-labels/[id]/route");
+    const { PATCH } = await import("@/legacy-api/project-labels/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/project-labels/pl-1", {
@@ -202,7 +202,7 @@ describe("project labels routes", () => {
 
   it("deletes project labels and removes them from project metadata", async () => {
     duplicateRowsMock.mockReturnValue([{ id: "pl-1" }]);
-    const { DELETE } = await import("@/app/api/project-labels/[id]/route");
+    const { DELETE } = await import("@/legacy-api/project-labels/[id]/route");
 
     const response = await DELETE(
       new Request("http://localhost/api/project-labels/pl-1", {

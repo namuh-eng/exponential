@@ -1,4 +1,4 @@
-import { GET, POST } from "@/app/api/agent/runs/route";
+import { GET, POST } from "@/legacy-api/agent/runs/route";
 import { db } from "@/lib/db";
 import { member, team, teamMember, user, workspace } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";

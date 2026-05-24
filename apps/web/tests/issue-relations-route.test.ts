@@ -159,7 +159,7 @@ describe("issue relations routes", () => {
   });
 
   it("creates blocked_by as normalized inverse blocks relation", async () => {
-    const { POST } = await import("@/app/api/issues/[id]/relations/route");
+    const { POST } = await import("@/legacy-api/issues/[id]/relations/route");
 
     const response = await POST(
       jsonRequest({ type: "blocked_by", targetIssueId: targetIssue.id }),
@@ -178,7 +178,7 @@ describe("issue relations routes", () => {
   });
 
   it("rejects unsupported, self, duplicate, and missing target relations", async () => {
-    const { POST } = await import("@/app/api/issues/[id]/relations/route");
+    const { POST } = await import("@/legacy-api/issues/[id]/relations/route");
 
     const unsupported = await POST(
       jsonRequest({ type: "depends_on", targetIssueId: targetIssue.id }),
@@ -228,7 +228,7 @@ describe("issue relations routes", () => {
 
   it("deletes only relations attached to an issue in the authenticated workspace", async () => {
     const { DELETE } = await import(
-      "@/app/api/issues/[id]/relations/[relationId]/route"
+      "@/legacy-api/issues/[id]/relations/[relationId]/route"
     );
     findIssueLimitMock.mockReset();
     findIssueLimitMock.mockResolvedValueOnce([sourceIssue]);

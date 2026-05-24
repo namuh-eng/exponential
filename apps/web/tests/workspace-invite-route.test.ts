@@ -105,7 +105,7 @@ describe("workspace invite route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { POST } = await import("@/app/api/workspaces/invite/route");
+    const { POST } = await import("@/legacy-api/workspaces/invite/route");
 
     const response = await POST(
       new Request("http://localhost", { method: "POST" }),
@@ -115,7 +115,7 @@ describe("workspace invite route", () => {
   });
 
   it("sends invitations using the current request origin by default", async () => {
-    const { POST } = await import("@/app/api/workspaces/invite/route");
+    const { POST } = await import("@/legacy-api/workspaces/invite/route");
 
     const response = await POST(
       new Request("http://localhost:3015/api/workspaces/invite", {
@@ -139,7 +139,7 @@ describe("workspace invite route", () => {
 
   it("uses configured app URL override for invitation links", async () => {
     vi.stubEnv("BETTER_AUTH_URL", "https://whetline.example");
-    const { POST } = await import("@/app/api/workspaces/invite/route");
+    const { POST } = await import("@/legacy-api/workspaces/invite/route");
 
     const response = await POST(
       new Request("http://localhost:3015/api/workspaces/invite", {
@@ -169,7 +169,7 @@ describe("workspace invite route", () => {
         },
       },
     ]);
-    const { POST } = await import("@/app/api/workspaces/invite/route");
+    const { POST } = await import("@/legacy-api/workspaces/invite/route");
 
     const response = await POST(
       new Request("http://localhost", {
@@ -193,7 +193,7 @@ describe("workspace invite route", () => {
         settings: { security: { permissions: { invitationsRole: "admins" } } },
       },
     ]);
-    const { POST } = await import("@/app/api/workspaces/invite/route");
+    const { POST } = await import("@/legacy-api/workspaces/invite/route");
 
     const response = await POST(
       new Request("http://localhost", {

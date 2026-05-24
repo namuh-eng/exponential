@@ -114,7 +114,7 @@ describe("team create issue options route", () => {
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
     const { GET } = await import(
-      "@/app/api/teams/[key]/create-issue-options/route"
+      "@/legacy-api/teams/[key]/create-issue-options/route"
     );
 
     const response = await GET(new Request("http://localhost"), {
@@ -127,7 +127,7 @@ describe("team create issue options route", () => {
   it("returns 404 when team is missing", async () => {
     findAccessibleTeamMock.mockResolvedValue(null);
     const { GET } = await import(
-      "@/app/api/teams/[key]/create-issue-options/route"
+      "@/legacy-api/teams/[key]/create-issue-options/route"
     );
 
     const response = await GET(new Request("http://localhost"), {
@@ -139,7 +139,7 @@ describe("team create issue options route", () => {
 
   it("returns full issue creation options payload", async () => {
     const { GET } = await import(
-      "@/app/api/teams/[key]/create-issue-options/route"
+      "@/legacy-api/teams/[key]/create-issue-options/route"
     );
 
     const response = await GET(new Request("http://localhost"), {

@@ -421,7 +421,7 @@ describe("issue detail route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/issues/[id]/route");
+    const { GET } = await import("@/legacy-api/issues/[id]/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ id: "ENG-1" }),
@@ -431,7 +431,7 @@ describe("issue detail route", () => {
   });
 
   it("returns full issue detail payload", async () => {
-    const { GET } = await import("@/app/api/issues/[id]/route");
+    const { GET } = await import("@/legacy-api/issues/[id]/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ id: "ENG-1" }),
@@ -601,7 +601,7 @@ describe("issue detail route", () => {
       },
     ]);
 
-    const { GET } = await import("@/app/api/issues/[id]/route");
+    const { GET } = await import("@/legacy-api/issues/[id]/route");
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ id: "ENG-1" }),
     });
@@ -650,7 +650,7 @@ describe("issue detail route", () => {
     reactionsWhereMock.mockResolvedValueOnce([]);
     attachmentsOrderByMock.mockResolvedValueOnce([]);
 
-    const { GET } = await import("@/app/api/issues/[id]/route");
+    const { GET } = await import("@/legacy-api/issues/[id]/route");
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ id: "ENG-1" }),
     });
@@ -672,7 +672,7 @@ describe("issue detail route", () => {
 
   it("returns 404 when patching a missing issue", async () => {
     issueLimitMock.mockResolvedValue([]);
-    const { PATCH } = await import("@/app/api/issues/[id]/route");
+    const { PATCH } = await import("@/legacy-api/issues/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost", {
@@ -690,7 +690,7 @@ describe("issue detail route", () => {
   });
 
   it("rejects empty titles on patch", async () => {
-    const { PATCH } = await import("@/app/api/issues/[id]/route");
+    const { PATCH } = await import("@/legacy-api/issues/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost", {
@@ -708,7 +708,7 @@ describe("issue detail route", () => {
   });
 
   it("updates issue fields and emits status-change notifications", async () => {
-    const { PATCH } = await import("@/app/api/issues/[id]/route");
+    const { PATCH } = await import("@/legacy-api/issues/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost", {
@@ -787,7 +787,7 @@ describe("issue detail route", () => {
         estimate: null,
       },
     ]);
-    const { PATCH } = await import("@/app/api/issues/[id]/route");
+    const { PATCH } = await import("@/legacy-api/issues/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost", {
@@ -841,7 +841,7 @@ describe("issue detail route", () => {
         archivedAt: new Date("2026-04-23T12:00:00.000Z"),
       },
     ]);
-    const { PATCH } = await import("@/app/api/issues/[id]/route");
+    const { PATCH } = await import("@/legacy-api/issues/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost", {
@@ -878,7 +878,7 @@ describe("issue detail route", () => {
   });
 
   it("deletes an issue", async () => {
-    const { DELETE } = await import("@/app/api/issues/[id]/route");
+    const { DELETE } = await import("@/legacy-api/issues/[id]/route");
 
     const response = await DELETE(new Request("http://localhost"), {
       params: Promise.resolve({ id: "ENG-1" }),

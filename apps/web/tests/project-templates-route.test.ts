@@ -104,7 +104,7 @@ describe("project templates route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/project-templates/route");
+    const { GET } = await import("@/legacy-api/project-templates/route");
 
     const response = await GET();
 
@@ -112,7 +112,7 @@ describe("project templates route", () => {
   });
 
   it("lists project templates for the active workspace", async () => {
-    const { GET } = await import("@/app/api/project-templates/route");
+    const { GET } = await import("@/legacy-api/project-templates/route");
 
     const response = await GET();
 
@@ -123,7 +123,7 @@ describe("project templates route", () => {
   });
 
   it("validates required names", async () => {
-    const { POST } = await import("@/app/api/project-templates/route");
+    const { POST } = await import("@/legacy-api/project-templates/route");
 
     const response = await POST(
       new Request("http://localhost/api/project-templates", {
@@ -139,7 +139,7 @@ describe("project templates route", () => {
   });
 
   it("returns 400 for malformed JSON", async () => {
-    const { POST } = await import("@/app/api/project-templates/route");
+    const { POST } = await import("@/legacy-api/project-templates/route");
 
     const response = await POST(
       new Request("http://localhost/api/project-templates", {
@@ -153,7 +153,7 @@ describe("project templates route", () => {
   });
 
   it("creates a project template with structure", async () => {
-    const { POST } = await import("@/app/api/project-templates/route");
+    const { POST } = await import("@/legacy-api/project-templates/route");
 
     const response = await POST(
       new Request("http://localhost/api/project-templates", {
@@ -187,7 +187,7 @@ describe("project templates route", () => {
   });
 
   it("normalizes project template structure and settings", async () => {
-    const { POST } = await import("@/app/api/project-templates/route");
+    const { POST } = await import("@/legacy-api/project-templates/route");
 
     await POST(
       new Request("http://localhost/api/project-templates", {
@@ -217,7 +217,7 @@ describe("project templates route", () => {
   });
 
   it("updates a project template with editable structure", async () => {
-    const { PATCH } = await import("@/app/api/project-templates/[id]/route");
+    const { PATCH } = await import("@/legacy-api/project-templates/[id]/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/project-templates/template-1", {
@@ -253,7 +253,9 @@ describe("project templates route", () => {
   });
 
   it("deletes a project template from the active workspace", async () => {
-    const { DELETE } = await import("@/app/api/project-templates/[id]/route");
+    const { DELETE } = await import(
+      "@/legacy-api/project-templates/[id]/route"
+    );
 
     const response = await DELETE(
       new Request("http://localhost/api/project-templates/template-1", {

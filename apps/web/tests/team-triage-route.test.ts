@@ -116,7 +116,7 @@ describe("team triage route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/teams/[key]/triage/route");
+    const { GET } = await import("@/legacy-api/teams/[key]/triage/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ key: "ENG" }),
@@ -127,7 +127,7 @@ describe("team triage route", () => {
 
   it("returns 404 when team is missing", async () => {
     findAccessibleTeamMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/teams/[key]/triage/route");
+    const { GET } = await import("@/legacy-api/teams/[key]/triage/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ key: "MISSING" }),
@@ -137,7 +137,7 @@ describe("team triage route", () => {
   });
 
   it("returns triage issues with creator info", async () => {
-    const { GET } = await import("@/app/api/teams/[key]/triage/route");
+    const { GET } = await import("@/legacy-api/teams/[key]/triage/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ key: "ENG" }),
@@ -185,7 +185,7 @@ describe("team triage route", () => {
         teamId: "team-child",
       },
     ]);
-    const { GET } = await import("@/app/api/teams/[key]/triage/route");
+    const { GET } = await import("@/legacy-api/teams/[key]/triage/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ key: "ENG" }),
@@ -206,7 +206,7 @@ describe("team triage route", () => {
       key: "ENG",
       triageEnabled: false,
     });
-    const { GET } = await import("@/app/api/teams/[key]/triage/route");
+    const { GET } = await import("@/legacy-api/teams/[key]/triage/route");
 
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ key: "ENG" }),

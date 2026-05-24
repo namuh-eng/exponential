@@ -273,7 +273,7 @@ describe("workspace members route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/workspaces/members/route");
+    const { GET } = await import("@/legacy-api/workspaces/members/route");
 
     const response = await GET();
 
@@ -281,7 +281,7 @@ describe("workspace members route", () => {
   });
 
   it("returns full members and invitations list", async () => {
-    const { GET } = await import("@/app/api/workspaces/members/route");
+    const { GET } = await import("@/legacy-api/workspaces/members/route");
 
     const response = await GET();
 
@@ -302,7 +302,7 @@ describe("workspace members route", () => {
         settings: { security: { permissions: { invitationsRole: "admins" } } },
       },
     ]);
-    const { GET } = await import("@/app/api/workspaces/members/route");
+    const { GET } = await import("@/legacy-api/workspaces/members/route");
 
     const response = await GET();
 
@@ -314,7 +314,7 @@ describe("workspace members route", () => {
   });
 
   it("updates member role", async () => {
-    const { PATCH } = await import("@/app/api/workspaces/members/route");
+    const { PATCH } = await import("@/legacy-api/workspaces/members/route");
 
     const response = await PATCH(
       new Request("http://localhost/api/workspaces/members", {
@@ -330,7 +330,7 @@ describe("workspace members route", () => {
   });
 
   it("removes an active workspace member", async () => {
-    const { DELETE } = await import("@/app/api/workspaces/members/route");
+    const { DELETE } = await import("@/legacy-api/workspaces/members/route");
 
     const response = await DELETE(
       new Request("http://localhost/api/workspaces/members", {
@@ -344,7 +344,7 @@ describe("workspace members route", () => {
   });
 
   it("rejects self-removal and non-manager removal attempts", async () => {
-    const { DELETE } = await import("@/app/api/workspaces/members/route");
+    const { DELETE } = await import("@/legacy-api/workspaces/members/route");
 
     targetMemberLimitMock.mockReturnValueOnce([
       { id: "member-1", userId: "user-1", role: "owner" },
@@ -370,7 +370,7 @@ describe("workspace members route", () => {
   });
 
   it("resends pending invitations via PATCH", async () => {
-    const { PATCH } = await import("@/app/api/workspaces/members/route");
+    const { PATCH } = await import("@/legacy-api/workspaces/members/route");
 
     const response = await PATCH(
       new Request("http://localhost:3015/api/workspaces/members", {
@@ -401,7 +401,7 @@ describe("workspace members route", () => {
   });
 
   it("resends a pending workspace invitation via POST", async () => {
-    const { POST } = await import("@/app/api/workspaces/members/route");
+    const { POST } = await import("@/legacy-api/workspaces/members/route");
 
     const response = await POST(
       new Request("http://localhost/api/workspaces/members", {
@@ -427,7 +427,7 @@ describe("workspace members route", () => {
   });
 
   it("revokes a pending workspace invitation", async () => {
-    const { DELETE } = await import("@/app/api/workspaces/members/route");
+    const { DELETE } = await import("@/legacy-api/workspaces/members/route");
 
     const response = await DELETE(
       new Request("http://localhost/api/workspaces/members", {

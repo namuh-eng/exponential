@@ -1,4 +1,4 @@
-import { GET, PATCH } from "@/app/api/account/preferences/route";
+import { GET, PATCH } from "@/legacy-api/account/preferences/route";
 import { db } from "@/lib/db";
 import { user } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";

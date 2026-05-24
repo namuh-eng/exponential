@@ -45,7 +45,9 @@ describe("notification read route", () => {
 
   it("returns 401 without a session", async () => {
     getSessionMock.mockResolvedValue(null);
-    const { PATCH } = await import("@/app/api/notifications/[id]/read/route");
+    const { PATCH } = await import(
+      "@/legacy-api/notifications/[id]/read/route"
+    );
 
     const response = await PATCH({} as never, {
       params: Promise.resolve({ id: "notif-1" }),
@@ -55,7 +57,9 @@ describe("notification read route", () => {
   });
 
   it("marks the notification as read", async () => {
-    const { PATCH } = await import("@/app/api/notifications/[id]/read/route");
+    const { PATCH } = await import(
+      "@/legacy-api/notifications/[id]/read/route"
+    );
 
     const response = await PATCH({} as never, {
       params: Promise.resolve({ id: "notif-1" }),
@@ -69,7 +73,9 @@ describe("notification read route", () => {
 
   it("returns 404 when the notification does not exist", async () => {
     updateReturningMock.mockResolvedValue([]);
-    const { PATCH } = await import("@/app/api/notifications/[id]/read/route");
+    const { PATCH } = await import(
+      "@/legacy-api/notifications/[id]/read/route"
+    );
 
     const response = await PATCH({} as never, {
       params: Promise.resolve({ id: "missing" }),
