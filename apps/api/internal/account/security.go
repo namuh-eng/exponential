@@ -24,7 +24,7 @@ type securityAction struct {
 
 func (h Handler) GetSecurity(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
-	payload, err := h.securityPayload(r, p.UserID, "")
+	payload, err := h.securityPayload(r, p.UserID, p.WorkspaceID, "")
 	if err != nil {
 		problem.Write(w, 500, "Get security failed", err.Error())
 		return
@@ -71,7 +71,7 @@ func (h Handler) UpdateSecurity(w http.ResponseWriter, r *http.Request) {
 			problem.Write(w, 500, "Create API key failed", err.Error())
 			return
 		}
-		payload, err := h.securityPayload(r, p.UserID, secret)
+		payload, err := h.securityPayload(r, p.UserID, p.WorkspaceID, secret)
 		if err != nil {
 			problem.Write(w, 500, "Get security failed", err.Error())
 			return
@@ -83,7 +83,7 @@ func (h Handler) UpdateSecurity(w http.ResponseWriter, r *http.Request) {
 			problem.Write(w, 400, "API key id is required.", "")
 			return
 		}
-		_, _ = h.DB.Exec(r.Context(), `delete from api_key where id=$1::uuid and user_id=$2`, body.APIKeyID, p.UserID)
+		_, _ = h.DB.Exec(r.Context(), `delete from api_key where id=$1::uuid and user_id=$2 and workspace_id=$3::uuid`, body.APIKeyID, p.UserID, p.WorkspaceID)
 	case "revokeAuthorizedApplication":
 		if body.ApplicationID == "" {
 			problem.Write(w, 400, "Authorized application id is required.", "")
@@ -94,7 +94,7 @@ func (h Handler) UpdateSecurity(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 400, "Unsupported action.", "")
 		return
 	}
-	payload, err := h.securityPayload(r, p.UserID, "")
+	payload, err := h.securityPayload(r, p.UserID, p.WorkspaceID, "")
 	if err != nil {
 		problem.Write(w, 500, "Get security failed", err.Error())
 		return
@@ -102,7 +102,7 @@ func (h Handler) UpdateSecurity(w http.ResponseWriter, r *http.Request) {
 	problem.JSON(w, 200, payload)
 }
 
-func (h Handler) securityPayload(r *http.Request, userID, createdSecret string) (map[string]any, error) {
+func (h Handler) securityPayload(r *http.Request, userID, workspaceID, createdSecret string) (map[string]any, error) {
 	sessions := []map[string]any{}
 	rows, err := h.DB.Query(r.Context(), `select id,user_agent,ip_address,created_at,updated_at,expires_at from session where user_id=$1 and expires_at>now() order by updated_at desc limit 10`, userID)
 	if err != nil {
@@ -149,7 +149,7 @@ func (h Handler) securityPayload(r *http.Request, userID, createdSecret string) 
 		}
 	}
 	keys := []map[string]any{}
-	kr, _ := h.DB.Query(r.Context(), `select ak.id::text,ak.name,ak.key_prefix,w.name,ak.created_at,ak.last_used_at from api_key ak join workspace w on w.id=ak.workspace_id where ak.user_id=$1 order by ak.created_at desc`, userID)
+	kr, _ := h.DB.Query(r.Context(), `select ak.id::text,ak.name,ak.key_prefix,w.name,ak.created_at,ak.last_used_at from api_key ak join workspace w on w.id=ak.workspace_id where ak.user_id=$1 and ak.workspace_id=$2::uuid order by ak.created_at desc`, userID, workspaceID)
 	if kr != nil {
 		defer kr.Close()
 		for kr.Next() {
@@ -165,7 +165,7 @@ func (h Handler) securityPayload(r *http.Request, userID, createdSecret string) 
 			}
 		}
 	}
-	out := map[string]any{"sessions": sessions, "passkeys": passkeys, "authorizedApplications": apps, "apiKeys": keys, "canCreateApiKeys": true, "providers": []any{}, "passkeyEnabled": false}
+	out := map[string]any{"sessions": sessions, "passkeys": passkeys, "authorizedApplications": apps, "apiKeys": keys, "canCreateApiKeys": true, "providers": []any{}, "passkeyEnabled": true}
 	if createdSecret != "" {
 		out["createdCredential"] = map[string]any{"kind": "apiKey", "label": "API key", "secret": createdSecret}
 	}
