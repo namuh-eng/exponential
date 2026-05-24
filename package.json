@@ -16,7 +16,8 @@
     "db:generate": "pnpm --filter @exponential/web db:generate",
     "db:migrate": "pnpm --filter @exponential/web db:migrate",
     "db:push": "pnpm --filter @exponential/web db:push",
-    "api:build": "cd apps/api && go build ./..."
+    "api:build": "cd apps/api && go build ./...",
+    "api:test": "cd apps/api && go test ./..."
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",

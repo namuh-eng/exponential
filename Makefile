@@ -1,4 +1,4 @@
-.PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd api-build openapi-coverage
+.PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd api-build api-test openapi-coverage
 .PHONY: check-header test-header check-verbose test-verbose
 .PHONY: dev-services dev-services-down
 
@@ -23,6 +23,11 @@ api-build:
 	@. ./hack/run_silent.sh && \
 	run_silent "Go API build passed" "pnpm api:build"
 
+# Go API tests
+api-test:
+	@. ./hack/run_silent.sh && \
+	run_silent "Go API tests passed" "pnpm api:test"
+
 # OpenAPI coverage
 openapi-coverage:
 	@. ./hack/run_silent.sh && \
@@ -36,7 +41,7 @@ format:
 	pnpm format
 
 # Unit tests (Vitest) — only shows failures, summary on success
-test: test-header
+test: test-header api-test
 	@. ./hack/run_silent.sh && \
 	run_silent_with_test_count "Unit Tests passed" "TZ=Asia/Seoul pnpm test" "vitest"
 
