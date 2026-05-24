@@ -146,6 +146,7 @@ func (h Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	signed := rawToken + "." + signBetterAuthToken(rawToken, betterAuthSecret())
+	setBrowserSessionCookies(w, r, workspace, signed, expires)
 	problem.JSON(w, 200, map[string]any{"success": true, "user": user, "sessionToken": signed, "expiresAt": expires.Format(time.RFC3339Nano), "workspace": workspace, "team": team})
 }
 
@@ -166,6 +167,18 @@ type publicTeam struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Key  string `json:"key"`
+}
+
+func setBrowserSessionCookies(w http.ResponseWriter, r *http.Request, workspace publicWorkspace, signedToken string, expires time.Time) {
+	secure := r.TLS != nil || strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")), "https")
+	for _, cookie := range []*http.Cookie{
+		{Name: "activeWorkspaceId", Value: workspace.ID, Path: "/", SameSite: http.SameSiteLaxMode, Secure: secure},
+		{Name: "activeWorkspaceSlug", Value: workspace.URLSlug, Path: "/", SameSite: http.SameSiteLaxMode, Secure: secure},
+		{Name: "better-auth.session_token", Value: signedToken, Path: "/", Expires: expires, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: secure},
+		{Name: "better-auth.session-token", Value: signedToken, Path: "/", Expires: expires, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: secure},
+	} {
+		http.SetCookie(w, cookie)
+	}
 }
 
 func (h Handler) ensureUser(r *http.Request, email, name string) (testUser, error) {
