@@ -171,6 +171,23 @@ type publicTeam struct {
 	Key  string `json:"key"`
 }
 
+type canonicalIssueSeed struct {
+	Number     int
+	Identifier string
+	Title      string
+	Priority   string
+	Type       string
+	CreatedAt  time.Time
+}
+
+var canonicalIssueSeeds = []canonicalIssueSeed{
+	{Number: 1, Identifier: "ENG-1", Title: "Welcome to Forever Browsing", Priority: "medium", CreatedAt: time.Date(2026, 5, 1, 16, 0, 0, 0, time.UTC)},
+	{Number: 179, Identifier: "ENG-179", Title: "Issue added to FOREVER-AGENT", Priority: "medium", Type: "status_change", CreatedAt: time.Date(2026, 5, 6, 17, 30, 0, 0, time.UTC)},
+	{Number: 138, Identifier: "ENG-138", Title: "Figure out latest strategy for browser session memory", Priority: "high", Type: "assigned", CreatedAt: time.Date(2026, 5, 2, 20, 15, 0, 0, time.UTC)},
+	{Number: 137, Identifier: "ENG-137", Title: "Audit autonomous navigation edge cases", Priority: "high", Type: "assigned", CreatedAt: time.Date(2026, 5, 2, 19, 45, 0, 0, time.UTC)},
+	{Number: 136, Identifier: "ENG-136", Title: "Improve Forever Browsing agent inbox handoff", Priority: "medium", Type: "assigned", CreatedAt: time.Date(2026, 5, 2, 19, 0, 0, 0, time.UTC)},
+}
+
 func setBrowserSessionCookies(w http.ResponseWriter, r *http.Request, workspace publicWorkspace, signedToken string, expires time.Time) {
 	secure := r.TLS != nil || strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")), "https")
 	for _, cookie := range []*http.Cookie{
@@ -223,7 +240,50 @@ func (h Handler) ensureCanonicalWorkspace(r *http.Request, userID string) (publi
 		return ws, team, err
 	}
 	_, err = h.DB.Exec(r.Context(), `insert into workflow_state (name,team_id,category,color,position,is_default) select name,$1::uuid,category::workflow_state_category,color,position,true from (values ('Triage','triage','#f59e0b',0),('Backlog','backlog','#6b6f76',1),('Todo','unstarted','#6b6f76',2),('In Progress','started','#f59e0b',3),('Done','completed','#22c55e',4),('Canceled','canceled','#6b6f76',5)) as v(name,category,color,position) where not exists (select 1 from workflow_state where team_id=$1::uuid)`, team.ID)
+	if err != nil {
+		return ws, team, err
+	}
+	err = h.ensureCanonicalSeeds(r, userID, team.ID)
 	return ws, team, err
+}
+
+func (h Handler) ensureCanonicalSeeds(r *http.Request, userID, teamID string) error {
+	var stateID string
+	err := h.DB.QueryRow(r.Context(), `select id::text from workflow_state where team_id=$1::uuid and category='backlog' order by position asc limit 1`, teamID).Scan(&stateID)
+	if err != nil {
+		err = h.DB.QueryRow(r.Context(), `select id::text from workflow_state where team_id=$1::uuid order by position asc limit 1`, teamID).Scan(&stateID)
+	}
+	if err != nil {
+		return err
+	}
+	var actorID string
+	err = h.DB.QueryRow(r.Context(), `insert into "user" (id,email,name,email_verified) values ('canonical-notification-actor','notifications@foreverbrowsing.test','Ashley Ha',true) on conflict (email) do update set name=excluded.name returning id`).Scan(&actorID)
+	if err != nil {
+		return err
+	}
+	for _, seed := range canonicalIssueSeeds {
+		issueID, err := h.ensureCanonicalIssue(r, seed, teamID, stateID, userID, actorID)
+		if err != nil {
+			return err
+		}
+		if seed.Type != "" {
+			_, err = h.DB.Exec(r.Context(), `insert into notification (user_id,issue_id,actor_id,type,read_at,created_at) select $1,$2::uuid,$3,$4::notification_type,$5,$6 where not exists (select 1 from notification where user_id=$1 and issue_id=$2::uuid and type=$4::notification_type)`, userID, issueID, actorID, seed.Type, seed.CreatedAt.Add(time.Hour), seed.CreatedAt)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (h Handler) ensureCanonicalIssue(r *http.Request, seed canonicalIssueSeed, teamID, stateID, userID, actorID string) (string, error) {
+	var issueID string
+	err := h.DB.QueryRow(r.Context(), `select id::text from issue where team_id=$1::uuid and number=$2 limit 1`, teamID, seed.Number).Scan(&issueID)
+	if err == nil {
+		return issueID, nil
+	}
+	err = h.DB.QueryRow(r.Context(), `insert into issue (number,identifier,title,description,team_id,state_id,assignee_id,creator_id,priority,created_at,updated_at) values ($1,$2,$3,'Canonical Forever Browsing seed issue.',$4::uuid,$5::uuid,$6,$7,$8,$9,$9) returning id::text`, seed.Number, seed.Identifier, seed.Title, teamID, stateID, userID, actorID, seed.Priority, seed.CreatedAt).Scan(&issueID)
+	return issueID, err
 }
 
 func randomBase64URL(size int) string {
