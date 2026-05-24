@@ -67,6 +67,7 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 		v1.Mount("/auth", authProvidersHandler.Routes())
 		v1.Mount("/inbound", inbound.Handler{DB: db}.Routes())
 		v1.Post("/oauth/token", authProvidersHandler.ExchangeOAuthToken)
+		v1.Post("/test/create-session", testhelpers.Handler{DB: db}.CreateSession)
 		v1.Group(func(protected chi.Router) {
 			protected.Use(authMiddleware.Require)
 			protected.Post("/issues/{id}/comments", commentsHandler.CreateForIssue)

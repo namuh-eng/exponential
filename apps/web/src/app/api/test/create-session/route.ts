@@ -9,6 +9,7 @@ import {
   DATABASE_BOOTSTRAP_TITLE,
   shouldRenderDatabaseBootstrapError,
 } from "@/lib/dev-database-error";
+import { headlessAuthProvidersEnabled } from "@/lib/headless-api";
 import { makeSignature } from "better-auth/crypto";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -46,6 +47,47 @@ export async function POST(request: Request) {
 
   if (!email) {
     return NextResponse.json({ error: "Email is required" }, { status: 400 });
+  }
+
+  if (headlessAuthProvidersEnabled()) {
+    const upstream = await fetch(
+      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1"}/test/create-session`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "user-agent":
+            request.headers.get("user-agent") ??
+            "Playwright test browser session",
+          "x-forwarded-for": request.headers.get("x-forwarded-for") ?? "",
+          "x-real-ip": request.headers.get("x-real-ip") ?? "",
+        },
+        body: JSON.stringify({ email, name: body?.name }),
+      },
+    );
+    const payload = await upstream.json();
+    const response = NextResponse.json(payload, { status: upstream.status });
+    if (upstream.ok && payload?.sessionToken && payload?.workspace) {
+      const shouldSecure = new URL(request.url).protocol === "https:";
+      response.cookies.set("activeWorkspaceId", payload.workspace.id, {
+        path: "/",
+        sameSite: "lax",
+        secure: shouldSecure,
+      });
+      response.cookies.set("activeWorkspaceSlug", payload.workspace.urlSlug, {
+        path: "/",
+        sameSite: "lax",
+        secure: shouldSecure,
+      });
+      response.cookies.set("better-auth.session_token", payload.sessionToken, {
+        expires: new Date(payload.expiresAt),
+        httpOnly: true,
+        path: "/",
+        sameSite: "lax",
+        secure: false,
+      });
+    }
+    return response;
   }
 
   try {

@@ -2459,6 +2459,30 @@ paths:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
         default:
           $ref: '#/components/responses/Problem'
+  /test/create-session:
+    post:
+      operationId: createTestSession
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
+                name: { type: string }
+      responses:
+        '200':
+          description: Test browser session created
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        default:
+          $ref: '#/components/responses/Problem'
   /test/slack-integration:
     post:
       operationId: createTestSlackIntegration

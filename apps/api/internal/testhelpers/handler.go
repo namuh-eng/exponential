@@ -1,7 +1,10 @@
 package testhelpers
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -106,4 +109,131 @@ func randomHex(size int) string {
 	b := make([]byte, size)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+type createSessionRequest struct {
+	Email string `json:"email"`
+	Name  string `json:"name"`
+}
+
+func (h Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
+	if !allowed() {
+		problem.JSON(w, 404, map[string]string{"error": "Not found"})
+		return
+	}
+	var input createSessionRequest
+	_ = json.NewDecoder(r.Body).Decode(&input)
+	email := strings.ToLower(strings.TrimSpace(input.Email))
+	if email == "" {
+		problem.JSON(w, 400, map[string]string{"error": "Email is required"})
+		return
+	}
+	user, err := h.ensureUser(r, email, input.Name)
+	if err != nil {
+		problem.Write(w, 500, "Create test session failed", err.Error())
+		return
+	}
+	workspace, team, err := h.ensureCanonicalWorkspace(r, user.ID)
+	if err != nil {
+		problem.Write(w, 500, "Create test session failed", err.Error())
+		return
+	}
+	rawToken := randomBase64URL(24)
+	expires := time.Now().UTC().Add(7 * 24 * time.Hour)
+	_, err = h.DB.Exec(r.Context(), `insert into session (id,expires_at,token,created_at,updated_at,ip_address,user_agent,user_id) values ($1,$2,$3,now(),now(),$4,$5,$6)`, randomBase64URL(16), expires, rawToken, clientIP(r), userAgent(r), user.ID)
+	if err != nil {
+		problem.Write(w, 500, "Create test session failed", err.Error())
+		return
+	}
+	signed := rawToken + "." + signBetterAuthToken(rawToken, betterAuthSecret())
+	problem.JSON(w, 200, map[string]any{"success": true, "user": user, "sessionToken": signed, "expiresAt": expires.Format(time.RFC3339Nano), "workspace": workspace, "team": team})
+}
+
+type testUser struct {
+	ID            string  `json:"id"`
+	Email         string  `json:"email"`
+	Name          string  `json:"name"`
+	Image         *string `json:"image"`
+	EmailVerified bool    `json:"emailVerified"`
+}
+
+type publicWorkspace struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	URLSlug string `json:"urlSlug"`
+}
+type publicTeam struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Key  string `json:"key"`
+}
+
+func (h Handler) ensureUser(r *http.Request, email, name string) (testUser, error) {
+	var u testUser
+	err := h.DB.QueryRow(r.Context(), `select id,email,name,image,email_verified from "user" where email=$1 limit 1`, email).Scan(&u.ID, &u.Email, &u.Name, &u.Image, &u.EmailVerified)
+	if err == nil {
+		return u, nil
+	}
+	id := randomBase64URL(24)
+	if strings.TrimSpace(name) == "" {
+		parts := strings.Split(email, "@")
+		name = strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(parts[0], ".", " "), "_", " "), "-", " ")
+	}
+	err = h.DB.QueryRow(r.Context(), `insert into "user" (id,email,name,email_verified) values ($1,$2,$3,true) returning id,email,name,image,email_verified`, id, email, name).Scan(&u.ID, &u.Email, &u.Name, &u.Image, &u.EmailVerified)
+	return u, err
+}
+
+func (h Handler) ensureCanonicalWorkspace(r *http.Request, userID string) (publicWorkspace, publicTeam, error) {
+	var ws publicWorkspace
+	err := h.DB.QueryRow(r.Context(), `insert into workspace (name,url_slug,settings) values ('Forever Browsing','foreverbrowsing','{"region":"United States","fiscalMonth":"january"}'::jsonb) on conflict (url_slug) do update set name=excluded.name returning id::text,name,url_slug`).Scan(&ws.ID, &ws.Name, &ws.URLSlug)
+	if err != nil {
+		return ws, publicTeam{}, err
+	}
+	_, err = h.DB.Exec(r.Context(), `insert into member (user_id,workspace_id,role) values ($1,$2::uuid,'owner') on conflict (user_id,workspace_id) do nothing`, userID, ws.ID)
+	if err != nil {
+		return ws, publicTeam{}, err
+	}
+	var team publicTeam
+	err = h.DB.QueryRow(r.Context(), `insert into team (name,key,workspace_id,cycles_enabled,cycle_start_day,cycle_duration_weeks) values ('Engineering','ENG',$1::uuid,true,1,2) on conflict (workspace_id,key) do update set name=excluded.name returning id::text,name,key`, ws.ID).Scan(&team.ID, &team.Name, &team.Key)
+	if err != nil {
+		return ws, team, err
+	}
+	_, err = h.DB.Exec(r.Context(), `insert into team_member (team_id,user_id) values ($1::uuid,$2) on conflict (team_id,user_id) do nothing`, team.ID, userID)
+	if err != nil {
+		return ws, team, err
+	}
+	_, err = h.DB.Exec(r.Context(), `insert into workflow_state (name,team_id,category,color,position,is_default) select name,$1::uuid,category::workflow_state_category,color,position,true from (values ('Triage','triage','#f59e0b',0),('Backlog','backlog','#6b6f76',1),('Todo','unstarted','#6b6f76',2),('In Progress','started','#f59e0b',3),('Done','completed','#22c55e',4),('Canceled','canceled','#6b6f76',5)) as v(name,category,color,position) where not exists (select 1 from workflow_state where team_id=$1::uuid)`, team.ID)
+	return ws, team, err
+}
+
+func randomBase64URL(size int) string {
+	b := make([]byte, size)
+	_, _ = rand.Read(b)
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+func betterAuthSecret() string {
+	if s := os.Getenv("BETTER_AUTH_SECRET"); s != "" {
+		return s
+	}
+	return "dev-only-better-auth-secret-not-for-production"
+}
+func signBetterAuthToken(value, secret string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(value))
+	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
+}
+func clientIP(r *http.Request) string {
+	if v := strings.TrimSpace(strings.Split(r.Header.Get("x-forwarded-for"), ",")[0]); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(r.Header.Get("x-real-ip")); v != "" {
+		return v
+	}
+	return ""
+}
+func userAgent(r *http.Request) string {
+	if v := strings.TrimSpace(r.Header.Get("user-agent")); v != "" {
+		return v
+	}
+	return "Playwright test browser session"
 }
