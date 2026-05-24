@@ -2,6 +2,12 @@
 # Pre-flight: provision AWS infrastructure (team tier - ECS Fargate + RDS private VPC + ElastiCache Redis)
 set -euo pipefail
 
+if [ -f .env ]; then
+  set -a
+  . ./.env
+  set +a
+fi
+
 REGION="${AWS_REGION:-us-east-1}"
 APP_NAME="exponential"
 
@@ -11,43 +17,56 @@ echo "Region: $REGION"
 # 1. VPC and subnets
 echo ""
 echo "--- VPC ---"
-VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=${APP_NAME}-vpc" \
-  --query 'Vpcs[0].VpcId' --output text --region $REGION 2>/dev/null)
-if [ "$VPC_ID" = "None" ] || [ -z "$VPC_ID" ]; then
-  VPC_ID=$(aws ec2 create-vpc --cidr-block 10.0.0.0/16 --region $REGION \
-    --query 'Vpc.VpcId' --output text)
-  aws ec2 create-tags --resources $VPC_ID --tags "Key=Name,Value=${APP_NAME}-vpc" --region $REGION
-  aws ec2 modify-vpc-attribute --vpc-id $VPC_ID --enable-dns-hostnames --region $REGION
-  echo "VPC created: $VPC_ID"
+if [ -n "${VPC_ID:-}" ]; then
+  echo "Using VPC from environment: $VPC_ID"
 else
-  echo "VPC exists: $VPC_ID"
+  VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=${APP_NAME}-vpc" \
+    --query 'Vpcs[0].VpcId' --output text --region $REGION 2>/dev/null)
+  if [ "$VPC_ID" = "None" ] || [ -z "$VPC_ID" ]; then
+    VPC_ID=$(aws ec2 create-vpc --cidr-block 10.0.0.0/16 --region $REGION \
+      --query 'Vpc.VpcId' --output text)
+    aws ec2 create-tags --resources $VPC_ID --tags "Key=Name,Value=${APP_NAME}-vpc" --region $REGION
+    aws ec2 modify-vpc-attribute --vpc-id $VPC_ID --enable-dns-hostnames --region $REGION
+    echo "VPC created: $VPC_ID"
+  else
+    echo "VPC exists: $VPC_ID"
+  fi
 fi
 
-# Public subnets (ALB)
-PUB_SUBNET_A=$(aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block 10.0.1.0/24 \
-  --availability-zone ${REGION}a --query 'Subnet.SubnetId' --output text --region $REGION 2>/dev/null || \
-  aws ec2 describe-subnets --filters "Name=tag:Name,Values=${APP_NAME}-pub-a" \
-  --query 'Subnets[0].SubnetId' --output text --region $REGION)
-aws ec2 create-tags --resources $PUB_SUBNET_A --tags "Key=Name,Value=${APP_NAME}-pub-a" --region $REGION 2>/dev/null || true
+# Public subnets (ALB). If subnet ids are supplied in .env, reuse them and
+# do not retag or re-associate shared infrastructure.
+if [ -z "${PUB_SUBNET_A:-}" ]; then
+  PUB_SUBNET_A=$(aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block 10.0.1.0/24 \
+    --availability-zone ${REGION}a --query 'Subnet.SubnetId' --output text --region $REGION 2>/dev/null || \
+    aws ec2 describe-subnets --filters "Name=tag:Name,Values=${APP_NAME}-pub-a" \
+    --query 'Subnets[0].SubnetId' --output text --region $REGION)
+  aws ec2 create-tags --resources $PUB_SUBNET_A --tags "Key=Name,Value=${APP_NAME}-pub-a" --region $REGION 2>/dev/null || true
+fi
 
-PUB_SUBNET_B=$(aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block 10.0.2.0/24 \
-  --availability-zone ${REGION}b --query 'Subnet.SubnetId' --output text --region $REGION 2>/dev/null || \
-  aws ec2 describe-subnets --filters "Name=tag:Name,Values=${APP_NAME}-pub-b" \
-  --query 'Subnets[0].SubnetId' --output text --region $REGION)
-aws ec2 create-tags --resources $PUB_SUBNET_B --tags "Key=Name,Value=${APP_NAME}-pub-b" --region $REGION 2>/dev/null || true
+if [ -z "${PUB_SUBNET_B:-}" ]; then
+  PUB_SUBNET_B=$(aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block 10.0.2.0/24 \
+    --availability-zone ${REGION}b --query 'Subnet.SubnetId' --output text --region $REGION 2>/dev/null || \
+    aws ec2 describe-subnets --filters "Name=tag:Name,Values=${APP_NAME}-pub-b" \
+    --query 'Subnets[0].SubnetId' --output text --region $REGION)
+  aws ec2 create-tags --resources $PUB_SUBNET_B --tags "Key=Name,Value=${APP_NAME}-pub-b" --region $REGION 2>/dev/null || true
+fi
 
 # Private subnets (Fargate + RDS + ElastiCache)
-PRIV_SUBNET_A=$(aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block 10.0.11.0/24 \
-  --availability-zone ${REGION}a --query 'Subnet.SubnetId' --output text --region $REGION 2>/dev/null || \
-  aws ec2 describe-subnets --filters "Name=tag:Name,Values=${APP_NAME}-priv-a" \
-  --query 'Subnets[0].SubnetId' --output text --region $REGION)
-aws ec2 create-tags --resources $PRIV_SUBNET_A --tags "Key=Name,Value=${APP_NAME}-priv-a" --region $REGION 2>/dev/null || true
+if [ -z "${PRIV_SUBNET_A:-}" ]; then
+  PRIV_SUBNET_A=$(aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block 10.0.11.0/24 \
+    --availability-zone ${REGION}a --query 'Subnet.SubnetId' --output text --region $REGION 2>/dev/null || \
+    aws ec2 describe-subnets --filters "Name=tag:Name,Values=${APP_NAME}-priv-a" \
+    --query 'Subnets[0].SubnetId' --output text --region $REGION)
+  aws ec2 create-tags --resources $PRIV_SUBNET_A --tags "Key=Name,Value=${APP_NAME}-priv-a" --region $REGION 2>/dev/null || true
+fi
 
-PRIV_SUBNET_B=$(aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block 10.0.12.0/24 \
-  --availability-zone ${REGION}b --query 'Subnet.SubnetId' --output text --region $REGION 2>/dev/null || \
-  aws ec2 describe-subnets --filters "Name=tag:Name,Values=${APP_NAME}-priv-b" \
-  --query 'Subnets[0].SubnetId' --output text --region $REGION)
-aws ec2 create-tags --resources $PRIV_SUBNET_B --tags "Key=Name,Value=${APP_NAME}-priv-b" --region $REGION 2>/dev/null || true
+if [ -z "${PRIV_SUBNET_B:-}" ]; then
+  PRIV_SUBNET_B=$(aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block 10.0.12.0/24 \
+    --availability-zone ${REGION}b --query 'Subnet.SubnetId' --output text --region $REGION 2>/dev/null || \
+    aws ec2 describe-subnets --filters "Name=tag:Name,Values=${APP_NAME}-priv-b" \
+    --query 'Subnets[0].SubnetId' --output text --region $REGION)
+  aws ec2 create-tags --resources $PRIV_SUBNET_B --tags "Key=Name,Value=${APP_NAME}-priv-b" --region $REGION 2>/dev/null || true
+fi
 
 # Internet gateway for public subnets
 IGW_ID=$(aws ec2 describe-internet-gateways \
@@ -57,40 +76,52 @@ if [ "$IGW_ID" = "None" ] || [ -z "$IGW_ID" ]; then
   IGW_ID=$(aws ec2 create-internet-gateway --region $REGION --query 'InternetGateway.InternetGatewayId' --output text)
   aws ec2 attach-internet-gateway --internet-gateway-id $IGW_ID --vpc-id $VPC_ID --region $REGION
 fi
-PUB_RTB=$(aws ec2 create-route-table --vpc-id $VPC_ID --region $REGION --query 'RouteTable.RouteTableId' --output text 2>/dev/null || \
-  aws ec2 describe-route-tables --filters "Name=tag:Name,Values=${APP_NAME}-pub-rtb" \
-  --query 'RouteTables[0].RouteTableId' --output text --region $REGION)
-aws ec2 create-route --route-table-id $PUB_RTB --destination-cidr-block 0.0.0.0/0 --gateway-id $IGW_ID --region $REGION 2>/dev/null || true
-aws ec2 create-tags --resources $PUB_RTB --tags "Key=Name,Value=${APP_NAME}-pub-rtb" --region $REGION 2>/dev/null || true
-aws ec2 associate-route-table --route-table-id $PUB_RTB --subnet-id $PUB_SUBNET_A --region $REGION 2>/dev/null || true
-aws ec2 associate-route-table --route-table-id $PUB_RTB --subnet-id $PUB_SUBNET_B --region $REGION 2>/dev/null || true
+if [ -z "${PUB_RTB:-}" ]; then
+  PUB_RTB=$(aws ec2 create-route-table --vpc-id $VPC_ID --region $REGION --query 'RouteTable.RouteTableId' --output text 2>/dev/null || \
+    aws ec2 describe-route-tables --filters "Name=tag:Name,Values=${APP_NAME}-pub-rtb" \
+    --query 'RouteTables[0].RouteTableId' --output text --region $REGION)
+  aws ec2 create-route --route-table-id $PUB_RTB --destination-cidr-block 0.0.0.0/0 --gateway-id $IGW_ID --region $REGION 2>/dev/null || true
+  aws ec2 create-tags --resources $PUB_RTB --tags "Key=Name,Value=${APP_NAME}-pub-rtb" --region $REGION 2>/dev/null || true
+  aws ec2 associate-route-table --route-table-id $PUB_RTB --subnet-id $PUB_SUBNET_A --region $REGION 2>/dev/null || true
+  aws ec2 associate-route-table --route-table-id $PUB_RTB --subnet-id $PUB_SUBNET_B --region $REGION 2>/dev/null || true
+else
+  echo "Using public route table from environment: $PUB_RTB"
+fi
 
 # NAT Gateway for private subnets (Fargate needs outbound internet)
 echo ""
 echo "--- NAT Gateway ---"
-EIP_ALLOC=$(aws ec2 describe-addresses --filters "Name=tag:Name,Values=${APP_NAME}-nat-eip" \
-  --query 'Addresses[0].AllocationId' --output text --region $REGION 2>/dev/null)
-if [ "$EIP_ALLOC" = "None" ] || [ -z "$EIP_ALLOC" ]; then
-  EIP_ALLOC=$(aws ec2 allocate-address --domain vpc --region $REGION --query 'AllocationId' --output text)
-  aws ec2 create-tags --resources $EIP_ALLOC --tags "Key=Name,Value=${APP_NAME}-nat-eip" --region $REGION
+if [ -z "${NAT_GW:-}" ]; then
+  EIP_ALLOC=$(aws ec2 describe-addresses --filters "Name=tag:Name,Values=${APP_NAME}-nat-eip" \
+    --query 'Addresses[0].AllocationId' --output text --region $REGION 2>/dev/null)
+  if [ "$EIP_ALLOC" = "None" ] || [ -z "$EIP_ALLOC" ]; then
+    EIP_ALLOC=$(aws ec2 allocate-address --domain vpc --region $REGION --query 'AllocationId' --output text)
+    aws ec2 create-tags --resources $EIP_ALLOC --tags "Key=Name,Value=${APP_NAME}-nat-eip" --region $REGION
+  fi
+  NAT_GW=$(aws ec2 describe-nat-gateways \
+    --filter "Name=tag:Name,Values=${APP_NAME}-nat" "Name=state,Values=available" \
+    --query 'NatGateways[0].NatGatewayId' --output text --region $REGION 2>/dev/null)
+  if [ "$NAT_GW" = "None" ] || [ -z "$NAT_GW" ]; then
+    NAT_GW=$(aws ec2 create-nat-gateway --subnet-id $PUB_SUBNET_A --allocation-id $EIP_ALLOC \
+      --region $REGION --query 'NatGateway.NatGatewayId' --output text)
+    aws ec2 create-tags --resources $NAT_GW --tags "Key=Name,Value=${APP_NAME}-nat" --region $REGION
+    echo "Waiting for NAT Gateway..."
+    aws ec2 wait nat-gateway-available --nat-gateway-ids $NAT_GW --region $REGION
+  fi
+else
+  echo "Using NAT Gateway from environment: $NAT_GW"
 fi
-NAT_GW=$(aws ec2 describe-nat-gateways \
-  --filter "Name=tag:Name,Values=${APP_NAME}-nat" "Name=state,Values=available" \
-  --query 'NatGateways[0].NatGatewayId' --output text --region $REGION 2>/dev/null)
-if [ "$NAT_GW" = "None" ] || [ -z "$NAT_GW" ]; then
-  NAT_GW=$(aws ec2 create-nat-gateway --subnet-id $PUB_SUBNET_A --allocation-id $EIP_ALLOC \
-    --region $REGION --query 'NatGateway.NatGatewayId' --output text)
-  aws ec2 create-tags --resources $NAT_GW --tags "Key=Name,Value=${APP_NAME}-nat" --region $REGION
-  echo "Waiting for NAT Gateway..."
-  aws ec2 wait nat-gateway-available --nat-gateway-ids $NAT_GW --region $REGION
+if [ -z "${PRIV_RTB:-}" ]; then
+  PRIV_RTB=$(aws ec2 create-route-table --vpc-id $VPC_ID --region $REGION --query 'RouteTable.RouteTableId' --output text 2>/dev/null || \
+    aws ec2 describe-route-tables --filters "Name=tag:Name,Values=${APP_NAME}-priv-rtb" \
+    --query 'RouteTables[0].RouteTableId' --output text --region $REGION)
+  aws ec2 create-route --route-table-id $PRIV_RTB --destination-cidr-block 0.0.0.0/0 --nat-gateway-id $NAT_GW --region $REGION 2>/dev/null || true
+  aws ec2 create-tags --resources $PRIV_RTB --tags "Key=Name,Value=${APP_NAME}-priv-rtb" --region $REGION 2>/dev/null || true
+  aws ec2 associate-route-table --route-table-id $PRIV_RTB --subnet-id $PRIV_SUBNET_A --region $REGION 2>/dev/null || true
+  aws ec2 associate-route-table --route-table-id $PRIV_RTB --subnet-id $PRIV_SUBNET_B --region $REGION 2>/dev/null || true
+else
+  echo "Using private route table from environment: $PRIV_RTB"
 fi
-PRIV_RTB=$(aws ec2 create-route-table --vpc-id $VPC_ID --region $REGION --query 'RouteTable.RouteTableId' --output text 2>/dev/null || \
-  aws ec2 describe-route-tables --filters "Name=tag:Name,Values=${APP_NAME}-priv-rtb" \
-  --query 'RouteTables[0].RouteTableId' --output text --region $REGION)
-aws ec2 create-route --route-table-id $PRIV_RTB --destination-cidr-block 0.0.0.0/0 --nat-gateway-id $NAT_GW --region $REGION 2>/dev/null || true
-aws ec2 create-tags --resources $PRIV_RTB --tags "Key=Name,Value=${APP_NAME}-priv-rtb" --region $REGION 2>/dev/null || true
-aws ec2 associate-route-table --route-table-id $PRIV_RTB --subnet-id $PRIV_SUBNET_A --region $REGION 2>/dev/null || true
-aws ec2 associate-route-table --route-table-id $PRIV_RTB --subnet-id $PRIV_SUBNET_B --region $REGION 2>/dev/null || true
 echo "VPC networking ready"
 
 # 2. Security groups
@@ -171,6 +202,7 @@ else
     --engine-version 15 \
     --master-username postgres \
     --master-user-password "${DB_PASSWORD:?Set DB_PASSWORD in .env}" \
+    --db-name "${APP_NAME}" \
     --allocated-storage 20 \
     --no-publicly-accessible \
     --db-subnet-group-name $DB_SUBNET_GROUP \
@@ -248,7 +280,7 @@ grep -q '^AWS_REGION=' .env || echo "AWS_REGION=$REGION" >> .env
 # 6. ECR Repositories
 echo ""
 echo "--- ECR Repositories ---"
-for REPO in "${APP_NAME}-api" "${APP_NAME}-web" "${APP_NAME}-kratos"; do
+for REPO in "${APP_NAME}-api" "${APP_NAME}-web" "${APP_NAME}-kratos" "${APP_NAME}-schema"; do
   aws ecr describe-repositories --repository-names $REPO --region $REGION 2>/dev/null || \
     aws ecr create-repository --repository-name $REPO --region $REGION
   echo "ECR repo ready: $REPO"
@@ -266,7 +298,7 @@ echo "ECS cluster ready: ${APP_NAME}-cluster"
 echo ""
 echo "--- Application Load Balancer ---"
 ALB_ARN=$(aws elbv2 describe-load-balancers --names ${APP_NAME}-alb --region $REGION \
-  --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null)
+  --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || true)
 if [ "$ALB_ARN" = "None" ] || [ -z "$ALB_ARN" ]; then
   ALB_ARN=$(aws elbv2 create-load-balancer --name ${APP_NAME}-alb \
     --subnets $PUB_SUBNET_A $PUB_SUBNET_B \
@@ -286,7 +318,7 @@ create_target_group() {
   local health_path="$3"
   local arn
   arn=$(aws elbv2 describe-target-groups --names "$name" --region $REGION \
-    --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null)
+    --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || true)
   if [ "$arn" = "None" ] || [ -z "$arn" ]; then
     arn=$(aws elbv2 create-target-group --name "$name" \
       --protocol HTTP --port "$port" --vpc-id $VPC_ID \
@@ -308,7 +340,7 @@ KRATOS_TG_ARN=$(create_target_group "${APP_NAME}-kratos-tg" 4433 "/health/ready"
 
 # HTTP listener: default web, /api/* to Go API, /auth/* to Kratos.
 LISTENER_ARN=$(aws elbv2 describe-listeners --load-balancer-arn $ALB_ARN --region $REGION \
-  --query 'Listeners[?Port==`80`].ListenerArn | [0]' --output text)
+  --query 'Listeners[?Port==`80`].ListenerArn | [0]' --output text 2>/dev/null || true)
 if [ "$LISTENER_ARN" = "None" ] || [ -z "$LISTENER_ARN" ]; then
   LISTENER_ARN=$(aws elbv2 create-listener --load-balancer-arn $ALB_ARN \
     --protocol HTTP --port 80 \
@@ -327,7 +359,7 @@ ensure_listener_rule() {
   shift 2
   local existing
   existing=$(aws elbv2 describe-rules --listener-arn "$LISTENER_ARN" --region $REGION \
-    --query "Rules[?Priority=='$priority'].RuleArn | [0]" --output text)
+    --query "Rules[?Priority=='$priority'].RuleArn | [0]" --output text 2>/dev/null || true)
   if [ "$existing" = "None" ] || [ -z "$existing" ]; then
     aws elbv2 create-rule --listener-arn "$LISTENER_ARN" \
       --priority "$priority" \

@@ -8,6 +8,13 @@ const required = [
     port: 3016,
   },
   {
+    file: "infra/ecs/api-migrate-task-definition.json",
+    family: "exponential-api-migrate",
+    container: "api-migrate",
+    imageIncludes: "exponential-api",
+    noPort: true,
+  },
+  {
     file: "infra/ecs/web-task-definition.json",
     family: "exponential-web",
     container: "web",
@@ -19,6 +26,13 @@ const required = [
     container: "kratos",
     port: 4433,
     imageIncludes: "exponential-kratos",
+  },
+  {
+    file: "infra/ecs/schema-task-definition.json",
+    family: "exponential-schema",
+    container: "schema",
+    imageIncludes: "exponential-schema",
+    noPort: true,
   },
 ];
 
@@ -34,12 +48,14 @@ for (const item of required) {
   );
   if (!container)
     throw new Error(`${item.file}: missing container ${item.container}`);
-  if (
-    !container.portMappings?.some(
-      (mapping) => mapping.containerPort === item.port,
-    )
-  ) {
-    throw new Error(`${item.file}: missing port ${item.port}`);
+  if (!item.noPort) {
+    if (
+      !container.portMappings?.some(
+        (mapping) => mapping.containerPort === item.port,
+      )
+    ) {
+      throw new Error(`${item.file}: missing port ${item.port}`);
+    }
   }
   if (item.imageIncludes && !container.image?.includes(item.imageIncludes)) {
     throw new Error(`${item.file}: image must include ${item.imageIncludes}`);

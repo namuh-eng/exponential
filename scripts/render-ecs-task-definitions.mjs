@@ -4,8 +4,10 @@ import { basename, join } from "node:path";
 
 const templates = [
   "infra/ecs/api-task-definition.json",
+  "infra/ecs/api-migrate-task-definition.json",
   "infra/ecs/web-task-definition.json",
   "infra/ecs/kratos-task-definition.json",
+  "infra/ecs/schema-task-definition.json",
 ];
 
 function parseArgs(argv) {
@@ -20,10 +22,11 @@ function parseArgs(argv) {
 }
 
 export function renderTemplate(input, env = process.env) {
+  const optionalEmpty = new Set(["OTEL_EXPORTER_OTLP_ENDPOINT"]);
   const missing = new Set();
   const rendered = input.replace(/\$\{([A-Z0-9_]+)\}/g, (_match, key) => {
     const value = env[key];
-    if (value === undefined || value === "") {
+    if (value === undefined || (value === "" && !optionalEmpty.has(key))) {
       missing.add(key);
       return "";
     }

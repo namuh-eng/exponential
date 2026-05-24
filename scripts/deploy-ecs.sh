@@ -2,6 +2,13 @@
 # Build images, register task definitions, and create/update split ECS services.
 set -euo pipefail
 
+ENV_FILE="${ENV_FILE:-.env}"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  . "$ENV_FILE"
+  set +a
+fi
+
 REGION="${AWS_REGION:-us-east-1}"
 APP_NAME="${APP_NAME:-exponential}"
 CLUSTER="${ECS_CLUSTER:-${APP_NAME}-cluster}"
@@ -35,16 +42,62 @@ aws ecr get-login-password --region "$REGION" | docker login --username AWS --pa
 docker build -f infra/docker/api.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-api:$IMAGE_TAG" .
 docker build -f infra/docker/web.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-web:$IMAGE_TAG" .
 docker build -f infra/docker/kratos.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-kratos:$IMAGE_TAG" .
+docker build -f infra/docker/web-schema.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-schema:$IMAGE_TAG" .
 
 docker push "$ECR_REGISTRY/${APP_NAME}-api:$IMAGE_TAG"
 docker push "$ECR_REGISTRY/${APP_NAME}-web:$IMAGE_TAG"
 docker push "$ECR_REGISTRY/${APP_NAME}-kratos:$IMAGE_TAG"
+docker push "$ECR_REGISTRY/${APP_NAME}-schema:$IMAGE_TAG"
 
 node scripts/render-ecs-task-definitions.mjs --out-dir "$TASK_OUT_DIR"
 
 API_TASK_ARN=$(aws ecs register-task-definition --cli-input-json "file://${TASK_OUT_DIR}/api-task-definition.json" --region "$REGION" --query 'taskDefinition.taskDefinitionArn' --output text)
+API_MIGRATE_TASK_ARN=$(aws ecs register-task-definition --cli-input-json "file://${TASK_OUT_DIR}/api-migrate-task-definition.json" --region "$REGION" --query 'taskDefinition.taskDefinitionArn' --output text)
 WEB_TASK_ARN=$(aws ecs register-task-definition --cli-input-json "file://${TASK_OUT_DIR}/web-task-definition.json" --region "$REGION" --query 'taskDefinition.taskDefinitionArn' --output text)
 KRATOS_TASK_ARN=$(aws ecs register-task-definition --cli-input-json "file://${TASK_OUT_DIR}/kratos-task-definition.json" --region "$REGION" --query 'taskDefinition.taskDefinitionArn' --output text)
+SCHEMA_TASK_ARN=$(aws ecs register-task-definition --cli-input-json "file://${TASK_OUT_DIR}/schema-task-definition.json" --region "$REGION" --query 'taskDefinition.taskDefinitionArn' --output text)
+
+run_migration_task() {
+  local label="$1"
+  local task_arn="$2"
+  local container_name="$3"
+  shift 3
+
+  local overrides='{}'
+  if [ "$#" -gt 0 ]; then
+    overrides=$(node -e 'const [name,...cmd]=process.argv.slice(1); console.log(JSON.stringify({containerOverrides:[{name,command:cmd}]}));' "$container_name" "$@")
+  fi
+
+  echo "Running one-off ECS task: $label"
+  local task
+  task=$(aws ecs run-task \
+    --cluster "$CLUSTER" \
+    --task-definition "$task_arn" \
+    --launch-type FARGATE \
+    --network-configuration "awsvpcConfiguration={subnets=[$PRIV_SUBNET_A,$PRIV_SUBNET_B],securityGroups=[$APP_SG],assignPublicIp=DISABLED}" \
+    --overrides "$overrides" \
+    --region "$REGION" \
+    --query 'tasks[0].taskArn' \
+    --output text)
+
+  if [ -z "$task" ] || [ "$task" = "None" ]; then
+    echo "Failed to start migration task: $label" >&2
+    exit 1
+  fi
+
+  aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$task" --region "$REGION"
+  local exit_code
+  exit_code=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$task" --region "$REGION" --query "tasks[0].containers[?name==\`$container_name\`].exitCode | [0]" --output text)
+  if [ "$exit_code" != "0" ]; then
+    aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$task" --region "$REGION" --query 'tasks[0].stoppedReason' --output text >&2 || true
+    echo "Migration task failed: $label (exit $exit_code)" >&2
+    exit 1
+  fi
+}
+
+run_migration_task "drizzle schema push" "$SCHEMA_TASK_ARN" schema
+run_migration_task "Go SQL migrations" "$API_MIGRATE_TASK_ARN" api-migrate
+run_migration_task "Kratos SQL migrations" "$KRATOS_TASK_ARN" kratos migrate sql -e --yes --config /etc/config/kratos/kratos.yml
 
 ensure_service() {
   local service="$1"
