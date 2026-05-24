@@ -173,35 +173,61 @@ function ImportModal({
     }
   };
 
-  const validateCsv = async (
-    nextCsvText = csvText,
-    nextMapping = mapping,
-    nextTeamId = teamId,
-  ) => {
-    setBusy(true);
-    setError("");
-    const res = await fetch("/api/workspaces/imports/preview", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        csv: nextCsvText,
-        mapping: nextMapping,
-        teamId: nextTeamId,
-      }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) {
-      setError(data.error ?? "CSV validation failed.");
-      return;
-    }
-    setPreview(data.preview ?? []);
-    setStep("preview");
-  };
+  const validateCsv = useCallback(
+    async (
+      nextCsvText = csvText,
+      nextMapping = mapping,
+      nextTeamId = teamId,
+    ) => {
+      setBusy(true);
+      setError("");
+      const res = await fetch("/api/workspaces/imports/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          csv: nextCsvText,
+          mapping: nextMapping,
+          teamId: nextTeamId,
+        }),
+      });
+      const data = await res.json();
+      setBusy(false);
+      if (!res.ok) {
+        setError(data.error ?? "CSV validation failed.");
+        return;
+      }
+      setPreview(data.preview ?? []);
+      setStep("preview");
+    },
+    [csvText, mapping, teamId],
+  );
 
   const validate = async () => {
     await validateCsv();
   };
+
+  useEffect(() => {
+    if (
+      provider === "csv" &&
+      step === "map" &&
+      csvText &&
+      mapping.title &&
+      teamId &&
+      preview.length === 0 &&
+      !busy
+    ) {
+      void validateCsv(csvText, mapping, teamId);
+    }
+  }, [
+    busy,
+    csvText,
+    mapping,
+    preview.length,
+    provider,
+    step,
+    teamId,
+    validateCsv,
+  ]);
 
   const startImport = async () => {
     setBusy(true);
