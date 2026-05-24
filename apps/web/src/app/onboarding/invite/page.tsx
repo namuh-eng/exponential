@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  apiErrorMessage,
+  createBrowserApiClient,
+} from "@/lib/browser-api-client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
@@ -7,6 +11,8 @@ interface InviteEntry {
   email: string;
   role: "admin" | "member" | "guest";
 }
+
+const apiClient = createBrowserApiClient();
 
 function InviteTeamContent() {
   const router = useRouter();
@@ -53,25 +59,15 @@ function InviteTeamContent() {
     setError("");
 
     try {
-      const res = await fetch("/api/workspaces/invite", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId, invites: validInvites }),
+      const { data, error } = await apiClient.POST("/workspaces/invite", {
+        body: { workspaceId, invites: validInvites },
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || "Failed to send invitations");
+      if (error) {
+        setError(apiErrorMessage(error, "Failed to send invitations"));
         return;
       }
 
-      const data = (await res.json()) as {
-        results?: {
-          email: string;
-          status: "sent" | "failed";
-          error?: string;
-        }[];
-      };
       const failures =
         data.results?.filter((result) => result.status === "failed") ?? [];
 

@@ -95,4 +95,24 @@ for (const forbidden of ['fetch("/api/teams"', "fetch('/api/teams'"]) {
   }
 }
 
+const onboardingInvitePage = readFileSync(
+  "apps/web/src/app/onboarding/invite/page.tsx",
+  "utf8",
+);
+if (!onboardingInvitePage.includes("createBrowserApiClient")) {
+  throw new Error(
+    "OnboardingInvitePage must consume the generated SDK browser client",
+  );
+}
+for (const forbidden of [
+  'fetch("/api/workspaces/invite"',
+  "fetch('/api/workspaces/invite'",
+]) {
+  if (onboardingInvitePage.includes(forbidden)) {
+    throw new Error(
+      `OnboardingInvitePage still contains direct workspace invite API fetch: ${forbidden}`,
+    );
+  }
+}
+
 console.log("Web runtime SDK usage guard passed.");

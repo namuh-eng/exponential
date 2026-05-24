@@ -24,6 +24,20 @@ vi.mock("next/navigation", () => ({
 
 import InviteTeamPage from "@/app/onboarding/invite/page";
 
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function requestPath(input: RequestInfo | URL) {
+  if (input instanceof Request) {
+    return new URL(input.url).pathname;
+  }
+  return new URL(input.toString(), "http://localhost").pathname;
+}
+
 describe("Invite Team page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -108,13 +122,11 @@ describe("Invite Team page", () => {
   });
 
   it("submits invites and shows success state", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          results: [{ email: "test@example.com", status: "sent" }],
-        }),
-    });
+    const mockFetch = vi.fn().mockResolvedValue(
+      jsonResponse({
+        results: [{ email: "test@example.com", status: "sent" }],
+      }),
+    );
     globalThis.fetch = mockFetch;
 
     render(<InviteTeamPage />);
@@ -124,15 +136,29 @@ describe("Invite Team page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send invitations" }));
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/invite", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      expect(mockFetch).toHaveBeenCalled();
+    });
+    const [request, init] = mockFetch.mock.calls[0] as [
+      RequestInfo | URL,
+      RequestInit?,
+    ];
+    expect(requestPath(request)).toBe("/api/workspaces/invite");
+    expect(request instanceof Request ? request.method : init?.method).toBe(
+      "POST",
+    );
+    if (request instanceof Request) {
+      await expect(request.clone().json()).resolves.toEqual({
+        workspaceId: "ws-123",
+        invites: [{ email: "test@example.com", role: "member" }],
+      });
+    } else {
+      expect(init?.body).toBe(
+        JSON.stringify({
           workspaceId: "ws-123",
           invites: [{ email: "test@example.com", role: "member" }],
         }),
-      });
-    });
+      );
+    }
 
     await waitFor(() => {
       expect(screen.getByText("Invitations sent!")).toBeDefined();
@@ -140,20 +166,18 @@ describe("Invite Team page", () => {
   });
 
   it("shows per-email failures instead of success when any invite fails", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          results: [
-            { email: "good@example.com", status: "sent" },
-            {
-              email: "bad@example.com",
-              status: "failed",
-              error: "Invalid email",
-            },
-          ],
-        }),
-    });
+    const mockFetch = vi.fn().mockResolvedValue(
+      jsonResponse({
+        results: [
+          { email: "good@example.com", status: "sent" },
+          {
+            email: "bad@example.com",
+            status: "failed",
+            error: "Invalid email",
+          },
+        ],
+      }),
+    );
     globalThis.fetch = mockFetch;
 
     render(<InviteTeamPage />);
@@ -177,11 +201,11 @@ describe("Invite Team page", () => {
   });
 
   it("displays error message on API failure", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: false,
-      json: () =>
-        Promise.resolve({ error: "You are not a member of this workspace" }),
-    });
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ error: "You are not a member of this workspace" }, 403),
+      );
     globalThis.fetch = mockFetch;
 
     render(<InviteTeamPage />);
@@ -201,10 +225,7 @@ describe("Invite Team page", () => {
     const mockFetch = vi.fn().mockImplementation(
       () =>
         new Promise((resolve) => {
-          setTimeout(
-            () => resolve({ ok: true, json: () => Promise.resolve({}) }),
-            100,
-          );
+          setTimeout(() => resolve(jsonResponse({ results: [] })), 100);
         }),
     );
     globalThis.fetch = mockFetch;
