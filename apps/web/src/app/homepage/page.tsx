@@ -31,8 +31,11 @@ export default function Homepage() {
       <div className="grid min-h-[78vh] items-center gap-12 py-16 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="max-w-3xl">
           <h1 className="text-balance text-5xl font-semibold leading-[0.95] tracking-[-0.06em] sm:text-6xl lg:text-7xl">
-            The product development system for teams and agents
+            Purpose-built for planning and building products
           </h1>
+          <h2 className="mt-5 text-balance text-2xl font-medium tracking-[-0.03em] text-[var(--editorial-ink-2)]">
+            The product development system for teams and agents
+          </h2>
           <p className="mt-6 max-w-2xl text-pretty text-lg leading-8 text-[var(--editorial-ink-3)]">
             Linear brings planning, issue tracking, customer feedback, and
             product intelligence into one focused system. Explore the public
