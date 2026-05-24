@@ -49,6 +49,23 @@ docker push "$ECR_REGISTRY/${APP_NAME}-web:$IMAGE_TAG"
 docker push "$ECR_REGISTRY/${APP_NAME}-kratos:$IMAGE_TAG"
 docker push "$ECR_REGISTRY/${APP_NAME}-schema:$IMAGE_TAG"
 
+ensure_log_group() {
+  local group="$1"
+  if ! aws logs describe-log-groups \
+    --log-group-name-prefix "$group" \
+    --region "$REGION" \
+    --query "logGroups[?logGroupName==\`$group\`].logGroupName | [0]" \
+    --output text | grep -qx "$group"; then
+    aws logs create-log-group --log-group-name "$group" --region "$REGION"
+  fi
+}
+
+ensure_log_group "/ecs/${APP_NAME}-api"
+ensure_log_group "/ecs/${APP_NAME}-api-migrate"
+ensure_log_group "/ecs/${APP_NAME}-web"
+ensure_log_group "/ecs/${APP_NAME}-kratos"
+ensure_log_group "/ecs/${APP_NAME}-schema"
+
 node scripts/render-ecs-task-definitions.mjs --out-dir "$TASK_OUT_DIR"
 
 API_TASK_ARN=$(aws ecs register-task-definition --cli-input-json "file://${TASK_OUT_DIR}/api-task-definition.json" --region "$REGION" --query 'taskDefinition.taskDefinitionArn' --output text)

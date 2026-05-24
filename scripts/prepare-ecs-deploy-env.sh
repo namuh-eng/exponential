@@ -108,6 +108,25 @@ aws iam put-role-policy \
   --policy-document "file://${SECRETS_POLICY}" >/dev/null
 rm -f "$SECRETS_POLICY"
 
+LOGS_POLICY=$(mktemp)
+cat >"$LOGS_POLICY" <<JSON
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogGroup"],
+      "Resource": "arn:aws:logs:${REGION}:${ACCOUNT_ID}:log-group:/ecs/${APP_NAME}-*"
+    }
+  ]
+}
+JSON
+aws iam put-role-policy \
+  --role-name "$EXEC_ROLE" \
+  --policy-name "${APP_NAME}-create-task-log-groups" \
+  --policy-document "file://${LOGS_POLICY}" >/dev/null
+rm -f "$LOGS_POLICY"
+
 TASK_POLICY=$(mktemp)
 cat >"$TASK_POLICY" <<JSON
 {
