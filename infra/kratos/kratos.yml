@@ -58,9 +58,9 @@ log:
 
 secrets:
   cookie:
-    - PLEASE-CHANGE-ME-COOKIE-SECRET-32B
+    - dev-cookie-secret-32-byte-value
   cipher:
-    - PLEASE-CHANGE-ME-CIPHER-SECRET-32B
+    - dev-cipher-secret-32-byte-value
 
 ciphers:
   algorithm: xchacha20-poly1305

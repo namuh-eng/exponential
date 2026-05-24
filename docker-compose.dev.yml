@@ -74,7 +74,7 @@ services:
   web-schema:
     image: node:20-alpine
     working_dir: /workspace
-    command: sh -c "corepack enable && pnpm install --frozen-lockfile=false && pnpm db:push -- --force"
+    command: sh -c "corepack enable && pnpm install --frozen-lockfile=false && pnpm --filter @exponential/web exec drizzle-kit push --config drizzle.config.ts --force"
     environment:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/exponential?sslmode=disable
     volumes:
