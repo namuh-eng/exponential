@@ -8,6 +8,7 @@ export default function LoginPage() {
     <AuthPage
       mode="login"
       initialGoogleConfigured={isGoogleOAuthConfigured()}
+      useKratos={process.env.EXPONENTIAL_HEADLESS_AUTH_PROVIDERS === "true"}
     />
   );
 }
