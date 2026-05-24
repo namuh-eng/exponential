@@ -23,7 +23,7 @@ export function MarketingShell({
       <section className="mx-auto w-full max-w-7xl px-6 py-8 sm:px-10 lg:px-12">
         <nav
           className="flex items-center justify-between gap-5 text-sm"
-          aria-label="Public"
+          aria-label="Public marketing"
         >
           <Link
             href="/homepage"
