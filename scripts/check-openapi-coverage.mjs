@@ -4,11 +4,16 @@ import fs from "node:fs";
 const openapi = fs.readFileSync("packages/proto/openapi.yaml", "utf8");
 const routerFiles = ["apps/api/internal/http/router.go"];
 const mountedRoutes = new Set();
+const nonContractProxyMounts = new Set(["/api/auth/kratos"]);
 
 for (const file of routerFiles) {
   const source = fs.readFileSync(file, "utf8");
   for (const match of source.matchAll(/Mount\("([^"]+)"/g)) {
-    mountedRoutes.add(`/v1${match[1]}`);
+    const mount = match[1];
+    if (nonContractProxyMounts.has(mount)) {
+      continue;
+    }
+    mountedRoutes.add(`/v1${mount}`);
   }
   for (const match of source.matchAll(
     /\.(?:Get|Post|Patch|Delete|Put)\("([^"]+)"/g,

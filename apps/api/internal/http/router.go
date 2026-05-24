@@ -3,6 +3,10 @@ package http
 import (
 	"encoding/json"
 	stdhttp "net/http"
+	"net/http/httputil"
+	"net/url"
+	"os"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -44,13 +48,16 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 	r := chi.NewRouter()
 	r.Use(observability.TraceMiddleware("exponential-api"))
 	r.Use(observability.RequestLogger(logger, metrics))
-	r.Get("/healthz", func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+
+	healthHandler := func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(stdhttp.StatusOK)
 		if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
 			logger.Error("write health response", zap.Error(err))
 		}
-	})
+	}
+	r.Get("/healthz", healthHandler)
+	r.Get("/api/healthz", healthHandler)
 	r.Get("/metrics/red", func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(stdhttp.StatusOK)
@@ -58,13 +65,27 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 			logger.Error("write metrics response", zap.Error(err))
 		}
 	})
+	r.Get("/api/metrics/red", func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(stdhttp.StatusOK)
+		if err := json.NewEncoder(w).Encode(observability.Snapshot(metrics)); err != nil {
+			logger.Error("write metrics response", zap.Error(err))
+		}
+	})
 
+	r.Mount("/api/auth/kratos", kratosProxyHandler())
+	mountAPIRoutes(r, "/v1", db)
+	mountAPIRoutes(r, "/api", db)
+	return r
+}
+
+func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool) {
 	authMiddleware := auth.Middleware{DB: db}
 	authProvidersHandler := authproviders.Handler{DB: db}
 	commentsHandler := comments.Handler{DB: db}
 	documentsHandler := documents.Handler{DB: db}
 	labelsHandler := labels.Handler{DB: db}
-	r.Route("/v1", func(v1 chi.Router) {
+	r.Route(prefix, func(v1 chi.Router) {
 		v1.Mount("/auth", authProvidersHandler.Routes())
 		v1.Mount("/inbound", inbound.Handler{DB: db}.Routes())
 		v1.Post("/oauth/token", authProvidersHandler.ExchangeOAuthToken)
@@ -107,5 +128,45 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 			protected.Get("/sync/ws", syncapi.Handler{DB: db}.WebSocket)
 		})
 	})
-	return r
+}
+
+func kratosProxyHandler() stdhttp.Handler {
+	target := strings.TrimSpace(os.Getenv("EXPONENTIAL_API_KRATOS_URL"))
+	if target == "" {
+		target = "http://localhost:4433"
+	}
+	targetURL, err := url.Parse(target)
+	if err != nil {
+		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+			stdhttp.Error(w, "Kratos URL is invalid", stdhttp.StatusBadGateway)
+		})
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+	originalDirector := proxy.Director
+	proxy.Director = func(req *stdhttp.Request) {
+		originalDirector(req)
+		suffix := strings.TrimPrefix(req.URL.Path, "/api/auth/kratos")
+		if suffix == "" {
+			suffix = "/"
+		}
+		req.URL.Scheme = targetURL.Scheme
+		req.URL.Host = targetURL.Host
+		req.URL.Path = singleJoiningSlash(targetURL.Path, suffix)
+		req.Host = targetURL.Host
+	}
+	return proxy
+}
+
+func singleJoiningSlash(a, b string) string {
+	aslash := strings.HasSuffix(a, "/")
+	bslash := strings.HasPrefix(b, "/")
+	switch {
+	case aslash && bslash:
+		return a + b[1:]
+	case !aslash && !bslash:
+		return a + "/" + b
+	default:
+		return a + b
+	}
 }
