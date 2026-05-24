@@ -9,12 +9,25 @@ type ConnectedProvider = {
   id: string;
   providerId: string;
   accountId?: string | null;
+  displayName?: string | null;
+  handle?: string | null;
+  email?: string | null;
+  avatarUrl?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 };
 
+type ProviderCapability =
+  | boolean
+  | {
+      supported?: boolean;
+      configured?: boolean;
+      devLinking?: boolean;
+      unavailableReason?: string;
+    };
+
 type ProviderCapabilities = {
-  providers?: Record<string, boolean | undefined>;
+  providers?: Record<string, ProviderCapability | undefined>;
 };
 
 type AccountSecurityPayload = {
@@ -31,7 +44,10 @@ type ProviderRegistryEntry = {
 };
 
 type ProviderRow = ProviderRegistryEntry & {
+  supported: boolean;
   configured: boolean;
+  devLinking: boolean;
+  unavailableReason: string;
   connectedProvider?: ConnectedProvider;
   status: "connected" | "available" | "unavailable";
 };
@@ -95,15 +111,73 @@ function isLinkableProvider(provider: ConnectedProvider) {
   return provider.providerId !== "credential";
 }
 
+function normalizeCapability(capability: ProviderCapability | undefined) {
+  if (typeof capability === "boolean") {
+    return { supported: true, configured: capability, devLinking: false };
+  }
+
+  return {
+    supported: capability?.supported ?? true,
+    configured: capability?.configured ?? false,
+    devLinking: capability?.devLinking ?? false,
+    unavailableReason: capability?.unavailableReason,
+  };
+}
+
+function identityLabel(provider: ConnectedProvider) {
+  return (
+    provider.displayName?.trim() ||
+    provider.handle?.trim() ||
+    provider.email?.trim() ||
+    provider.accountId?.trim() ||
+    "Unknown identity"
+  );
+}
+
+function identityDetail(provider: ConnectedProvider) {
+  const details = [provider.handle, provider.email]
+    .map((detail) => detail?.trim())
+    .filter(Boolean);
+  return details.length > 0
+    ? details.join(" · ")
+    : "Provider profile metadata unavailable";
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "Connection date unavailable";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Connection date unavailable";
+  return `Connected ${new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date)}`;
+}
+
+function getConnectionsPathname() {
+  return window.location.pathname.endsWith(CONNECTIONS_PATH)
+    ? window.location.pathname
+    : CONNECTIONS_PATH;
+}
+
+function getConnectionsCallbackPath(params?: URLSearchParams) {
+  const query = params?.toString();
+  return `${getConnectionsPathname()}${query ? `?${query}` : ""}`;
+}
+
 function getConnectionsCallbackUrl(params?: URLSearchParams) {
   const base = new URL(window.location.href);
-  const pathname = base.pathname.endsWith(CONNECTIONS_PATH)
-    ? base.pathname
-    : CONNECTIONS_PATH;
-  base.pathname = pathname;
+  base.pathname = getConnectionsPathname();
   base.search = params?.toString() ? `?${params.toString()}` : "";
   base.hash = "";
   return base.toString();
+}
+
+function getProviderCapabilitiesPath() {
+  const params = new URLSearchParams({
+    callbackUrl: getConnectionsCallbackPath(),
+  });
+  return `/api/auth/provider-capabilities?${params.toString()}`;
 }
 
 function noticeFromSearch() {
@@ -142,6 +216,8 @@ export default function ConnectedAccountsPage() {
   );
   const [disconnectingProvider, setDisconnectingProvider] =
     useState<ProviderId | null>(null);
+  const [pendingDisconnect, setPendingDisconnect] =
+    useState<ProviderRow | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   useEffect(() => {
@@ -157,7 +233,7 @@ export default function ConnectedAccountsPage() {
             signal: controller.signal,
             credentials: "include",
           }),
-          fetch("/api/auth/provider-capabilities", {
+          fetch(getProviderCapabilitiesPath(), {
             signal: controller.signal,
             credentials: "include",
           }),
@@ -212,11 +288,17 @@ export default function ConnectedAccountsPage() {
       const connectedProvider = providers.find(
         (accountProvider) => accountProvider.providerId === provider.id,
       );
-      const configured =
-        capabilities.providers?.[provider.capabilityKey] === true;
+      const capability = normalizeCapability(
+        capabilities.providers?.[provider.capabilityKey],
+      );
+      const configured = capability.configured || capability.devLinking;
       return {
         ...provider,
+        supported: capability.supported,
         configured,
+        devLinking: capability.devLinking,
+        unavailableReason:
+          capability.unavailableReason ?? provider.unavailableReason,
         connectedProvider,
         status: connectedProvider
           ? "connected"
@@ -297,7 +379,9 @@ export default function ConnectedAccountsPage() {
     }
   }
 
-  async function disconnectProvider(row: ProviderRow) {
+  async function confirmDisconnectProvider() {
+    const row = pendingDisconnect;
+    if (!row) return;
     if (!row.connectedProvider) return;
 
     setDisconnectingProvider(row.id);
@@ -327,6 +411,7 @@ export default function ConnectedAccountsPage() {
         tone: "success",
         message: `${row.label} disconnected.`,
       });
+      setPendingDisconnect(null);
     } catch {
       setNotice({
         tone: "error",
@@ -387,9 +472,13 @@ export default function ConnectedAccountsPage() {
                     {providerLabel(provider.providerId)}
                   </div>
                   <div className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
-                    {provider.accountId
-                      ? `External identity: ${provider.accountId}`
-                      : "External identity unavailable"}
+                    {identityLabel(provider)}
+                    <span className="mt-0.5 block">
+                      {identityDetail(provider)}
+                    </span>
+                    <span className="mt-0.5 block">
+                      {formatDate(provider.createdAt)}
+                    </span>
                   </div>
                 </div>
                 <span className="rounded-full border border-emerald-500/30 px-2 py-0.5 text-[12px] text-emerald-200">
@@ -441,8 +530,8 @@ export default function ConnectedAccountsPage() {
                   <span>{provider.description}</span>
                   <span className="mt-0.5 block">
                     {provider.status === "connected"
-                      ? provider.connectedProvider?.accountId
-                        ? `External identity: ${provider.connectedProvider.accountId}`
+                      ? provider.connectedProvider
+                        ? `${identityLabel(provider.connectedProvider)} · ${formatDate(provider.connectedProvider.createdAt)}`
                         : "This provider is already connected to your account."
                       : provider.status === "available"
                         ? provider.attributionPurpose
@@ -459,7 +548,7 @@ export default function ConnectedAccountsPage() {
                     className="rounded-md border border-[#2c2d33] px-3 py-2 text-[13px] text-[var(--color-text-primary)] transition-colors hover:bg-[#1b1c22] disabled:cursor-not-allowed disabled:opacity-60"
                     type="button"
                     disabled={disconnectingProvider === provider.id}
-                    onClick={() => void disconnectProvider(provider)}
+                    onClick={() => setPendingDisconnect(provider)}
                   >
                     {disconnectingProvider === provider.id
                       ? `Disconnecting ${provider.label}...`
@@ -479,7 +568,9 @@ export default function ConnectedAccountsPage() {
                 </button>
               ) : (
                 <span className="rounded-full border border-[#3a3b42] px-2 py-0.5 text-[12px] text-[var(--color-text-tertiary)]">
-                  Unavailable
+                  {provider.supported
+                    ? "Configuration required"
+                    : "Unavailable"}
                 </span>
               )}
             </div>
@@ -519,6 +610,44 @@ export default function ConnectedAccountsPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {pendingDisconnect && (
+        <dialog
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex h-full max-h-none w-full max-w-none items-center justify-center bg-black/60 p-4"
+          open
+        >
+          <div className="w-full max-w-md rounded-lg border border-[#2c2d33] bg-[#111217] p-5 shadow-xl">
+            <h2 className="text-[16px] font-semibold text-[var(--color-text-primary)]">
+              Disconnect {pendingDisconnect.label}?
+            </h2>
+            <p className="mt-2 text-[13px] text-[var(--color-text-secondary)]">
+              Synced {pendingDisconnect.label} activity may stop being
+              attributed to your user and can fall back to generic integration
+              actors until you reconnect this identity.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                className="rounded-md px-3 py-2 text-[13px] text-[var(--color-text-secondary)] transition-colors hover:bg-[#1b1c22]"
+                type="button"
+                onClick={() => setPendingDisconnect(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="rounded-md bg-red-600 px-3 py-2 text-[13px] font-medium text-white transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+                type="button"
+                disabled={disconnectingProvider === pendingDisconnect.id}
+                onClick={() => void confirmDisconnectProvider()}
+              >
+                {disconnectingProvider === pendingDisconnect.id
+                  ? `Disconnecting ${pendingDisconnect.label}...`
+                  : `Disconnect ${pendingDisconnect.label}`}
+              </button>
+            </div>
+          </div>
+        </dialog>
       )}
     </div>
   );

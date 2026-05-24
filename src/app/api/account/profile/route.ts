@@ -1,5 +1,7 @@
 import {
+  isValidAccountProfileTimezone,
   readAccountProfileFromUserSettings,
+  sanitizeAccountProfileMetadata,
   sanitizeAccountProfileUsername,
   writeAccountProfileToUserSettings,
 } from "@/lib/account-profile";
@@ -60,6 +62,11 @@ async function buildProfileResponse(userId: string) {
       name: currentUser.name,
       email: currentUser.email,
       username: accountProfile.username,
+      pronouns: accountProfile.pronouns,
+      title: accountProfile.title,
+      location: accountProfile.location,
+      timezone: accountProfile.timezone,
+      showLocalTime: accountProfile.showLocalTime,
       image: currentUser.image,
     },
     workspaceAccess: {
@@ -101,6 +108,11 @@ export async function PATCH(request: Request) {
     name?: unknown;
     username?: unknown;
     image?: unknown;
+    pronouns?: unknown;
+    title?: unknown;
+    location?: unknown;
+    timezone?: unknown;
+    showLocalTime?: unknown;
   } | null;
 
   const name = typeof body?.name === "string" ? body.name.trim() : "";
@@ -118,6 +130,21 @@ export async function PATCH(request: Request) {
       { status: 400 },
     );
   }
+
+  if (!isValidAccountProfileTimezone(body?.timezone)) {
+    return NextResponse.json(
+      { error: "Timezone must be a valid IANA timezone" },
+      { status: 400 },
+    );
+  }
+
+  const metadata = sanitizeAccountProfileMetadata({
+    pronouns: body?.pronouns,
+    title: body?.title,
+    location: body?.location,
+    timezone: body?.timezone,
+    showLocalTime: body?.showLocalTime,
+  });
 
   const rawImage =
     typeof body?.image === "string" ? body.image.trim() : body?.image;
@@ -160,6 +187,7 @@ export async function PATCH(request: Request) {
         payload.currentUser.settings,
         {
           username,
+          ...metadata,
         },
       ),
       updatedAt: new Date(),
@@ -171,6 +199,7 @@ export async function PATCH(request: Request) {
       name,
       email: payload.currentUser.email,
       username,
+      ...metadata,
       image,
     },
     workspaceAccess: payload.workspaceAccess,

@@ -37,12 +37,13 @@ export const KEYBOARD_SHORTCUTS: KeyboardShortcutDefinition[] = [
     category: "Command",
     scope: "global",
     action: "open-command-palette",
-    description: "Search issues and run workspace commands.",
+    description:
+      "Search issues and run workspace commands. Also opens with / outside text fields.",
   },
   {
     id: "open-keyboard-shortcuts",
     label: "Open keyboard shortcuts",
-    keys: ["/"],
+    keys: ["?"],
     category: "Command",
     scope: "global",
     action: "open-keyboard-shortcuts",
@@ -167,6 +168,10 @@ export function isPlainKeyShortcut(event: KeyboardEvent, key: string): boolean {
     !event.shiftKey &&
     !isEditableShortcutTarget(event.target)
   );
+}
+
+export function isSlashCommandPaletteShortcut(event: KeyboardEvent): boolean {
+  return isPlainKeyShortcut(event, "/");
 }
 
 export function isCommandPaletteShortcut(event: KeyboardEvent): boolean {

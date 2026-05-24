@@ -4,11 +4,14 @@ const getSessionMock = vi.fn();
 const teamLimitMock = vi.fn();
 const maxWhereMock = vi.fn();
 const defaultStateLimitMock = vi.fn();
+const currentUserLimitMock = vi.fn();
 const teamMemberWhereMock = vi.fn();
 const loadGroupByMock = vi.fn();
 const insertIssueValuesMock = vi.fn();
 const insertLabelsValuesMock = vi.fn();
 const insertHistoryValuesMock = vi.fn();
+const insertRelationValuesMock = vi.fn();
+const insertSubscriptionValuesMock = vi.fn();
 const buildNotificationValuesMock = vi.fn();
 const insertNotificationsMock = vi.fn();
 const normalizeIssueDescriptionHtmlMock = vi.fn();
@@ -41,11 +44,31 @@ vi.mock("@/lib/db", () => ({
     select: vi.fn((selection: Record<string, unknown>) => {
       selectCallCount += 1;
 
+      if (selection.id === "cycle.id") {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue([{ id: "cycle-1" }]),
+            }),
+          }),
+        };
+      }
+
       if ("key" in selection) {
         return {
           from: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
               limit: teamLimitMock,
+            }),
+          }),
+        };
+      }
+
+      if ("settings" in selection) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: currentUserLimitMock,
             }),
           }),
         };
@@ -123,6 +146,24 @@ vi.mock("@/lib/db", () => ({
               };
             }
 
+            if (typedTable.__name === "issueRelation") {
+              return {
+                values: (...valuesArgs: unknown[]) => {
+                  insertRelationValuesMock(...valuesArgs);
+                  return Promise.resolve();
+                },
+              };
+            }
+
+            if (typedTable.__name === "issueSubscription") {
+              return {
+                values: (...valuesArgs: unknown[]) => {
+                  insertSubscriptionValuesMock(...valuesArgs);
+                  return Promise.resolve();
+                },
+              };
+            }
+
             return {
               values: (...valuesArgs: unknown[]) => {
                 insertIssueValuesMock(...valuesArgs);
@@ -140,7 +181,10 @@ vi.mock("@/lib/db", () => ({
                       priority: "high",
                       assigneeId: "user-2",
                       projectId: "project-1",
+                      cycleId: null,
                       parentIssueId: null,
+                      estimate: null,
+                      dueDate: null,
                     },
                   ]),
                 };
@@ -156,9 +200,12 @@ vi.mock("@/lib/db", () => ({
 }));
 
 vi.mock("@/lib/db/schema", () => ({
+  cycle: { id: "cycle.id", teamId: "cycle.teamId" },
   issue: { __name: "issue", assigneeId: "issue.assigneeId" },
   issueHistory: { __name: "issueHistory" },
   issueLabel: { __name: "issueLabel" },
+  issueRelation: { __name: "issueRelation" },
+  issueSubscription: { __name: "issueSubscription" },
   label: {
     id: "label.id",
     parentLabelId: "label.parentLabelId",
@@ -168,6 +215,7 @@ vi.mock("@/lib/db/schema", () => ({
   },
   team: {},
   teamMember: {},
+  user: { id: "user.id", settings: "user.settings" },
   workflowState: {},
 }));
 
@@ -189,6 +237,7 @@ describe("issues route", () => {
     ]);
     maxWhereMock.mockResolvedValue([{ maxNum: 7 }]);
     defaultStateLimitMock.mockResolvedValue([{ id: "state-backlog" }]);
+    currentUserLimitMock.mockResolvedValue([{ settings: {} }]);
     teamMemberWhereMock.mockResolvedValue([]);
     loadGroupByMock.mockResolvedValue([]);
     normalizeIssueDescriptionHtmlMock.mockReturnValue("<p>normalized</p>");
@@ -298,7 +347,10 @@ describe("issues route", () => {
       priority: "high",
       assigneeId: "user-2",
       projectId: "project-1",
+      cycleId: null,
       parentIssueId: null,
+      estimate: null,
+      dueDate: null,
     });
     expect(insertLabelsValuesMock).toHaveBeenCalledWith([
       { issueId: "issue-1", labelId: "label-1" },
@@ -314,6 +366,11 @@ describe("issues route", () => {
         identifier: "ENG-8",
         title: "Ship this",
         teamId: "team-1",
+        cycleId: null,
+        estimate: null,
+        dueDate: null,
+        parentIssueId: null,
+        relatedIssueId: null,
       },
     });
     expect(insertNotificationsMock).toHaveBeenCalledWith([
@@ -331,8 +388,124 @@ describe("issues route", () => {
       priority: "high",
       assigneeId: "user-2",
       projectId: "project-1",
+      cycleId: null,
       parentIssueId: null,
+      estimate: null,
+      dueDate: null,
     });
+  });
+
+  it("persists composer planning metadata and creation relations", async () => {
+    const { POST } = await import("@/app/api/issues/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/issues", {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Plan metadata",
+          teamId: "team-1",
+          cycleId: "cycle-1",
+          estimate: 5,
+          dueDate: "2026-06-01",
+          parentIssueId: "parent-1",
+          relatedIssueId: "related-1",
+          relationType: "related",
+          subscribe: true,
+        }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(insertIssueValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cycleId: "cycle-1",
+        estimate: 5,
+        dueDate: new Date("2026-06-01T00:00:00.000Z"),
+        parentIssueId: "parent-1",
+      }),
+    );
+    expect(insertRelationValuesMock).toHaveBeenCalledWith({
+      issueId: "issue-1",
+      relatedIssueId: "related-1",
+      type: "related",
+    });
+    expect(insertSubscriptionValuesMock).toHaveBeenCalledWith({
+      issueId: "issue-1",
+      userId: "user-1",
+      subscribed: true,
+    });
+    expect(insertHistoryValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          cycleId: "cycle-1",
+          estimate: 5,
+          dueDate: "2026-06-01T00:00:00.000Z",
+          parentIssueId: "parent-1",
+          relatedIssueId: "related-1",
+        }),
+      }),
+    );
+  });
+
+  it("creates a cycle-scoped issue when the cycle belongs to the team", async () => {
+    const { POST } = await import("@/app/api/issues/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/issues", {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Cycle task",
+          teamId: "team-1",
+          cycleId: "cycle-1",
+        }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(insertIssueValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ cycleId: "cycle-1" }),
+    );
+  });
+
+  it("uses account auto-assignment preference before team load balancing", async () => {
+    currentUserLimitMock.mockResolvedValue([
+      {
+        settings: {
+          accountPreferences: {
+            automations: { autoAssignment: "assign-to-me" },
+          },
+        },
+      },
+    ]);
+    teamLimitMock.mockResolvedValue([
+      {
+        id: "team-1",
+        key: "ENG",
+        workspaceId: "workspace-1",
+        settings: { autoAssignment: true },
+      },
+    ]);
+
+    const { POST } = await import("@/app/api/issues/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/issues", {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Assign me",
+          teamId: "team-1",
+        }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(teamMemberWhereMock).not.toHaveBeenCalled();
+    expect(insertIssueValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ assigneeId: "user-1" }),
+    );
   });
 
   it("auto-assigns new unassigned issues to the lightest-loaded team member", async () => {

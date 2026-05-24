@@ -7,12 +7,26 @@ import { useProjectViewState } from "@/hooks/use-project-view-state";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+interface ProjectTemplateOption {
+  id: string;
+  name: string;
+  description: string;
+  settings?: {
+    milestones?: string[];
+    status?: string | null;
+    priority?: string | null;
+  };
+}
+
 interface ProjectData {
   id: string;
   name: string;
   icon: string | null;
   slug: string;
-  status: "planned" | "started" | "paused" | "completed" | "canceled";
+  status: string;
+  statusLabel?: string;
+  statusColor?: string;
+  statusIcon?: string;
   priority: "none" | "urgent" | "high" | "medium" | "low";
   health: string;
   lead: { name: string; image?: string | null } | null;
@@ -24,7 +38,13 @@ interface ProjectData {
 }
 
 type ProjectStatus = ProjectData["status"];
-type StatusFilter = "all" | ProjectStatus;
+type StatusFilter =
+  | "all"
+  | "planned"
+  | "started"
+  | "paused"
+  | "completed"
+  | "canceled";
 type SortOption =
   | "created-desc"
   | "created-asc"
@@ -57,6 +77,9 @@ export function ProjectsPage({
   } | null>(null);
   const [availableLabels, setAvailableLabels] = useState<
     { id: string; name: string; color: string }[]
+  >([]);
+  const [projectTemplates, setProjectTemplates] = useState<
+    ProjectTemplateOption[]
   >([]);
   const [labelFilterId, setLabelFilterId] = useState("all");
   const [loading, setLoading] = useState(true);
@@ -100,12 +123,21 @@ export function ProjectsPage({
       if (res.ok) {
         const data = await res.json();
         setProjects(data.projects ?? []);
-        const labelsRes = await fetch("/api/project-labels");
+        const [labelsRes, templatesRes] = await Promise.all([
+          fetch("/api/project-labels"),
+          fetch("/api/project-templates"),
+        ]);
         if (labelsRes.ok) {
           const labelsData = await labelsRes.json();
           setAvailableLabels(labelsData.labels ?? []);
         } else {
           setAvailableLabels([]);
+        }
+        if (templatesRes.ok) {
+          const templatesData = await templatesRes.json();
+          setProjectTemplates(templatesData.templates ?? []);
+        } else {
+          setProjectTemplates([]);
         }
         setActiveTeam(teamRecord);
         setLoadState("ready");
@@ -133,12 +165,23 @@ export function ProjectsPage({
       e.preventDefault();
       const formData = new FormData(e.currentTarget);
 
+      const milestoneInput = `${formData.get("projectMilestones") ?? ""}`
+        .split("\n")
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map((name) => ({ name }));
+
       const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: formData.get("name"),
           description: formData.get("description"),
+          labelIds: formData.getAll("labelIds"),
+          templateId: formData.get("templateId") || undefined,
+          ...(milestoneInput.length > 0
+            ? { projectMilestones: milestoneInput }
+            : {}),
           ...(teamKey ? { teamKey } : {}),
         }),
       });
@@ -150,6 +193,28 @@ export function ProjectsPage({
     },
     [fetchProjects, teamKey],
   );
+
+  const templateSelect =
+    projectTemplates.length > 0 ? (
+      <label className="flex flex-col gap-1 text-[12px] text-[var(--color-text-secondary)]">
+        Project template
+        <select
+          name="templateId"
+          aria-label="Apply project template"
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+        >
+          <option value="">No template</option>
+          {projectTemplates.map((template) => (
+            <option key={template.id} value={template.id}>
+              {template.name}
+            </option>
+          ))}
+        </select>
+        <span className="text-[11px] text-[var(--color-text-tertiary)]">
+          Applies configured status, priority, labels, and milestones.
+        </span>
+      </label>
+    ) : null;
 
   if (loading) {
     return (
@@ -197,6 +262,32 @@ export function ProjectsPage({
                 rows={2}
                 className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
               />
+              <textarea
+                name="projectMilestones"
+                placeholder="Initial milestones (one per line, optional)"
+                rows={3}
+                className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
+              />
+
+              {templateSelect}
+
+              {availableLabels.length > 0 && (
+                <label className="flex flex-col gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                  Project labels
+                  <select
+                    name="labelIds"
+                    multiple
+                    aria-label="Apply project labels"
+                    className="min-h-[72px] rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                  >
+                    {availableLabels.map((label) => (
+                      <option key={label.id} value={label.id}>
+                        {label.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <div className="flex items-center gap-2">
                 <button
                   type="submit"
@@ -249,6 +340,16 @@ export function ProjectsPage({
       </div>
     );
   }
+
+  const statusOptions = Array.from(
+    new Map(
+      scopedProjects.map((project) => [
+        project.status,
+        project.statusLabel ??
+          project.status.replace(/^./, (char) => char.toUpperCase()),
+      ]),
+    ),
+  );
 
   const filteredProjects = scopedProjects.filter((project) => {
     if (
@@ -324,11 +425,11 @@ export function ProjectsPage({
             className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-2 py-1 text-[12px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
           >
             <option value="all">All statuses</option>
-            <option value="planned">Planned</option>
-            <option value="started">In progress</option>
-            <option value="paused">Paused</option>
-            <option value="completed">Completed</option>
-            <option value="canceled">Canceled</option>
+            {statusOptions.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
           </select>
         </label>
         <label className="mr-2 flex items-center gap-2 text-[12px] text-[var(--color-text-secondary)]">
@@ -404,6 +505,32 @@ export function ProjectsPage({
               rows={2}
               className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
             />
+            <textarea
+              name="projectMilestones"
+              placeholder="Initial milestones (one per line, optional)"
+              rows={3}
+              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
+            />
+
+            {templateSelect}
+
+            {availableLabels.length > 0 && (
+              <label className="flex flex-col gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                Project labels
+                <select
+                  name="labelIds"
+                  multiple
+                  aria-label="Apply project labels"
+                  className="min-h-[72px] rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                >
+                  {availableLabels.map((label) => (
+                    <option key={label.id} value={label.id}>
+                      {label.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <div className="flex items-center gap-2">
               <button
                 type="submit"
@@ -429,7 +556,7 @@ export function ProjectsPage({
         <div className="w-[60px] shrink-0 text-center">Priority</div>
         <div className="w-[60px] shrink-0 text-center">Lead</div>
         <div className="w-[80px] shrink-0">Target date</div>
-        <div className="w-[70px] shrink-0">Status</div>
+        <div className="w-[120px] shrink-0">Status</div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -441,6 +568,9 @@ export function ProjectsPage({
               icon={project.icon}
               slug={project.slug}
               status={project.status}
+              statusLabel={project.statusLabel}
+              statusColor={project.statusColor}
+              statusIcon={project.statusIcon}
               priority={project.priority}
               health={project.health}
               lead={

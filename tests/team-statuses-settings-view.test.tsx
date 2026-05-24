@@ -165,7 +165,9 @@ describe("TeamIssueStatusesPage", () => {
     );
     expect(screen.getAllByText("QA Review").length).toBeGreaterThan(0);
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "s5" } });
+    fireEvent.change(screen.getByLabelText("Duplicate issue status"), {
+      target: { value: "s5" },
+    });
     await waitFor(() => screen.getByText("Duplicate issue status saved."));
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/teams/TEAM/statuses",
@@ -351,7 +353,7 @@ describe("TeamIssueStatusesPage", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByLabelText("Default status for this category"),
+      screen.getByLabelText("Default status for this workflow type"),
     ).toBeDisabled();
     expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
     expect(
@@ -359,18 +361,83 @@ describe("TeamIssueStatusesPage", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("edits workflow type and behavior controls", async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PATCH") {
+          return {
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                statuses: mockStatuses,
+                duplicateStatusId: "s6",
+              }),
+          } as Response;
+        }
+
+        return {
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              statuses: mockStatuses,
+              duplicateStatusId: "s6",
+            }),
+        } as Response;
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<TeamIssueStatusesPage />);
+    await screen.findByText("Issue statuses");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[4]);
+    fireEvent.change(screen.getByLabelText("Workflow type"), {
+      target: { value: "completed" },
+    });
+    fireEvent.click(
+      screen.getByLabelText("Default status for this workflow type"),
+    );
+    fireEvent.change(screen.getByLabelText("Terminal behavior"), {
+      target: { value: "completed" },
+    });
+    fireEvent.change(screen.getByLabelText("Auto-close/archive after days"), {
+      target: { value: "14" },
+    });
+    fireEvent.change(screen.getByLabelText("SLA behavior"), {
+      target: { value: "pause" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => screen.getByText("Status updated."));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/teams/TEAM/statuses",
+      expect.objectContaining({
+        method: "PATCH",
+        body: expect.stringContaining('"category":"completed"'),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/teams/TEAM/statuses",
+      expect.objectContaining({
+        method: "PATCH",
+        body: expect.stringContaining('"terminalBehavior":"completed"'),
+      }),
+    );
+  });
+
   it("renders duplicate issue status selector with all statuses", async () => {
     render(<TeamIssueStatusesPage />);
     await waitFor(() => screen.getByText("Duplicate issue status"));
 
-    const select = screen.getByRole("combobox");
+    const select = screen.getByLabelText("Duplicate issue status");
     expect(select).toBeInTheDocument();
 
     // Check if some statuses from different categories are options
-    expect(screen.getByRole("option", { name: "Triage" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Done" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("option", { name: "Canceled" }),
-    ).toBeInTheDocument();
+    const optionLabels = Array.from((select as HTMLSelectElement).options).map(
+      (option) => option.textContent,
+    );
+    expect(optionLabels).toContain("Triage");
+    expect(optionLabels).toContain("Done");
+    expect(optionLabels).toContain("Canceled");
   });
 });

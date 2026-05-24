@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { workspace } from "@/lib/db/schema";
 import { inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describeDb } from "./_helpers/db-integration";
 
 const MATCH_WS_ID = "13300000-0000-0000-0000-000000000001";
 const DISABLED_WS_ID = "13300000-0000-0000-0000-000000000002";
@@ -19,7 +20,7 @@ function post(body: unknown) {
   );
 }
 
-describe("SAML discovery API route", () => {
+describeDb("SAML discovery API route", () => {
   beforeAll(async () => {
     await db.delete(workspace).where(inArray(workspace.id, TEST_WS_IDS));
     await db.insert(workspace).values([

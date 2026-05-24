@@ -4,6 +4,10 @@ const getSessionMock = vi.fn();
 const findAccessibleTeamMock = vi.fn();
 const updateSetMock = vi.fn();
 const updateReturningMock = vi.fn();
+const insertValuesMock = vi.fn(() => ({
+  onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+}));
+const deleteWhereMock = vi.fn().mockResolvedValue(undefined);
 let selectResults: unknown[][] = [];
 
 function nextSelectResult() {
@@ -22,8 +26,21 @@ vi.mock("@/lib/teams", () => ({
   findAccessibleTeam: findAccessibleTeamMock,
 }));
 
-vi.mock("@/lib/db", () => ({
-  db: {
+vi.mock("@/lib/label-application", () => ({
+  normalizeApplicableIssueLabelIds: vi.fn(async ({ labelIds }) => ({
+    ok: true,
+    labelIds,
+  })),
+}));
+
+vi.mock("@/lib/issue-subscriptions", () => ({
+  setIssueSubscription: vi.fn(({ issueId, userId, subscribed, client }) =>
+    client.insert({}).values({ issueId, userId, subscribed }),
+  ),
+}));
+
+function makeDbMock() {
+  const dbMock = {
     select: vi.fn(() => {
       const chain = {
         from: vi.fn(() => chain),
@@ -40,7 +57,17 @@ vi.mock("@/lib/db", () => ({
         }),
       })),
     })),
-  },
+    delete: vi.fn(() => ({ where: deleteWhereMock })),
+    insert: vi.fn(() => ({ values: insertValuesMock })),
+  };
+  return {
+    ...dbMock,
+    transaction: vi.fn((callback) => callback(dbMock)),
+  };
+}
+
+vi.mock("@/lib/db", () => ({
+  db: makeDbMock(),
 }));
 
 vi.mock("next/headers", () => ({
@@ -79,6 +106,7 @@ describe("team triage issue route", () => {
       name: "Engineering",
       key: "ENG",
       workspaceId: "workspace-1",
+      settings: {},
     });
     updateReturningMock.mockReturnValue([
       { id: "issue-1", stateId: "state-backlog" },
@@ -226,6 +254,72 @@ describe("team triage issue route", () => {
     );
   });
 
+  it("persists accept metadata, comment, labels, and subscription atomically", async () => {
+    selectResults = [
+      [triageIssue],
+      [backlogDestination],
+      [{ id: "member-1" }],
+      [{ id: "project-1" }],
+      [{ id: "milestone-1", projectId: "project-1" }],
+      [{ id: "cycle-1" }],
+    ];
+    const { PATCH } = await import(
+      "@/app/api/teams/[key]/triage/[issueId]/route"
+    );
+
+    const response = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({
+          action: "accept",
+          destinationStateId: "state-backlog",
+          confirmed: true,
+          priority: "high",
+          estimate: 3,
+          assigneeId: "user-2",
+          projectId: "project-1",
+          projectMilestoneId: "milestone-1",
+          cycleId: "cycle-1",
+          labelIds: ["label-1"],
+          comment: "Accepted with context",
+          subscribe: true,
+        }),
+      }),
+      {
+        params: Promise.resolve({ key: "ENG", issueId: "issue-1" }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stateId: "state-backlog",
+        priority: "high",
+        estimate: 3,
+        assigneeId: "user-2",
+        projectId: "project-1",
+        projectMilestoneId: "milestone-1",
+        cycleId: "cycle-1",
+      }),
+    );
+    expect(insertValuesMock).toHaveBeenCalledWith([
+      { issueId: "issue-1", labelId: "label-1" },
+    ]);
+    expect(insertValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: "Accepted with context",
+        issueId: "issue-1",
+        userId: "user-1",
+      }),
+    );
+    expect(insertValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issueId: "issue-1",
+        userId: "user-1",
+        subscribed: true,
+      }),
+    );
+  });
   it("rejects decisions for issues that are not currently in triage", async () => {
     selectResults = [[{ ...triageIssue, stateCategory: "backlog" }]];
     const { PATCH } = await import(

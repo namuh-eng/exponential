@@ -42,9 +42,22 @@ test.describe("Account security and access", () => {
     await expect(
       page.getByRole("button", { name: "Add passkey" }),
     ).toBeEnabled();
+    await page.getByRole("button", { name: "Add passkey" }).click();
+    await expect(
+      page.getByRole("dialog", { name: "Add passkey" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByText("Passkey enrollment cancelled.")).toBeVisible();
     await expect(
       page.getByText(/No passkeys have been added yet/i),
     ).toBeVisible();
+    await page.getByRole("button", { name: "Add passkey" }).click();
+    await expect(
+      page.getByRole("dialog", { name: "Add passkey" }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Passkey name")).toHaveValue("Passkey 1");
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByText("Passkey enrollment cancelled.")).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "API keys", exact: true }),
     ).toHaveCount(0);
@@ -119,14 +132,25 @@ test.describe("Account security and access", () => {
     await expect(page.getByText("E2E OAuth App")).toBeVisible();
     await expect(
       page.getByText(new RegExp(`App ID: ${grant.appId}`)),
-    ).toBeVisible();
-    await expect(page.getByText(/Permissions: read, write/)).toBeVisible();
-    await expect(page.getByText(/Webhooks enabled/)).toBeVisible();
+    ).toHaveCount(0);
+    await expect(page.getByText(/Permissions: View workspace/)).toBeVisible();
+    await expect(page.getByText(/Webhook access/)).toBeVisible();
+    await expect(page.getByText(/Last used\s+Unavailable/)).toBeVisible();
 
     await page
       .getByRole("region", { name: "Authorized applications" })
       .getByRole("button", { name: "Revoke" })
       .click();
+    await expect(
+      page.getByRole("alertdialog", { name: "Confirm revoking E2E OAuth App" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByText("E2E OAuth App")).toBeVisible();
+    await page
+      .getByRole("region", { name: "Authorized applications" })
+      .getByRole("button", { name: "Revoke" })
+      .click();
+    await page.getByRole("button", { name: "Confirm revoke" }).click();
 
     await expect(
       page.getByText("Authorized application revoked."),

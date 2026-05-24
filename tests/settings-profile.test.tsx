@@ -36,6 +36,11 @@ function mockSession() {
         email: "john@example.com",
         username: "johnd",
         image: null,
+        pronouns: "they/them",
+        title: "Product Engineer",
+        location: "San Francisco",
+        timezone: "America/Los_Angeles",
+        showLocalTime: true,
       },
       workspaceAccess: {
         currentWorkspaceId: "workspace-1",
@@ -113,6 +118,22 @@ describe("Account Profile Page", () => {
     );
   });
 
+  it("renders editable Linear profile metadata controls", async () => {
+    mockSession();
+    render(<ProfilePage />);
+    await waitForLoaded();
+
+    expect(screen.getByLabelText("Pronouns")).toHaveValue("they/them");
+    expect(screen.getByLabelText("Role or title")).toHaveValue(
+      "Product Engineer",
+    );
+    expect(screen.getByLabelText("Location")).toHaveValue("San Francisco");
+    expect(screen.getByLabelText("Timezone")).toHaveValue(
+      "America/Los_Angeles",
+    );
+    expect(screen.getByLabelText(/Show my local time/)).toBeChecked();
+  });
+
   it("renders Update button", async () => {
     mockSession();
     render(<ProfilePage />);
@@ -140,6 +161,11 @@ describe("Account Profile Page", () => {
           email: "john@example.com",
           username: "johnd",
           image: null,
+          pronouns: "she/her",
+          title: "Manager",
+          location: "New York",
+          timezone: "America/New_York",
+          showLocalTime: false,
         },
       }),
     });
@@ -152,7 +178,10 @@ describe("Account Profile Page", () => {
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
         "/api/account/profile",
-        expect.objectContaining({ method: "PATCH" }),
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining('"timezone":"America/Los_Angeles"'),
+        }),
       );
     });
   });

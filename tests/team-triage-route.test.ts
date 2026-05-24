@@ -31,11 +31,15 @@ vi.mock("@/lib/db", () => ({
         "color" in selection &&
         Object.keys(selection).length === 3
       ) {
-        return {
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue(triageStatesWhereMock()),
-          }),
+        const query = {
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          orderBy: vi.fn().mockResolvedValue([]),
+          // biome-ignore lint/suspicious/noThenProperty: mock query is awaitable like Drizzle
+          then: (resolve: (val: unknown) => void) =>
+            resolve(triageStatesWhereMock()),
         };
+        return query;
       }
 
       // Get issues in triage state
@@ -56,6 +60,7 @@ vi.mock("@/lib/db", () => ({
       const chain = {
         from: vi.fn().mockReturnThis(),
         innerJoin: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockReturnThis(),
         limit: vi.fn().mockReturnThis(),

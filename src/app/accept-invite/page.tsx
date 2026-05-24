@@ -73,8 +73,8 @@ export default async function AcceptInvitePage({
   const storedInvitePayload = storedInvite
     ? verifyInviteToken(storedInvite.token)
     : null;
-  const invite =
-    storedInvite && storedInvite.status === "pending"
+  const invite = storedInvite
+    ? storedInvite.status === "pending"
       ? {
           id: storedInvite.id,
           workspaceId: storedInvite.workspaceId,
@@ -82,23 +82,24 @@ export default async function AcceptInvitePage({
           role: storedInvite.role,
           teamKey: storedInvitePayload?.teamKey ?? null,
         }
-      : signedInvite
+      : null
+    : signedInvite
+      ? {
+          id: null,
+          workspaceId: signedInvite.workspaceId,
+          email: signedInvite.email,
+          role: signedInvite.role,
+          teamKey: signedInvite.teamKey ?? null,
+        }
+      : workspaceInviteLink?.inviteLinkEnabled
         ? {
             id: null,
-            workspaceId: signedInvite.workspaceId,
-            email: signedInvite.email,
-            role: signedInvite.role,
-            teamKey: signedInvite.teamKey ?? null,
+            workspaceId: workspaceInviteLink.workspaceId,
+            email: null,
+            role: "member" as const,
+            teamKey: null,
           }
-        : workspaceInviteLink?.inviteLinkEnabled
-          ? {
-              id: null,
-              workspaceId: workspaceInviteLink.workspaceId,
-              email: null,
-              role: "member" as const,
-              teamKey: null,
-            }
-          : null;
+        : null;
 
   if (!invite) {
     return (

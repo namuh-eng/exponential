@@ -11,6 +11,7 @@ import {
   team,
   user,
   workflowState,
+  workspace,
 } from "@/lib/db/schema";
 import {
   type InitiativeHealth,
@@ -26,6 +27,7 @@ import {
   getInitiativeName,
   validateInitiativeParentLink,
 } from "@/lib/initiative-hierarchy";
+import { readWorkspaceInitiativeSettings } from "@/lib/initiative-settings";
 import { and, count, eq, inArray, ne, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -68,6 +70,16 @@ function addActivity(
     makeInitiativeActivityEntry(entry),
     ...settings.activity,
   ].slice(0, 50);
+}
+
+async function readCurrentWorkspaceInitiativeSettings(workspaceId: string) {
+  const [workspaceRecord] = await db
+    .select({ settings: workspace.settings })
+    .from(workspace)
+    .where(eq(workspace.id, workspaceId))
+    .limit(1);
+
+  return readWorkspaceInitiativeSettings(workspaceRecord?.settings);
 }
 
 async function readWorkspaceInitiativeHierarchy(
@@ -306,6 +318,15 @@ export async function GET(
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
   }
 
+  const initiativeSettings =
+    await readCurrentWorkspaceInitiativeSettings(workspaceId);
+  if (!initiativeSettings.enabled) {
+    return NextResponse.json(
+      { error: "Initiatives are disabled for this workspace" },
+      { status: 403 },
+    );
+  }
+
   const detail = await buildInitiativeDetailResponse(workspaceId, id);
   if (!detail) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -329,6 +350,15 @@ export async function PATCH(
 
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
+  }
+
+  const initiativeSettings =
+    await readCurrentWorkspaceInitiativeSettings(workspaceId);
+  if (!initiativeSettings.enabled) {
+    return NextResponse.json(
+      { error: "Initiatives are disabled for this workspace" },
+      { status: 403 },
+    );
   }
 
   const existing = await db
@@ -847,6 +877,15 @@ export async function DELETE(
 
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
+  }
+
+  const initiativeSettings =
+    await readCurrentWorkspaceInitiativeSettings(workspaceId);
+  if (!initiativeSettings.enabled) {
+    return NextResponse.json(
+      { error: "Initiatives are disabled for this workspace" },
+      { status: 403 },
+    );
   }
 
   const deleted = await db

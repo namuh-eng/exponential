@@ -99,6 +99,17 @@ test.describe("Team triage detail review", () => {
               color: "#5e6ad2",
             },
           ],
+          metadataOptions: {
+            labels: [{ id: "label-bug", name: "Bug", color: "#f00" }],
+            cycles: [{ id: "cycle-1", name: "Cycle 1", number: 1 }],
+            projects: [{ id: "project-1", name: "Customer Experience" }],
+            projectMilestones: [
+              { id: "milestone-1", name: "MVP", projectId: "project-1" },
+            ],
+            members: [
+              { id: "user-2", name: "Morgan", email: "morgan@example.com" },
+            ],
+          },
           declineDestinationStates: [
             {
               id: "state-canceled",
@@ -117,6 +128,15 @@ test.describe("Team triage detail review", () => {
         action: "accept",
         destinationStateId: "state-ready",
         confirmed: true,
+        priority: "urgent",
+        estimate: 2,
+        labelIds: ["label-bug"],
+        cycleId: "cycle-1",
+        projectId: "project-1",
+        projectMilestoneId: "milestone-1",
+        assigneeId: "user-2",
+        comment: "Accepting with triage context",
+        subscribe: true,
       });
       accepted = true;
       await route.fulfill({
@@ -177,10 +197,41 @@ test.describe("Team triage detail review", () => {
 
     await page.getByRole("button", { name: "Accept", exact: true }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page.getByText("Accept triage issue")).toBeVisible();
+    await expect(
+      page.getByText("Accept: ENG-179 Review incoming customer escalation"),
+    ).toBeVisible();
+    await expect(page.getByLabel("Accept priority")).toBeVisible();
+    await expect(page.getByLabel("Accept estimate")).toBeVisible();
+    await expect(page.getByLabel("Accept label Bug")).toBeVisible();
+    await expect(page.getByLabel("Accept cycle")).toBeVisible();
+    await expect(
+      page.getByLabel("Accept project", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Accept project milestone")).toBeVisible();
+    await expect(page.getByLabel("Accept team")).toBeVisible();
+    await expect(page.getByLabel("Accept assignee")).toBeVisible();
+    await expect(page.getByLabel("Comment for accepting issue")).toBeVisible();
+    await expect(page.getByLabel("Subscribe to issue updates")).toBeChecked();
+    await expect(
+      page.getByRole("dialog").getByRole("button", { name: "More actions" }),
+    ).toBeVisible();
     await page
       .getByRole("combobox", { name: "Triage destination status" })
       .selectOption("state-ready");
+    await page.getByLabel("Accept priority").selectOption("urgent");
+    await page.getByLabel("Accept estimate").fill("2");
+    await page.getByLabel("Accept label Bug").check();
+    await page.getByLabel("Accept cycle").selectOption("cycle-1");
+    await page
+      .getByLabel("Accept project", { exact: true })
+      .selectOption("project-1");
+    await page
+      .getByLabel("Accept project milestone")
+      .selectOption("milestone-1");
+    await page.getByLabel("Accept assignee").selectOption("user-2");
+    await page
+      .getByLabel("Comment for accepting issue")
+      .fill("Accepting with triage context");
     await page
       .getByRole("dialog")
       .getByRole("button", { name: "Accept issue" })

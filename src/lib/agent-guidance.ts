@@ -2,6 +2,7 @@ import { readAccountPreferencesFromUserSettings } from "@/lib/account-preference
 import { db } from "@/lib/db";
 import { member, team, user, workspace } from "@/lib/db/schema";
 import { readTeamSettings } from "@/lib/team-settings";
+import { readWorkspaceAiSettings } from "@/lib/workspace-ai-settings";
 import { and, eq } from "drizzle-orm";
 
 export type AgentGuidanceSource = "workspace" | "account" | "team";
@@ -15,27 +16,12 @@ export interface AgentGuidanceEntry {
 export interface EffectiveAgentGuidance {
   entries: AgentGuidanceEntry[];
   effectiveInstructions: string;
+  autoFixEnabled: boolean;
   teamKey: string | null;
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function readWorkspaceAgentGuidance(settings: unknown) {
-  const root = asRecord(settings);
-  const ai = asRecord(root.ai);
-  const agents = asRecord(root.agents);
-  const candidate =
-    ai.agentGuidance ??
-    ai.guidance ??
-    agents.agentGuidance ??
-    agents.guidance ??
-    root.agentGuidance;
-
-  return typeof candidate === "string" ? candidate : "";
+export function readWorkspaceAgentGuidance(settings: unknown) {
+  return readWorkspaceAiSettings(settings).workspaceAgentGuidance;
 }
 
 function normalizeGuidance(value: string) {
@@ -46,6 +32,7 @@ export function buildEffectiveAgentGuidance(input: {
   workspaceGuidance?: string | null;
   accountGuidance?: string | null;
   teamGuidance?: string | null;
+  autoFixEnabled?: boolean | null;
   teamKey?: string | null;
 }): EffectiveAgentGuidance {
   const entries: AgentGuidanceEntry[] = [];
@@ -84,6 +71,7 @@ export function buildEffectiveAgentGuidance(input: {
     effectiveInstructions: entries
       .map((entry) => `${entry.label}:\n${entry.instructions}`)
       .join("\n\n"),
+    autoFixEnabled: input.autoFixEnabled === true,
     teamKey: input.teamKey?.trim().toUpperCase() || null,
   };
 }
@@ -137,6 +125,7 @@ export async function resolveEffectiveAgentGuidance(input: {
     workspaceGuidance: readWorkspaceAgentGuidance(workspaceRow[0]?.settings),
     accountGuidance: accountPreferences.agentPersonalization.instructions,
     teamGuidance: teamSettings?.agentGuidance,
+    autoFixEnabled: accountPreferences.agentPersonalization.autoFix,
     teamKey: teamRow[0]?.key ?? normalizedTeamKey,
   });
 }

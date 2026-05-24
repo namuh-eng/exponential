@@ -9,6 +9,11 @@ interface ProfileData {
   email: string;
   username: string;
   image: string | null;
+  pronouns: string;
+  title: string;
+  location: string;
+  timezone: string;
+  showLocalTime: boolean;
 }
 
 interface WorkspaceAccess {
@@ -23,6 +28,11 @@ export default function ProfilePage() {
     email: "",
     username: "",
     image: null,
+    pronouns: "",
+    title: "",
+    location: "",
+    timezone: "",
+    showLocalTime: false,
   });
   const [workspaceAccess, setWorkspaceAccess] = useState<WorkspaceAccess>({
     currentWorkspaceId: null,
@@ -49,6 +59,11 @@ export default function ProfilePage() {
             email: data.profile.email ?? "",
             username: data.profile.username ?? "",
             image: data.profile.image ?? null,
+            pronouns: data.profile.pronouns ?? "",
+            title: data.profile.title ?? "",
+            location: data.profile.location ?? "",
+            timezone: data.profile.timezone ?? "",
+            showLocalTime: data.profile.showLocalTime ?? false,
           });
           setWorkspaceAccess({
             currentWorkspaceId:
@@ -98,6 +113,11 @@ export default function ProfilePage() {
           name: profile.name,
           username: profile.username,
           image: profile.image,
+          pronouns: profile.pronouns,
+          title: profile.title,
+          location: profile.location,
+          timezone: profile.timezone,
+          showLocalTime: profile.showLocalTime,
         }),
       });
 
@@ -252,6 +272,98 @@ export default function ProfilePage() {
           placeholder="One word, like a nickname or first name"
           aria-label="Username"
         />
+      </div>
+
+      {/* Profile metadata */}
+      <div className="mb-4 grid gap-4 sm:grid-cols-2">
+        <div>
+          <label
+            htmlFor="profile-pronouns"
+            className="mb-1.5 block text-[13px] text-[var(--color-text-secondary)]"
+          >
+            Pronouns
+          </label>
+          <input
+            id="profile-pronouns"
+            type="text"
+            value={profile.pronouns}
+            onChange={(e) =>
+              setProfile({ ...profile, pronouns: e.target.value })
+            }
+            className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+            placeholder="They/them"
+            aria-label="Pronouns"
+          />
+        </div>
+        <div>
+          <label
+            htmlFor="profile-title"
+            className="mb-1.5 block text-[13px] text-[var(--color-text-secondary)]"
+          >
+            Role or title
+          </label>
+          <input
+            id="profile-title"
+            type="text"
+            value={profile.title}
+            onChange={(e) => setProfile({ ...profile, title: e.target.value })}
+            className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+            placeholder="Product Engineer"
+            aria-label="Role or title"
+          />
+        </div>
+      </div>
+
+      <div className="mb-6 grid gap-4 sm:grid-cols-2">
+        <div>
+          <label
+            htmlFor="profile-location"
+            className="mb-1.5 block text-[13px] text-[var(--color-text-secondary)]"
+          >
+            Location
+          </label>
+          <input
+            id="profile-location"
+            type="text"
+            value={profile.location}
+            onChange={(e) =>
+              setProfile({ ...profile, location: e.target.value })
+            }
+            className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+            placeholder="San Francisco"
+            aria-label="Location"
+          />
+        </div>
+        <div>
+          <label
+            htmlFor="profile-timezone"
+            className="mb-1.5 block text-[13px] text-[var(--color-text-secondary)]"
+          >
+            Timezone
+          </label>
+          <input
+            id="profile-timezone"
+            type="text"
+            value={profile.timezone}
+            onChange={(e) =>
+              setProfile({ ...profile, timezone: e.target.value })
+            }
+            className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+            placeholder="America/Los_Angeles"
+            aria-label="Timezone"
+          />
+          <label className="mt-2 flex items-center gap-2 text-[12px] text-[var(--color-text-secondary)]">
+            <input
+              type="checkbox"
+              checked={profile.showLocalTime}
+              onChange={(e) =>
+                setProfile({ ...profile, showLocalTime: e.target.checked })
+              }
+              className="h-3.5 w-3.5 rounded border-[var(--color-border)]"
+            />
+            Show my local time on profile surfaces
+          </label>
+        </div>
       </div>
 
       {/* Update button */}

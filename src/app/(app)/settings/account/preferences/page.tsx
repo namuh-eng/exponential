@@ -603,6 +603,86 @@ export default function PreferencesPage() {
           </div>
         </div>
 
+        <SectionHeader title="Automations" />
+        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+          <SettingRow
+            label="Auto-assignment"
+            description="When you create an unassigned issue, assign it to you before team-level assignment rules run."
+          >
+            <Select
+              aria-label="Auto-assignment"
+              value={preferences.automations.autoAssignment}
+              onChange={(value) =>
+                updatePreferences({
+                  automations: {
+                    autoAssignment:
+                      value as AccountPreferences["automations"]["autoAssignment"],
+                  },
+                })
+              }
+              options={[
+                { label: "Off", value: "off" },
+                { label: "Assign new issues to me", value: "assign-to-me" },
+              ]}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label="Git branch format"
+            description="Saved for branch copy/generation surfaces. No branch generator is currently available on this page."
+          >
+            <Select
+              aria-label="Git branch format"
+              value={preferences.automations.gitBranchFormat}
+              onChange={(value) =>
+                updatePreferences({
+                  automations: {
+                    gitBranchFormat:
+                      value as AccountPreferences["automations"]["gitBranchFormat"],
+                  },
+                })
+              }
+              options={[
+                { label: "ENG-123-short-title", value: "team-id-title" },
+                {
+                  label: "eng-123-short-title",
+                  value: "team-id-lowercase-title",
+                },
+                {
+                  label: "owner/ENG-123-short-title",
+                  value: "owner/team-id-title",
+                },
+              ]}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label="Status transitions"
+            description="Saved preference for workflow automation. Existing status changes remain manual unless a focused workflow consumes it."
+          >
+            <Select
+              aria-label="Status transitions"
+              value={preferences.automations.statusTransitions}
+              onChange={(value) =>
+                updatePreferences({
+                  automations: {
+                    statusTransitions:
+                      value as AccountPreferences["automations"]["statusTransitions"],
+                  },
+                })
+              }
+              options={[
+                { label: "Manual", value: "manual" },
+                { label: "Move to started", value: "started" },
+                {
+                  label: "Started and completed from activity",
+                  value: "started-and-completed",
+                },
+              ]}
+            />
+          </SettingRow>
+        </div>
+
         <SectionHeader title="Desktop application" />
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
           <SettingRow

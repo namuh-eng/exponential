@@ -24,6 +24,11 @@ const mockProfileData = {
     email: "ashley@test.com",
     username: "ashleyha",
     image: null,
+    pronouns: "they/them",
+    title: "Product Engineer",
+    location: "San Francisco",
+    timezone: "America/Los_Angeles",
+    showLocalTime: true,
   },
   workspaceAccess: {
     currentWorkspaceId: "ws-1",
@@ -51,6 +56,15 @@ describe("ProfilePage UI", () => {
     expect(screen.getByLabelText("Full name")).toHaveValue("Ashley");
     expect(screen.getByLabelText("Email")).toHaveValue("ashley@test.com");
     expect(screen.getByLabelText("Username")).toHaveValue("ashleyha");
+    expect(screen.getByLabelText("Pronouns")).toHaveValue("they/them");
+    expect(screen.getByLabelText("Role or title")).toHaveValue(
+      "Product Engineer",
+    );
+    expect(screen.getByLabelText("Location")).toHaveValue("San Francisco");
+    expect(screen.getByLabelText("Timezone")).toHaveValue(
+      "America/Los_Angeles",
+    );
+    expect(screen.getByLabelText(/Show my local time/)).toBeChecked();
     expect(screen.getByText(/Remove yourself from Namuh/i)).toBeInTheDocument();
   });
 

@@ -115,6 +115,8 @@ describe("notifications route", () => {
           issuePriority: "high",
           issueId: "issue-1",
           readAt: null,
+          snoozedUntilAt: null,
+          unsnoozedAt: null,
           createdAt: "2026-04-23T11:00:00.000Z",
         },
         {
@@ -127,6 +129,8 @@ describe("notifications route", () => {
           issuePriority: "none",
           issueId: null,
           readAt: "2026-04-23T12:00:00.000Z",
+          snoozedUntilAt: null,
+          unsnoozedAt: null,
           createdAt: "2026-04-23T12:30:00.000Z",
         },
       ],

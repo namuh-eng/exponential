@@ -9,6 +9,10 @@ const insertReturningMock = vi.fn();
 const teamLimitMock = vi.fn();
 const projectInsertValuesMock = vi.fn();
 const projectTeamInsertValuesMock = vi.fn();
+const projectMilestoneInsertValuesMock = vi.fn();
+const projectTemplateLimitMock = vi.fn();
+const projectLabelRowsMock = vi.fn();
+const workspaceSettingsLimitMock = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: {
@@ -26,6 +30,18 @@ vi.mock("@/lib/active-workspace", () => ({
 vi.mock("@/lib/db", () => ({
   db: {
     select: vi.fn((selection?: Record<string, unknown>) => {
+      if (
+        selection &&
+        "settings" in selection &&
+        Object.keys(selection).length === 1
+      ) {
+        return {
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue(workspaceSettingsLimitMock()),
+        };
+      }
+
       // projects lookup
       if (selection && "slug" in selection && "leadId" in selection) {
         return {
@@ -51,6 +67,33 @@ vi.mock("@/lib/db", () => ({
           from: vi.fn().mockReturnThis(),
           innerJoin: vi.fn().mockReturnThis(),
           where: vi.fn().mockResolvedValue(projectTeamRowsInArrayMock()),
+        };
+      }
+
+      // project template lookup for POST application
+      if (
+        selection &&
+        "id" in selection &&
+        "description" in selection &&
+        "settings" in selection &&
+        Object.keys(selection).length === 3
+      ) {
+        return {
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue(projectTemplateLimitMock()),
+        };
+      }
+
+      // project label validation for POST application
+      if (
+        selection &&
+        "id" in selection &&
+        Object.keys(selection).length === 1
+      ) {
+        return {
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue(projectLabelRowsMock()),
         };
       }
 
@@ -106,7 +149,11 @@ vi.mock("@/lib/db", () => ({
 
           return {
             values: vi.fn((values) => {
-              projectTeamInsertValuesMock(values);
+              if (insertCall === 2) {
+                projectTeamInsertValuesMock(values);
+              } else {
+                projectMilestoneInsertValuesMock(values);
+              }
               return Promise.resolve([]);
             }),
           };
@@ -128,6 +175,7 @@ describe("projects collection route", () => {
     vi.clearAllMocks();
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
     resolveActiveWorkspaceIdMock.mockResolvedValue("workspace-1");
+    workspaceSettingsLimitMock.mockReturnValue([]);
     projectsOrderByMock.mockReturnValue([
       {
         id: "proj-1",
@@ -155,6 +203,19 @@ describe("projects collection route", () => {
       { id: "team-1", key: "ENG", name: "Engineering" },
     ]);
     insertReturningMock.mockReturnValue([{ id: "proj-2", slug: "new-proj" }]);
+    projectTemplateLimitMock.mockReturnValue([
+      {
+        id: "template-1",
+        description: "Template description",
+        settings: {
+          status: "started",
+          priority: "high",
+          labelIds: ["label-1"],
+          milestones: ["Plan", "Build"],
+        },
+      },
+    ]);
+    projectLabelRowsMock.mockReturnValue([{ id: "label-1" }]);
   });
 
   it("returns 401 without a session", async () => {
@@ -219,6 +280,109 @@ describe("projects collection route", () => {
     expect(projectTeamInsertValuesMock).toHaveBeenCalledWith([
       { projectId: "proj-2", teamId: "team-1" },
     ]);
+  });
+
+  it("applies project template settings and milestones when creating a project", async () => {
+    const { POST } = await import("@/app/api/projects/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/projects", {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Launch Project",
+          templateId: "template-1",
+          teamKey: "ENG",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    const payload = await response.json();
+    expect(payload.appliedTemplateId).toBe("template-1");
+    expect(payload.appliedMilestones).toEqual(["Plan", "Build"]);
+    expect(projectInsertValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Launch Project",
+        description: "Template description",
+        priority: "high",
+        settings: { labelIds: ["label-1"] },
+      }),
+    );
+    expect(projectMilestoneInsertValuesMock).toHaveBeenCalledWith([
+      { name: "Plan", projectId: "proj-2", sortOrder: 0 },
+      { name: "Build", projectId: "proj-2", sortOrder: 1 },
+    ]);
+  });
+
+  it("creates a project with a configured custom status", async () => {
+    workspaceSettingsLimitMock.mockReturnValue([
+      {
+        settings: {
+          projectStatuses: [
+            {
+              id: "blocked",
+              key: "blocked",
+              name: "Blocked",
+              description: "Waiting",
+              color: "#8844ff",
+              icon: "!",
+              position: 5,
+            },
+          ],
+        },
+      },
+    ]);
+    const { POST } = await import("@/app/api/projects/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/projects", {
+        method: "POST",
+        body: JSON.stringify({ name: "Blocked Project", status: "blocked" }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(projectInsertValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "planned",
+        settings: expect.objectContaining({ projectStatusKey: "blocked" }),
+      }),
+    );
+  });
+
+  it("rejects project templates outside the active workspace", async () => {
+    projectTemplateLimitMock.mockReturnValue([]);
+    const { POST } = await import("@/app/api/projects/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/projects", {
+        method: "POST",
+        body: JSON.stringify({ name: "Launch Project", templateId: "missing" }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Project template not found in active workspace",
+    });
+    expect(projectInsertValuesMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects project creation with an unknown custom status", async () => {
+    const { POST } = await import("@/app/api/projects/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/projects", {
+        method: "POST",
+        body: JSON.stringify({ name: "Unknown", status: "unknown" }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Project status is not configured for this workspace",
+    });
+    expect(projectInsertValuesMock).not.toHaveBeenCalled();
   });
 
   it.each([

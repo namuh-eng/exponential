@@ -28,6 +28,10 @@ describe("ProjectDetailPage interactions", () => {
       icon: "📱",
       slug: "mobile-app",
       status: "planned",
+      statusLabel: "Planned",
+      statusColor: "#6b6f76",
+      statusIcon: "○",
+      statusIsDefault: true,
       priority: "high",
       startDate: null,
       targetDate: null,
@@ -39,7 +43,35 @@ describe("ProjectDetailPage interactions", () => {
     availableMembers: [{ id: "u-1", name: "Ashley" }],
     availableTeams: [{ id: "t-1", name: "Engineering", key: "ENG" }],
     availableLabels: [],
+    availableStatuses: [
+      {
+        key: "planned",
+        name: "Planned",
+        color: "#6b6f76",
+        icon: "○",
+        isDefault: true,
+      },
+      {
+        key: "started",
+        name: "In progress",
+        color: "#b58900",
+        icon: "◐",
+        isDefault: true,
+      },
+      {
+        key: "blocked",
+        name: "Blocked",
+        color: "#8844ff",
+        icon: "!",
+        isDefault: false,
+      },
+    ],
     slackChannel: null,
+    projectStatuses: [
+      { key: "planned", name: "Planned" },
+      { key: "started", name: "In Progress" },
+      { key: "blocked", name: "Blocked" },
+    ],
     resources: [],
     activity: [],
     milestones: [],
@@ -67,7 +99,14 @@ describe("ProjectDetailPage interactions", () => {
         json: () =>
           Promise.resolve({
             ...mockProjectData,
-            project: { ...mockProjectData.project, status: "started" },
+            project: {
+              ...mockProjectData.project,
+              status: "blocked",
+              statusLabel: "Blocked",
+              statusColor: "#8844ff",
+              statusIcon: "!",
+              statusIsDefault: false,
+            },
           }),
       });
 
@@ -86,9 +125,9 @@ describe("ProjectDetailPage interactions", () => {
     // Based on the DOM output, the second one is usually the properties one if the first is description.
     fireEvent.click(editButtons[1]);
 
-    // Change status to "In Progress" (which maps to 'started')
+    // Change status to a custom workspace status.
     const statusSelect = screen.getByLabelText(/status/i);
-    fireEvent.change(statusSelect, { target: { value: "started" } });
+    fireEvent.change(statusSelect, { target: { value: "blocked" } });
 
     // Save
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -98,14 +137,62 @@ describe("ProjectDetailPage interactions", () => {
         "/api/projects/mobile-app",
         expect.objectContaining({
           method: "PATCH",
-          body: expect.stringContaining('"status":"started"'),
+          body: expect.stringContaining('"status":"blocked"'),
         }),
       );
     });
 
-    // Check if the UI updated (Summary status should be 'Started' or 'In Progress' depending on display)
-    // Summary items uses capitalize: project.status.replace(/^./, (char) => char.toUpperCase())
-    expect(screen.getByText("Started")).toBeInTheDocument();
+    expect(screen.getAllByText("Blocked").length).toBeGreaterThan(0);
+  });
+
+  it("applies a custom project status via the properties modal", async () => {
+    vi.mocked(useParams).mockReturnValue({ slug: "mobile-app" });
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockProjectData),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            ...mockProjectData,
+            project: {
+              ...mockProjectData.project,
+              status: "blocked",
+              statusLabel: "Blocked",
+            },
+          }),
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ProjectDetailPage />);
+
+    await waitFor(() =>
+      expect(screen.getByText("Mobile App")).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: /edit/i })[1]);
+
+    const statusSelect = screen.getByLabelText(/status/i);
+    expect(statusSelect).toHaveTextContent("Blocked");
+    fireEvent.change(statusSelect, { target: { value: "blocked" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/projects/mobile-app",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining('"status":"blocked"'),
+        }),
+      );
+    });
+
+    expect(screen.getAllByText("Blocked").length).toBeGreaterThan(0);
   });
 
   it("adds a new link resource to the project", async () => {
@@ -170,5 +257,178 @@ describe("ProjectDetailPage interactions", () => {
 
     expect(screen.getByText("Design Doc")).toBeInTheDocument();
     expect(screen.getByText(/Link added/)).toBeInTheDocument();
+  });
+});
+
+describe("ProjectDetailPage milestone management", () => {
+  const mockProjectData = {
+    project: {
+      id: "p-1",
+      name: "Mobile App",
+      description: "Building the next gen mobile app",
+      icon: "📱",
+      slug: "mobile-app",
+      status: "planned",
+      priority: "high",
+      startDate: null,
+      targetDate: null,
+    },
+    lead: { id: "u-1", name: "Ashley" },
+    members: [],
+    teams: [{ id: "t-1", name: "Engineering", key: "ENG" }],
+    labels: [],
+    availableMembers: [{ id: "u-1", name: "Ashley" }],
+    availableTeams: [{ id: "t-1", name: "Engineering", key: "ENG" }],
+    availableLabels: [],
+    slackChannel: null,
+    resources: [],
+    activity: [],
+    milestones: [],
+    issueGroups: [],
+    progress: {
+      total: 0,
+      completed: 0,
+      percentage: 0,
+      assignees: [],
+      labels: [],
+    },
+  };
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("creates a milestone from the empty sidebar state", async () => {
+    vi.mocked(useParams).mockReturnValue({
+      slug: "mobile-app",
+      workspaceSlug: "foreverbrowsing",
+    });
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockProjectData),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ milestone: { id: "m-1" } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            ...mockProjectData,
+            milestones: [
+              {
+                id: "m-1",
+                name: "Beta",
+                description: "Customer preview",
+                issueCount: 0,
+                completedCount: 0,
+                progress: 0,
+              },
+            ],
+          }),
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ProjectDetailPage />);
+
+    await screen.findByText("Mobile App");
+    fireEvent.click(screen.getByRole("button", { name: "Add milestone" }));
+    fireEvent.change(screen.getByLabelText("Milestone name"), {
+      target: { value: "Beta" },
+    });
+    fireEvent.change(screen.getByLabelText("Milestone description"), {
+      target: { value: "Customer preview" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create milestone" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/projects/mobile-app/milestones?workspaceSlug=foreverbrowsing",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            name: "Beta",
+            description: "Customer preview",
+          }),
+        }),
+      ),
+    );
+    expect(await screen.findByText("Beta")).toBeInTheDocument();
+  });
+
+  it("assigns an issue to a project milestone", async () => {
+    vi.mocked(useParams).mockReturnValue({ slug: "mobile-app" });
+    const dataWithIssue = {
+      ...mockProjectData,
+      milestones: [
+        {
+          id: "m-1",
+          name: "Beta",
+          description: null,
+          issueCount: 0,
+          completedCount: 0,
+          progress: 0,
+        },
+      ],
+      issueGroups: [
+        {
+          state: {
+            id: "state-1",
+            name: "Todo",
+            category: "unstarted",
+            color: "#888",
+          },
+          issues: [
+            {
+              id: "issue-1",
+              identifier: "ENG-1",
+              title: "Scope beta",
+              priority: "none",
+              assignee: null,
+              createdAt: "2026-05-01T00:00:00.000Z",
+              href: null,
+              labels: [],
+              projectMilestoneId: null,
+            },
+          ],
+        },
+      ],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(dataWithIssue),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: "issue-1" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(dataWithIssue),
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ProjectDetailPage />);
+    await screen.findByText("Mobile App");
+    fireEvent.click(screen.getByRole("button", { name: "Issues" }));
+    fireEvent.change(await screen.findByLabelText("Milestone for ENG-1"), {
+      target: { value: "m-1" },
+    });
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/issues/issue-1",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ projectMilestoneId: "m-1" }),
+        }),
+      ),
+    );
   });
 });

@@ -63,6 +63,44 @@ type RawAuthorizedApplication = {
   updatedAt: Date | string | null;
 };
 
+const SCOPE_PRESENTATION: Record<
+  string,
+  { group: string; description: string }
+> = {
+  read: {
+    group: "Workspace data",
+    description: "View workspace and account information",
+  },
+  write: {
+    group: "Workspace data",
+    description: "Create and update workspace data",
+  },
+  "issues:read": {
+    group: "Issues",
+    description: "View issues and related metadata",
+  },
+  "issues:write": {
+    group: "Issues",
+    description: "Create and update issues",
+  },
+  "comments:read": {
+    group: "Comments",
+    description: "View comments",
+  },
+  "comments:write": {
+    group: "Comments",
+    description: "Create and update comments",
+  },
+  "webhooks:read": {
+    group: "Webhooks",
+    description: "View webhook subscriptions",
+  },
+  "webhooks:write": {
+    group: "Webhooks",
+    description: "Manage webhook subscriptions",
+  },
+};
+
 type WorkspaceAccess = {
   workspaceId: string;
   workspaceName: string;
@@ -119,6 +157,34 @@ function serializeDate(value: Date | string | null) {
     : new Date(value).toISOString();
 }
 
+function providerDisplayName(providerId: string, accountId: string) {
+  if (providerId === "google" && accountId.includes("@")) {
+    return accountId.split("@")[0];
+  }
+  return accountId;
+}
+
+function serializeAccountProvider(item: {
+  id: string;
+  providerId: string;
+  accountId: string;
+  createdAt: Date | string | null;
+  updatedAt: Date | string | null;
+}) {
+  const isEmail = item.accountId.includes("@");
+  return {
+    id: item.id,
+    providerId: item.providerId,
+    accountId: item.accountId,
+    displayName: providerDisplayName(item.providerId, item.accountId),
+    handle: isEmail ? null : item.accountId,
+    email: isEmail ? item.accountId : null,
+    avatarUrl: null,
+    createdAt: serializeDate(item.createdAt),
+    updatedAt: serializeDate(item.updatedAt),
+  };
+}
+
 function normalizeScopes(value: unknown) {
   if (Array.isArray(value)) {
     return value.filter(
@@ -137,17 +203,43 @@ function normalizeScopes(value: unknown) {
   return [];
 }
 
+function humanizeScope(scope: string) {
+  return scope
+    .split(/[:_.-]+/)
+    .filter(Boolean)
+    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function buildPermissionGroups(scopes: string[]) {
+  const groups = new Map<string, string[]>();
+
+  for (const scope of scopes) {
+    const known = SCOPE_PRESENTATION[scope];
+    const group = known?.group ?? "Additional access";
+    const description = known?.description ?? humanizeScope(scope);
+    groups.set(group, [...(groups.get(group) ?? []), description]);
+  }
+
+  return [...groups].map(([label, descriptions]) => ({ label, descriptions }));
+}
+
 function serializeAuthorizedApplication(application: RawAuthorizedApplication) {
+  const scopes = normalizeScopes(application.scopes);
+
   return {
     id: application.id,
     appId: application.appId,
     clientId: application.clientId,
     name: application.name,
     imageUrl: application.imageUrl,
-    scopes: normalizeScopes(application.scopes),
+    publisher: null,
+    scopes,
+    permissionGroups: buildPermissionGroups(scopes),
     webhooksEnabled: application.webhooksEnabled,
     createdAt: serializeDate(application.createdAt),
     updatedAt: serializeDate(application.updatedAt),
+    lastUsedAt: null,
   };
 }
 
@@ -447,7 +539,7 @@ async function buildSecurityPayload(authSession: AuthSession) {
           apiKeyCreationPermission,
         )
       : false,
-    providers,
+    providers: providers.map(serializeAccountProvider),
     passkeyEnabled: isPasskeyAuthEnabled(),
   };
 }

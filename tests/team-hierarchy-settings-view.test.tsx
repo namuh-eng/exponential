@@ -27,9 +27,16 @@ describe("TeamHierarchySettingsPage", () => {
                   name: "Team Name",
                   key: "TEAM",
                   parentTeamId: null,
+                  parentTeam: null,
                   eligibleParentTeams: [
                     { id: "parent-1", name: "Platform", key: "PLAT" },
                   ],
+                  childTeams: [{ id: "child-1", name: "Frontend", key: "FE" }],
+                  hierarchyImpact: {
+                    rollupTeamCount: 2,
+                    filters: ["Issues", "Cycles", "Triage", "Analytics"],
+                    teamScopePath: "/foreverbrowsing/teams/TEAM",
+                  },
                 },
               }),
           });
@@ -43,9 +50,16 @@ describe("TeamHierarchySettingsPage", () => {
                   name: "Team Name",
                   key: "TEAM",
                   parentTeamId: JSON.parse(options.body).parentTeamId,
+                  parentTeam: { id: "parent-1", name: "Platform", key: "PLAT" },
                   eligibleParentTeams: [
                     { id: "parent-1", name: "Platform", key: "PLAT" },
                   ],
+                  childTeams: [{ id: "child-1", name: "Frontend", key: "FE" }],
+                  hierarchyImpact: {
+                    rollupTeamCount: 2,
+                    filters: ["Issues", "Cycles", "Triage", "Analytics"],
+                    teamScopePath: "/foreverbrowsing/teams/TEAM",
+                  },
                 },
               }),
           });
@@ -66,6 +80,10 @@ describe("TeamHierarchySettingsPage", () => {
     await waitFor(() => {
       expect(screen.getAllByText("Parent team").length).toBeGreaterThan(0);
     });
+
+    expect(screen.getByText("Hierarchy context")).toBeInTheDocument();
+    expect(screen.getByText("Rollup and filter effects")).toBeInTheDocument();
+    expect(screen.getByText("Frontend (FE)")).toBeInTheDocument();
 
     const select = screen.getByRole("combobox");
     expect(select).not.toBeDisabled();

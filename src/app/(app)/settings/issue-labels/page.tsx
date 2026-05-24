@@ -579,6 +579,7 @@ interface IssueLabelsPageProps {
   initialTeamId?: string;
   showScopePicker?: boolean;
   description?: string;
+  createLabelButtonText?: string;
 }
 
 export default function IssueLabelsPage({
@@ -586,6 +587,7 @@ export default function IssueLabelsPage({
   initialTeamId = "",
   showScopePicker = true,
   description,
+  createLabelButtonText = "New label",
 }: IssueLabelsPageProps = {}) {
   const [labels, setLabels] = useState<LabelData[]>([]);
   const [teams, setTeams] = useState<TeamData[]>([]);
@@ -960,7 +962,7 @@ export default function IssueLabelsPage({
             }
             className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:opacity-90"
           >
-            New label
+            {createLabelButtonText}
           </button>
         </div>
       </div>

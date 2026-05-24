@@ -5,6 +5,7 @@ import { member, team, teamMember, user, workspace } from "@/lib/db/schema";
 import { TEAM_RESTORATION_WINDOW_MS } from "@/lib/team-lifecycle";
 import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describeDb } from "./_helpers/db-integration";
 
 const ADMIN_USER_ID = "33600000-0000-0000-0000-000000000001";
 const MEMBER_USER_ID = "33600000-0000-0000-0000-000000000002";
@@ -98,7 +99,7 @@ async function cleanup() {
   await db.delete(user).where(eq(user.id, MEMBER_USER_ID));
 }
 
-describe("team restoration lifecycle", () => {
+describeDb("team restoration lifecycle", () => {
   beforeEach(async () => {
     await cleanup();
     await seedTeam();

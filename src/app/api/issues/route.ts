@@ -1,11 +1,18 @@
+import { readAccountPreferencesFromUserSettings } from "@/lib/account-preferences";
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
+  cycle,
   issue,
   issueLabel,
+  issueRelation,
+  issueSubscription,
+  project,
+  projectMilestone,
   team,
   teamMember,
+  user,
   workflowState,
 } from "@/lib/db/schema";
 import { normalizeIssueDescriptionHtml } from "@/lib/issue-description";
@@ -35,8 +42,15 @@ export async function POST(request: Request) {
     priority,
     assigneeId,
     projectId,
+    cycleId,
     labelIds,
     parentIssueId,
+    projectMilestoneId,
+    estimate,
+    dueDate,
+    relatedIssueId,
+    relationType,
+    subscribe,
   } = body;
 
   const trimmedTitle = typeof title === "string" ? title.trim() : "";
@@ -95,8 +109,12 @@ export async function POST(request: Request) {
   // Use provided stateId or find default backlog state
   let finalStateId = stateId;
   if (!finalStateId) {
-    const defaultState = await db
-      .select({ id: workflowState.id })
+    const backlogStates = await db
+      .select({
+        id: workflowState.id,
+        isDefault: workflowState.isDefault,
+        position: workflowState.position,
+      })
       .from(workflowState)
       .where(
         and(
@@ -104,9 +122,13 @@ export async function POST(request: Request) {
           eq(workflowState.category, "backlog"),
         ),
       )
-      .limit(1);
+      .limit(1000);
 
-    finalStateId = defaultState[0]?.id;
+    finalStateId = backlogStates.sort(
+      (a, b) =>
+        Number(b.isDefault === true) - Number(a.isDefault === true) ||
+        Number(a.position) - Number(b.position),
+    )[0]?.id;
   }
 
   if (!finalStateId) {
@@ -117,6 +139,20 @@ export async function POST(request: Request) {
   }
 
   let finalAssigneeId = assigneeId || null;
+  if (!finalAssigneeId) {
+    const [currentUser] = await db
+      .select({ settings: user.settings })
+      .from(user)
+      .where(eq(user.id, session.user.id))
+      .limit(1);
+    const accountPreferences = readAccountPreferencesFromUserSettings(
+      currentUser?.settings,
+    );
+    if (accountPreferences.automations.autoAssignment === "assign-to-me") {
+      finalAssigneeId = session.user.id;
+    }
+  }
+
   const teamFlags = readTeamSettings(teamRecord.settings);
   if (!finalAssigneeId && teamFlags.autoAssignment) {
     const candidateMembers = await db
@@ -153,7 +189,47 @@ export async function POST(request: Request) {
     }
   }
 
+  const finalCycleId = cycleId || null;
+  if (finalCycleId) {
+    const [cycleRecord] = await db
+      .select({ id: cycle.id })
+      .from(cycle)
+      .where(and(eq(cycle.id, finalCycleId), eq(cycle.teamId, teamId)))
+      .limit(1);
+
+    if (!cycleRecord) {
+      return NextResponse.json({ error: "Cycle not found" }, { status: 400 });
+    }
+  }
+
   const normalizedDescription = normalizeIssueDescriptionHtml(description);
+  const normalizedEstimate =
+    estimate === null || estimate === undefined || estimate === ""
+      ? null
+      : Number(estimate);
+  if (normalizedEstimate !== null && !Number.isFinite(normalizedEstimate)) {
+    return NextResponse.json(
+      { error: "Estimate must be a number" },
+      { status: 400 },
+    );
+  }
+
+  const normalizedDueDate =
+    typeof dueDate === "string" && dueDate.trim()
+      ? new Date(`${dueDate.trim()}T00:00:00.000Z`)
+      : null;
+  if (normalizedDueDate && Number.isNaN(normalizedDueDate.getTime())) {
+    return NextResponse.json({ error: "Due date is invalid" }, { status: 400 });
+  }
+
+  const normalizedRelationType =
+    relationType === "blocks" ||
+    relationType === "blocked_by" ||
+    relationType === "duplicate" ||
+    relationType === "related"
+      ? relationType
+      : "related";
+
   const normalizedLabels = await normalizeApplicableIssueLabelIds({
     db,
     labelIds,
@@ -165,6 +241,37 @@ export async function POST(request: Request) {
       { error: normalizedLabels.error },
       { status: 400 },
     );
+  }
+
+  const finalProjectMilestoneId = projectMilestoneId || null;
+  if (finalProjectMilestoneId) {
+    if (!projectId) {
+      return NextResponse.json(
+        { error: "Project is required for milestone assignment" },
+        { status: 400 },
+      );
+    }
+    const milestoneRows = await db
+      .select({
+        id: projectMilestone.id,
+        projectId: projectMilestone.projectId,
+      })
+      .from(projectMilestone)
+      .innerJoin(project, eq(projectMilestone.projectId, project.id))
+      .where(
+        and(
+          eq(projectMilestone.id, finalProjectMilestoneId),
+          eq(projectMilestone.projectId, projectId),
+          eq(project.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1);
+    if (!milestoneRows[0]) {
+      return NextResponse.json(
+        { error: "Project milestone not found" },
+        { status: 400 },
+      );
+    }
   }
 
   const newIssue = await db.transaction(async (tx) => {
@@ -181,7 +288,13 @@ export async function POST(request: Request) {
         priority: priority || "none",
         assigneeId: finalAssigneeId,
         projectId: projectId || null,
+        ...(finalProjectMilestoneId
+          ? { projectMilestoneId: finalProjectMilestoneId }
+          : {}),
+        cycleId: finalCycleId,
         parentIssueId: parentIssueId || null,
+        estimate: normalizedEstimate,
+        dueDate: normalizedDueDate,
       })
       .returning();
 
@@ -194,6 +307,22 @@ export async function POST(request: Request) {
       );
     }
 
+    if (relatedIssueId) {
+      await tx.insert(issueRelation).values({
+        issueId: createdIssue.id,
+        relatedIssueId,
+        type: normalizedRelationType,
+      });
+    }
+
+    if (subscribe) {
+      await tx.insert(issueSubscription).values({
+        issueId: createdIssue.id,
+        userId: session.user.id,
+        subscribed: true,
+      });
+    }
+
     await insertIssueHistoryEvent(tx, teamRecord, {
       issueId: createdIssue.id,
       actorId: session.user.id,
@@ -204,6 +333,11 @@ export async function POST(request: Request) {
         identifier: createdIssue.identifier,
         title: createdIssue.title,
         teamId,
+        cycleId: finalCycleId,
+        estimate: normalizedEstimate,
+        dueDate: normalizedDueDate?.toISOString() ?? null,
+        parentIssueId: parentIssueId || null,
+        relatedIssueId: relatedIssueId || null,
       },
     });
 

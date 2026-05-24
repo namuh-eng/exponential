@@ -3,12 +3,13 @@ import { db } from "@/lib/db";
 import { member, team, teamMember, user, workspace } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describeDb } from "./_helpers/db-integration";
 
 const TEST_USER_ID = "10000000-0000-0000-0000-000000000001";
 const TEST_WS_ID = "10000000-0000-0000-0000-000000000002";
 const TEST_TEAM_ID = "10000000-0000-0000-0000-000000000003";
 
-describe("Approved domain auto-join logic", () => {
+describeDb("Approved domain auto-join logic", () => {
   beforeAll(async () => {
     // Cleanup
     await db.delete(teamMember).where(eq(teamMember.userId, TEST_USER_ID));

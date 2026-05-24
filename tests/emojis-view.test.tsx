@@ -1,14 +1,26 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import EmojisSettingsPage from "@/app/(app)/settings/emojis/page";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const fetchMock = vi.fn();
 
 describe("EmojisSettingsPage component", () => {
-  afterEach(() => {
-    cleanup();
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ emojis: [] }),
+    });
   });
 
-  it("renders the emojis settings page with an explanatory unavailable CTA", async () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it("renders the emojis settings page with an upload form and empty state", async () => {
     render(<EmojisSettingsPage />);
 
     expect(screen.getByText("Loading...")).toBeInTheDocument();
@@ -23,11 +35,6 @@ describe("EmojisSettingsPage component", () => {
     );
 
     const uploadButton = screen.getByRole("button", { name: "Upload emoji" });
-    expect(uploadButton).toBeDisabled();
-    expect(
-      screen.getByText(
-        "Custom emoji uploads are not available in this workspace yet.",
-      ),
-    ).toBeInTheDocument();
+    expect(uploadButton).not.toBeDisabled();
   });
 });

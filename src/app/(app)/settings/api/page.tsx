@@ -3,7 +3,9 @@
 import { Avatar } from "@/components/avatar";
 import {
   OAUTH_SCOPE_OPTIONS,
+  WEBHOOK_EVENT_LABELS,
   validateOAuthRedirectUrl,
+  validateWebhookUrl,
 } from "@/lib/api-settings";
 import type {
   ApiSettingsPayload,
@@ -351,7 +353,10 @@ function WebhooksList({
                 {item.url}
               </div>
               <div className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
-                Events: {item.events.join(", ")}
+                Subscription scope:{" "}
+                {item.events
+                  .map((event) => WEBHOOK_EVENT_LABELS[event] ?? event)
+                  .join(", ")}
               </div>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-2 text-right text-[12px] text-[var(--color-text-tertiary)]">
@@ -631,6 +636,21 @@ export default function ApiSettingsPage() {
   }
 
   async function submitWebhook() {
+    const urlValidation = validateWebhookUrl(webhookForm.url);
+    if (!urlValidation.ok) {
+      setStatusMessage(null);
+      setRevealedCredential(null);
+      setErrorMessage(urlValidation.error);
+      return;
+    }
+
+    if (webhookForm.events.length === 0) {
+      setStatusMessage(null);
+      setRevealedCredential(null);
+      setErrorMessage("At least one webhook event is required.");
+      return;
+    }
+
     const didPersist = await mutate(
       "/api/workspaces/current/api",
       {
@@ -1019,7 +1039,7 @@ export default function ApiSettingsPage() {
       {webhookModalOpen ? (
         <Modal
           title="New webhook"
-          description="Configure an HTTPS endpoint that receives create, update, and delete events."
+          description="Configure an HTTPS endpoint and choose the issue events it should receive."
           onClose={() => setWebhookModalOpen(false)}
         >
           <div className="space-y-4">
@@ -1053,7 +1073,7 @@ export default function ApiSettingsPage() {
 
             <fieldset>
               <legend className="mb-1.5 text-[12px] font-medium text-[var(--color-text-secondary)]">
-                Events
+                Subscription scope
               </legend>
               <div className="space-y-2">
                 {(["created", "updated", "deleted"] as WebhookEventType[]).map(
@@ -1079,7 +1099,7 @@ export default function ApiSettingsPage() {
                             }))
                           }
                         />
-                        Entity {eventName}
+                        {WEBHOOK_EVENT_LABELS[eventName]}
                       </label>
                     );
                   },

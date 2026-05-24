@@ -28,9 +28,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Linear",
+  title: "Exponential",
   description:
-    "Linear is a better way to build. Meet the new standard for modern software development.",
+    "Exponential is the editorial workspace for building focused software teams.",
 };
 
 export default function RootLayout({

@@ -1,3 +1,4 @@
+import { readAccountProfileFromUserSettings } from "@/lib/account-profile";
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { db } from "@/lib/db";
 import { member, team, teamMember, user, workspace } from "@/lib/db/schema";
@@ -16,6 +17,11 @@ export interface WorkspaceDirectoryMember {
   image: string | null;
   role: string;
   joinedAt: string;
+  pronouns: string;
+  title: string;
+  location: string;
+  timezone: string;
+  showLocalTime: boolean;
   teams: { id: string; name: string; key: string }[];
 }
 
@@ -81,6 +87,7 @@ export async function getWorkspaceMembersDirectory(userId: string) {
       image: user.image,
       role: member.role,
       joinedAt: member.createdAt,
+      settings: user.settings,
     })
     .from(member)
     .innerJoin(user, eq(member.userId, user.id))
@@ -123,11 +130,24 @@ export async function getWorkspaceMembersDirectory(userId: string) {
 
   return {
     workspaceId,
-    members: workspaceMembers.map((entry) => ({
-      ...entry,
-      joinedAt: entry.joinedAt?.toISOString() ?? new Date(0).toISOString(),
-      teams: teamsByUserId.get(entry.userId) ?? [],
-    })),
+    members: workspaceMembers.map((entry) => {
+      const profile = readAccountProfileFromUserSettings(entry.settings);
+      return {
+        id: entry.id,
+        userId: entry.userId,
+        name: entry.name,
+        email: entry.email,
+        image: entry.image,
+        role: entry.role,
+        joinedAt: entry.joinedAt?.toISOString() ?? new Date(0).toISOString(),
+        pronouns: profile.pronouns,
+        title: profile.title,
+        location: profile.location,
+        timezone: profile.timezone,
+        showLocalTime: profile.showLocalTime,
+        teams: teamsByUserId.get(entry.userId) ?? [],
+      };
+    }),
   };
 }
 

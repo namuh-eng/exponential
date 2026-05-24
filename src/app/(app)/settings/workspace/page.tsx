@@ -1,7 +1,7 @@
 "use client";
 
 import { Avatar } from "@/components/avatar";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
 
 interface WorkspaceData {
@@ -11,6 +11,23 @@ interface WorkspaceData {
   logo: string | null;
   region: string;
   fiscalMonth: string;
+  welcomeMessage: string;
+}
+
+function validateWorkspaceSlug(value: string) {
+  if (value.length < 2 || value.length > 63) {
+    return "URL slug must be between 2 and 63 characters";
+  }
+
+  if (value.trim() !== value) {
+    return "URL slug cannot include leading or trailing spaces";
+  }
+
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)) {
+    return "URL slug can only use lowercase letters, numbers, and single hyphens";
+  }
+
+  return null;
 }
 
 function SectionHeader({ title }: { title: string }) {
@@ -23,6 +40,7 @@ function SectionHeader({ title }: { title: string }) {
 
 export default function WorkspaceSettingsPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const [workspace, setWorkspace] = useState<WorkspaceData>({
     id: null,
     name: "",
@@ -30,6 +48,7 @@ export default function WorkspaceSettingsPage() {
     logo: null,
     region: "United States",
     fiscalMonth: "january",
+    welcomeMessage: "",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -38,6 +57,9 @@ export default function WorkspaceSettingsPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedLogoName, setSelectedLogoName] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [welcomeDialogOpen, setWelcomeDialogOpen] = useState(false);
+  const [welcomeDraft, setWelcomeDraft] = useState("");
+  const [slugError, setSlugError] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -61,6 +83,10 @@ export default function WorkspaceSettingsPage() {
             logo: data.workspace.logo ?? null,
             region: data.workspace.region ?? "United States",
             fiscalMonth: data.workspace.fiscalMonth ?? "january",
+            welcomeMessage:
+              typeof data.workspace.welcomeMessage === "string"
+                ? data.workspace.welcomeMessage
+                : "",
           });
         }
       })
@@ -84,6 +110,7 @@ export default function WorkspaceSettingsPage() {
           urlSlug: nextWorkspace.urlSlug,
           logo: nextWorkspace.logo,
           fiscalMonth: nextWorkspace.fiscalMonth,
+          welcomeMessage: nextWorkspace.welcomeMessage,
         }),
       });
 
@@ -109,8 +136,23 @@ export default function WorkspaceSettingsPage() {
         region: data.workspace?.region ?? currentWorkspace.region,
         fiscalMonth:
           data.workspace?.fiscalMonth ?? currentWorkspace.fiscalMonth,
+        welcomeMessage:
+          typeof data.workspace?.welcomeMessage === "string"
+            ? data.workspace.welcomeMessage
+            : currentWorkspace.welcomeMessage,
       }));
       setStatusMessage("Workspace updated.");
+      const returnedSlug = data.workspace?.urlSlug;
+      if (returnedSlug && returnedSlug !== nextWorkspace.urlSlug) {
+        setErrorMessage(
+          "Workspace saved, but the server returned an unexpected URL slug.",
+        );
+      }
+      if (returnedSlug && pathname.includes("/settings/workspace")) {
+        router.replace(
+          `/${encodeURIComponent(returnedSlug)}/settings/workspace`,
+        );
+      }
       router.refresh();
     } finally {
       setSaving(false);
@@ -118,7 +160,23 @@ export default function WorkspaceSettingsPage() {
   };
 
   const handleFieldBlur = () => {
+    const nextSlugError = validateWorkspaceSlug(workspace.urlSlug);
+    setSlugError(nextSlugError);
+    if (nextSlugError) return;
     void saveWorkspace(workspace);
+  };
+
+  const handleWelcomeConfigure = () => {
+    setWelcomeDraft(workspace.welcomeMessage);
+    setWelcomeDialogOpen(true);
+    setStatusMessage(null);
+    setErrorMessage(null);
+  };
+
+  const handleWelcomeSave = async () => {
+    const nextWorkspace = { ...workspace, welcomeMessage: welcomeDraft };
+    await saveWorkspace(nextWorkspace);
+    setWelcomeDialogOpen(false);
   };
 
   const handleLogoSelection = (event: ChangeEvent<HTMLInputElement>) => {
@@ -260,14 +318,21 @@ export default function WorkspaceSettingsPage() {
             id="ws-url"
             type="text"
             value={workspace.urlSlug}
-            onChange={(e) =>
-              setWorkspace({ ...workspace, urlSlug: e.target.value })
-            }
+            onChange={(e) => {
+              const nextSlug = e.target.value;
+              setWorkspace({ ...workspace, urlSlug: nextSlug });
+              setSlugError(validateWorkspaceSlug(nextSlug));
+            }}
             onBlur={handleFieldBlur}
             className="w-full rounded-r-md border border-[var(--color-border)] bg-transparent px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
             aria-label="Workspace URL slug"
           />
         </div>
+        {slugError ? (
+          <p className="mt-1 text-[12px] text-red-400" role="alert">
+            {slugError}
+          </p>
+        ) : null}
       </div>
 
       {/* Time & region */}
@@ -313,10 +378,14 @@ export default function WorkspaceSettingsPage() {
       <div className="py-2">
         <button
           type="button"
+          onClick={handleWelcomeConfigure}
           className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
         >
           Configure
         </button>
+        <p className="mt-2 text-[12px] text-[var(--color-text-tertiary)]">
+          {workspace.welcomeMessage || "No welcome message configured."}
+        </p>
       </div>
 
       {statusMessage ? (
@@ -348,6 +417,60 @@ export default function WorkspaceSettingsPage() {
           Delete workspace
         </button>
       </div>
+
+      {welcomeDialogOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <dialog
+            aria-modal="true"
+            aria-labelledby="welcome-message-title"
+            open
+            className="w-full max-w-[520px] rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-5 shadow-2xl"
+          >
+            <h2
+              id="welcome-message-title"
+              className="text-[16px] font-semibold text-[var(--color-text-primary)]"
+            >
+              Configure welcome message
+            </h2>
+            <p className="mt-2 text-[13px] text-[var(--color-text-secondary)]">
+              This message appears during workspace onboarding.
+            </p>
+            <label
+              htmlFor="workspace-welcome-message"
+              className="mt-4 block text-[12px] text-[var(--color-text-secondary)]"
+            >
+              Welcome message
+            </label>
+            <textarea
+              id="workspace-welcome-message"
+              value={welcomeDraft}
+              onChange={(event) => setWelcomeDraft(event.target.value)}
+              maxLength={2000}
+              rows={6}
+              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+              aria-label="Welcome message text"
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setWelcomeDialogOpen(false)}
+                disabled={saving}
+                className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleWelcomeSave}
+                disabled={saving}
+                className="rounded-md border border-[var(--color-border)] bg-[var(--color-accent)] px-3 py-1.5 text-[12px] text-white transition-colors hover:opacity-90 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </dialog>
+        </div>
+      ) : null}
 
       {deleteDialogOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

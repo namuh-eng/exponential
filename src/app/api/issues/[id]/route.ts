@@ -11,7 +11,9 @@ import {
   issueReaction,
   issueRelation,
   label,
+  member,
   project,
+  projectMilestone,
   reaction,
   team,
   user,
@@ -30,7 +32,7 @@ import {
 } from "@/lib/notifications";
 import { getDownloadUrl } from "@/lib/s3";
 import { readTeamSettings } from "@/lib/team-settings";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 function isUuidLike(value: string) {
@@ -52,6 +54,7 @@ async function findIssueRecord(id: string, workspaceId: string) {
       assigneeId: issue.assigneeId,
       creatorId: issue.creatorId,
       projectId: issue.projectId,
+      projectMilestoneId: issue.projectMilestoneId,
       parentIssueId: issue.parentIssueId,
       cycleId: issue.cycleId,
       dueDate: issue.dueDate,
@@ -91,6 +94,7 @@ async function findIssueRecord(id: string, workspaceId: string) {
       assigneeId: issue.assigneeId,
       creatorId: issue.creatorId,
       projectId: issue.projectId,
+      projectMilestoneId: issue.projectMilestoneId,
       parentIssueId: issue.parentIssueId,
       cycleId: issue.cycleId,
       dueDate: issue.dueDate,
@@ -176,7 +180,11 @@ export async function GET(
           .where(eq(project.id, iss.projectId))
       : Promise.resolve([]),
     db
-      .select({ labelName: label.name, labelColor: label.color })
+      .select({
+        labelId: label.id,
+        labelName: label.name,
+        labelColor: label.color,
+      })
       .from(issueLabel)
       .innerJoin(label, eq(issueLabel.labelId, label.id))
       .where(eq(issueLabel.issueId, iss.id)),
@@ -458,7 +466,11 @@ export async function GET(
     cycle: cycleData,
     parentIssue: parentIssueData,
     relations: relationData,
-    labels: labelRows.map((l) => ({ name: l.labelName, color: l.labelColor })),
+    labels: labelRows.map((l) => ({
+      id: l.labelId,
+      name: l.labelName,
+      color: l.labelColor,
+    })),
     subscription: subscriptionSummary,
     reactions: Array.from(issueReactionsByEmoji.entries()).map(
       ([emoji, data]) => ({
@@ -488,6 +500,9 @@ export async function GET(
       body: c.body,
       user: { name: c.userName ?? "Unknown user", image: c.userImage },
       createdAt: c.createdAt,
+      ownedByMe: c.userId === session.user.id,
+      canEdit: c.userId === session.user.id,
+      canDelete: c.userId === session.user.id,
       reactions: Array.from(reactionsByComment.get(c.id)?.entries() ?? []).map(
         ([emoji, data]) => ({
           emoji,
@@ -535,6 +550,15 @@ export async function PATCH(
     stateId?: string;
     sortOrder?: number;
     archive?: boolean;
+    priority?: "none" | "urgent" | "high" | "medium" | "low";
+    assigneeId?: string | null;
+    projectId?: string | null;
+    parentIssueId?: string | null;
+    cycleId?: string | null;
+    dueDate?: string | null;
+    estimate?: number | null;
+    labelIds?: string[];
+    projectMilestoneId?: string | null;
   };
 
   const existingIssue = await findIssueRecord(id, workspaceId);
@@ -613,6 +637,223 @@ export async function PATCH(
     }
   }
 
+  if (body.priority !== undefined) {
+    const priorities = new Set(["none", "urgent", "high", "medium", "low"]);
+    if (!priorities.has(body.priority)) {
+      return NextResponse.json({ error: "Invalid priority" }, { status: 400 });
+    }
+    updateData.priority = body.priority;
+    if (body.priority !== existingIssue.priority) {
+      changedFields.push("priority");
+    }
+  }
+
+  if (body.assigneeId !== undefined) {
+    if (body.assigneeId) {
+      const [assigneeMember] = await db
+        .select({ id: member.id })
+        .from(member)
+        .where(
+          and(
+            eq(member.workspaceId, workspaceId),
+            eq(member.userId, body.assigneeId),
+          ),
+        )
+        .limit(1);
+      if (!assigneeMember) {
+        return NextResponse.json(
+          { error: "Assignee is not a workspace member" },
+          { status: 400 },
+        );
+      }
+    }
+    updateData.assigneeId = body.assigneeId;
+    if (body.assigneeId !== existingIssue.assigneeId) {
+      changedFields.push("assigneeId");
+    }
+  }
+
+  if (body.projectId !== undefined) {
+    if (body.projectId) {
+      const [projectRecord] = await db
+        .select({ id: project.id })
+        .from(project)
+        .where(
+          and(
+            eq(project.id, body.projectId),
+            eq(project.workspaceId, workspaceId),
+          ),
+        )
+        .limit(1);
+      if (!projectRecord) {
+        return NextResponse.json(
+          { error: "Project not found" },
+          { status: 400 },
+        );
+      }
+    }
+    updateData.projectId = body.projectId;
+    if (body.projectId !== existingIssue.projectId) {
+      changedFields.push("projectId");
+    }
+  }
+
+  if (body.cycleId !== undefined) {
+    if (body.cycleId) {
+      const [cycleRecord] = await db
+        .select({ id: cycle.id, teamId: cycle.teamId })
+        .from(cycle)
+        .where(eq(cycle.id, body.cycleId))
+        .limit(1);
+      if (!cycleRecord || cycleRecord.teamId !== existingIssue.teamId) {
+        return NextResponse.json({ error: "Cycle not found" }, { status: 400 });
+      }
+    }
+    updateData.cycleId = body.cycleId;
+    if (body.cycleId !== existingIssue.cycleId) {
+      changedFields.push("cycleId");
+    }
+  }
+
+  if (body.parentIssueId !== undefined) {
+    if (body.parentIssueId) {
+      if (body.parentIssueId === existingIssue.id) {
+        return NextResponse.json(
+          { error: "Issue cannot be its own parent" },
+          { status: 400 },
+        );
+      }
+      const [parentRecord] = await db
+        .select({ id: issue.id, teamId: issue.teamId })
+        .from(issue)
+        .innerJoin(team, eq(issue.teamId, team.id))
+        .where(
+          and(
+            eq(issue.id, body.parentIssueId),
+            eq(team.workspaceId, workspaceId),
+          ),
+        )
+        .limit(1);
+      if (!parentRecord) {
+        return NextResponse.json(
+          { error: "Parent issue not found" },
+          { status: 400 },
+        );
+      }
+    }
+    updateData.parentIssueId = body.parentIssueId;
+    if (body.parentIssueId !== existingIssue.parentIssueId) {
+      changedFields.push("parentIssueId");
+    }
+  }
+
+  if (body.dueDate !== undefined) {
+    const nextDueDate = body.dueDate
+      ? new Date(`${body.dueDate}T00:00:00`)
+      : null;
+    if (nextDueDate && Number.isNaN(nextDueDate.getTime())) {
+      return NextResponse.json({ error: "Invalid due date" }, { status: 400 });
+    }
+    updateData.dueDate = nextDueDate;
+    const currentDueDate = existingIssue.dueDate
+      ? existingIssue.dueDate.toISOString().slice(0, 10)
+      : null;
+    if ((body.dueDate || null) !== currentDueDate) {
+      changedFields.push("dueDate");
+    }
+  }
+
+  if (body.estimate !== undefined) {
+    if (
+      body.estimate !== null &&
+      (!Number.isFinite(body.estimate) || body.estimate < 0)
+    ) {
+      return NextResponse.json({ error: "Invalid estimate" }, { status: 400 });
+    }
+    updateData.estimate = body.estimate;
+    if (body.estimate !== existingIssue.estimate) {
+      changedFields.push("estimate");
+    }
+  }
+
+  if (body.projectMilestoneId !== undefined) {
+    const nextProjectId =
+      body.projectId !== undefined ? body.projectId : existingIssue.projectId;
+
+    if (body.projectMilestoneId) {
+      if (!nextProjectId) {
+        return NextResponse.json(
+          {
+            error:
+              "Issue must be assigned to a project before selecting a milestone",
+          },
+          { status: 400 },
+        );
+      }
+
+      const milestoneRows = await db
+        .select({ id: projectMilestone.id })
+        .from(projectMilestone)
+        .innerJoin(project, eq(projectMilestone.projectId, project.id))
+        .where(
+          and(
+            eq(projectMilestone.id, body.projectMilestoneId),
+            eq(projectMilestone.projectId, nextProjectId),
+            eq(project.workspaceId, workspaceId),
+          ),
+        )
+        .limit(1);
+
+      if (!milestoneRows[0]) {
+        return NextResponse.json(
+          { error: "Project milestone not found" },
+          { status: 400 },
+        );
+      }
+    }
+
+    updateData.projectMilestoneId = body.projectMilestoneId;
+    if (body.projectMilestoneId !== existingIssue.projectMilestoneId) {
+      changedFields.push("projectMilestoneId");
+    }
+  } else if (
+    body.projectId !== undefined &&
+    body.projectId !== existingIssue.projectId &&
+    existingIssue.projectMilestoneId
+  ) {
+    updateData.projectMilestoneId = null;
+    changedFields.push("projectMilestoneId");
+  }
+
+  let normalizedLabelIds: string[] | undefined;
+  if (body.labelIds !== undefined) {
+    normalizedLabelIds = [
+      ...new Set(
+        body.labelIds.filter(
+          (value): value is string =>
+            typeof value === "string" && value.length > 0,
+        ),
+      ),
+    ];
+    if (normalizedLabelIds.length > 0) {
+      const labelRows = await db
+        .select({ id: label.id })
+        .from(label)
+        .where(
+          and(
+            inArray(label.id, normalizedLabelIds),
+            eq(label.workspaceId, workspaceId),
+            or(isNull(label.teamId), eq(label.teamId, existingIssue.teamId)),
+            isNull(label.archivedAt),
+          ),
+        );
+      if (labelRows.length !== normalizedLabelIds.length) {
+        return NextResponse.json({ error: "Label not found" }, { status: 400 });
+      }
+    }
+    changedFields.push("labelIds");
+  }
+
   if (body.archive !== undefined) {
     updateData.archivedAt = body.archive ? new Date() : null;
     if (Boolean(existingIssue.archivedAt) !== body.archive) {
@@ -639,7 +880,27 @@ export async function PATCH(
       stateId: issue.stateId,
       sortOrder: issue.sortOrder,
       archivedAt: issue.archivedAt,
+      priority: issue.priority,
+      assigneeId: issue.assigneeId,
+      projectId: issue.projectId,
+      projectMilestoneId: issue.projectMilestoneId,
+      parentIssueId: issue.parentIssueId,
+      cycleId: issue.cycleId,
+      dueDate: issue.dueDate,
+      estimate: issue.estimate,
     });
+
+  if (normalizedLabelIds !== undefined) {
+    await db.delete(issueLabel).where(eq(issueLabel.issueId, existingIssue.id));
+    if (normalizedLabelIds.length > 0) {
+      await db.insert(issueLabel).values(
+        normalizedLabelIds.map((labelId) => ({
+          issueId: existingIssue.id,
+          labelId,
+        })),
+      );
+    }
+  }
 
   if (updated[0] && changedFields.length > 0) {
     await insertIssueHistoryEvent(

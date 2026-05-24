@@ -18,6 +18,7 @@ import {
   it,
   vi,
 } from "vitest";
+import { describeDb } from "./_helpers/db-integration";
 
 const TEST_USER_ID = "16000000-0000-0000-0000-000000000001";
 const TEST_WS_ID = "16000000-0000-0000-0000-000000000002";
@@ -57,7 +58,7 @@ const getSessionMock = auth.api.getSession as unknown as ReturnType<
   typeof vi.fn
 >;
 
-describe("Team Statuses API Route", () => {
+describeDb("Team Statuses API Route", () => {
   beforeEach(() => {
     getSessionMock.mockResolvedValue({
       session: {
@@ -188,6 +189,11 @@ describe("Team Statuses API Route", () => {
           name: "QA Review",
           description: "Ready for verification",
           color: "#123abc",
+          behavior: {
+            terminalBehavior: "standard",
+            autoArchiveDays: 7,
+            slaBehavior: "pause",
+          },
         }),
       }),
       { params: Promise.resolve({ key: "STAT" }) },
@@ -202,6 +208,10 @@ describe("Team Statuses API Route", () => {
       expect.objectContaining({
         description: "Ready for verification",
         color: "#123abc",
+        behavior: expect.objectContaining({
+          autoArchiveDays: 7,
+          slaBehavior: "pause",
+        }),
       }),
     );
 
@@ -213,6 +223,11 @@ describe("Team Statuses API Route", () => {
           name: "Verification",
           description: "Being verified",
           color: "#abcdef",
+          behavior: {
+            terminalBehavior: "completed",
+            autoArchiveDays: 14,
+            slaBehavior: "complete",
+          },
         }),
       }),
       { params: Promise.resolve({ key: "STAT" }) },
@@ -226,6 +241,11 @@ describe("Team Statuses API Route", () => {
             name: "Verification",
             description: "Being verified",
             color: "#abcdef",
+            behavior: expect.objectContaining({
+              terminalBehavior: "completed",
+              autoArchiveDays: 14,
+              slaBehavior: "complete",
+            }),
           }),
         ],
       },

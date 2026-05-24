@@ -26,7 +26,7 @@ interface InitiativeData {
     withUpdates: number;
     withoutUpdates: number;
     paused: number;
-  };
+  } | null;
   projectCount: number;
   completedProjectCount: number;
 }
@@ -54,12 +54,7 @@ export function InitiativeRow({ initiative }: InitiativeRowProps) {
     `/initiatives/${initiative.id}`,
     workspaceSlug,
   );
-  const rollup = initiative.activeProjectHealthRollup ?? {
-    total: 0,
-    withUpdates: 0,
-    withoutUpdates: 0,
-    paused: 0,
-  };
+  const rollup = initiative.activeProjectHealthRollup;
 
   return (
     <Link
@@ -148,9 +143,11 @@ export function InitiativeRow({ initiative }: InitiativeRowProps) {
           Active projects
         </span>
         <span className="truncate">
-          {rollup.total === 0
-            ? "No active projects"
-            : `${rollup.withUpdates}/${rollup.total} with updates${rollup.paused ? `, ${rollup.paused} paused` : ""}`}
+          {rollup === null
+            ? "Rollups off"
+            : !rollup || rollup.total === 0
+              ? "No active projects"
+              : `${rollup.withUpdates}/${rollup.total} with updates${rollup.paused ? `, ${rollup.paused} paused` : ""}`}
         </span>
       </div>
     </Link>

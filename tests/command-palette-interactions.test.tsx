@@ -35,6 +35,24 @@ describe("CommandPalette component", () => {
     expect(screen.getByPlaceholderText(/type a command/i)).toBeInTheDocument();
   });
 
+  it("includes Ask Linear command that dispatches assistant open event", async () => {
+    const dispatchSpy = vi.spyOn(window, "dispatchEvent");
+
+    render(<CommandPalette teamKey="ENG" />);
+    window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Command palette")).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Ask Linear/i }));
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "open-ask-linear" }),
+    );
+    expect(screen.queryByLabelText("Command palette")).not.toBeInTheDocument();
+  });
+
   it("navigates with arrow keys and executes command on Enter", async () => {
     render(<CommandPalette teamKey="ENG" />);
     window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT));
@@ -45,15 +63,15 @@ describe("CommandPalette component", () => {
 
     const input = screen.getByPlaceholderText(/type a command/i);
 
-    // Initial state: first command should be selected (usually 'Create view' based on code)
-    // We can check by looking for the 'bg-[var(--color-accent)]' class
+    // Initial state: first command should be selected
     const buttons = screen.getAllByRole("button");
-    expect(buttons[0]).toHaveClass("bg-[var(--color-accent)]");
+    expect(buttons[0]).toHaveClass("bg-[var(--color-accent-soft)]");
 
-    // Arrow down to 'Create new issue'
+    // Arrow down to 'Create new issue' (Ask Linear, Create view, Create new issue)
     fireEvent.keyDown(input, { key: "ArrowDown" });
-    expect(buttons[1]).toHaveClass("bg-[var(--color-accent)]");
-    expect(buttons[0]).not.toHaveClass("bg-[var(--color-accent)]");
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(buttons[2]).toHaveClass("bg-[var(--color-accent-soft)]");
+    expect(buttons[0]).not.toHaveClass("bg-[var(--color-accent-soft)]");
 
     // Enter to execute 'Create new issue' which dispatches an event
     const dispatchSpy = vi.spyOn(window, "dispatchEvent");
@@ -73,6 +91,8 @@ describe("CommandPalette component", () => {
             identifier: "ENG-1",
             title: "Search Result Issue",
             priority: "high",
+            teamKey: "ENG",
+            path: "/team/ENG/issue/ENG-1",
           },
         ]),
     });
@@ -103,7 +123,7 @@ describe("CommandPalette component", () => {
     // First item should be the search result
     fireEvent.keyDown(input, { key: "Enter" });
 
-    expect(pushMock).toHaveBeenCalledWith("/issue/i-1");
+    expect(pushMock).toHaveBeenCalledWith("/team/ENG/issue/ENG-1");
     expect(screen.queryByLabelText("Command palette")).not.toBeInTheDocument();
   });
 

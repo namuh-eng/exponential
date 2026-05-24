@@ -117,6 +117,7 @@ const seededRuns: AgentRun[] = [
       guidance: {
         entries: [],
         effectiveInstructions: "",
+        autoFixEnabled: false,
         teamKey: "EXP",
       },
     },
@@ -202,6 +203,7 @@ export function createAgentRun(
       guidance: input.guidance ?? {
         entries: [],
         effectiveInstructions: "",
+        autoFixEnabled: false,
         teamKey,
       },
     },
@@ -219,6 +221,9 @@ export function createAgentRun(
       input.guidance?.effectiveInstructions
         ? "Applied workspace/account/team agent guidance to the prompt configuration."
         : "No saved agent guidance was available for this request context.",
+      input.guidance?.autoFixEnabled
+        ? "Account personalization requested proactive lint/type fix suggestions for this run."
+        : "Account personalization left proactive lint/type fixes off for this run.",
       "Queued deterministic mock execution for product validation.",
     ],
     suggestions: [

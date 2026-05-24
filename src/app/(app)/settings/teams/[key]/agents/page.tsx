@@ -9,6 +9,10 @@ interface TeamAgentsData {
   agentGuidance: string;
   autoAssignment: boolean;
   canModifyAgentGuidance?: boolean;
+  agentGuidancePermissionLabel?: string;
+  guidanceEntries?: { source: string; label: string; instructions: string }[];
+  effectiveAgentPromptPreview?: string;
+  agentGuidanceLastSavedAt?: string | null;
 }
 
 function Toggle({
@@ -43,6 +47,11 @@ function Toggle({
 export default function TeamAgentsSettingsPage() {
   const params = useParams();
   const teamKey = params.key as string;
+  const workspaceSlug =
+    typeof params.workspaceSlug === "string" ? params.workspaceSlug : null;
+  const teamSettingsHref = workspaceSlug
+    ? `/${encodeURIComponent(workspaceSlug)}/settings/teams/${encodeURIComponent(teamKey)}`
+    : `/settings/teams/${encodeURIComponent(teamKey)}`;
   const [team, setTeam] = useState<TeamAgentsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [agentGuidance, setAgentGuidance] = useState("");
@@ -133,7 +142,7 @@ export default function TeamAgentsSettingsPage() {
     <div className="max-w-[720px]">
       <div className="mb-6">
         <Link
-          href={`/settings/teams/${encodeURIComponent(teamKey)}`}
+          href={teamSettingsHref}
           className="text-[12px] text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-primary)]"
         >
           Back to team settings
@@ -149,8 +158,22 @@ export default function TeamAgentsSettingsPage() {
 
       <div className="mt-8 space-y-6">
         <div className="rounded-lg border border-[var(--color-border)] p-4">
+          <div className="mb-4 rounded-md border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-3 text-[12px] text-[var(--color-text-secondary)]">
+            <div className="font-medium text-[var(--color-text-primary)]">
+              Permission state
+            </div>
+            <div>
+              {team.agentGuidancePermissionLabel ?? "Workspace policy loaded."}
+            </div>
+            <div className="mt-1">
+              Last saved:{" "}
+              {team.agentGuidanceLastSavedAt
+                ? new Date(team.agentGuidanceLastSavedAt).toLocaleString()
+                : "Not saved yet"}
+            </div>
+          </div>
           <h3 className="mb-2 text-[14px] font-medium text-[var(--color-text-primary)]">
-            Agent guidance
+            Team agent guidance
           </h3>
           <p className="mb-4 text-[13px] text-[var(--color-text-secondary)]">
             Team-specific instructions are included in agent run prompt
@@ -174,12 +197,54 @@ export default function TeamAgentsSettingsPage() {
         </div>
 
         <div className="rounded-lg border border-[var(--color-border)] p-4">
+          <h3 className="mb-3 text-[14px] font-medium text-[var(--color-text-primary)]">
+            Effective guidance stack
+          </h3>
+          <div className="space-y-3">
+            {(team.guidanceEntries?.length ?? 0) > 0 ? (
+              team.guidanceEntries?.map((entry) => (
+                <div
+                  key={entry.source}
+                  className="rounded-md border border-[var(--color-border)] p-3"
+                >
+                  <div className="text-[12px] font-medium uppercase tracking-wide text-[var(--color-text-tertiary)]">
+                    {entry.label}
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap text-[13px] text-[var(--color-text-primary)]">
+                    {entry.instructions}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-[13px] text-[var(--color-text-secondary)]">
+                No workspace, account, or team guidance is configured yet.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-4">
           <h3 className="mb-2 text-[14px] font-medium text-[var(--color-text-primary)]">
-            Auto-assignment
+            Prompt and behavior preview
+          </h3>
+          <p className="mb-3 text-[13px] text-[var(--color-text-secondary)]">
+            This is the effective configuration sent to agent runs for team{" "}
+            {teamKey}. Saving this page updates the agent run API prompt
+            context.
+          </p>
+          <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-md border border-[var(--color-border)] p-3 text-[12px] text-[var(--color-text-primary)]">
+            {team.effectiveAgentPromptPreview}
+          </pre>
+        </div>
+
+        <div className="rounded-lg border border-[var(--color-border)] p-4">
+          <h3 className="mb-2 text-[14px] font-medium text-[var(--color-text-primary)]">
+            Auto-assignment workflow
           </h3>
           <p className="text-[13px] text-[var(--color-text-secondary)]">
             When enabled, newly created unassigned issues are assigned to the
-            team member with the lightest current issue load.
+            team member with the lightest current issue load. This controls the
+            downstream issue assignment workflow, not the prompt guidance above.
           </p>
           <div className="mt-4 flex items-center justify-between">
             <span className="text-[13px] text-[var(--color-text-primary)]">

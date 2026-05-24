@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -14,6 +20,11 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
+
+function setEditableValue(element: HTMLElement, value: string) {
+  element.textContent = value;
+  fireEvent.input(element);
+}
 
 describe("ProjectProperties", () => {
   const defaultProps = {
@@ -260,5 +271,157 @@ describe("ProjectDetailPage", () => {
 
     expect(await screen.findByText("New issue")).toBeDefined();
     expect(screen.getAllByText("Agent Speed").length).toBeGreaterThan(1);
+  });
+
+  it("creates the first project issue from the empty issues tab", async () => {
+    const projectResponse = {
+      project: {
+        id: "project-1",
+        name: "Agent Speed",
+        description: "Latency work",
+        icon: "⚡",
+        slug: "agent-speed",
+        status: "planned",
+        priority: "high",
+        startDate: null,
+        targetDate: null,
+      },
+      lead: null,
+      members: [],
+      teams: [{ id: "team-1", name: "Engineering", key: "ENG" }],
+      labels: [],
+      availableMembers: [],
+      availableTeams: [{ id: "team-1", name: "Engineering", key: "ENG" }],
+      availableLabels: [],
+      slackChannel: null,
+      resources: [],
+      activity: [],
+      milestones: [],
+      issueGroups: [],
+      progress: {
+        total: 0,
+        completed: 0,
+        percentage: 0,
+        assignees: [],
+        labels: [],
+      },
+    };
+    const refreshedProjectResponse = {
+      ...projectResponse,
+      issueGroups: [
+        {
+          state: {
+            id: "state-1",
+            name: "Backlog",
+            category: "backlog",
+            color: "#6b7280",
+          },
+          issues: [
+            {
+              id: "issue-2",
+              identifier: "ENG-2",
+              title: "Plan first project task",
+              priority: "none",
+              assignee: null,
+              createdAt: "2026-04-08T00:00:00.000Z",
+              href: "/team/ENG/issue/issue-2",
+              labels: [],
+            },
+          ],
+        },
+      ],
+      progress: {
+        total: 1,
+        completed: 0,
+        percentage: 0,
+        assignees: [],
+        labels: [],
+      },
+    };
+    let projectFetchCount = 0;
+    const fetchSpy = vi.fn((input) => {
+      const url = typeof input === "string" ? input : input.toString();
+
+      if (url === "/api/projects/agent-speed") {
+        projectFetchCount += 1;
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve(
+              projectFetchCount > 1
+                ? refreshedProjectResponse
+                : projectResponse,
+            ),
+        });
+      }
+
+      if (url === "/api/teams/ENG/create-issue-options") {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              team: { id: "team-1", name: "Engineering", key: "ENG" },
+              statuses: [
+                {
+                  id: "state-1",
+                  name: "Backlog",
+                  category: "backlog",
+                  color: "#6b7280",
+                },
+              ],
+              priorities: [{ value: "none", label: "No priority" }],
+              assignees: [],
+              labels: [],
+              projects: [{ id: "project-1", name: "Agent Speed", icon: "⚡" }],
+            }),
+        });
+      }
+
+      if (url === "/api/issue-templates") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ templates: [] }),
+        });
+      }
+
+      if (url === "/api/issues") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ id: "issue-2" }),
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as unknown as typeof fetch;
+    global.fetch = fetchSpy;
+
+    render(<ProjectDetailPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Issues" }));
+    expect(
+      await screen.findByText("No issues in this project yet."),
+    ).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Create issue" }));
+    expect(await screen.findByText("New issue")).toBeDefined();
+    expect(screen.getAllByText("Agent Speed").length).toBeGreaterThan(1);
+
+    setEditableValue(
+      screen.getByRole("textbox", { name: "Issue title" }),
+      "Plan first project task",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Create Issue" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/issues",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"projectId":"project-1"'),
+        }),
+      );
+    });
+    expect(await screen.findByText("Plan first project task")).toBeDefined();
   });
 });

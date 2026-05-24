@@ -235,6 +235,9 @@ describe("issue comments route", () => {
         name: "Ashley",
         image: null,
       },
+      ownedByMe: true,
+      canEdit: true,
+      canDelete: true,
       reactions: [],
       attachments: [],
     });

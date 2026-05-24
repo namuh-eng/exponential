@@ -1,5 +1,4 @@
 import {
-  ACCOUNT_NOTIFICATION_CHANNELS,
   type AccountNotificationEventKey,
   type AccountNotificationSettings,
   readAccountNotificationsFromUserSettings,
@@ -173,9 +172,39 @@ export function shouldDeliverAccountNotificationEventForSettings(
   eventKey: AccountNotificationEventKey,
   settings: AccountNotificationSettings,
 ) {
-  return ACCOUNT_NOTIFICATION_CHANNELS.some(
-    (channel) => settings.channels[channel].events[eventKey],
-  );
+  switch (eventKey) {
+    case "assignments":
+      return (
+        settings.inbox.assignedToMe ||
+        settings.email.issueActivity ||
+        settings.slack.assignedToMe
+      );
+    case "mentions":
+    case "comments":
+      return (
+        settings.inbox.mentionsAndReplies ||
+        settings.email.mentionsAndReplies ||
+        settings.desktop.mentionsAndReplies ||
+        settings.slack.mentionsAndReplies
+      );
+    case "dueDates":
+      return settings.desktop.reminders || settings.email.dailyDigest;
+    case "projectUpdates":
+      return settings.email.weeklyDigest || settings.slack.projectUpdates;
+    case "teamUpdates":
+      return settings.inbox.teamUpdates;
+    case "statusChanges":
+    case "relations":
+      return (
+        settings.inbox.subscribedIssues ||
+        settings.email.issueActivity ||
+        settings.desktop.issueActivity
+      );
+    case "workspaceAdmin":
+      return settings.email.workspaceInvites;
+    default:
+      return true;
+  }
 }
 
 export function shouldDeliverNotificationForSettings(

@@ -1,8 +1,25 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { notification } from "@/lib/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
+
+async function unreadCountFor(userId: string) {
+  if (typeof db.select !== "function") return undefined;
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(notification)
+    .where(
+      sql`${notification.userId} = ${userId}
+        AND ${notification.readAt} IS NULL
+        AND (
+          ${notification.snoozedUntilAt} IS NULL
+          OR ${notification.snoozedUntilAt} <= now()
+          OR (${notification.unsnoozedAt} IS NOT NULL AND ${notification.unsnoozedAt} >= ${notification.snoozedUntilAt})
+        )`,
+    );
+  return row?.count ?? 0;
+}
 
 export async function PATCH(
   _request: NextRequest,
@@ -30,5 +47,10 @@ export async function PATCH(
     );
   }
 
-  return NextResponse.json({ success: true });
+  const unreadCount = await unreadCountFor(session.user.id);
+
+  return NextResponse.json({
+    success: true,
+    ...(unreadCount !== undefined ? { unreadCount } : {}),
+  });
 }

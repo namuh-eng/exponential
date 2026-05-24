@@ -18,6 +18,7 @@ import {
   it,
   vi,
 } from "vitest";
+import { describeDb } from "./_helpers/db-integration";
 
 const ADMIN_USER_ID = "25200000-0000-0000-0000-000000000001";
 const MEMBER_USER_ID = "25200000-0000-0000-0000-000000000002";
@@ -136,7 +137,7 @@ async function seed() {
   });
 }
 
-describe("workspace teams API route", () => {
+describeDb("workspace teams API route", () => {
   beforeAll(async () => {
     await cleanup();
   });

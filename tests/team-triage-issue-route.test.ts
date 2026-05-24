@@ -40,6 +40,33 @@ vi.mock("@/lib/db", () => ({
         }),
       })),
     })),
+    // The triage accept/decline route now wraps its writes in db.transaction.
+    // Reuse the same update/delete/insert shapes the rest of the mock returns
+    // so callbacks behave identically to the outer db.
+    transaction: vi.fn(
+      async (
+        cb: (tx: {
+          update: unknown;
+          delete: unknown;
+          insert: unknown;
+        }) => Promise<unknown>,
+      ) =>
+        cb({
+          update: vi.fn(() => ({
+            set: updateSetMock.mockImplementation(() => ({
+              where: vi.fn().mockReturnValue({
+                returning: vi.fn().mockResolvedValue(updateReturningMock()),
+              }),
+            })),
+          })),
+          delete: vi.fn(() => ({
+            where: vi.fn().mockResolvedValue([]),
+          })),
+          insert: vi.fn(() => ({
+            values: vi.fn().mockResolvedValue([]),
+          })),
+        }),
+    ),
   },
 }));
 

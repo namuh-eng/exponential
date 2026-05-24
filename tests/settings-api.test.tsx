@@ -271,8 +271,9 @@ describe("API settings page", () => {
     fireEvent.change(screen.getByLabelText("Endpoint URL"), {
       target: { value: "https://example.com/hooks/linear" },
     });
-    fireEvent.click(screen.getByLabelText("Entity updated"));
-    fireEvent.click(screen.getByLabelText("Entity deleted"));
+    expect(screen.getByText("Subscription scope")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Issue updated"));
+    fireEvent.click(screen.getByLabelText("Issue deleted"));
     fireEvent.click(screen.getByRole("button", { name: "Create webhook" }));
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
@@ -282,6 +283,24 @@ describe("API settings page", () => {
       url: "https://example.com/hooks/linear",
       events: ["created", "deleted"],
     });
+  });
+
+  it("shows user-visible webhook URL validation before creating", async () => {
+    mockApiLoad();
+
+    render(<ApiSettingsPage />);
+    await waitForLoaded();
+
+    fireEvent.click(screen.getByRole("button", { name: "New webhook" }));
+    fireEvent.change(screen.getByLabelText("Endpoint URL"), {
+      target: { value: "not-a-url" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create webhook" }));
+
+    expect(
+      screen.getByText("Webhook URL must be a valid absolute URL."),
+    ).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   it("creates an API key and renders it in the list", async () => {

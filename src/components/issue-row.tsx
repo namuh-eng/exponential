@@ -23,6 +23,8 @@ interface IssueRowProps {
   assigneeImage?: string;
   labels?: { name: string; color: string }[];
   projectName?: string;
+  cycleName?: string | null;
+  estimate?: number | null;
   dueDate?: string | null;
   createdAt: string;
   href?: string;
@@ -71,6 +73,8 @@ export function IssueRow({
   assigneeImage,
   labels,
   projectName,
+  cycleName,
+  estimate,
   dueDate,
   createdAt,
   href,
@@ -119,7 +123,10 @@ export function IssueRow({
       )}
 
       {/* Title */}
-      <span className="min-w-0 flex-1 truncate font-medium text-[var(--color-text-primary)]">
+      <span
+        data-editorial-row-title
+        className="editorial-row-title min-w-0 flex-1 truncate text-[var(--color-text-primary)]"
+      >
         {title}
       </span>
 
@@ -138,6 +145,18 @@ export function IssueRow({
           <span aria-hidden="true">›</span>
           <span className="truncate">{projectName}</span>
         </div>
+      )}
+
+      {/* Cycle and estimate */}
+      {cycleName && (
+        <span className="shrink-0 text-[12px] text-[var(--color-text-secondary)]">
+          {cycleName}
+        </span>
+      )}
+      {estimate !== null && estimate !== undefined && (
+        <span className="shrink-0 rounded border border-[var(--color-border)] px-1.5 py-0.5 text-[11px] text-[var(--color-text-secondary)]">
+          {estimate} pt
+        </span>
       )}
 
       {/* Due date */}
@@ -167,7 +186,9 @@ export function IssueRow({
   );
 
   const className = `group flex h-[42px] items-center gap-2 border-b border-[var(--color-border)] bg-[color-mix(in_oklab,var(--color-surface)_72%,transparent)] px-4 text-[13px] transition-colors hover:bg-[var(--color-surface-hover)] ${
-    selected ? "bg-[var(--color-surface-active)]" : ""
+    selected
+      ? "bg-[var(--color-surface-active)] shadow-[inset_2px_0_0_var(--color-accent)]"
+      : ""
   }`;
 
   if (onToggleSelected) {
@@ -175,7 +196,7 @@ export function IssueRow({
       <Link
         href={href}
         aria-label={`${identifier} ${title}`}
-        className="flex min-w-0 flex-1 items-center gap-2"
+        className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden"
         onClick={(event) => {
           if (event.shiftKey || selectionMode) {
             event.preventDefault();

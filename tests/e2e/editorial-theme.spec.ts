@@ -42,7 +42,7 @@ const flows: EditorialFlow[] = [
         page.getByRole("heading", { name: /Projects|No projects/ }),
       ).toBeVisible();
       await expect(
-        page.getByRole("button", { name: "New project" }),
+        page.getByRole("button", { name: /New project|Create project/ }),
       ).toBeVisible();
     },
   },

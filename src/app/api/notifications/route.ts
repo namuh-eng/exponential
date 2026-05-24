@@ -1,8 +1,18 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { issue, notification, user } from "@/lib/db/schema";
-import { desc, eq, isNull, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
+
+function activeInboxPredicate(userId: string) {
+  return sql`${notification.userId} = ${userId}
+    AND ${notification.readAt} IS NULL
+    AND (
+      ${notification.snoozedUntilAt} IS NULL
+      OR ${notification.snoozedUntilAt} <= now()
+      OR (${notification.unsnoozedAt} IS NOT NULL AND ${notification.unsnoozedAt} >= ${notification.snoozedUntilAt})
+    )`;
+}
 
 export async function GET() {
   const { response: authResponse, session } = await requireApiSession();
@@ -20,6 +30,8 @@ export async function GET() {
       id: notification.id,
       type: notification.type,
       readAt: notification.readAt,
+      snoozedUntilAt: notification.snoozedUntilAt,
+      unsnoozedAt: notification.unsnoozedAt,
       createdAt: notification.createdAt,
       actorName: actor.name,
       actorImage: actor.image,
@@ -38,9 +50,7 @@ export async function GET() {
   const unreadCount = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(notification)
-    .where(
-      sql`${notification.userId} = ${userId} AND ${notification.readAt} IS NULL`,
-    );
+    .where(activeInboxPredicate(userId));
 
   return NextResponse.json({
     notifications: notifications.map((n) => ({
@@ -53,6 +63,8 @@ export async function GET() {
       issuePriority: n.issuePriority ?? "none",
       issueId: n.issueId,
       readAt: n.readAt?.toISOString() ?? null,
+      snoozedUntilAt: n.snoozedUntilAt?.toISOString() ?? null,
+      unsnoozedAt: n.unsnoozedAt?.toISOString() ?? null,
       createdAt: n.createdAt.toISOString(),
     })),
     unreadCount: unreadCount[0]?.count ?? 0,

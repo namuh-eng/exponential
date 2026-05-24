@@ -264,6 +264,9 @@ export async function POST(
         name: session.user.name,
         image: session.user.image ?? null,
       },
+      ownedByMe: true,
+      canEdit: true,
+      canDelete: true,
       reactions: [],
       attachments: responseAttachments,
     });

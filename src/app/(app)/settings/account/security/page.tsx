@@ -15,16 +15,24 @@ type SecuritySession = {
   expiresAt: string;
 };
 
+type PermissionGroup = {
+  label: string;
+  descriptions: string[];
+};
+
 type AuthorizedApplication = {
   id: string;
-  appId: string;
+  appId?: string;
   name: string;
-  clientId: string;
+  clientId?: string;
   imageUrl: string | null;
+  publisher: string | null;
   scopes: string[];
+  permissionGroups?: PermissionGroup[];
   webhooksEnabled: boolean;
   createdAt: string;
   updatedAt: string;
+  lastUsedAt: string | null;
 };
 
 type Passkey = {
@@ -79,6 +87,82 @@ function formatDate(value: string | null) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+}
+
+const SCOPE_LABELS: Record<string, { group: string; description: string }> = {
+  read: {
+    group: "Workspace data",
+    description: "View workspace and account information",
+  },
+  write: {
+    group: "Workspace data",
+    description: "Create and update workspace data",
+  },
+  "issues:read": {
+    group: "Issues",
+    description: "View issues and related metadata",
+  },
+  "issues:write": {
+    group: "Issues",
+    description: "Create and update issues",
+  },
+  "comments:read": {
+    group: "Comments",
+    description: "View comments",
+  },
+  "comments:write": {
+    group: "Comments",
+    description: "Create and update comments",
+  },
+  "webhooks:read": {
+    group: "Webhooks",
+    description: "View webhook subscriptions",
+  },
+  "webhooks:write": {
+    group: "Webhooks",
+    description: "Manage webhook subscriptions",
+  },
+};
+
+function humanizeScope(scope: string) {
+  const normalized = scope.trim();
+  if (!normalized) {
+    return "Access granted by this application";
+  }
+
+  return normalized
+    .split(/[:_.-]+/)
+    .filter(Boolean)
+    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function permissionGroupsFor(application: AuthorizedApplication) {
+  if (application.permissionGroups?.length) {
+    return application.permissionGroups;
+  }
+
+  const groups = new Map<string, string[]>();
+  for (const scope of application.scopes) {
+    const known = SCOPE_LABELS[scope];
+    const group = known?.group ?? "Additional access";
+    const description = known?.description ?? humanizeScope(scope);
+    groups.set(group, [...(groups.get(group) ?? []), description]);
+  }
+
+  return [...groups].map(([label, descriptions]) => ({ label, descriptions }));
+}
+
+function permissionSummary(application: AuthorizedApplication) {
+  const descriptions = permissionGroupsFor(application).flatMap(
+    (group) => group.descriptions,
+  );
+
+  if (!descriptions.length) {
+    return "No account permissions recorded";
+  }
+
+  return descriptions.join(", ");
 }
 
 function deviceLabel(session: SecuritySession) {
@@ -172,10 +256,19 @@ export default function AccountSecurityPage() {
     null,
   );
   const [passkeySupported, setPasskeySupported] = useState(false);
+  const [passkeyDialogOpen, setPasskeyDialogOpen] = useState(false);
+  const [passkeyName, setPasskeyName] = useState("Passkey 1");
+  const [passkeyNameError, setPasskeyNameError] = useState<string | null>(null);
   const [apiKeyFormOpen, setApiKeyFormOpen] = useState(false);
   const [apiKeyName, setApiKeyName] = useState("Personal API key");
   const [createdCredential, setCreatedCredential] =
     useState<CreatedCredential | null>(null);
+  const [confirmingApplicationId, setConfirmingApplicationId] = useState<
+    string | null
+  >(null);
+  const [expandedApplicationId, setExpandedApplicationId] = useState<
+    string | null
+  >(null);
 
   const loadSecurityState = useCallback(async (signal?: AbortSignal) => {
     const response = await fetch("/api/account/security", { signal });
@@ -263,7 +356,7 @@ export default function AccountSecurityPage() {
     }
   }
 
-  async function createPasskey() {
+  function createPasskey() {
     if (!securityState?.passkeyEnabled) {
       setError("Passkey enrollment is not configured for this environment.");
       return;
@@ -275,25 +368,40 @@ export default function AccountSecurityPage() {
       return;
     }
 
-    const defaultName = `Passkey ${securityState?.passkeys.length ? securityState.passkeys.length + 1 : 1}`;
-    const name = window.prompt("Name this passkey", defaultName)?.trim();
+    setError(null);
+    setStatus(null);
+    setPasskeyNameError(null);
+    setPasskeyName(`Passkey ${securityState.passkeys.length + 1}`);
+    setPasskeyDialogOpen(true);
+  }
+
+  async function submitPasskeyEnrollment(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    const name = passkeyName.trim();
     if (!name) {
+      setPasskeyNameError("Passkey name is required.");
       return;
     }
 
     setSaving(true);
     setError(null);
-    setStatus(null);
+    setPasskeyNameError(null);
+    setStatus("Starting passkey enrollment…");
     try {
       await enrollPasskey(name);
       await loadSecurityState();
+      setPasskeyDialogOpen(false);
       setStatus("Passkey added.");
     } catch (err) {
-      setError(
+      const message =
         err instanceof Error
           ? err.message
-          : "Passkey enrollment failed. Try again or use another browser.",
-      );
+          : "Passkey enrollment failed. Try again or use another browser.";
+      setStatus(null);
+      setError(message);
+      setPasskeyNameError(message);
     } finally {
       setSaving(false);
     }
@@ -374,7 +482,7 @@ export default function AccountSecurityPage() {
           {status}
         </div>
       ) : null}
-      {error ? (
+      {error && !passkeyDialogOpen ? (
         <div
           className="mt-5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[13px] text-red-600"
           role="alert"
@@ -382,6 +490,70 @@ export default function AccountSecurityPage() {
           {error}
         </div>
       ) : null}
+
+      {passkeyDialogOpen ? (
+        <dialog
+          open
+          className="fixed inset-0 z-50 flex h-full w-full max-w-none items-center justify-center bg-black/30 px-4"
+          aria-labelledby="passkey-dialog-title"
+        >
+          <form
+            className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-xl"
+            onSubmit={submitPasskeyEnrollment}
+          >
+            <h2
+              id="passkey-dialog-title"
+              className="text-[16px] font-semibold text-[var(--color-text-primary)]"
+            >
+              Add passkey
+            </h2>
+            <p className="mt-2 text-[13px] text-[var(--color-text-secondary)]">
+              Name this passkey so you can recognize and revoke it later. Your
+              browser will ask you to confirm enrollment after you continue.
+            </p>
+            <label
+              htmlFor="passkey-name"
+              className="mt-4 block text-[12px] font-medium text-[var(--color-text-secondary)]"
+            >
+              Passkey name
+            </label>
+            <input
+              id="passkey-name"
+              type="text"
+              value={passkeyName}
+              onChange={(event) => setPasskeyName(event.target.value)}
+              maxLength={255}
+              className="mt-2 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+              placeholder="Work laptop"
+            />
+            {passkeyNameError ? (
+              <p className="mt-2 text-[12px] text-red-600" role="alert">
+                {passkeyNameError}
+              </p>
+            ) : null}
+            <div className="mt-5 flex justify-end gap-2">
+              <SmallButton
+                disabled={saving}
+                onClick={() => {
+                  setPasskeyDialogOpen(false);
+                  setPasskeyNameError(null);
+                  setStatus("Passkey enrollment cancelled.");
+                }}
+              >
+                Cancel
+              </SmallButton>
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? "Starting…" : "Continue"}
+              </button>
+            </div>
+          </form>
+        </dialog>
+      ) : null}
+
       {createdCredential ? (
         <div className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-[13px] text-[var(--color-text-primary)]">
           <div className="font-medium">
@@ -685,57 +857,110 @@ export default function AccountSecurityPage() {
         {securityState.authorizedApplications.length ? (
           <div className="divide-y divide-[var(--color-border)]">
             {securityState.authorizedApplications.map((application) => (
-              <div
-                key={application.id}
-                className="flex items-start justify-between gap-3 py-4 first:pt-0 last:pb-0"
-              >
-                <div className="flex min-w-0 gap-3">
-                  {application.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={application.imageUrl}
-                      alt=""
-                      className="h-9 w-9 rounded-lg border border-[var(--color-border)] object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-hover)] text-[13px] font-medium text-[var(--color-text-secondary)]">
-                      {application.name.slice(0, 1).toUpperCase()}
+              <div key={application.id} className="py-4 first:pt-0 last:pb-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 gap-3">
+                    {application.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={application.imageUrl}
+                        alt=""
+                        className="h-9 w-9 rounded-lg border border-[var(--color-border)] object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-hover)] text-[13px] font-medium text-[var(--color-text-secondary)]">
+                        {application.name.slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <h3 className="text-[14px] font-medium text-[var(--color-text-primary)]">
+                        {application.name}
+                      </h3>
+                      <p className="mt-1 text-[12px] text-[var(--color-text-secondary)]">
+                        {application.publisher ?? "Connected application"}
+                      </p>
+                      <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+                        Permissions: {permissionSummary(application)}
+                        {application.webhooksEnabled ? " · Webhook access" : ""}
+                      </p>
+                      <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+                        Authorized {formatDate(application.createdAt)} · Last
+                        used{" "}
+                        {application.lastUsedAt
+                          ? formatDate(application.lastUsedAt)
+                          : "Unavailable"}
+                      </p>
+                      <button
+                        type="button"
+                        className="mt-2 text-[12px] text-[var(--color-accent)] hover:underline"
+                        onClick={() =>
+                          setExpandedApplicationId((current) =>
+                            current === application.id ? null : application.id,
+                          )
+                        }
+                      >
+                        {expandedApplicationId === application.id
+                          ? "Hide developer details"
+                          : "Show developer details"}
+                      </button>
+                      {expandedApplicationId === application.id ? (
+                        <p className="mt-1 break-all text-[12px] text-[var(--color-text-tertiary)]">
+                          App ID: {application.appId ?? "Unavailable"} · Client
+                          ID: {application.clientId ?? "Unavailable"}
+                        </p>
+                      ) : null}
                     </div>
-                  )}
-                  <div className="min-w-0">
-                    <h3 className="text-[14px] font-medium text-[var(--color-text-primary)]">
-                      {application.name}
-                    </h3>
-                    <p className="mt-1 break-all text-[12px] text-[var(--color-text-secondary)]">
-                      App ID: {application.appId} · Client ID:{" "}
-                      {application.clientId}
-                    </p>
-                    <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
-                      Permissions:{" "}
-                      {application.scopes.length
-                        ? application.scopes.join(", ")
-                        : "No scopes recorded"}
-                      {application.webhooksEnabled ? " · Webhooks enabled" : ""}
-                      {" · Authorized "}
-                      {formatDate(application.createdAt)}
-                    </p>
                   </div>
+                  <SmallButton
+                    tone="danger"
+                    disabled={saving}
+                    onClick={() => setConfirmingApplicationId(application.id)}
+                  >
+                    Revoke
+                  </SmallButton>
                 </div>
-                <SmallButton
-                  tone="danger"
-                  disabled={saving}
-                  onClick={() =>
-                    mutate(
-                      {
-                        action: "revokeAuthorizedApplication",
-                        applicationId: application.id,
-                      },
-                      "Authorized application revoked.",
-                    )
-                  }
-                >
-                  Revoke
-                </SmallButton>
+                {confirmingApplicationId === application.id ? (
+                  <div
+                    className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-[12px] text-[var(--color-text-primary)]"
+                    role="alertdialog"
+                    aria-label={`Confirm revoking ${application.name}`}
+                  >
+                    <p className="font-medium">
+                      Revoke access for {application.name}?
+                    </p>
+                    <p className="mt-1 text-[var(--color-text-secondary)]">
+                      This application will lose access to your account and the
+                      following permissions will be removed:{" "}
+                      {permissionSummary(application)}.
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <SmallButton
+                        tone="danger"
+                        disabled={saving}
+                        onClick={async () => {
+                          const revoked = await mutate(
+                            {
+                              action: "revokeAuthorizedApplication",
+                              applicationId: application.id,
+                            },
+                            "Authorized application revoked.",
+                          );
+                          if (revoked) {
+                            setConfirmingApplicationId(null);
+                          }
+                        }}
+                      >
+                        Confirm revoke
+                      </SmallButton>
+                      <SmallButton
+                        disabled={saving}
+                        onClick={() => setConfirmingApplicationId(null)}
+                      >
+                        Cancel
+                      </SmallButton>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { member, user, workspace } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describeDb } from "./_helpers/db-integration";
 
 const TEST_USER_ID = "14000000-0000-0000-0000-000000000001";
 const TEST_WS_ID = "14000000-0000-0000-0000-000000000002";
@@ -31,7 +32,7 @@ vi.mock("@/lib/auth", () => ({
 
 import { auth } from "@/lib/auth";
 
-describe("Account Profile Workspace API Route (Leave Workspace)", () => {
+describeDb("Account Profile Workspace API Route (Leave Workspace)", () => {
   beforeAll(async () => {
     // Cleanup
     await db.delete(member).where(eq(member.userId, TEST_USER_ID));

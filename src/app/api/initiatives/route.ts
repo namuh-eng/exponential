@@ -9,11 +9,13 @@ import {
   project,
   team,
   user,
+  workspace,
 } from "@/lib/db/schema";
 import {
   isInitiativeHealth,
   readInitiativeSettings,
 } from "@/lib/initiative-detail";
+import { readWorkspaceInitiativeSettings } from "@/lib/initiative-settings";
 import { readProjectSettings } from "@/lib/project-detail";
 import { and, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -27,6 +29,24 @@ export async function GET(request: Request) {
   const workspaceId = await resolveRequestWorkspaceId(session.user.id, request);
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
+  }
+
+  const [workspaceRecord] = await db
+    .select({ settings: workspace.settings })
+    .from(workspace)
+    .where(eq(workspace.id, workspaceId))
+    .limit(1);
+  const initiativeSettings = readWorkspaceInitiativeSettings(
+    workspaceRecord?.settings,
+  );
+
+  if (!initiativeSettings.enabled) {
+    return NextResponse.json({
+      initiatives: [],
+      workspaceMembers: [],
+      workspaceTeams: [],
+      initiativesSettings: initiativeSettings,
+    });
   }
 
   const [initiatives, workspaceMembers, workspaceTeams] = await Promise.all([
@@ -99,12 +119,15 @@ export async function GET(request: Request) {
         projectCount: projects.length,
         completedProjectCount: completedCount,
         latestUpdate,
-        activeProjectHealthRollup: {
-          total: activeProjects.length,
-          withUpdates: activeProjectUpdateCount,
-          withoutUpdates: activeProjects.length - activeProjectUpdateCount,
-          paused: activeProjects.filter((p) => p.status === "paused").length,
-        },
+        activeProjectHealthRollup: initiativeSettings.projectRollups
+          ? {
+              total: activeProjects.length,
+              withUpdates: activeProjectUpdateCount,
+              withoutUpdates: activeProjects.length - activeProjectUpdateCount,
+              paused: activeProjects.filter((p) => p.status === "paused")
+                .length,
+            }
+          : null,
         createdAt: init.createdAt,
         updatedAt: init.updatedAt,
       };
@@ -115,6 +138,7 @@ export async function GET(request: Request) {
     initiatives: result,
     workspaceMembers,
     workspaceTeams,
+    initiativesSettings: initiativeSettings,
   });
 }
 
@@ -127,6 +151,21 @@ export async function POST(request: Request) {
   const workspaceId = await resolveRequestWorkspaceId(session.user.id, request);
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
+  }
+
+  const [workspaceRecord] = await db
+    .select({ settings: workspace.settings })
+    .from(workspace)
+    .where(eq(workspace.id, workspaceId))
+    .limit(1);
+  const initiativeSettings = readWorkspaceInitiativeSettings(
+    workspaceRecord?.settings,
+  );
+  if (!initiativeSettings.enabled) {
+    return NextResponse.json(
+      { error: "Initiatives are disabled for this workspace" },
+      { status: 403 },
+    );
   }
 
   const body = await request.json();

@@ -128,10 +128,9 @@ describe("Security settings page", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("acme.com")).toBeInTheDocument();
     expect(screen.getByText(defaultSecurity().inviteUrl)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "SAML & SCIM ↗" })).toHaveAttribute(
-      "href",
-      "https://linear.app/docs/saml-and-access-control",
-    );
+    expect(
+      screen.getByRole("button", { name: /SAML & SCIM management/ }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("switch", { name: "Google authentication" }),
     ).toHaveAttribute("aria-checked", "false");

@@ -122,6 +122,7 @@ describe("current workspace route", () => {
         region: "Canada",
         fiscalMonth: "april",
         plan: "free",
+        welcomeMessage: "",
       },
     });
   });
@@ -133,9 +134,10 @@ describe("current workspace route", () => {
         method: "PATCH",
         body: JSON.stringify({
           name: "Acme QA",
-          urlSlug: "Acme QA",
+          urlSlug: "acme-qa",
           logo: "data:image/png;base64,logo",
           fiscalMonth: "october",
+          welcomeMessage: "Welcome",
         }),
       }),
     );
@@ -149,6 +151,7 @@ describe("current workspace route", () => {
         settings: {
           region: "Canada",
           fiscalMonth: "october",
+          welcomeMessage: "Welcome",
         },
       }),
     );
@@ -162,6 +165,7 @@ describe("current workspace route", () => {
         region: "Canada",
         fiscalMonth: "october",
         plan: "free",
+        welcomeMessage: "Welcome",
       },
     });
   });

@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import InitiativesPage from "@/app/(app)/initiatives/page";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockInitiatives = [
   {
@@ -31,6 +31,10 @@ const mockInitiatives = [
 ];
 
 describe("InitiativesPage component", () => {
+  beforeEach(() => {
+    window.history.replaceState(null, "", "/initiatives");
+  });
+
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
@@ -130,6 +134,35 @@ describe("InitiativesPage component", () => {
     });
 
     await waitFor(() => screen.getByText("New Feature"));
+  });
+
+  it("disables initiative creation when workspace initiatives are disabled", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          initiatives: [],
+          workspaceMembers: [],
+          workspaceTeams: [],
+          initiativesSettings: { enabled: false, projectRollups: true },
+        }),
+      }),
+    );
+
+    render(<InitiativesPage />);
+
+    const button = await screen.findByRole("button", {
+      name: /initiatives disabled/i,
+    });
+    expect(button).toBeDisabled();
+
+    fireEvent.keyDown(document, { key: "n" });
+    fireEvent.keyDown(document, { key: "i" });
+
+    expect(
+      screen.queryByPlaceholderText("Initiative name"),
+    ).not.toBeInTheDocument();
   });
 
   it("handles keyboard shortcut N then I to open create form", async () => {

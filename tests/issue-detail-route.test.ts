@@ -331,7 +331,7 @@ describe("issue detail route", () => {
       { id: "project-1", name: "Ever", icon: "rocket" },
     ]);
     labelsWhereMock.mockResolvedValue([
-      { labelName: "Bug", labelColor: "#f00" },
+      { labelId: "label-1", labelName: "Bug", labelColor: "#f00" },
     ]);
     commentsOrderByMock.mockResolvedValue([
       {
@@ -496,7 +496,7 @@ describe("issue detail route", () => {
           },
         },
       ],
-      labels: [{ name: "Bug", color: "#f00" }],
+      labels: [{ id: "label-1", name: "Bug", color: "#f00" }],
       subscription: { subscribed: true, watcherCount: 2 },
       reactions: [
         { emoji: "👍", count: 2, reactedByMe: true },
@@ -508,6 +508,9 @@ describe("issue detail route", () => {
           body: "first",
           user: { name: "Commenter", image: null },
           createdAt: "2026-04-23T11:00:00.000Z",
+          ownedByMe: false,
+          canEdit: false,
+          canDelete: false,
           reactions: [{ emoji: "🔥", count: 2, reacted: true }],
           attachments: [
             {
@@ -755,6 +758,74 @@ describe("issue detail route", () => {
       stateId: "state-2",
       sortOrder: 8,
       archivedAt: null,
+      priority: undefined,
+      assigneeId: undefined,
+      projectId: undefined,
+      parentIssueId: undefined,
+      cycleId: undefined,
+      dueDate: undefined,
+      estimate: undefined,
+    });
+  });
+
+  it("persists editable sidebar scalar metadata fields", async () => {
+    updateReturningMock.mockResolvedValue([
+      {
+        id: "issue-1",
+        title: "Broken route",
+        description: "<p>Hello</p>",
+        updatedAt: new Date("2026-04-23T12:00:00.000Z"),
+        stateId: "state-1",
+        sortOrder: 2,
+        archivedAt: null,
+        priority: "low",
+        assigneeId: "user-2",
+        projectId: "project-1",
+        parentIssueId: "issue-parent",
+        cycleId: "cycle-1",
+        dueDate: null,
+        estimate: null,
+      },
+    ]);
+    const { PATCH } = await import("@/app/api/issues/[id]/route");
+
+    const response = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({
+          priority: "low",
+          dueDate: null,
+          estimate: null,
+        }),
+        headers: { "content-type": "application/json" },
+      }),
+      { params: Promise.resolve({ id: "ENG-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        priority: "low",
+        dueDate: null,
+        estimate: null,
+        updatedAt: expect.any(Date),
+      }),
+    );
+    expect(insertHistoryValuesMock).toHaveBeenCalledWith({
+      issueId: "issue-1",
+      actorId: "user-1",
+      actorName: "Ashley",
+      actorEmail: "ashley@example.com",
+      eventType: "updated",
+      metadata: {
+        changedFields: ["priority", "dueDate", "estimate"],
+        identifier: "ENG-1",
+      },
+    });
+    await expect(response.json()).resolves.toMatchObject({
+      priority: "low",
+      dueDate: null,
+      estimate: null,
     });
   });
 

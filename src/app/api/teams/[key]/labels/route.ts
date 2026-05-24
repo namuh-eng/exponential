@@ -1,6 +1,7 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { label } from "@/lib/db/schema";
+import { validateScopedParentLabel } from "@/lib/label-parent-validation";
 import { findAccessibleTeam } from "@/lib/teams";
 import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -33,4 +34,56 @@ export async function GET(
     .where(and(eq(label.teamId, teamRecord.id), isNull(label.archivedAt)));
 
   return NextResponse.json({ labels });
+}
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ key: string }> },
+) {
+  const { response: authResponse, session } = await requireApiSession();
+  if (authResponse) {
+    return authResponse;
+  }
+
+  const { key } = await params;
+  const teamRecord = await findAccessibleTeam(key, session.user.id, {
+    request,
+  });
+
+  if (!teamRecord) {
+    return NextResponse.json({ error: "Team not found" }, { status: 404 });
+  }
+
+  const body = await request.json();
+  const trimmedName = typeof body.name === "string" ? body.name.trim() : "";
+
+  if (!trimmedName) {
+    return NextResponse.json({ error: "Name is required" }, { status: 400 });
+  }
+
+  const parentValidation = await validateScopedParentLabel({
+    workspaceId: teamRecord.workspaceId,
+    teamId: teamRecord.id,
+    parentLabelId: body.parentLabelId,
+  });
+  if (!parentValidation.ok) {
+    return NextResponse.json(
+      { error: parentValidation.error },
+      { status: parentValidation.status },
+    );
+  }
+
+  const [newLabel] = await db
+    .insert(label)
+    .values({
+      name: trimmedName,
+      color: body.color || "#6b6f76",
+      description: body.description || null,
+      workspaceId: teamRecord.workspaceId,
+      teamId: teamRecord.id,
+      parentLabelId: parentValidation.parentLabelId,
+    })
+    .returning();
+
+  return NextResponse.json({ label: newLabel }, { status: 201 });
 }

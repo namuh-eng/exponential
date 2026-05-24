@@ -10,6 +10,7 @@ import {
 } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describeDb } from "./_helpers/db-integration";
 
 const TEST_USER_ID = "15000000-0000-0000-0000-000000000001";
 const TEST_OTHER_USER_ID = "15000000-0000-0000-0000-000000000006";
@@ -44,7 +45,7 @@ const getSessionMock = auth.api.getSession as unknown as ReturnType<
   typeof vi.fn
 >;
 
-describe("Team Settings API Route", () => {
+describeDb("Team Settings API Route", () => {
   beforeAll(async () => {
     // Cleanup
     await db.delete(teamMember).where(eq(teamMember.teamId, TEST_TEAM_ID));
@@ -470,6 +471,134 @@ describe("Team Settings API Route", () => {
 
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/cycle/i);
+  });
+
+  it("PATCH persists workflow automation settings", async () => {
+    getSessionMock.mockResolvedValue({
+      session: {
+        id: "session-id",
+        userId: TEST_USER_ID,
+        token: "token",
+        expiresAt: new Date(Date.now() + 60_000),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      user: {
+        id: TEST_USER_ID,
+        name: "Test User",
+        email: "test@example.com",
+        emailVerified: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    const res = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({
+          workflowAutomation: {
+            gitBranchFormat: "ENG-{issueNumber}-{issueTitle}",
+            gitBranchAutomationEnabled: true,
+            gitPrAutomationEnabled: true,
+            gitBranchCreateTargetStatusId: TEST_READY_STATE_ID,
+            gitPrMergeTargetStatusId: TEST_BACKLOG_STATE_ID,
+            autoAssignEnabled: true,
+            autoAssignMode: "round_robin",
+            statusTransitionRules: [
+              {
+                id: "merged-pr",
+                name: "Complete merged PRs",
+                trigger: "pull_request_merged",
+                sourceStatusId: TEST_READY_STATE_ID,
+                targetStatusId: TEST_BACKLOG_STATE_ID,
+                enabled: true,
+              },
+            ],
+          },
+        }),
+      }),
+      { params: Promise.resolve({ key: "UPDT" }) },
+    );
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(
+      data.team.workflowStates.map((state: { id: string }) => state.id),
+    ).toContain(TEST_READY_STATE_ID);
+    expect(data.team.workflowAutomation).toMatchObject({
+      gitBranchFormat: "ENG-{issueNumber}-{issueTitle}",
+      gitBranchAutomationEnabled: true,
+      gitPrAutomationEnabled: true,
+      gitBranchCreateTargetStatusId: TEST_READY_STATE_ID,
+      gitPrMergeTargetStatusId: TEST_BACKLOG_STATE_ID,
+      autoAssignEnabled: true,
+      autoAssignMode: "round_robin",
+    });
+    expect(data.team.workflowAutomation.statusTransitionRules[0]).toMatchObject(
+      {
+        id: "merged-pr",
+        name: "Complete merged PRs",
+        trigger: "pull_request_merged",
+        sourceStatusId: TEST_READY_STATE_ID,
+        targetStatusId: TEST_BACKLOG_STATE_ID,
+        enabled: true,
+      },
+    );
+
+    const getRes = await GET(new Request("http://localhost"), {
+      params: Promise.resolve({ key: "UPDT" }),
+    });
+    const getPayload = await getRes.json();
+    expect(
+      getPayload.team.workflowAutomation.statusTransitionRules,
+    ).toHaveLength(1);
+    expect(getPayload.team.autoAssignment).toBe(true);
+  });
+
+  it("PATCH rejects workflow automation statuses outside the team workflow", async () => {
+    getSessionMock.mockResolvedValue({
+      session: {
+        id: "session-id",
+        userId: TEST_USER_ID,
+        token: "token",
+        expiresAt: new Date(Date.now() + 60_000),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      user: {
+        id: TEST_USER_ID,
+        name: "Test User",
+        email: "test@example.com",
+        emailVerified: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    const res = await PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        body: JSON.stringify({
+          workflowAutomation: {
+            statusTransitionRules: [
+              {
+                id: "bad-rule",
+                name: "Bad rule",
+                trigger: "issue_created",
+                sourceStatusId: null,
+                targetStatusId: TEST_OTHER_USER_ID,
+                enabled: true,
+              },
+            ],
+          },
+        }),
+      }),
+      { params: Promise.resolve({ key: "UPDT" }) },
+    );
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/target status/i);
   });
 
   it("persists agent guidance and reports modify permission", async () => {

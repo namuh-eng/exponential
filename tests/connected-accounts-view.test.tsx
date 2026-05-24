@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,7 +30,11 @@ const mockLocation = {
 };
 
 type ProviderCapabilities = Partial<
-  Record<"google" | "github" | "gitlab" | "slack" | "passkey", boolean>
+  Record<
+    "google" | "github" | "gitlab" | "slack" | "passkey",
+    | boolean
+    | { supported?: boolean; configured?: boolean; devLinking?: boolean }
+  >
 >;
 
 function mockFetch({
@@ -47,7 +52,7 @@ function mockFetch({
         headers: { "Content-Type": "application/json" },
       });
     }
-    if (path === "/api/auth/provider-capabilities") {
+    if (path.startsWith("/api/auth/provider-capabilities")) {
       return new Response(JSON.stringify({ providers: capabilities }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -74,7 +79,7 @@ describe("ConnectedAccountsPage component", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders provider-level unavailable states including GitHub when no provider is configured", async () => {
+  it("renders provider-level configuration states including GitHub when no provider is configured", async () => {
     const fetchMock = mockFetch({});
 
     render(<ConnectedAccountsPage />);
@@ -90,6 +95,10 @@ describe("ConnectedAccountsPage component", () => {
       );
     });
 
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/provider-capabilities?callbackUrl=%2Fforeverbrowsing%2Fsettings%2Faccount%2Fconnections",
+      expect.objectContaining({ credentials: "include" }),
+    );
     expect(
       screen.getByRole("heading", { level: 1, name: "Connected accounts" }),
     ).toBeInTheDocument();
@@ -103,7 +112,7 @@ describe("ConnectedAccountsPage component", () => {
     expect(
       screen.getByText("GitHub account linking is not configured"),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("Unavailable")).toHaveLength(4);
+    expect(screen.getAllByText("Configuration required")).toHaveLength(4);
     expect(
       screen.queryByRole("button", { name: "Connect account" }),
     ).not.toBeInTheDocument();
@@ -111,7 +120,7 @@ describe("ConnectedAccountsPage component", () => {
   });
 
   it("opens a provider chooser and starts GitHub account linking when configured", async () => {
-    mockFetch({ capabilities: { github: true } });
+    mockFetch({ capabilities: { github: { configured: true } } });
     linkSocialAccountMock.mockResolvedValueOnce({
       data: {
         url: "https://github.com/login/oauth/authorize?client_id=test",
@@ -149,12 +158,15 @@ describe("ConnectedAccountsPage component", () => {
 
   it("renders connected GitHub identity and disconnect action", async () => {
     mockFetch({
-      capabilities: { github: true },
+      capabilities: { github: { configured: true } },
       providers: [
         {
           id: "provider-1",
           providerId: "github",
           accountId: "octocat",
+          displayName: "The Octocat",
+          handle: "octocat",
+          createdAt: "2026-05-01T00:00:00.000Z",
         },
         { id: "provider-2", providerId: "credential", accountId: "email" },
       ],
@@ -164,13 +176,25 @@ describe("ConnectedAccountsPage component", () => {
     render(<ConnectedAccountsPage />);
 
     expect(await screen.findAllByText("GitHub")).toHaveLength(2);
-    expect(screen.getAllByText("External identity: octocat")).toHaveLength(2);
+    expect(screen.getAllByText("The Octocat")).toHaveLength(1);
+    expect(screen.getByText("octocat")).toBeInTheDocument();
+    expect(screen.getAllByText(/Connected (Apr 30|May 1), 2026/)).toHaveLength(
+      2,
+    );
     expect(screen.getAllByText("Connected")).toHaveLength(2);
     expect(
       screen.queryByText("No connected accounts yet."),
     ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Disconnect GitHub" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent(/may stop being attributed/);
+    expect(unlinkSocialAccount).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Disconnect GitHub" }),
+    );
 
     await waitFor(() => {
       expect(unlinkSocialAccount).toHaveBeenCalledWith({
@@ -182,7 +206,9 @@ describe("ConnectedAccountsPage component", () => {
   });
 
   it("keeps the provider surface extensible when capabilities include non-account-linking providers", async () => {
-    mockFetch({ capabilities: { google: true, passkey: true } });
+    mockFetch({
+      capabilities: { google: { devLinking: true }, passkey: true },
+    });
 
     render(<ConnectedAccountsPage />);
 
@@ -199,7 +225,7 @@ describe("ConnectedAccountsPage component", () => {
     mockLocation.search = "?error=access_denied";
     mockLocation.href =
       "http://localhost:3015/foreverbrowsing/settings/account/connections?error=access_denied";
-    mockFetch({ capabilities: { github: true } });
+    mockFetch({ capabilities: { github: { configured: true } } });
 
     render(<ConnectedAccountsPage />);
 

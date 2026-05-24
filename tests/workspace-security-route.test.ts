@@ -15,6 +15,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/active-workspace", () => ({
   resolveActiveWorkspaceId: resolveActiveWorkspaceIdMock,
+  resolveRequestWorkspaceId: resolveActiveWorkspaceIdMock,
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -225,6 +226,24 @@ describe("workspace security route", () => {
         webSearch: false,
         hipaa: true,
         ipRestrictions: [],
+        saml: {
+          enabled: false,
+          domains: [],
+          idpSsoUrl: "",
+          entityId: "",
+          certificate: "",
+          metadataUrl: "",
+          lastTestedAt: null,
+          status: "not_configured",
+          lastError: null,
+        },
+        scim: {
+          enabled: false,
+          baseUrl: "http://localhost:3000/api/scim/workspace-1",
+          tokens: [],
+          lastSyncAt: null,
+          status: "disabled",
+        },
       },
     });
   });

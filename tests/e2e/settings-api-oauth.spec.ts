@@ -63,6 +63,71 @@ test.describe("Settings API OAuth applications", () => {
     await expect(page.getByText(`Redirect URL: ${callbackUrl}`)).toBeVisible();
   });
 
+  test("validates webhook URL and shows issue subscription scope", async ({
+    page,
+  }) => {
+    const suffix = Date.now().toString(36);
+    const workspaceSlug = `webhook-settings-${suffix}`;
+    const workspaceResponse = await page.request.post("/api/workspaces", {
+      data: {
+        name: `Webhook Settings ${suffix}`,
+        urlSlug: workspaceSlug,
+      },
+    });
+    expect(workspaceResponse.status()).toBe(201);
+
+    const badApiResponse = await page.request.post(
+      "/api/workspaces/current/api",
+      {
+        data: {
+          action: "createWebhook",
+          label: `Bad webhook ${suffix}`,
+          url: "http://localhost:3015/hook",
+          events: ["created"],
+        },
+      },
+    );
+    expect(badApiResponse.status()).toBe(400);
+    await expect(badApiResponse.json()).resolves.toEqual({
+      error: "Webhook URL must use HTTPS.",
+    });
+
+    await page.goto(`/${workspaceSlug}/settings/api`);
+    await expect(
+      page.getByRole("heading", { name: "API", exact: true }),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "New webhook" }).click();
+    await expect(
+      page.getByRole("dialog", { name: "New webhook" }),
+    ).toBeVisible();
+    await expect(page.getByText("Subscription scope")).toBeVisible();
+    await expect(page.getByLabel("Issue created")).toBeChecked();
+    await expect(page.getByLabel("Issue updated")).toBeChecked();
+
+    await page.getByLabel("Endpoint URL").fill("not-a-url");
+    await page.getByRole("button", { name: "Create webhook" }).click();
+    await expect(
+      page.getByText("Webhook URL must be a valid absolute URL."),
+    ).toBeVisible();
+    await expect(page.getByText("Webhook created.")).toHaveCount(0);
+
+    const webhookName = `Issue webhook ${suffix}`;
+    await page.getByLabel("Webhook name").fill(webhookName);
+    await page
+      .getByLabel("Endpoint URL")
+      .fill(`https://hooks-${suffix}.example.com/linear`);
+    await page.getByLabel("Issue updated").uncheck();
+    await page.getByLabel("Issue deleted").check();
+    await page.getByRole("button", { name: "Create webhook" }).click();
+
+    await expect(page.getByText("Webhook created.")).toBeVisible();
+    await expect(page.getByText(webhookName, { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Subscription scope: Issue created, Issue deleted"),
+    ).toBeVisible();
+  });
+
   test("manages OAuth, webhook, and API key lifecycle controls", async ({
     page,
   }) => {

@@ -2,16 +2,15 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, project, workspace } from "@/lib/db/schema";
+import { readProjectSettings } from "@/lib/project-detail";
 import {
   DEFAULT_PROJECT_STATUSES,
   readProjectStatusSettings,
   serializeProjectStatusSettings,
   validateProjectStatusesInput,
 } from "@/lib/project-status-settings";
-import { and, count, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-
-type ProjectStatusDbValue = (typeof DEFAULT_PROJECT_STATUSES)[number]["key"];
 
 type WorkspaceAccess = {
   workspaceId: string;
@@ -21,18 +20,6 @@ type WorkspaceAccess = {
 
 function canManageProjectStatuses(role: string) {
   return role === "owner" || role === "admin";
-}
-
-function toStatusCounts(
-  rows: { status: ProjectStatusDbValue; count: number | string }[],
-) {
-  const countsByDbValue = new Map<string, number>();
-
-  for (const row of rows) {
-    countsByDbValue.set(row.status, Number(row.count));
-  }
-
-  return countsByDbValue;
 }
 
 async function getWorkspaceAccess(
@@ -62,12 +49,18 @@ async function getWorkspaceAccess(
 
 async function getProjectCounts(workspaceId: string) {
   const rows = await db
-    .select({ status: project.status, count: count() })
+    .select({ status: project.status, settings: project.settings })
     .from(project)
-    .where(eq(project.workspaceId, workspaceId))
-    .groupBy(project.status);
+    .where(eq(project.workspaceId, workspaceId));
 
-  return toStatusCounts(rows);
+  const countsByKey = new Map<string, number>();
+  for (const row of rows) {
+    const settings = readProjectSettings(row.settings);
+    const key = settings.projectStatusKey ?? row.status;
+    countsByKey.set(key, (countsByKey.get(key) ?? 0) + 1);
+  }
+
+  return countsByKey;
 }
 
 function buildStatuses(settings: unknown, countsByKey: Map<string, number>) {
@@ -111,8 +104,6 @@ export async function GET() {
       readOnly: false,
       customStatusesSupported: true,
       canManage: canManageProjectStatuses(access.role),
-      limitation:
-        "Custom project statuses are configurable in settings; project records still store the default lifecycle values.",
     });
   } catch {
     return NextResponse.json(

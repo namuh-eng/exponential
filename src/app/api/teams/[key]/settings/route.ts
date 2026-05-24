@@ -1,3 +1,8 @@
+import { readAccountPreferencesFromUserSettings } from "@/lib/account-preferences";
+import {
+  buildEffectiveAgentGuidance,
+  readWorkspaceAgentGuidance,
+} from "@/lib/agent-guidance";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
@@ -5,6 +10,7 @@ import {
   member,
   team,
   teamMember,
+  user,
   workflowState,
   workspace,
 } from "@/lib/db/schema";
@@ -14,7 +20,12 @@ import {
   getTeamRestorableUntil,
   isTeamRestorable,
 } from "@/lib/team-lifecycle";
-import { getMutableTeamSettings, readTeamSettings } from "@/lib/team-settings";
+import {
+  type StatusTransitionRule,
+  type TeamWorkflowAutomationSettings,
+  getMutableTeamSettings,
+  readTeamSettings,
+} from "@/lib/team-settings";
 import { findAccessibleTeam } from "@/lib/teams";
 import {
   canPerformWorkspacePermission,
@@ -52,6 +63,7 @@ type TeamSettingsRecord = Omit<
 > & {
   childTeamIds?: string[];
   hierarchyTeamIds?: string[];
+  updatedAt?: Date | null;
 };
 
 async function buildTeamResponse(
@@ -67,6 +79,8 @@ async function buildTeamResponse(
     workspaceMemberRow,
     parentTeamRow,
     eligibleParentRows,
+    childTeamRows,
+    userRow,
   ] = await Promise.all([
     db
       .select({ value: count() })
@@ -133,9 +147,36 @@ async function buildTeamResponse(
           activeTeamFilter,
         ),
       ),
+    db
+      .select({
+        id: team.id,
+        name: team.name,
+        key: team.key,
+        isPrivate: team.isPrivate,
+      })
+      .from(team)
+      .where(and(eq(team.parentTeamId, teamRecord.id), activeTeamFilter))
+      .orderBy(asc(team.name)),
+    db
+      .select({ settings: user.settings })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1),
   ]);
 
   const flags = readTeamSettings(teamRecord.settings);
+  const workspaceAgentGuidance = readWorkspaceAgentGuidance(
+    workspaceRow[0]?.settings,
+  );
+  const accountAgentGuidance = readAccountPreferencesFromUserSettings(
+    userRow[0]?.settings,
+  ).agentPersonalization.instructions;
+  const effectiveGuidance = buildEffectiveAgentGuidance({
+    workspaceGuidance: workspaceAgentGuidance,
+    accountGuidance: accountAgentGuidance,
+    teamGuidance: flags.agentGuidance,
+    teamKey: teamRecord.key,
+  });
   const acceptDestinationStates = workflowStateRows.filter((state) =>
     ["backlog", "unstarted", "started", "completed"].includes(state.category),
   );
@@ -184,6 +225,9 @@ async function buildTeamResponse(
   const visibleEligibleParentTeams = eligibleParentRows
     .filter(canSeeTeamSummary)
     .map(({ id, name, key }) => ({ id, name, key }));
+  const visibleChildTeams = childTeamRows
+    .filter(canSeeTeamSummary)
+    .map(({ id, name, key }) => ({ id, name, key }));
 
   return {
     id: teamRecord.id,
@@ -200,6 +244,8 @@ async function buildTeamResponse(
     triageDeclineDestinationStateId: flags.triageDeclineDestinationStateId,
     acceptDestinationStates,
     declineDestinationStates,
+    workflowStates: workflowStateRows,
+    workflowAutomation: flags.workflowAutomation,
     cyclesEnabled: teamRecord.cyclesEnabled ?? false,
     cycleStartDay: teamRecord.cycleStartDay ?? 1,
     cycleDurationWeeks: teamRecord.cycleDurationWeeks ?? 2,
@@ -213,12 +259,41 @@ async function buildTeamResponse(
     ),
     detailedHistory: flags.detailedHistory,
     agentGuidance: flags.agentGuidance,
+    workspaceAgentGuidance,
+    accountAgentGuidance,
+    guidanceEntries: effectiveGuidance.entries,
+    effectiveAgentPromptPreview:
+      effectiveGuidance.effectiveInstructions ||
+      "No guidance configured yet. Agents will use the default workspace prompt.",
+    agentGuidanceLastSavedAt: teamRecord.updatedAt?.toISOString() ?? null,
+    agentGuidancePermissionLabel: canModifyAgentGuidance
+      ? "You can edit team agent guidance for this workspace."
+      : "Workspace policy restricts team agent guidance edits.",
     canModifyAgentGuidance,
     autoAssignment: flags.autoAssignment,
+    autoAssignMode: flags.autoAssignMode,
+    defaultAssigneeId: flags.defaultAssigneeId,
+    gitBranchFormat: flags.gitBranchFormat,
+    gitPrAutomationEnabled: flags.gitPrAutomationEnabled,
+    gitPrMergeTargetStatusId: flags.gitPrMergeTargetStatusId,
+    gitBranchCreateTargetStatusId: flags.gitBranchCreateTargetStatusId,
+    statusTransitionRules: flags.statusTransitionRules,
     discussionSummariesEnabled: flags.discussionSummariesEnabled,
+    discussionSummaryMinComments: flags.discussionSummaryMinComments,
+    discussionSummaryRefreshMode: flags.discussionSummaryRefreshMode,
     parentTeamId: teamRecord.parentTeamId ?? null,
     parentTeam: visibleParentTeam,
     eligibleParentTeams: visibleEligibleParentTeams,
+    childTeams: visibleChildTeams,
+    hierarchyTeamIds: teamRecord.hierarchyTeamIds ?? [
+      teamRecord.id,
+      ...visibleChildTeams.map((child) => child.id),
+    ],
+    hierarchyImpact: {
+      rollupTeamCount: teamRecord.hierarchyTeamIds?.length ?? 1,
+      filters: ["Issues", "Cycles", "Triage", "Analytics"],
+      teamScopePath: `/${workspaceSlug}/teams/${teamRecord.key}`,
+    },
     retiredAt: teamRecord.retiredAt?.toISOString() ?? null,
     deletedAt: teamRecord.deletedAt?.toISOString() ?? null,
     deleteScheduledAt: teamRecord.deleteScheduledAt?.toISOString() ?? null,
@@ -277,9 +352,20 @@ export async function PATCH(
     cycleDurationWeeks?: number;
     emailEnabled?: boolean;
     detailedHistory?: boolean;
+    gitBranchFormat?: string;
+    gitPrAutomationEnabled?: boolean;
+    gitPrMergeTargetStatusId?: string | null;
+    gitBranchCreateTargetStatusId?: string | null;
+    autoAssignEnabled?: boolean;
+    autoAssignMode?: "creator" | "team_lead" | "round_robin" | "none";
+    defaultAssigneeId?: string | null;
+    statusTransitionRules?: StatusTransitionRule[];
     agentGuidance?: string;
     autoAssignment?: boolean;
     discussionSummariesEnabled?: boolean;
+    discussionSummaryMinComments?: number;
+    discussionSummaryRefreshMode?: "manual" | "automatic";
+    workflowAutomation?: Partial<TeamWorkflowAutomationSettings>;
     parentTeamId?: string | null;
   } | null;
 
@@ -510,6 +596,116 @@ export async function PATCH(
 
   const currentFlags = readTeamSettings(teamRecord.settings);
   const currentSettings = getMutableTeamSettings(teamRecord.settings);
+  const workflowStateRows = await db
+    .select({
+      id: workflowState.id,
+      name: workflowState.name,
+      category: workflowState.category,
+      color: workflowState.color,
+      position: workflowState.position,
+    })
+    .from(workflowState)
+    .where(eq(workflowState.teamId, teamRecord.id))
+    .orderBy(asc(workflowState.position), asc(workflowState.name));
+
+  const normalizeOptionalStateId = (value: string | null | undefined) =>
+    typeof value === "string" ? value.trim() || null : (value ?? null);
+  const nextGitBranchFormat =
+    body.gitBranchFormat === undefined
+      ? currentFlags.gitBranchFormat
+      : body.gitBranchFormat.trim();
+  if (
+    body.gitBranchFormat !== undefined &&
+    (!nextGitBranchFormat || !nextGitBranchFormat.includes("{number}"))
+  ) {
+    return NextResponse.json(
+      { error: "Branch format must include {number}" },
+      { status: 400 },
+    );
+  }
+  const nextAutoAssignMode = body.autoAssignMode ?? currentFlags.autoAssignMode;
+  if (
+    !["creator", "team_lead", "round_robin", "none"].includes(
+      nextAutoAssignMode,
+    )
+  ) {
+    return NextResponse.json(
+      { error: "Auto-assignment mode is invalid" },
+      { status: 400 },
+    );
+  }
+  const nextStatusTransitionRules =
+    body.statusTransitionRules === undefined
+      ? currentFlags.statusTransitionRules
+      : body.statusTransitionRules;
+  const transitionStateIds = [
+    normalizeOptionalStateId(body.gitPrMergeTargetStatusId),
+    normalizeOptionalStateId(body.gitBranchCreateTargetStatusId),
+    ...nextStatusTransitionRules.map((rule) => rule.targetStatusId),
+  ].filter((value): value is string => Boolean(value));
+  const uniqueTransitionStateIds = [...new Set(transitionStateIds)];
+  const transitionStateRows = uniqueTransitionStateIds.length
+    ? await db
+        .select({ id: workflowState.id, category: workflowState.category })
+        .from(workflowState)
+        .where(
+          and(
+            eq(workflowState.teamId, teamRecord.id),
+            inArray(workflowState.id, uniqueTransitionStateIds),
+          ),
+        )
+    : [];
+  const transitionStatesById = new Map(
+    transitionStateRows.map((state) => [state.id, state]),
+  );
+  if (uniqueTransitionStateIds.some((id) => !transitionStatesById.has(id))) {
+    return NextResponse.json(
+      { error: "Target status must belong to this team's workflow" },
+      { status: 400 },
+    );
+  }
+  const validRuleTriggers = new Set([
+    "branch_created",
+    "pr_opened",
+    "pr_merged",
+    "issue_assigned",
+    "issue_unassigned",
+  ]);
+  const validRuleSources = new Set([
+    "any",
+    "backlog",
+    "unstarted",
+    "started",
+    "completed",
+  ]);
+  for (const rule of nextStatusTransitionRules) {
+    if (
+      !rule.id?.trim() ||
+      !rule.name?.trim() ||
+      !validRuleTriggers.has(rule.trigger) ||
+      !validRuleSources.has(rule.sourceCategory) ||
+      !rule.targetStatusId
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Status transition rules must include a name, trigger, and target status",
+        },
+        { status: 400 },
+      );
+    }
+    const target = transitionStatesById.get(rule.targetStatusId);
+    if (
+      target &&
+      rule.sourceCategory !== "any" &&
+      target.category === rule.sourceCategory
+    ) {
+      return NextResponse.json(
+        { error: "Target status must differ from the source category" },
+        { status: 400 },
+      );
+    }
+  }
   const nextTriageAcceptDestinationStateId =
     body.triageAcceptDestinationStateId === undefined
       ? currentFlags.triageAcceptDestinationStateId
@@ -522,6 +718,145 @@ export async function PATCH(
     body.agentGuidance === undefined
       ? currentFlags.agentGuidance
       : body.agentGuidance;
+  const nextDiscussionSummaryMinComments =
+    body.discussionSummaryMinComments === undefined
+      ? currentFlags.discussionSummaryMinComments
+      : Number(body.discussionSummaryMinComments);
+  if (
+    !Number.isInteger(nextDiscussionSummaryMinComments) ||
+    nextDiscussionSummaryMinComments < 3 ||
+    nextDiscussionSummaryMinComments > 50
+  ) {
+    return NextResponse.json(
+      { error: "Discussion summary trigger must be between 3 and 50 comments" },
+      { status: 400 },
+    );
+  }
+  const nextDiscussionSummaryRefreshMode =
+    body.discussionSummaryRefreshMode === undefined
+      ? currentFlags.discussionSummaryRefreshMode
+      : body.discussionSummaryRefreshMode;
+  if (!["manual", "automatic"].includes(nextDiscussionSummaryRefreshMode)) {
+    return NextResponse.json(
+      { error: "Discussion summary refresh mode is invalid" },
+      { status: 400 },
+    );
+  }
+
+  const workflowStateIds = new Set(workflowStateRows.map((state) => state.id));
+  const normalizeStatusId = (value: string | null | undefined) =>
+    typeof value === "string" ? value.trim() || null : (value ?? null);
+  const currentWorkflowAutomation = currentFlags.workflowAutomation;
+  const workflowAutomationPatch = body.workflowAutomation ?? {};
+  const nextWorkflowAutomation: TeamWorkflowAutomationSettings = {
+    ...currentWorkflowAutomation,
+    ...workflowAutomationPatch,
+    gitBranchFormat:
+      typeof workflowAutomationPatch.gitBranchFormat === "string"
+        ? workflowAutomationPatch.gitBranchFormat.trim()
+        : currentWorkflowAutomation.gitBranchFormat,
+    gitBranchCreateTargetStatusId:
+      workflowAutomationPatch.gitBranchCreateTargetStatusId === undefined
+        ? currentWorkflowAutomation.gitBranchCreateTargetStatusId
+        : normalizeStatusId(
+            workflowAutomationPatch.gitBranchCreateTargetStatusId,
+          ),
+    gitPrMergeTargetStatusId:
+      workflowAutomationPatch.gitPrMergeTargetStatusId === undefined
+        ? currentWorkflowAutomation.gitPrMergeTargetStatusId
+        : normalizeStatusId(workflowAutomationPatch.gitPrMergeTargetStatusId),
+    defaultAssigneeId:
+      workflowAutomationPatch.defaultAssigneeId === undefined
+        ? currentWorkflowAutomation.defaultAssigneeId
+        : normalizeStatusId(workflowAutomationPatch.defaultAssigneeId),
+    statusTransitionRules:
+      workflowAutomationPatch.statusTransitionRules ??
+      currentWorkflowAutomation.statusTransitionRules,
+  };
+
+  if (!nextWorkflowAutomation.gitBranchFormat) {
+    return NextResponse.json(
+      { error: "Git branch format is required" },
+      { status: 400 },
+    );
+  }
+  if (
+    nextWorkflowAutomation.autoAssignMode &&
+    !["creator", "team_lead", "round_robin", "none"].includes(
+      nextWorkflowAutomation.autoAssignMode,
+    )
+  ) {
+    return NextResponse.json(
+      { error: "Auto-assignment mode is invalid" },
+      { status: 400 },
+    );
+  }
+
+  for (const [field, value] of [
+    [
+      "Branch creation target status",
+      nextWorkflowAutomation.gitBranchCreateTargetStatusId,
+    ],
+    [
+      "Pull request merge target status",
+      nextWorkflowAutomation.gitPrMergeTargetStatusId,
+    ],
+  ] as const) {
+    if (value && !workflowStateIds.has(value)) {
+      return NextResponse.json(
+        { error: `${field} must belong to this team's workflow` },
+        { status: 400 },
+      );
+    }
+  }
+
+  if (!Array.isArray(nextWorkflowAutomation.statusTransitionRules)) {
+    return NextResponse.json(
+      { error: "Status transition rules must be an array" },
+      { status: 400 },
+    );
+  }
+
+  nextWorkflowAutomation.statusTransitionRules =
+    nextWorkflowAutomation.statusTransitionRules.map((rule, index) => ({
+      id: rule.id?.trim() || `rule-${index + 1}`,
+      name: rule.name?.trim() || `Transition rule ${index + 1}`,
+      trigger: rule.trigger,
+      sourceStatusId: normalizeStatusId(rule.sourceStatusId),
+      targetStatusId: normalizeStatusId(rule.targetStatusId) ?? "",
+      enabled: rule.enabled !== false,
+    }));
+
+  for (const rule of nextWorkflowAutomation.statusTransitionRules) {
+    if (
+      ![
+        "issue_created",
+        "branch_created",
+        "pull_request_merged",
+        "issue_assigned",
+      ].includes(rule.trigger)
+    ) {
+      return NextResponse.json(
+        { error: "Status transition trigger is invalid" },
+        { status: 400 },
+      );
+    }
+    if (rule.sourceStatusId && !workflowStateIds.has(rule.sourceStatusId)) {
+      return NextResponse.json(
+        { error: "Source status must belong to this team's workflow" },
+        { status: 400 },
+      );
+    }
+    if (!rule.targetStatusId || !workflowStateIds.has(rule.targetStatusId)) {
+      return NextResponse.json(
+        {
+          error:
+            "Transition rules require a target status from this team's workflow",
+        },
+        { status: 400 },
+      );
+    }
+  }
 
   if (
     body.agentGuidance !== undefined &&
@@ -574,11 +909,41 @@ export async function PATCH(
         ...currentSettings,
         emailEnabled: body.emailEnabled ?? currentFlags.emailEnabled,
         detailedHistory: body.detailedHistory ?? currentFlags.detailedHistory,
+        gitBranchFormat: nextGitBranchFormat,
+        gitPrAutomationEnabled:
+          body.gitPrAutomationEnabled ?? currentFlags.gitPrAutomationEnabled,
+        gitPrMergeTargetStatusId:
+          body.gitPrMergeTargetStatusId === undefined
+            ? currentFlags.gitPrMergeTargetStatusId
+            : normalizeOptionalStateId(body.gitPrMergeTargetStatusId),
+        gitBranchCreateTargetStatusId:
+          body.gitBranchCreateTargetStatusId === undefined
+            ? currentFlags.gitBranchCreateTargetStatusId
+            : normalizeOptionalStateId(body.gitBranchCreateTargetStatusId),
+        autoAssignment:
+          body.autoAssignEnabled ??
+          body.autoAssignment ??
+          currentFlags.autoAssignment,
+        autoAssignMode: nextAutoAssignMode,
+        defaultAssigneeId:
+          body.defaultAssigneeId === undefined
+            ? currentFlags.defaultAssigneeId
+            : body.defaultAssigneeId?.trim() || null,
+        statusTransitionRules: nextStatusTransitionRules.map((rule) => ({
+          id: rule.id.trim(),
+          name: rule.name.trim(),
+          trigger: rule.trigger,
+          sourceCategory: rule.sourceCategory,
+          targetStatusId: rule.targetStatusId,
+          enabled: rule.enabled !== false,
+        })),
         agentGuidance: nextAgentGuidance,
-        autoAssignment: body.autoAssignment ?? currentFlags.autoAssignment,
+        workflowAutomation: nextWorkflowAutomation,
         discussionSummariesEnabled:
           body.discussionSummariesEnabled ??
           currentFlags.discussionSummariesEnabled,
+        discussionSummaryMinComments: nextDiscussionSummaryMinComments,
+        discussionSummaryRefreshMode: nextDiscussionSummaryRefreshMode,
         triageAcceptDestinationStateId: nextTriageAcceptDestinationStateId,
         triageDeclineDestinationStateId: nextTriageDeclineDestinationStateId,
       },

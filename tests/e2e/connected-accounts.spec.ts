@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Connected accounts", () => {
-  test("Connected accounts renders integration provider rows and configured/unavailable states", async ({
+  test("workspace-prefixed route preserves slug and renders provider rows", async ({
     page,
   }) => {
     const suffix = Date.now().toString(36);
@@ -14,11 +14,33 @@ test.describe("Connected accounts", () => {
     });
     expect(workspaceResponse.status()).toBe(201);
 
+    const loginRedirects: string[] = [];
+    page.on("response", (response) => {
+      const url = new URL(response.url());
+      if (url.pathname === "/login") {
+        loginRedirects.push(
+          `${response.status()} ${url.pathname}${url.search}`,
+        );
+      }
+    });
+
     await page.goto(`/${workspaceSlug}/settings/account/connections`);
+    await expect(page).toHaveURL(
+      new RegExp(`/${workspaceSlug}/settings/account/connections$`),
+    );
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Connected accounts" }),
     ).toBeVisible();
+    await expect(page).toHaveURL(
+      new RegExp(`/${workspaceSlug}/settings/account/connections$`),
+    );
+    expect(page.url()).not.toContain("/login");
+    expect(page.url()).not.toContain(
+      "/settings/account/connections?callbackUrl",
+    );
+    expect(loginRedirects).toEqual([]);
+
     await expect(page.getByText("No connected accounts yet.")).toBeVisible();
     await expect(page.getByText("Available providers")).toBeVisible();
     await expect(page.getByText(/^GitHub$/)).toBeVisible();
@@ -32,28 +54,69 @@ test.describe("Connected accounts", () => {
     );
     expect(capabilities.ok()).toBeTruthy();
     const data = (await capabilities.json()) as {
-      providers?: { github?: boolean; google?: boolean };
+      providers?: {
+        github?: boolean | { configured?: boolean; devLinking?: boolean };
+        google?: boolean | { configured?: boolean; devLinking?: boolean };
+      };
     };
 
     const connectButton = page.getByRole("button", { name: "Connect account" });
-    if (data.providers?.github) {
+    const githubCapability = data.providers?.github;
+    const googleCapability = data.providers?.google;
+    const githubActionable =
+      githubCapability === true ||
+      (typeof githubCapability === "object" &&
+        (githubCapability.configured || githubCapability.devLinking));
+    const googleActionable =
+      googleCapability === true ||
+      (typeof googleCapability === "object" &&
+        (googleCapability.configured || googleCapability.devLinking));
+
+    if (githubActionable) {
       await expect(connectButton).toBeEnabled();
       await connectButton.click();
       await expect(
         page.getByText("Choose an account to connect"),
       ).toBeVisible();
-      await expect(page.getByRole("button", { name: "GitHub" })).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "GitHub", exact: true }),
+      ).toBeVisible();
     } else {
       await expect(
         page.getByText("GitHub account linking is not configured"),
       ).toBeVisible();
     }
 
-    if (!data.providers?.github && !data.providers?.google) {
+    if (!githubActionable && !googleActionable) {
       await expect(connectButton).toHaveCount(0);
       await expect(page.getByText("Choose an account to connect")).toHaveCount(
         0,
       );
     }
+  });
+
+  test("non-prefixed connected accounts route still renders for authenticated users", async ({
+    page,
+  }) => {
+    await page.goto("/settings/account/connections");
+
+    await expect(page).not.toHaveURL(/\/login/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Connected accounts" }),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/settings\/account\/connections$/);
+  });
+
+  test("non-prefixed connected accounts route continues to render", async ({
+    page,
+  }) => {
+    await page.goto("/settings/account/connections");
+
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Connected accounts" }),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/settings\/account\/connections$/);
+    await expect(page.getByText("Available providers")).toBeVisible();
+    await expect(page.getByText(/^GitHub$/)).toBeVisible();
   });
 });

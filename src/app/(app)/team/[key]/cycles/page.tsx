@@ -1,5 +1,6 @@
 "use client";
 
+import { useAppShellContext } from "@/app/(app)/app-shell";
 import { CycleRow } from "@/components/cycle-row";
 import { CycleSection } from "@/components/cycle-section";
 import { EmptyState } from "@/components/empty-state";
@@ -77,7 +78,10 @@ function getCycleFormDefaults(data: CyclesResponse | null) {
 }
 
 export default function TeamCyclesPage() {
-  const params = useParams<{ key: string }>();
+  const params = useParams<{ key?: string }>();
+  const shellContext = useAppShellContext();
+  const teamKey = params.key ?? shellContext?.teamKey ?? "";
+  const workspaceSlug = shellContext?.workspaceSlug;
   const [data, setData] = useState<CyclesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadState, setLoadState] = useState<"ready" | "not-found" | "error">(
@@ -89,7 +93,13 @@ export default function TeamCyclesPage() {
   const fetchCycles = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/teams/${params.key}/cycles`);
+      if (!teamKey) {
+        setData(null);
+        setLoadState("not-found");
+        return;
+      }
+
+      const res = await fetch(`/api/teams/${teamKey}/cycles`);
       if (res.ok) {
         const json = await res.json();
         setData(json);
@@ -105,7 +115,7 @@ export default function TeamCyclesPage() {
     } finally {
       setLoading(false);
     }
-  }, [params.key]);
+  }, [teamKey]);
 
   useEffect(() => {
     fetchCycles();
@@ -119,7 +129,7 @@ export default function TeamCyclesPage() {
       const endDate = formData.get("endDate") as string;
       const name = (formData.get("name") as string) || undefined;
 
-      const res = await fetch(`/api/teams/${params.key}/cycles`, {
+      const res = await fetch(`/api/teams/${teamKey}/cycles`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ startDate, endDate, name }),
@@ -137,7 +147,7 @@ export default function TeamCyclesPage() {
       } | null;
       setCreateError(json?.error ?? "Failed to create cycle");
     },
-    [params.key, fetchCycles],
+    [teamKey, fetchCycles],
   );
 
   if (loading) {
@@ -151,7 +161,7 @@ export default function TeamCyclesPage() {
   if (loadState !== "ready") {
     return (
       <TeamRouteErrorState
-        teamKey={params.key}
+        teamKey={teamKey}
         variant={loadState}
         onRetry={loadState === "error" ? fetchCycles : undefined}
       />
@@ -161,7 +171,7 @@ export default function TeamCyclesPage() {
   if (!data) {
     return (
       <TeamRouteErrorState
-        teamKey={params.key}
+        teamKey={teamKey}
         variant="error"
         onRetry={fetchCycles}
       />
@@ -281,13 +291,27 @@ export default function TeamCyclesPage() {
                 Current Cycle
               </span>
             </div>
-            <CycleRow cycle={current} teamKey={params.key} />
+            <CycleRow
+              cycle={current}
+              teamKey={teamKey}
+              workspaceSlug={workspaceSlug}
+            />
           </div>
         )}
 
-        <CycleSection title="Upcoming" cycles={upcoming} teamKey={params.key} />
+        <CycleSection
+          title="Upcoming"
+          cycles={upcoming}
+          teamKey={teamKey}
+          workspaceSlug={workspaceSlug}
+        />
 
-        <CycleSection title="Past Cycles" cycles={past} teamKey={params.key} />
+        <CycleSection
+          title="Past Cycles"
+          cycles={past}
+          teamKey={teamKey}
+          workspaceSlug={workspaceSlug}
+        />
       </div>
     </div>
   );

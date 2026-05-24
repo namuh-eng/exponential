@@ -167,6 +167,62 @@ export const authorizedApplicationGrant = pgTable(
   ],
 );
 
+export const workspaceIntegration = pgTable(
+  "workspace_integration",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    provider: varchar("provider", { length: 64 }).notNull(),
+    status: varchar("status", { length: 32 }).notNull().default("connected"),
+    externalId: text("external_id"),
+    displayName: varchar("display_name", { length: 255 }),
+    metadata: jsonb("metadata").notNull().default({}),
+    connectedByUserId: text("connected_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    connectedAt: timestamp("connected_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("workspace_integration_workspace_idx").on(t.workspaceId),
+    uniqueIndex("workspace_integration_workspace_provider_idx").on(
+      t.workspaceId,
+      t.provider,
+    ),
+  ],
+);
+
+export const teamNotificationIntegration = pgTable(
+  "team_notification_integration",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => team.id, { onDelete: "cascade" }),
+    workspaceIntegrationId: uuid("workspace_integration_id").references(
+      () => workspaceIntegration.id,
+      { onDelete: "set null" },
+    ),
+    provider: varchar("provider", { length: 64 }).notNull(),
+    channelId: text("channel_id"),
+    channelName: varchar("channel_name", { length: 255 }),
+    enabled: boolean("enabled").notNull().default(false),
+    events: jsonb("events").notNull().default([]),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("team_notification_integration_team_idx").on(t.teamId),
+    uniqueIndex("team_notification_integration_team_provider_idx").on(
+      t.teamId,
+      t.provider,
+    ),
+  ],
+);
+
 export const verification = pgTable("verification", {
   id: text("id").primaryKey(),
   identifier: text("identifier").notNull(),
@@ -443,9 +499,13 @@ export const issueTemplate = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     name: varchar("name", { length: 255 }).notNull(),
     description: text("description").notNull(),
+    templateType: varchar("template_type", { length: 32 })
+      .notNull()
+      .default("issue"),
     workspaceId: uuid("workspace_id")
       .notNull()
       .references(() => workspace.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").references(() => team.id, { onDelete: "cascade" }),
     createdById: text("created_by_id").references(() => user.id, {
       onDelete: "set null",
     }),
@@ -453,7 +513,54 @@ export const issueTemplate = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
-  (t) => [index("issue_template_workspace_idx").on(t.workspaceId)],
+  (t) => [
+    index("issue_template_workspace_idx").on(t.workspaceId),
+    index("issue_template_team_idx").on(t.teamId),
+  ],
+);
+
+// ─── Recurring Issue ────────────────────────────────────────────────
+
+export const recurringIssue = pgTable(
+  "recurring_issue",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => team.id, { onDelete: "cascade" }),
+    creatorId: text("creator_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    title: varchar("title", { length: 500 }).notNull(),
+    description: text("description"),
+    stateId: uuid("state_id").references(() => workflowState.id, {
+      onDelete: "set null",
+    }),
+    assigneeId: text("assignee_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    priority: issuePriority("priority").notNull().default("none"),
+    labelIds: jsonb("label_ids").notNull().default([]),
+    projectId: uuid("project_id").references(() => project.id, {
+      onDelete: "set null",
+    }),
+    cadenceConfig: jsonb("cadence_config").notNull().default({}),
+    timezone: varchar("timezone", { length: 100 }).notNull().default("UTC"),
+    startAt: timestamp("start_at"),
+    nextRunAt: timestamp("next_run_at").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    lastRunAt: timestamp("last_run_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("recurring_issue_workspace_idx").on(t.workspaceId),
+    index("recurring_issue_team_idx").on(t.teamId),
+    index("recurring_issue_next_run_idx").on(t.nextRunAt),
+  ],
 );
 
 // ─── Project Team (many-to-many) ─────────────────────────────────────
@@ -893,6 +1000,8 @@ export const notification = pgTable(
     }),
     type: notificationType("type").notNull(),
     readAt: timestamp("read_at"),
+    snoozedUntilAt: timestamp("snoozed_until_at"),
+    unsnoozedAt: timestamp("unsnoozed_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [
@@ -948,12 +1057,19 @@ export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
   authorizedApplicationGrants: many(authorizedApplicationGrant),
+  connectedWorkspaceIntegrations: many(workspaceIntegration),
   memberships: many(member),
   workspaceInvitations: many(workspaceInvitation),
   teamMemberships: many(teamMember),
   createdIssues: many(issue, { relationName: "creator" }),
   assignedIssues: many(issue, { relationName: "assignee" }),
   projectTemplates: many(projectTemplate),
+  createdRecurringIssues: many(recurringIssue, {
+    relationName: "recurringIssueCreator",
+  }),
+  assignedRecurringIssues: many(recurringIssue, {
+    relationName: "recurringIssueAssignee",
+  }),
   comments: many(comment),
   notifications: many(notification, { relationName: "recipient" }),
 }));
@@ -968,8 +1084,38 @@ export const authorizedApplicationGrantRelations = relations(
   }),
 );
 
+export const workspaceIntegrationRelations = relations(
+  workspaceIntegration,
+  ({ one, many }) => ({
+    workspace: one(workspace, {
+      fields: [workspaceIntegration.workspaceId],
+      references: [workspace.id],
+    }),
+    connectedBy: one(user, {
+      fields: [workspaceIntegration.connectedByUserId],
+      references: [user.id],
+    }),
+    teamNotificationIntegrations: many(teamNotificationIntegration),
+  }),
+);
+
+export const teamNotificationIntegrationRelations = relations(
+  teamNotificationIntegration,
+  ({ one }) => ({
+    team: one(team, {
+      fields: [teamNotificationIntegration.teamId],
+      references: [team.id],
+    }),
+    workspaceIntegration: one(workspaceIntegration, {
+      fields: [teamNotificationIntegration.workspaceIntegrationId],
+      references: [workspaceIntegration.id],
+    }),
+  }),
+);
+
 export const workspaceRelations = relations(workspace, ({ many }) => ({
   members: many(member),
+  integrations: many(workspaceIntegration),
   invitations: many(workspaceInvitation),
   teams: many(team),
   labels: many(label),
@@ -1016,8 +1162,10 @@ export const teamRelations = relations(team, ({ one, many }) => ({
   }),
   childTeams: many(team, { relationName: "parentTeam" }),
   members: many(teamMember),
+  notificationIntegrations: many(teamNotificationIntegration),
   workflowStates: many(workflowState),
   issues: many(issue),
+  recurringIssues: many(recurringIssue),
   labels: many(label),
   cycles: many(cycle),
 }));
@@ -1078,6 +1226,35 @@ export const issueRelations = relations(issue, ({ one, many }) => ({
   relations: many(issueRelation, { relationName: "source" }),
   relatedFrom: many(issueRelation, { relationName: "target" }),
   notifications: many(notification),
+}));
+
+export const recurringIssueRelations = relations(recurringIssue, ({ one }) => ({
+  workspace: one(workspace, {
+    fields: [recurringIssue.workspaceId],
+    references: [workspace.id],
+  }),
+  team: one(team, {
+    fields: [recurringIssue.teamId],
+    references: [team.id],
+  }),
+  creator: one(user, {
+    fields: [recurringIssue.creatorId],
+    references: [user.id],
+    relationName: "recurringIssueCreator",
+  }),
+  state: one(workflowState, {
+    fields: [recurringIssue.stateId],
+    references: [workflowState.id],
+  }),
+  assignee: one(user, {
+    fields: [recurringIssue.assigneeId],
+    references: [user.id],
+    relationName: "recurringIssueAssignee",
+  }),
+  project: one(project, {
+    fields: [recurringIssue.projectId],
+    references: [project.id],
+  }),
 }));
 
 export const issueHistoryRelations = relations(issueHistory, ({ one }) => ({

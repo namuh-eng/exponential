@@ -62,7 +62,7 @@ describe("Global Help and Shortcuts logic", () => {
     expect(screen.getByText("Create initiative")).toBeInTheDocument();
   });
 
-  it("opens keyboard shortcuts with / outside editable fields and ignores / while typing", async () => {
+  it("opens keyboard shortcuts with ? outside editable fields and ignores ? while typing", async () => {
     render(
       <>
         <input aria-label="Issue title" />
@@ -70,12 +70,12 @@ describe("Global Help and Shortcuts logic", () => {
       </>,
     );
 
-    fireEvent.keyDown(screen.getByLabelText("Issue title"), { key: "/" });
+    fireEvent.keyDown(screen.getByLabelText("Issue title"), { key: "?" });
     expect(
       screen.queryByRole("heading", { name: "Keyboard shortcuts" }),
     ).not.toBeInTheDocument();
 
-    fireEvent.keyDown(document, { key: "/" });
+    fireEvent.keyDown(document, { key: "?" });
 
     expect(
       await screen.findByRole("heading", { name: "Keyboard shortcuts" }),
@@ -85,7 +85,7 @@ describe("Global Help and Shortcuts logic", () => {
   it("closes the shortcuts dialog with Escape because that shortcut is advertised", async () => {
     render(<Sidebar {...baseProps} />);
 
-    fireEvent.keyDown(document, { key: "/" });
+    fireEvent.keyDown(document, { key: "?" });
     expect(
       await screen.findByRole("heading", { name: "Keyboard shortcuts" }),
     ).toBeInTheDocument();

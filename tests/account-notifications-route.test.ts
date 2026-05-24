@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { user } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describeDb } from "./_helpers/db-integration";
 
 const TEST_USER_ID = "11000000-0000-0000-0000-000000000001";
 
@@ -22,7 +23,7 @@ vi.mock("@/lib/auth", () => ({
 
 import { auth } from "@/lib/auth";
 
-describe("Account Notifications API Route", () => {
+describeDb("Account Notifications API Route", () => {
   beforeAll(async () => {
     // Cleanup
     await db.delete(user).where(eq(user.id, TEST_USER_ID));

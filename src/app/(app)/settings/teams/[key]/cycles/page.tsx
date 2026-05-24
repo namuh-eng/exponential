@@ -1,8 +1,9 @@
 "use client";
 
+import { getDateInputValue } from "@/lib/cycle-utils";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 interface TeamCycle {
   id: string;
@@ -18,8 +19,34 @@ interface CyclesResponse {
   team: {
     name: string;
     cyclesEnabled: boolean;
+    cycleDurationWeeks?: number;
   };
   cycles: TeamCycle[];
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function getCycleFormDefaults(data: CyclesResponse | null) {
+  const durationWeeks = data?.team.cycleDurationWeeks ?? 2;
+  const today = new Date();
+  const latestCycleEnd = data?.cycles.reduce<Date | null>((latest, cycle) => {
+    const cycleEnd = new Date(cycle.endDate);
+    return !latest || cycleEnd.getTime() > latest.getTime() ? cycleEnd : latest;
+  }, null);
+  const startDate =
+    latestCycleEnd && latestCycleEnd.getTime() >= today.getTime()
+      ? addDays(latestCycleEnd, 1)
+      : today;
+  const endDate = addDays(startDate, durationWeeks * 7 - 1);
+
+  return {
+    startDate: getDateInputValue(startDate),
+    endDate: getDateInputValue(endDate),
+  };
 }
 
 export default function TeamCyclesSettingsPage() {
@@ -27,13 +54,57 @@ export default function TeamCyclesSettingsPage() {
   const teamKey = params.key as string;
   const [data, setData] = useState<CyclesResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const fetchCycles = useCallback(async () => {
+    const res = await fetch(`/api/teams/${teamKey}/cycles`);
+    const json = await res.json();
+    setData(json);
+  }, [teamKey]);
 
   useEffect(() => {
-    fetch(`/api/teams/${teamKey}/cycles`)
-      .then((res) => res.json())
-      .then((json) => setData(json))
-      .finally(() => setLoading(false));
-  }, [teamKey]);
+    fetchCycles().finally(() => setLoading(false));
+  }, [fetchCycles]);
+
+  const handleCreateCycle = useCallback(
+    async (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      setSubmitting(true);
+      setCreateError(null);
+
+      const formData = new FormData(e.currentTarget);
+      const payload = {
+        name: ((formData.get("name") as string) || "").trim() || undefined,
+        startDate: formData.get("startDate") as string,
+        endDate: formData.get("endDate") as string,
+        autoRollover: formData.get("autoRollover") === "on",
+      };
+
+      try {
+        const res = await fetch(`/api/teams/${teamKey}/cycles`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (res.ok) {
+          await fetchCycles();
+          setShowCreateForm(false);
+          return;
+        }
+
+        const json = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setCreateError(json?.error ?? "Failed to create cycle");
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [teamKey, fetchCycles],
+  );
 
   if (loading) {
     return (
@@ -50,6 +121,8 @@ export default function TeamCyclesSettingsPage() {
       </div>
     );
   }
+
+  const createDisabled = !data.team.cyclesEnabled;
 
   return (
     <div className="max-w-[720px]">
@@ -68,7 +141,17 @@ export default function TeamCyclesSettingsPage() {
         </h1>
         <button
           type="button"
-          className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
+          onClick={() => {
+            setCreateError(null);
+            setShowCreateForm(true);
+          }}
+          disabled={createDisabled}
+          title={
+            createDisabled
+              ? "Enable cycles in General settings before creating a cycle."
+              : undefined
+          }
+          className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           New cycle
         </button>
@@ -89,6 +172,19 @@ export default function TeamCyclesSettingsPage() {
           </Link>
           .
         </div>
+      )}
+
+      {showCreateForm && (
+        <CreateCycleForm
+          onSubmit={handleCreateCycle}
+          onCancel={() => {
+            setCreateError(null);
+            setShowCreateForm(false);
+          }}
+          error={createError}
+          defaults={getCycleFormDefaults(data)}
+          submitting={submitting}
+        />
       )}
 
       <div className="mt-8 flex flex-col gap-2">
@@ -124,5 +220,82 @@ export default function TeamCyclesSettingsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+function CreateCycleForm({
+  onSubmit,
+  onCancel,
+  error,
+  defaults,
+  submitting,
+}: {
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+  onCancel: () => void;
+  error: string | null;
+  defaults: { startDate: string; endDate: string };
+  submitting: boolean;
+}) {
+  return (
+    <form
+      aria-label="Create cycle"
+      onSubmit={onSubmit}
+      className="mt-6 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-hover)] p-4"
+    >
+      <div className="flex flex-col gap-3">
+        <label className="flex flex-col gap-1 text-[13px] text-[var(--color-text-secondary)]">
+          Name
+          <input
+            name="name"
+            type="text"
+            placeholder="Cycle name (optional)"
+            className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
+          />
+        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-[13px] text-[var(--color-text-secondary)]">
+            Start
+            <input
+              name="startDate"
+              type="date"
+              defaultValue={defaults.startDate}
+              required
+              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-2 py-1 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-[13px] text-[var(--color-text-secondary)]">
+            End
+            <input
+              name="endDate"
+              type="date"
+              defaultValue={defaults.endDate}
+              required
+              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-2 py-1 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-[13px] text-[var(--color-text-secondary)]">
+            <input name="autoRollover" type="checkbox" defaultChecked />
+            Auto rollover unfinished issues
+          </label>
+        </div>
+        {error && <p className="text-[12px] text-red-400">{error}</p>}
+        <div className="flex items-center gap-2">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {submitting ? "Creating..." : "Create cycle"}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md px-3 py-1.5 text-[13px] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </form>
   );
 }

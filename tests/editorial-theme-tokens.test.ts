@@ -25,7 +25,39 @@ describe("Editorial theme tokens", () => {
     expect(css).toContain("--editorial-bg: #faf7f2");
     expect(css).toContain("--editorial-accent: oklch(0.56 0.16 32)");
     expect(css).toContain("--editorial-sans: var(--font-inter-tight)");
+    expect(css).toContain("--shadow-editorial-sm: var(--editorial-shadow-sm)");
+    expect(editorialThemeTokens.shadow.md).toBe("var(--editorial-shadow-md)");
     expect(globalsCss).toContain('@import "./editorial-theme.css"');
+  });
+
+  it("keeps imported theme CSS free of Tailwind layers that must follow @tailwind", () => {
+    expect(globalsCss.indexOf('@import "./editorial-theme.css"')).toBeLessThan(
+      globalsCss.indexOf("@tailwind base"),
+    );
+    const cssWithoutComments = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(cssWithoutComments).not.toMatch(/@(tailwind|layer)\b/);
+
+    for (const layerRule of [
+      "@layer base",
+      "@layer components",
+      "@layer utilities",
+    ]) {
+      const layerIndex = globalsCss.indexOf(layerRule);
+      if (layerIndex === -1) {
+        continue;
+      }
+
+      const matchingTailwindDirective = layerRule.replace(
+        "@layer",
+        "@tailwind",
+      );
+      expect(
+        globalsCss.indexOf(matchingTailwindDirective),
+      ).toBeGreaterThanOrEqual(0);
+      expect(globalsCss.indexOf(matchingTailwindDirective)).toBeLessThan(
+        layerIndex,
+      );
+    }
   });
 
   it("documents shared primitive class names and implements them in the theme layer", () => {

@@ -6,16 +6,39 @@ import {
   signInWithPasskey,
 } from "@/lib/auth-client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type AuthMode = "login" | "signup";
-type LoginStep = "choose" | "email-input" | "email-code" | "sso-input";
+type LoginStep =
+  | "choose"
+  | "email-input"
+  | "email-verifying"
+  | "email-code"
+  | "sso-input";
+type ProviderCapabilityValue =
+  | boolean
+  | { configured?: boolean; devLinking?: boolean; supported?: boolean };
 type ProviderCapabilities = {
   providers?: {
-    google?: boolean;
+    google?: ProviderCapabilityValue;
     passkey?: boolean;
+    googleAllowed?: boolean;
+    emailPasskey?: boolean;
   };
+  workspace?: {
+    authentication?: {
+      google?: boolean;
+      emailPasskey?: boolean;
+    };
+  } | null;
 };
+
+function isProviderEnabled(value: ProviderCapabilityValue | undefined) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  return value?.configured === true;
+}
 type SocialSignInResult = {
   data?: {
     url?: string;
@@ -33,10 +56,24 @@ type SamlDiscoveryResponse = {
 };
 
 const emptyEmailLoginError = "Please enter an email address for login.";
-const invalidEmailError = "Enter a valid email address.";
 
-function isValidEmailAddress(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+function shouldUseNativeEmailValidation(
+  form: HTMLFormElement,
+  email: string,
+): boolean {
+  if (!email) {
+    return false;
+  }
+
+  const emailInput = form.querySelector<HTMLInputElement>(
+    'input[type="email"]',
+  );
+  if (!emailInput || emailInput.validity.valid) {
+    return false;
+  }
+
+  form.reportValidity();
+  return true;
 }
 
 const authErrorMessages: Record<string, string> = {
@@ -200,12 +237,12 @@ function FooterLinks({ mode }: { mode: AuthMode }) {
         Sign up
       </Link>{" "}
       or{" "}
-      <a
-        href="https://linear.app/homepage"
+      <Link
+        href="/homepage"
         className="font-medium text-[var(--auth-link)] transition-opacity hover:opacity-80"
       >
         learn more
-      </a>
+      </Link>
     </p>
   );
 }
@@ -226,11 +263,16 @@ export function AuthPage({
   const [googleConfigured, setGoogleConfigured] = useState<boolean | null>(
     initialGoogleConfigured,
   );
+  const [googleAllowed, setGoogleAllowed] = useState(true);
   const [passkeyConfigured, setPasskeyConfigured] = useState<boolean | null>(
     true,
   );
   const [passkeySupported, setPasskeySupported] = useState(false);
+  const [emailConfigured, setEmailConfigured] = useState(true);
+  const [googleDisabledByWorkspace, setGoogleDisabledByWorkspace] =
+    useState(false);
   const [error, setError] = useState("");
+  const emailSubmitAttemptRef = useRef(0);
 
   useEffect(() => {
     setPasskeySupported(browserSupportsPasskeys());
@@ -249,22 +291,46 @@ export function AuthPage({
 
     async function loadProviderCapabilities() {
       try {
-        const response = await fetch("/api/auth/provider-capabilities", {
-          cache: "no-store",
-          signal: controller.signal,
-        });
+        const callbackPath = getSafeCallbackPath();
+        const capabilitiesUrl = new URL(
+          "/api/auth/provider-capabilities",
+          window.location.origin,
+        );
+        if (callbackPath !== "/") {
+          capabilitiesUrl.searchParams.set("callbackUrl", callbackPath);
+        }
+        const response = await fetch(
+          `${capabilitiesUrl.pathname}${capabilitiesUrl.search}`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
         if (!response.ok) {
           throw new Error("Failed to load auth provider capabilities.");
         }
         const data = (await response.json()) as ProviderCapabilities;
-        setGoogleConfigured(data.providers?.google === true);
-        setPasskeyConfigured(data.providers?.passkey === true);
+        setGoogleConfigured(isProviderEnabled(data.providers?.google));
+        setGoogleAllowed(data.providers?.googleAllowed !== false);
+        setPasskeyConfigured(
+          data.providers?.emailPasskey !== false &&
+            data.providers?.passkey === true,
+        );
+        setEmailConfigured(
+          data.workspace?.authentication?.emailPasskey !== false,
+        );
+        setGoogleDisabledByWorkspace(
+          data.workspace?.authentication?.google === false,
+        );
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
         }
         setGoogleConfigured(false);
+        setGoogleAllowed(true);
         setPasskeyConfigured(true);
+        setEmailConfigured(true);
+        setGoogleDisabledByWorkspace(false);
       }
     }
 
@@ -274,6 +340,13 @@ export function AuthPage({
   }, []);
 
   async function handleGoogleLogin() {
+    if (!googleAllowed) {
+      setError(
+        "Google sign-in is disabled for this workspace. Use SAML SSO instead.",
+      );
+      return;
+    }
+
     if (googleConfigured !== true) {
       setError(
         "Google sign-in is not configured. Use email or SAML SSO instead.",
@@ -322,11 +395,23 @@ export function AuthPage({
       return;
     }
 
-    if (!isValidEmailAddress(normalizedEmail)) {
-      setError(invalidEmailError);
+    if (shouldUseNativeEmailValidation(e.currentTarget, normalizedEmail)) {
+      setError("");
       return;
     }
 
+    if (emailConfigured === false) {
+      setError(
+        "Email and passkey authentication is disabled for this workspace. Use SAML SSO instead.",
+      );
+      return;
+    }
+
+    const submitAttempt = emailSubmitAttemptRef.current + 1;
+    emailSubmitAttemptRef.current = submitAttempt;
+    setEmail(normalizedEmail);
+    setCode("");
+    setStep("email-verifying");
     setLoading(true);
     setError("");
 
@@ -345,10 +430,14 @@ export function AuthPage({
             }
           : {}),
       });
-      setCode("");
-      setStep("email-code");
+      if (emailSubmitAttemptRef.current === submitAttempt) {
+        setStep("email-code");
+      }
     } catch {
-      setError("Failed to send magic link. Please try again.");
+      if (emailSubmitAttemptRef.current === submitAttempt) {
+        setStep("email-input");
+        setError("Failed to send magic link. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -380,12 +469,19 @@ export function AuthPage({
     window.location.assign(verifyUrl.toString());
   }
 
-  async function handleSsoSubmit(e: React.FormEvent) {
+  async function handleSsoSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const normalizedSsoIdentifier = ssoIdentifier.trim();
 
     if (!normalizedSsoIdentifier) {
       setError(emptyEmailLoginError);
+      return;
+    }
+
+    if (
+      shouldUseNativeEmailValidation(e.currentTarget, normalizedSsoIdentifier)
+    ) {
+      setError("");
       return;
     }
 
@@ -422,7 +518,7 @@ export function AuthPage({
   async function handlePasskeyLogin() {
     if (passkeyConfigured === false) {
       setError(
-        "Passkey sign-in is not configured. Use email or Google to log in.",
+        "Passkey sign-in is disabled for this workspace. Use SAML SSO instead.",
       );
       return;
     }
@@ -456,11 +552,13 @@ export function AuthPage({
   }
 
   const title =
-    step === "email-input" || step === "sso-input"
-      ? "What’s your email address?"
-      : mode === "signup"
-        ? "Create your workspace"
-        : "Log in to Linear";
+    step === "email-verifying"
+      ? "Verifying it’s you"
+      : step === "email-input" || step === "sso-input"
+        ? "What’s your email address?"
+        : mode === "signup"
+          ? "Create your workspace"
+          : "Log in to Linear";
   const backLabel = mode === "signup" ? "Back to signup" : "Back to login";
 
   return (
@@ -475,66 +573,70 @@ export function AuthPage({
       <div className="mt-8 space-y-4">
         {step === "choose" && (
           <div className="space-y-3">
-            <button
-              type="button"
-              onClick={handleGoogleLogin}
-              disabled={loading}
-              className="auth-primary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 18 18"
-                role="img"
-                aria-label="Google"
+            {googleAllowed && (
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={loading}
+                className="auth-primary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <path
-                  d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
-                  fill="#4285F4"
-                />
-                <path
-                  d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"
-                  fill="#34A853"
-                />
-                <path
-                  d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
-                  fill="#FBBC05"
-                />
-                <path
-                  d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
-                  fill="#EA4335"
-                />
-              </svg>
-              {googleConfigured === null
-                ? "Checking Google sign-in"
-                : "Continue with Google"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setPasskeyPending(false);
-                setStep("email-input");
-              }}
-              disabled={loading}
-              className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                role="img"
-                aria-label="Email"
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 18 18"
+                  role="img"
+                  aria-label="Google"
+                >
+                  <path
+                    d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
+                    fill="#4285F4"
+                  />
+                  <path
+                    d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"
+                    fill="#34A853"
+                  />
+                  <path
+                    d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
+                    fill="#FBBC05"
+                  />
+                  <path
+                    d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
+                    fill="#EA4335"
+                  />
+                </svg>
+                {googleConfigured === null
+                  ? "Checking Google sign-in"
+                  : "Continue with Google"}
+              </button>
+            )}
+            {passkeyConfigured !== false && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPasskeyPending(false);
+                  setStep("email-input");
+                }}
+                disabled={loading}
+                className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <rect width="20" height="16" x="2" y="4" rx="2" />
-                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-              </svg>
-              Continue with email
-            </button>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  role="img"
+                  aria-label="Email"
+                >
+                  <rect width="20" height="16" x="2" y="4" rx="2" />
+                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                </svg>
+                Continue with email
+              </button>
+            )}
 
             <button
               type="button"
@@ -602,6 +704,13 @@ export function AuthPage({
               </>
             )}
 
+            {googleDisabledByWorkspace && emailConfigured === false ? (
+              <p className="pt-1 text-center text-sm text-[var(--auth-muted)]">
+                Google, email, and passkey login are disabled for this
+                workspace. Continue with SAML SSO.
+              </p>
+            ) : null}
+
             {error && (
               <p className="pt-1 text-center text-sm text-[var(--auth-error)]">
                 {error}
@@ -634,6 +743,8 @@ export function AuthPage({
             <button
               type="button"
               onClick={() => {
+                emailSubmitAttemptRef.current += 1;
+                setLoading(false);
                 setStep("choose");
                 setError("");
                 setCode("");
@@ -648,6 +759,47 @@ export function AuthPage({
               </p>
             )}
           </form>
+        )}
+
+        {step === "email-verifying" && (
+          <div className="space-y-5 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-[var(--auth-secondary-border)] bg-[var(--auth-secondary-bg)]">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--auth-accent)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                role="img"
+                aria-label="Verification in progress"
+              >
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+                <path d="m9 12 2 2 4-4" />
+              </svg>
+            </div>
+            <div>
+              <p className="mt-2 text-[14px] leading-6 text-[var(--auth-muted)]">
+                This helps us confirm this sign-in request before sending your
+                email link and code.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                emailSubmitAttemptRef.current += 1;
+                setLoading(false);
+                setStep("choose");
+                setError("");
+                setCode("");
+              }}
+              className="w-full pt-1 text-center text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
+            >
+              {backLabel}
+            </button>
+          </div>
         )}
 
         {step === "sso-input" && (

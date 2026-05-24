@@ -24,6 +24,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/active-workspace", () => ({
   resolveActiveWorkspaceId: resolveActiveWorkspaceIdMock,
+  resolveRequestWorkspaceId: resolveActiveWorkspaceIdMock,
 }));
 
 vi.mock("@/lib/db", async () => {
@@ -269,8 +270,10 @@ describe("workspace api route", () => {
     );
 
     expect(response.status).toBe(400);
+    // The webhook URL is validated before the events array, so an ftp:// URL
+    // surfaces the protocol error rather than the combined-validation message.
     await expect(response.json()).resolves.toEqual({
-      error: "A webhook URL and at least one event are required.",
+      error: "Webhook URL must use HTTPS.",
     });
     expect(webhookInsertValuesMock).not.toHaveBeenCalled();
   });

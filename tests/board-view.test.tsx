@@ -1,8 +1,9 @@
 import { BoardColumn } from "@/components/board-column";
 import { defaultDisplayProperties } from "@/components/display-options-panel";
 import { IssueCard } from "@/components/issue-card";
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import "@testing-library/jest-dom/vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(() => {
   cleanup();
@@ -60,6 +61,16 @@ describe("IssueCard", () => {
   it("renders creation date", () => {
     render(<IssueCard {...defaultProps} />);
     expect(screen.getByText("Feb 27")).toBeDefined();
+  });
+
+  it("uses the issue href as an accessible card link", () => {
+    render(<IssueCard {...defaultProps} href="/team/ENG/issue/ENG-116" />);
+
+    const link = screen.getByRole("link", {
+      name: /ENG-116 Add JS event listener detection/i,
+    });
+    expect(link).toHaveAttribute("href", "/team/ENG/issue/ENG-116");
+    expect(link).toHaveAttribute("data-testid", "issue-card");
   });
 
   it("does not render assignee when not provided", () => {
@@ -159,7 +170,28 @@ describe("BoardColumn", () => {
         <div>empty</div>
       </BoardColumn>,
     );
-    const button = screen.getByRole("button", { name: /add issue/i });
+    const button = screen.getByRole("button", {
+      name: /add issue to backlog/i,
+    });
     expect(button).toBeDefined();
+    expect(button).toBeDisabled();
+  });
+
+  it("calls the add issue handler from the column button", () => {
+    const onAddIssue = vi.fn();
+    render(
+      <BoardColumn
+        name="Todo"
+        count={0}
+        statusCategory="unstarted"
+        statusColor="#6b6f76"
+        onAddIssue={onAddIssue}
+      >
+        <div>empty</div>
+      </BoardColumn>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /add issue to todo/i }));
+    expect(onAddIssue).toHaveBeenCalledTimes(1);
   });
 });

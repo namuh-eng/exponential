@@ -18,8 +18,15 @@ type StatusCategory = (typeof CATEGORY_ORDER)[number];
 
 type TeamRecord = NonNullable<Awaited<ReturnType<typeof findAccessibleTeam>>>;
 
+type StatusBehavior = {
+  terminalBehavior?: string;
+  autoArchiveDays?: number | null;
+  slaBehavior?: string;
+};
+
 type TeamSettings = Record<string, unknown> & {
   duplicateIssueStatusId?: string;
+  statusBehaviors?: Record<string, StatusBehavior>;
 };
 
 function isStatusCategory(value: unknown): value is StatusCategory {
@@ -53,6 +60,46 @@ function normalizeColor(value: unknown) {
     return null;
   }
   return value.toLowerCase();
+}
+
+function normalizeBehavior(value: unknown): StatusBehavior | null | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object") return null;
+  const input = value as Record<string, unknown>;
+  const terminalBehavior =
+    typeof input.terminalBehavior === "string"
+      ? input.terminalBehavior
+      : "standard";
+  if (!["standard", "completed", "canceled"].includes(terminalBehavior))
+    return null;
+  const slaBehavior =
+    typeof input.slaBehavior === "string" ? input.slaBehavior : "inherit";
+  if (!["inherit", "pause", "complete", "ignore"].includes(slaBehavior))
+    return null;
+  let autoArchiveDays: number | null = null;
+  if (input.autoArchiveDays !== null && input.autoArchiveDays !== undefined) {
+    const n = Number(input.autoArchiveDays);
+    if (!Number.isInteger(n) || n < 0 || n > 3650) return null;
+    autoArchiveDays = n;
+  }
+  return { terminalBehavior, autoArchiveDays, slaBehavior };
+}
+
+async function persistStatusBehavior(
+  teamRecord: TeamRecord,
+  statusId: string,
+  behavior: StatusBehavior | undefined,
+) {
+  if (behavior === undefined) return teamRecord.settings;
+  const settings = readTeamSettings(teamRecord.settings);
+  const statusBehaviors = { ...(settings.statusBehaviors ?? {}) };
+  statusBehaviors[statusId] = behavior;
+  const nextSettings = { ...settings, statusBehaviors };
+  await db
+    .update(team)
+    .set({ settings: nextSettings, updatedAt: new Date() })
+    .where(eq(team.id, teamRecord.id));
+  return nextSettings;
 }
 
 async function canManageTeamStatuses(teamRecord: TeamRecord, userId: string) {
@@ -145,12 +192,16 @@ async function buildStatusesResponse(teamRecord: TeamRecord) {
       color: string;
       position: number;
       isDefault: boolean | null;
+      behavior: StatusBehavior;
     }>
   > = {};
 
   for (const cat of CATEGORY_ORDER) {
     grouped[cat] = [];
   }
+
+  const statusBehaviors =
+    readTeamSettings(teamRecord.settings).statusBehaviors ?? {};
 
   for (const state of states) {
     const cat = state.category;
@@ -163,6 +214,7 @@ async function buildStatusesResponse(teamRecord: TeamRecord) {
       color: state.color,
       position: state.position,
       isDefault: state.isDefault,
+      behavior: statusBehaviors[state.id] ?? {},
     });
   }
 
@@ -294,6 +346,14 @@ export async function POST(
     );
   }
 
+  const behavior = normalizeBehavior(body.behavior);
+  if (behavior === null) {
+    return NextResponse.json(
+      { error: "Invalid status behavior" },
+      { status: 400 },
+    );
+  }
+
   const categoryStates = await db
     .select({ position: workflowState.position })
     .from(workflowState)
@@ -308,18 +368,26 @@ export async function POST(
 
   const isFirstInCategory = categoryStates.length === 0;
 
-  await db.insert(workflowState).values({
-    teamId: result.teamRecord.id,
-    category: body.category,
-    name,
-    description: normalizeDescription(body.description),
-    color: color ?? "#6b6f76",
-    position: nextPosition,
-    isDefault: isFirstInCategory,
-    updatedAt: new Date(),
-  });
+  const [created] = await db
+    .insert(workflowState)
+    .values({
+      teamId: result.teamRecord.id,
+      category: body.category,
+      name,
+      description: normalizeDescription(body.description),
+      color: color ?? "#6b6f76",
+      position: nextPosition,
+      isDefault: isFirstInCategory,
+      updatedAt: new Date(),
+    })
+    .returning({ id: workflowState.id });
 
-  return buildStatusesResponse(result.teamRecord);
+  const settings = await persistStatusBehavior(
+    result.teamRecord,
+    created.id,
+    behavior ?? undefined,
+  );
+  return buildStatusesResponse({ ...result.teamRecord, settings });
 }
 
 export async function PATCH(
@@ -500,10 +568,35 @@ export async function PATCH(
     );
   }
 
-  const nextIsDefault =
-    body.isDefault === undefined
+  const targetCategoryStates = await db
+    .select({
+      id: workflowState.id,
+      position: workflowState.position,
+      isDefault: workflowState.isDefault,
+    })
+    .from(workflowState)
+    .where(
+      and(
+        eq(workflowState.teamId, result.teamRecord.id),
+        eq(workflowState.category, nextCategory),
+      ),
+    );
+  const targetCategoryWillBeEmpty =
+    nextCategory !== existing.category && targetCategoryStates.length === 0;
+
+  const nextIsDefault = targetCategoryWillBeEmpty
+    ? true
+    : body.isDefault === undefined
       ? existing.isDefault === true
       : body.isDefault === true;
+
+  const behavior = normalizeBehavior(body.behavior);
+  if (behavior === null) {
+    return NextResponse.json(
+      { error: "Invalid status behavior" },
+      { status: 400 },
+    );
+  }
 
   if (
     existing.isDefault === true &&
@@ -529,14 +622,29 @@ export async function PATCH(
         : {}),
       ...(color !== undefined ? { color } : {}),
       ...(body.category !== undefined ? { category: nextCategory } : {}),
-      ...(body.isDefault !== undefined
-        ? { isDefault: body.isDefault === true }
+      ...(body.category !== undefined && nextCategory !== existing.category
+        ? {
+            position:
+              Math.max(
+                -1,
+                ...targetCategoryStates.map((state) => Number(state.position)),
+              ) + 1,
+          }
+        : {}),
+      ...(body.isDefault !== undefined || targetCategoryWillBeEmpty
+        ? { isDefault: nextIsDefault }
         : {}),
       updatedAt: new Date(),
     })
     .where(eq(workflowState.id, id));
 
-  if (body.isDefault === true) {
+  const nextSettings = await persistStatusBehavior(
+    result.teamRecord,
+    id,
+    behavior ?? undefined,
+  );
+
+  if (nextIsDefault) {
     await db
       .update(workflowState)
       .set({ isDefault: false, updatedAt: new Date() })
@@ -549,7 +657,10 @@ export async function PATCH(
       );
   }
 
-  return buildStatusesResponse(result.teamRecord);
+  return buildStatusesResponse({
+    ...result.teamRecord,
+    settings: nextSettings,
+  });
 }
 
 export async function DELETE(
@@ -638,6 +749,18 @@ export async function DELETE(
   await db.delete(workflowState).where(eq(workflowState.id, id));
 
   const settings = readTeamSettings(result.teamRecord.settings);
+  const statusBehaviors = { ...(settings.statusBehaviors ?? {}) };
+  delete statusBehaviors[id];
+  if (settings.statusBehaviors) {
+    await db
+      .update(team)
+      .set({
+        settings: { ...settings, statusBehaviors },
+        updatedAt: new Date(),
+      })
+      .where(eq(team.id, result.teamRecord.id));
+  }
+
   if (settings.duplicateIssueStatusId === id) {
     const [fallback] = await db
       .select({ id: workflowState.id })
@@ -648,7 +771,11 @@ export async function DELETE(
     await db
       .update(team)
       .set({
-        settings: { ...settings, duplicateIssueStatusId: fallback?.id },
+        settings: {
+          ...settings,
+          statusBehaviors,
+          duplicateIssueStatusId: fallback?.id,
+        },
         updatedAt: new Date(),
       })
       .where(eq(team.id, result.teamRecord.id));

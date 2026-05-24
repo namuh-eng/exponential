@@ -2,6 +2,7 @@
 
 import {
   LAST_ISSUE_STORAGE_KEY,
+  OPEN_ASK_LINEAR_EVENT,
   OPEN_COMMAND_PALETTE_EVENT,
   OPEN_CREATE_ISSUE_EVENT,
   OPEN_CREATE_ISSUE_FULLSCREEN_EVENT,
@@ -10,6 +11,7 @@ import {
 import {
   isCommandPaletteShortcut,
   isEditableShortcutTarget,
+  isSlashCommandPaletteShortcut,
 } from "@/lib/keyboard-shortcuts";
 import { stripWorkspaceSlug, withWorkspaceSlug } from "@/lib/workspace-paths";
 import { usePathname, useRouter } from "next/navigation";
@@ -26,6 +28,8 @@ interface SearchResult {
   identifier: string;
   title: string;
   priority: string;
+  teamKey?: string;
+  path?: string;
 }
 
 interface ProjectPickerItem {
@@ -43,6 +47,28 @@ interface CommandItem {
   group: string;
   closeOnSelect?: boolean;
   action: () => void;
+}
+
+function getIssueTeamKey(result: SearchResult) {
+  if (result.teamKey) {
+    return result.teamKey;
+  }
+
+  const identifierTeamKey = result.identifier.match(
+    /^([A-Za-z][A-Za-z0-9]*)-/,
+  )?.[1];
+  return identifierTeamKey ?? null;
+}
+
+function getIssuePath(result: SearchResult) {
+  const issueTeamKey = getIssueTeamKey(result);
+  if (!issueTeamKey) {
+    return `/issue/${result.id}`;
+  }
+
+  return `/team/${encodeURIComponent(issueTeamKey)}/issue/${encodeURIComponent(
+    result.identifier,
+  )}`;
 }
 
 export function CommandPalette({
@@ -74,6 +100,12 @@ export function CommandPalette({
   const goTo = useCallback(
     (path: string) => router.push(withWorkspaceSlug(path, workspaceSlug)),
     [router, workspaceSlug],
+  );
+  const getIssueResultPath = useCallback(
+    (result: SearchResult) =>
+      result.path ??
+      `/team/${encodeURIComponent(result.teamKey ?? teamKey)}/issue/${encodeURIComponent(result.identifier)}`,
+    [teamKey],
   );
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
@@ -151,6 +183,15 @@ export function CommandPalette({
 
   // Commands
   const commands: CommandItem[] = [
+    {
+      id: "ask-linear",
+      label: "Ask Linear",
+      shortcut: "A",
+      group: "Ask",
+      action: () => {
+        window.dispatchEvent(new CustomEvent(OPEN_ASK_LINEAR_EVENT));
+      },
+    },
     {
       id: "create-view",
       label: "Create view",
@@ -426,7 +467,7 @@ export function CommandPalette({
         return;
       }
 
-      if (isCommandPaletteShortcut(e)) {
+      if (isCommandPaletteShortcut(e) || isSlashCommandPaletteShortcut(e)) {
         e.preventDefault();
         if (!open) {
           lastFocusedElementRef.current = document.activeElement as HTMLElement;
@@ -513,7 +554,7 @@ export function CommandPalette({
           // Navigate to issue
           const result = results[selectedIndex];
           close();
-          goTo(`/issue/${result.id}`);
+          goTo(getIssueResultPath(result));
         } else {
           const cmdIndex = selectedIndex - results.length;
           if (cmdIndex < filteredCommands.length) {
@@ -527,6 +568,7 @@ export function CommandPalette({
       close,
       executeCommand,
       filteredCommands,
+      getIssueResultPath,
       goTo,
       results,
       selectedIndex,
@@ -649,7 +691,7 @@ export function CommandPalette({
                       }`}
                       onClick={() => {
                         close();
-                        goTo(`/issue/${result.id}`);
+                        goTo(getIssueResultPath(result));
                       }}
                       onMouseEnter={() => setSelectedIndex(idx)}
                     >

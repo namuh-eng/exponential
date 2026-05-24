@@ -128,7 +128,10 @@ describe("TeamLabelsSettingsPage component", () => {
     fireEvent.change(screen.getByPlaceholderText("Label name"), {
       target: { value: "GraphQL" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create label" }));
+    const createButtons = screen.getAllByRole("button", {
+      name: "Create label",
+    });
+    fireEvent.click(createButtons[createButtons.length - 1]);
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(

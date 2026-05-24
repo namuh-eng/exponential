@@ -24,12 +24,15 @@ vi.mock("@/lib/active-workspace", () => ({
 
 vi.mock("@/lib/workspace-creation", () => ({
   MAX_WORKSPACE_NAME_LENGTH: 64,
-  sanitizeWorkspaceSlug: vi.fn((value: string) =>
-    value
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9-]+/g, "-"),
-  ),
+  validateWorkspaceSlug: vi.fn((value: string) => {
+    if (value.length < 2 || value.length > 63)
+      return "URL slug must be between 2 and 63 characters";
+    if (value.trim() !== value)
+      return "URL slug cannot include leading or trailing spaces";
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value))
+      return "URL slug can only use lowercase letters, numbers, and single hyphens";
+    return null;
+  }),
   validateWorkspaceName: vi.fn((value: string) => {
     if (!value.trim()) {
       return "Workspace name is required";
@@ -115,7 +118,11 @@ describe("current workspace route", () => {
         name: "Namuh",
         urlSlug: "namuh",
         logoUrl: "https://img.test/logo.png",
-        settings: { region: "Korea", fiscalMonth: "april" },
+        settings: {
+          region: "Korea",
+          fiscalMonth: "april",
+          welcomeMessage: "Hello",
+        },
         role: "owner",
       },
     ]);
@@ -161,6 +168,7 @@ describe("current workspace route", () => {
         region: "Korea",
         fiscalMonth: "april",
         plan: "free",
+        welcomeMessage: "Hello",
       },
     });
   });
@@ -182,6 +190,25 @@ describe("current workspace route", () => {
     });
   });
 
+  it("rejects invalid url slugs without sanitizing", async () => {
+    const { PATCH } = await import("@/app/api/workspaces/current/route");
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/current", {
+        method: "PATCH",
+        body: JSON.stringify({ urlSlug: "Bad Slug!" }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(updateSetMock).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual({
+      error:
+        "URL slug can only use lowercase letters, numbers, and single hyphens",
+    });
+  });
+
   it("rejects duplicate url slugs", async () => {
     duplicateSlugLimitMock.mockResolvedValue([{ id: "workspace-2" }]);
     const { PATCH } = await import("@/app/api/workspaces/current/route");
@@ -189,7 +216,7 @@ describe("current workspace route", () => {
     const response = await PATCH(
       new Request("http://localhost/api/workspaces/current", {
         method: "PATCH",
-        body: JSON.stringify({ urlSlug: "Taken" }),
+        body: JSON.stringify({ urlSlug: "taken" }),
         headers: { "content-type": "application/json" },
       }),
     );
@@ -208,9 +235,10 @@ describe("current workspace route", () => {
         method: "PATCH",
         body: JSON.stringify({
           name: "Namuh Labs",
-          urlSlug: "Namuh-Labs",
+          urlSlug: "namuh-labs",
           logo: null,
           fiscalMonth: "october",
+          welcomeMessage: "Welcome to QA",
         }),
         headers: { "content-type": "application/json" },
       }),
@@ -222,7 +250,11 @@ describe("current workspace route", () => {
         name: "Namuh Labs",
         urlSlug: "namuh-labs",
         logoUrl: null,
-        settings: { region: "Korea", fiscalMonth: "october" },
+        settings: {
+          region: "Korea",
+          fiscalMonth: "october",
+          welcomeMessage: "Welcome to QA",
+        },
         updatedAt: expect.any(Date),
       }),
     );
@@ -235,6 +267,7 @@ describe("current workspace route", () => {
         logo: null,
         region: "Korea",
         fiscalMonth: "october",
+        welcomeMessage: "Welcome to QA",
         plan: "free",
       },
     });

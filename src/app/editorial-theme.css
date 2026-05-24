@@ -1,3 +1,7 @@
+/* Keep this imported stylesheet free of Tailwind layer at-rules.
+   globals.css imports it before @tailwind so CSS @import stays valid; adding
+   a layer at-rule here makes Tailwind see a layer before its matching Tailwind rule.
+   Intentionally not wrapped in @layer: Tailwind layer directives here would break dev compilation. */
 :root {
   /* Editorial theme: warm paper, serious ink, rust accent. Canonical source: src/lib/editorial-theme-tokens.ts */
   --editorial-bg: #faf7f2;
@@ -5,7 +9,11 @@
   --editorial-surface-2: #f3eee5;
   --editorial-surface-3: #ebe5d9;
   --editorial-hover: rgba(20, 18, 14, 0.04);
-  --editorial-pressed: rgba(20, 18, 14, 0.08);
+  --editorial-pressed: color-mix(
+    in oklab,
+    var(--editorial-accent) 10%,
+    transparent
+  );
   --editorial-ink-1: #14120e;
   --editorial-ink-2: #2d2a23;
   --editorial-ink-3: #5b564a;
@@ -40,6 +48,9 @@
     rgba(20, 18, 14, 0.06);
   --editorial-shadow-lg: 0 8px 16px rgba(20, 18, 14, 0.08), 0 24px 60px
     rgba(20, 18, 14, 0.12);
+  --shadow-editorial-sm: var(--editorial-shadow-sm);
+  --shadow-editorial-md: var(--editorial-shadow-md);
+  --shadow-editorial-lg: var(--editorial-shadow-lg);
 
   /* Legacy app aliases consume Editorial tokens so existing features keep behavior with refreshed styling. */
   --color-sidebar-bg: var(--editorial-bg);
@@ -52,7 +63,16 @@
   --color-accent-hover: var(--editorial-accent-hover);
   --color-surface: var(--editorial-surface);
   --color-surface-hover: var(--editorial-hover);
-  --color-surface-active: var(--editorial-pressed);
+  --color-surface-active: color-mix(
+    in oklab,
+    var(--editorial-accent) 12%,
+    transparent
+  );
+  --color-surface-active-line: color-mix(
+    in oklab,
+    var(--editorial-accent) 58%,
+    var(--editorial-line)
+  );
 }
 
 .dark {
@@ -61,7 +81,11 @@
   --editorial-surface-2: #232019;
   --editorial-surface-3: #2c2820;
   --editorial-hover: rgba(255, 250, 240, 0.04);
-  --editorial-pressed: rgba(255, 250, 240, 0.08);
+  --editorial-pressed: color-mix(
+    in oklab,
+    var(--editorial-accent) 18%,
+    transparent
+  );
   --editorial-ink-1: #f3ede0;
   --editorial-ink-2: #ddd6c5;
   --editorial-ink-3: #9c9583;
@@ -208,4 +232,66 @@
   border: 1px solid var(--editorial-line-strong);
   background: var(--editorial-surface);
   box-shadow: var(--editorial-shadow-lg);
+}
+
+/* Editorial app surface hierarchy and overflow discipline.
+   Keep dense product panes readable without default light scrollbars or broad page churn. */
+.editorial-page-surface {
+  overflow: hidden;
+  scrollbar-color: color-mix(
+      in oklab,
+      var(--editorial-accent) 34%,
+      var(--editorial-line)
+    )
+    var(--editorial-surface-2);
+  scrollbar-width: thin;
+}
+.editorial-page-surface * {
+  scrollbar-color: color-mix(
+      in oklab,
+      var(--editorial-accent) 34%,
+      var(--editorial-line)
+    )
+    transparent;
+  scrollbar-width: thin;
+}
+.editorial-page-surface ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.editorial-page-surface ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.editorial-page-surface ::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: var(--editorial-radius-pill);
+  background: color-mix(
+    in oklab,
+    var(--editorial-accent) 34%,
+    var(--editorial-line)
+  );
+  background-clip: content-box;
+}
+.editorial-page-surface ::-webkit-scrollbar-thumb:hover {
+  background: color-mix(
+    in oklab,
+    var(--editorial-accent) 52%,
+    var(--editorial-line-strong)
+  );
+  background-clip: content-box;
+}
+.editorial-page-surface h1,
+.editorial-page-surface h2 {
+  font-family: var(--editorial-display);
+  letter-spacing: -0.01em;
+}
+.editorial-page-surface button,
+.editorial-page-surface input,
+.editorial-page-surface select,
+.editorial-page-surface textarea {
+  font-family: var(--editorial-sans);
+}
+.editorial-page-surface [data-editorial-row-title],
+.editorial-page-surface [data-editorial-control] {
+  letter-spacing: 0.005em;
 }

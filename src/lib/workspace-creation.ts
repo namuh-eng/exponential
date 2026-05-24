@@ -51,6 +51,27 @@ export function sanitizeWorkspaceSlug(value: string) {
     .replace(/-+$/g, "");
 }
 
+export function validateWorkspaceSlug(value: string) {
+  const trimmedSlug = value.trim();
+
+  if (
+    trimmedSlug.length < 2 ||
+    trimmedSlug.length > MAX_WORKSPACE_SLUG_LENGTH
+  ) {
+    return `URL slug must be between 2 and ${MAX_WORKSPACE_SLUG_LENGTH} characters`;
+  }
+
+  if (trimmedSlug !== value) {
+    return "URL slug cannot include leading or trailing spaces";
+  }
+
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(trimmedSlug)) {
+    return "URL slug can only use lowercase letters, numbers, and single hyphens";
+  }
+
+  return null;
+}
+
 export function validateWorkspaceName(name: string) {
   const trimmedName = name.trim();
 

@@ -13,6 +13,10 @@ vi.mock("@/components/avatar", () => ({
 describe("MembersPage component", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => true),
+    );
     vi.stubGlobal("URL", {
       createObjectURL: vi.fn(() => "blob:url"),
       revokeObjectURL: vi.fn(),
@@ -191,6 +195,49 @@ describe("MembersPage component", () => {
     await waitFor(() => {
       expect(screen.getByText("Member role updated.")).toBeDefined();
     });
+  });
+
+  it("shows member and invitation actions and calls remove/revoke/resend APIs", async () => {
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => mockMembersData,
+    });
+
+    render(<MembersPage />);
+    await waitFor(() =>
+      expect(screen.getAllByText("Teammate").length).toBeGreaterThan(0),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/workspaces/members",
+      expect.objectContaining({
+        method: "DELETE",
+        body: JSON.stringify({ id: "m2", kind: "member" }),
+      }),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Resend" }));
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/workspaces/members",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          id: "m3",
+          kind: "invitation",
+          action: "resend",
+        }),
+      }),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/workspaces/members",
+      expect.objectContaining({
+        method: "DELETE",
+        body: JSON.stringify({ id: "m3", kind: "invitation" }),
+      }),
+    );
   });
 
   it("shows empty state when no members exist", async () => {

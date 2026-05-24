@@ -35,10 +35,21 @@ test.describe("Workspace Views canonical route", () => {
     ).toBeVisible();
 
     await page.getByLabel("Create view").first().click();
+    await expect(page.getByText("Filters")).toBeVisible();
+    await expect(page.getByText("Display options")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "timeline", exact: true }),
+    ).toBeVisible();
     await page.getByPlaceholder("View name").fill(issueViewName);
+    await page.getByRole("button", { name: "timeline", exact: true }).click();
+    await page.getByLabel("Select issue group by").selectOption("assignee");
+    await page.getByLabel("Select issue order by").selectOption("updated");
     await page.getByRole("button", { name: /^Create$/ }).click();
     await expect(page.getByText(issueViewName)).toBeVisible();
     await expect(page).toHaveURL(/\/foreverbrowsing\/views$/);
+    await page.getByText(issueViewName).click();
+    await expect(page).toHaveURL(/\/foreverbrowsing\/team\/.+\/timeline$/);
+    await page.goto("/views");
 
     await page.getByRole("button", { name: "Projects" }).click();
     await expect(page).toHaveURL(/\/foreverbrowsing\/views$/);
@@ -51,6 +62,27 @@ test.describe("Workspace Views canonical route", () => {
     await page.getByRole("button", { name: /^Create$/ }).click();
     await expect(page.getByText(projectViewName)).toBeVisible();
     await expect(page).toHaveURL(/\/foreverbrowsing\/views$/);
+
+    await page.goto("/views/all");
+    await expect(page).toHaveURL(/\/views\/all$/);
+    await expect(
+      page.getByRole("heading", { name: "Views", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Issues" })).toHaveAttribute(
+      "data-active",
+      "true",
+    );
+    await page.getByRole("button", { name: "Projects" }).click();
+    await expect(page).toHaveURL(/\/views\/all$/);
+    await expect(
+      page.getByRole("button", { name: "Projects" }),
+    ).toHaveAttribute("data-active", "true");
+
+    await page.goto("/foreverbrowsing/views/all");
+    await expect(page).toHaveURL(/\/foreverbrowsing\/views\/all$/);
+    await expect(
+      page.getByRole("heading", { name: "Views", exact: true }),
+    ).toBeVisible();
 
     await page.goto("/views/issues");
     await expect(page).toHaveURL(/\/foreverbrowsing\/views\/issues$/);

@@ -9,12 +9,22 @@ import {
 } from "@/lib/workspace-paths";
 import { type NextRequest, NextResponse } from "next/server";
 
+export const PUBLIC_ROUTES = [
+  "/homepage",
+  "/pricing",
+  "/customers",
+  "/changelog",
+  "/now",
+] as const;
+
 const publicPaths = [
   "/login",
   "/signup",
+  ...PUBLIC_ROUTES,
   "/api/auth",
   "/api/workspaces",
   "/api/test",
+  "/api/account",
 ];
 
 function isPublicPath(pathname: string): boolean {
@@ -127,6 +137,35 @@ function getWorkspacePrefixedProjectRoute(pathname: string) {
   return null;
 }
 
+function getWorkspacePrefixedCyclesRoute(pathname: string) {
+  const segments = getPathSegments(pathname);
+
+  if (
+    isWorkspaceSlugSegment(segments[0]) &&
+    segments[1] === "cycles" &&
+    segments.length === 2
+  ) {
+    return { slug: decodeURIComponent(segments[0]) };
+  }
+
+  return null;
+}
+
+function getWorkspacePrefixedTeamCyclesRoute(pathname: string) {
+  const segments = getPathSegments(pathname);
+
+  if (
+    isWorkspaceSlugSegment(segments[0]) &&
+    segments[1] === "team" &&
+    segments[3] === "cycles" &&
+    (segments.length === 4 || segments.length === 5)
+  ) {
+    return { slug: decodeURIComponent(segments[0]) };
+  }
+
+  return null;
+}
+
 function getWorkspacePrefixedTeamProjectsRoute(pathname: string) {
   const segments = getPathSegments(pathname);
 
@@ -169,6 +208,20 @@ function getWorkspacePrefixedTeamAnalyticsRoute(pathname: string) {
     (segments[3] === "analytics" || segments[3] === "insights")
   ) {
     return { slug: decodeURIComponent(segments[0]) };
+  }
+
+  return null;
+}
+
+function getWorkspaceCyclesRedirect(pathname: string) {
+  const segments = getPathSegments(pathname);
+
+  if (
+    isWorkspaceSlugSegment(segments[0]) &&
+    segments[1] === "cycles" &&
+    segments.length === 2
+  ) {
+    return `/${segments[0]}/team/${CANONICAL_TEAM_KEY}/cycles`;
   }
 
   return null;
@@ -221,6 +274,19 @@ function getWorkspaceRootRedirect(pathname: string) {
 
   if (segments.length === 1 && isWorkspaceSlugSegment(segments[0])) {
     return `/${segments[0]}/inbox`;
+  }
+
+  return null;
+}
+
+function getWorkspacePrefixedSearchRedirect(
+  pathname: string,
+  workspaceSlug?: string,
+) {
+  const segments = getPathSegments(pathname);
+
+  if (segments.length === 1 && segments[0] === "search") {
+    return `/${encodeURIComponent(workspaceSlug || CANONICAL_WORKSPACE_SLUG)}/search`;
   }
 
   return null;
@@ -287,6 +353,23 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(canonicalIssueUrl);
   }
 
+  const workspaceCyclesRedirect = getWorkspaceCyclesRedirect(pathname);
+  if (workspaceCyclesRedirect) {
+    const workspaceCyclesUrl = request.nextUrl.clone();
+    workspaceCyclesUrl.pathname = workspaceCyclesRedirect;
+    return NextResponse.redirect(workspaceCyclesUrl);
+  }
+
+  const workspacePrefixedSearchRedirect = getWorkspacePrefixedSearchRedirect(
+    pathname,
+    request.cookies.get("activeWorkspaceSlug")?.value,
+  );
+  if (workspacePrefixedSearchRedirect) {
+    const workspacePrefixedSearchUrl = request.nextUrl.clone();
+    workspacePrefixedSearchUrl.pathname = workspacePrefixedSearchRedirect;
+    return NextResponse.redirect(workspacePrefixedSearchUrl);
+  }
+
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-workspace-source-path", pathname);
 
@@ -308,6 +391,23 @@ export async function proxy(request: NextRequest) {
     getWorkspacePrefixedProjectRoute(pathname);
   if (workspacePrefixedProjectRoute) {
     requestHeaders.set("x-workspace-slug", workspacePrefixedProjectRoute.slug);
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
+  const workspacePrefixedCyclesRoute =
+    getWorkspacePrefixedCyclesRoute(pathname);
+  if (workspacePrefixedCyclesRoute) {
+    requestHeaders.set("x-workspace-slug", workspacePrefixedCyclesRoute.slug);
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
+  const workspacePrefixedTeamCyclesRoute =
+    getWorkspacePrefixedTeamCyclesRoute(pathname);
+  if (workspacePrefixedTeamCyclesRoute) {
+    requestHeaders.set(
+      "x-workspace-slug",
+      workspacePrefixedTeamCyclesRoute.slug,
+    );
     return NextResponse.next({ request: { headers: requestHeaders } });
   }
 

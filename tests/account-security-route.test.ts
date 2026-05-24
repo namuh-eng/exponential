@@ -338,10 +338,21 @@ describe("Account Security API Route", () => {
         clientId: "lin_client_123",
         name: "Linear Importer",
         imageUrl: "https://example.com/importer.png",
+        publisher: null,
         scopes: ["read", "write"],
+        permissionGroups: [
+          {
+            label: "Workspace data",
+            descriptions: [
+              "View workspace and account information",
+              "Create and update workspace data",
+            ],
+          },
+        ],
         webhooksEnabled: true,
         createdAt: "2026-04-01T10:00:00.000Z",
         updatedAt: "2026-04-02T10:00:00.000Z",
+        lastUsedAt: null,
       },
     ]);
     expect(JSON.stringify(data)).not.toMatch(

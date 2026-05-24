@@ -57,6 +57,7 @@ export default function TeamLabelsSettingsPage() {
         initialTeamId={team.id}
         showScopePicker={false}
         description={`Manage labels available for ${team.name} issues.`}
+        createLabelButtonText="Create label"
       />
     </div>
   );

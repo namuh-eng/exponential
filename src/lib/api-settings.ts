@@ -11,6 +11,12 @@ export { asRecord, isPermissionLevel, readPermissionLevel };
 export type { PermissionLevel, WorkspaceMemberRole };
 export type WebhookEventType = "created" | "updated" | "deleted";
 
+export const WEBHOOK_EVENT_LABELS: Record<WebhookEventType, string> = {
+  created: "Issue created",
+  updated: "Issue updated",
+  deleted: "Issue deleted",
+};
+
 export const OAUTH_SCOPE_OPTIONS = [
   "read",
   "write",
@@ -141,9 +147,11 @@ export function normalizeWebhookEvents(value: unknown): WebhookEventType[] {
   );
 }
 
-export type OAuthRedirectValidationResult =
+export type UrlValidationResult =
   | { ok: true; url: string }
   | { ok: false; error: string };
+
+export type OAuthRedirectValidationResult = UrlValidationResult;
 
 function parseIpv4Address(hostname: string): number[] | null {
   const parts = hostname.split(".");
@@ -205,37 +213,47 @@ function isUnsafeRedirectHostname(hostname: string) {
   );
 }
 
-export function validateOAuthRedirectUrl(
+function validateHttpsPublicUrl(
   value: unknown,
-): OAuthRedirectValidationResult {
+  label: string,
+): UrlValidationResult {
   if (typeof value !== "string" || !value.trim()) {
-    return { ok: false, error: "Redirect URL is required." };
+    return { ok: false, error: `${label} is required.` };
   }
 
   let url: URL;
   try {
     url = new URL(value.trim());
   } catch {
-    return { ok: false, error: "Redirect URL must be a valid absolute URL." };
+    return { ok: false, error: `${label} must be a valid absolute URL.` };
   }
 
   if (url.protocol !== "https:") {
-    return { ok: false, error: "Redirect URL must use HTTPS." };
+    return { ok: false, error: `${label} must use HTTPS.` };
   }
 
   if (url.hash) {
-    return { ok: false, error: "Redirect URL must not include a fragment." };
+    return { ok: false, error: `${label} must not include a fragment.` };
   }
 
   if (isUnsafeRedirectHostname(url.hostname)) {
     return {
       ok: false,
-      error:
-        "Redirect URL must not use localhost, loopback, private, or link-local hosts.",
+      error: `${label} must not use localhost, loopback, private, or link-local hosts.`,
     };
   }
 
   return { ok: true, url: url.toString() };
+}
+
+export function validateOAuthRedirectUrl(
+  value: unknown,
+): OAuthRedirectValidationResult {
+  return validateHttpsPublicUrl(value, "Redirect URL");
+}
+
+export function validateWebhookUrl(value: unknown): UrlValidationResult {
+  return validateHttpsPublicUrl(value, "Webhook URL");
 }
 
 export type OAuthRedirectListValidationResult =

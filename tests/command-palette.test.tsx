@@ -381,6 +381,8 @@ describe("CommandPalette", () => {
           identifier: "ONB-4",
           title: "QA feature 004 browser verification",
           priority: "high",
+          teamKey: "ONB",
+          path: "/team/ONB/issue/ONB-4",
         },
       ],
     } as Response);
@@ -399,7 +401,61 @@ describe("CommandPalette", () => {
     );
 
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(pushMock).toHaveBeenCalledWith("/issue/issue-1");
+    expect(pushMock).toHaveBeenCalledWith("/team/ONB/issue/ONB-4");
+  });
+
+  it("wraps canonical issue result routes with the workspace slug on Enter and click", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          id: "issue-1",
+          identifier: "ENG-179",
+          title: "Palette routing regression",
+          priority: "urgent",
+          teamKey: "ENG",
+          path: "/team/ENG/issue/ENG-179",
+        },
+      ],
+    } as Response);
+
+    const { unmount } = render(
+      <CommandPalette teamKey="ENG" workspaceSlug="foreverbrowsing" />,
+    );
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+
+    const input = screen.getByPlaceholderText("Type a command or search...");
+    fireEvent.change(input, { target: { value: "ENG-179" } });
+
+    await screen.findByRole("button", {
+      name: /ENG-179 Palette routing regression/i,
+    });
+
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(pushMock).toHaveBeenCalledWith(
+      "/foreverbrowsing/team/ENG/issue/ENG-179",
+    );
+
+    unmount();
+    pushMock.mockClear();
+
+    render(<CommandPalette teamKey="ENG" workspaceSlug="foreverbrowsing" />);
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+    fireEvent.change(
+      screen.getByPlaceholderText("Type a command or search..."),
+      {
+        target: { value: "ENG-179" },
+      },
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /ENG-179 Palette routing regression/i,
+      }),
+    );
+    expect(pushMock).toHaveBeenCalledWith(
+      "/foreverbrowsing/team/ENG/issue/ENG-179",
+    );
   });
 
   it("ignores stale issue search responses when typing quickly", async () => {
@@ -410,6 +466,8 @@ describe("CommandPalette", () => {
       identifier: string;
       title: string;
       priority: string;
+      teamKey?: string;
+      path?: string;
     }>;
 
     let resolveFirst:
@@ -451,6 +509,8 @@ describe("CommandPalette", () => {
             identifier: "ONB-4",
             title: "Newest result",
             priority: "high",
+            teamKey: "ONB",
+            path: "/team/ONB/issue/ONB-4",
           },
         ],
       });
@@ -469,6 +529,8 @@ describe("CommandPalette", () => {
             identifier: "ON-1",
             title: "Stale result",
             priority: "low",
+            teamKey: "ON",
+            path: "/team/ON/issue/ON-1",
           },
         ],
       });
@@ -492,5 +554,51 @@ describe("CommandPalette", () => {
     expect(dispatchSpy).toHaveBeenCalledWith(
       expect.objectContaining({ type: OPEN_CREATE_ISSUE_FULLSCREEN_EVENT }),
     );
+  });
+
+  it("keeps command actions working when issue search results are present", async () => {
+    const dispatchSpy = vi.spyOn(window, "dispatchEvent");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          id: "issue-1",
+          identifier: "ENG-179",
+          title: "Issue search result",
+          priority: "high",
+          teamKey: "ENG",
+          path: "/team/ENG/issue/ENG-179",
+        },
+      ],
+    } as Response);
+
+    render(<CommandPalette teamKey="ENG" />);
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+
+    const input = screen.getByPlaceholderText("Type a command or search...");
+    fireEvent.change(input, { target: { value: "issue" } });
+
+    await screen.findByText("Issue search result");
+
+    fireEvent.click(screen.getByRole("button", { name: /Create new issue/i }));
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "open-create-issue" }),
+    );
+
+    cleanup();
+    pushMock.mockClear();
+
+    render(<CommandPalette teamKey="ENG" />);
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+    fireEvent.change(
+      screen.getByPlaceholderText("Type a command or search..."),
+      {
+        target: { value: "issues" },
+      },
+    );
+
+    await screen.findByText("Issue search result");
+    fireEvent.click(screen.getByRole("button", { name: "Go to Issues" }));
+    expect(pushMock).toHaveBeenCalledWith("/team/ENG/all");
   });
 });

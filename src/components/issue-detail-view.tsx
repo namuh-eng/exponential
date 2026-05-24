@@ -1,7 +1,10 @@
 "use client";
 
 import { useAppShellContext } from "@/app/(app)/app-shell";
-import { IssueProperties } from "@/components/issue-properties";
+import {
+  IssueProperties,
+  type IssuePropertyUpdate,
+} from "@/components/issue-properties";
 import { SidebarFavoriteButton } from "@/components/sidebar-favorite-button";
 import { LAST_ISSUE_STORAGE_KEY } from "@/lib/command-palette";
 import {
@@ -54,6 +57,9 @@ interface IssueComment {
   body: string;
   user: { name: string; image: string | null };
   createdAt: string;
+  ownedByMe?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
   reactions: IssueReaction[];
   attachments: IssueCommentAttachment[];
 }
@@ -81,6 +87,21 @@ interface IssueSubscriptionState {
   watcherCount: number;
 }
 
+interface IssuePropertyOptions {
+  statuses: {
+    id: string;
+    name: string;
+    category: NonNullable<IssueDetail["state"]>["category"];
+    color: string;
+  }[];
+  priorities: { value: IssueDetail["priority"]; label: string }[];
+  assignees: { id: string; name: string | null; image: string | null }[];
+  labels: { id: string; name: string; color: string }[];
+  projects: { id: string; name: string; icon: string | null }[];
+  cycles: { id: string; name: string | null; number: number }[];
+  estimates: { value: number; label: string }[];
+}
+
 interface IssueDetail {
   id: string;
   identifier: string;
@@ -99,10 +120,10 @@ interface IssueDetail {
       | "canceled";
     color: string;
   } | null;
-  assignee: { name: string; image: string | null } | null;
+  assignee: { id: string; name: string; image: string | null } | null;
   creator: { name: string; image: string | null } | null;
   team: { id: string; name: string; key: string };
-  project: { id: string; name: string; icon: string } | null;
+  project: { id: string; name: string; icon: string | null } | null;
   dueDate: string | null;
   estimate: number | null;
   cycle: { id: string; name: string | null; number: number } | null;
@@ -112,7 +133,7 @@ interface IssueDetail {
     type: "blocks" | "blocked_by" | "duplicate" | "related";
     issue: { id: string; identifier: string; title: string };
   }[];
-  labels: { name: string; color: string }[];
+  labels: { id: string; name: string; color: string }[];
   subscription: IssueSubscriptionState;
   reactions: IssueReaction[];
   discussionSummary: {
@@ -529,6 +550,20 @@ export function IssueDetailView({
   const [savingField, setSavingField] = useState<
     "title" | "description" | null
   >(null);
+  const [propertyOptions, setPropertyOptions] =
+    useState<IssuePropertyOptions | null>(null);
+  const [savingProperty, setSavingProperty] = useState<
+    | "status"
+    | "priority"
+    | "assignee"
+    | "labels"
+    | "dueDate"
+    | "estimate"
+    | "cycle"
+    | "project"
+    | "parentIssue"
+    | null
+  >(null);
   const [commentBody, setCommentBody] = useState("");
   const [workspaceMembers, setWorkspaceMembers] = useState<
     WorkspaceMemberOption[]
@@ -684,6 +719,50 @@ export function IssueDetailView({
   }, []);
 
   useEffect(() => {
+    if (!issue?.team.key) {
+      setPropertyOptions(null);
+      return;
+    }
+
+    let cancelled = false;
+    const teamKey = issue.team.key;
+
+    async function fetchPropertyOptions() {
+      try {
+        const res = await fetch(
+          `/api/teams/${encodeURIComponent(teamKey)}/create-issue-options`,
+        );
+        if (!res.ok) {
+          return;
+        }
+
+        const json = (await res.json()) as Partial<IssuePropertyOptions>;
+        if (!cancelled) {
+          setPropertyOptions({
+            statuses: json.statuses ?? [],
+            priorities: json.priorities ?? [],
+            assignees: json.assignees ?? [],
+            labels: json.labels ?? [],
+            projects: json.projects ?? [],
+            cycles: json.cycles ?? [],
+            estimates: json.estimates ?? [],
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setPropertyOptions(null);
+        }
+      }
+    }
+
+    void fetchPropertyOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [issue?.team.key]);
+
+  useEffect(() => {
     if (!issue) {
       return;
     }
@@ -742,6 +821,51 @@ export function IssueDetailView({
       void fetchHistory();
     } finally {
       setSavingField(null);
+    }
+  }
+
+  async function handlePropertyUpdate(updates: IssuePropertyUpdate) {
+    if (!issue) {
+      return;
+    }
+
+    const property =
+      updates.stateId !== undefined
+        ? "status"
+        : updates.priority !== undefined
+          ? "priority"
+          : updates.assigneeId !== undefined
+            ? "assignee"
+            : updates.labelIds !== undefined
+              ? "labels"
+              : updates.dueDate !== undefined
+                ? "dueDate"
+                : updates.estimate !== undefined
+                  ? "estimate"
+                  : updates.cycleId !== undefined
+                    ? "cycle"
+                    : updates.projectId !== undefined
+                      ? "project"
+                      : updates.parentIssueId !== undefined
+                        ? "parentIssue"
+                        : null;
+
+    setSavingProperty(property);
+    try {
+      const res = await fetch(`/api/issues/${issue.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to update issue property");
+      }
+
+      await fetchIssue();
+      void fetchHistory();
+    } finally {
+      setSavingProperty(null);
     }
   }
 
@@ -1855,29 +1979,33 @@ export function IssueDetailView({
                               >
                                 Copy link
                               </button>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
-                                onClick={() => {
-                                  setCommentActionMenuId(null);
-                                  setEditingCommentId(comment.id);
-                                  setCommentEditBody(comment.body);
-                                }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-red-500 hover:bg-[var(--color-surface-hover)]"
-                                onClick={() => {
-                                  setCommentActionMenuId(null);
-                                  void handleCommentDelete(comment.id);
-                                }}
-                              >
-                                Delete
-                              </button>
+                              {comment.canEdit ? (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                                  onClick={() => {
+                                    setCommentActionMenuId(null);
+                                    setEditingCommentId(comment.id);
+                                    setCommentEditBody(comment.body);
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                              ) : null}
+                              {comment.canDelete ? (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-red-500 hover:bg-[var(--color-surface-hover)]"
+                                  onClick={() => {
+                                    setCommentActionMenuId(null);
+                                    void handleCommentDelete(comment.id);
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              ) : null}
                             </div>
                           ) : null}
                         </div>
@@ -2176,17 +2304,14 @@ export function IssueDetailView({
             {issue.state && (
               <IssueProperties
                 status={{
+                  id: issue.state.id,
                   name: issue.state.name,
                   category: issue.state.category,
                   color: issue.state.color,
                 }}
                 priority={issue.priority}
                 assignee={issue.assignee}
-                labels={issue.labels.map((label, index) => ({
-                  id: `${label.name}-${index}`,
-                  name: label.name,
-                  color: label.color,
-                }))}
+                labels={issue.labels}
                 project={issue.project}
                 dueDate={issue.dueDate}
                 estimate={issue.estimate}
@@ -2194,6 +2319,10 @@ export function IssueDetailView({
                 parentIssue={issue.parentIssue}
                 relations={issue.relations}
                 issueId={issue.id}
+                editable
+                options={propertyOptions ?? undefined}
+                savingProperty={savingProperty}
+                onUpdateIssue={(updates) => void handlePropertyUpdate(updates)}
                 onRelationAdded={(relation) =>
                   setIssue((current) =>
                     current

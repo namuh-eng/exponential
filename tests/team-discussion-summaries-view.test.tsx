@@ -27,6 +27,8 @@ describe("TeamDiscussionSummariesSettingsPage", () => {
                   name: "Team Name",
                   key: "TEAM",
                   discussionSummariesEnabled: false,
+                  discussionSummaryMinComments: 8,
+                  discussionSummaryRefreshMode: "manual",
                 },
               }),
           });
@@ -41,6 +43,10 @@ describe("TeamDiscussionSummariesSettingsPage", () => {
                   key: "TEAM",
                   discussionSummariesEnabled: JSON.parse(options.body)
                     .discussionSummariesEnabled,
+                  discussionSummaryMinComments: JSON.parse(options.body)
+                    .discussionSummaryMinComments,
+                  discussionSummaryRefreshMode: JSON.parse(options.body)
+                    .discussionSummaryRefreshMode,
                 },
               }),
           });
@@ -62,6 +68,12 @@ describe("TeamDiscussionSummariesSettingsPage", () => {
       expect(screen.getByText("Discussion summaries")).toBeInTheDocument();
     });
 
+    expect(screen.getByText("Trigger policy")).toBeInTheDocument();
+    expect(screen.getByText("Issue detail preview")).toBeInTheDocument();
+    expect(screen.getByLabelText("Minimum comments for summaries")).toHaveValue(
+      8,
+    );
+
     const toggle = screen.getByLabelText("Enable discussion summaries");
     expect(toggle).toHaveAttribute("aria-checked", "false");
 
@@ -78,7 +90,11 @@ describe("TeamDiscussionSummariesSettingsPage", () => {
       "/api/teams/TEAM/settings",
       expect.objectContaining({
         method: "PATCH",
-        body: JSON.stringify({ discussionSummariesEnabled: true }),
+        body: JSON.stringify({
+          discussionSummariesEnabled: true,
+          discussionSummaryMinComments: 8,
+          discussionSummaryRefreshMode: "manual",
+        }),
       }),
     );
   });

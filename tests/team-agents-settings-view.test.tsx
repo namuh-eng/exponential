@@ -18,6 +18,23 @@ const mockTeam = {
   name: "Team Name",
   agentGuidance: "Original Guidance",
   autoAssignment: false,
+  agentGuidancePermissionLabel:
+    "You can edit team agent guidance for this workspace.",
+  agentGuidanceLastSavedAt: "2026-05-17T10:00:00.000Z",
+  guidanceEntries: [
+    {
+      source: "workspace",
+      label: "Workspace guidance",
+      instructions: "Cite evidence.",
+    },
+    {
+      source: "team",
+      label: "Team TEAM guidance",
+      instructions: "Original Guidance",
+    },
+  ],
+  effectiveAgentPromptPreview:
+    "Workspace guidance:\nCite evidence.\n\nTeam TEAM guidance:\nOriginal Guidance",
 };
 
 describe("TeamAgentsSettingsPage", () => {
@@ -65,6 +82,10 @@ describe("TeamAgentsSettingsPage", () => {
     expect(
       screen.getByText(/included in agent run prompt configuration/i),
     ).toBeInTheDocument();
+    expect(screen.getByText("Permission state")).toBeInTheDocument();
+    expect(screen.getByText("Effective guidance stack")).toBeInTheDocument();
+    expect(screen.getByText("Prompt and behavior preview")).toBeInTheDocument();
+    expect(screen.getByText("Workspace guidance")).toBeInTheDocument();
     expect(screen.getByLabelText("Enable auto-assignment")).toBeInTheDocument();
   });
 

@@ -18,6 +18,7 @@ interface BoardColumnProps {
   onDragOver?: React.DragEventHandler<HTMLDivElement>;
   onDrop?: React.DragEventHandler<HTMLDivElement>;
   onDragLeave?: React.DragEventHandler<HTMLDivElement>;
+  onAddIssue?: () => void;
   children: React.ReactNode;
 }
 
@@ -31,6 +32,7 @@ export function BoardColumn({
   onDragOver,
   onDrop,
   onDragLeave,
+  onAddIssue,
   children,
 }: BoardColumnProps) {
   return (
@@ -52,8 +54,10 @@ export function BoardColumn({
         <div className="flex-1" />
         <button
           type="button"
-          aria-label="Add issue"
-          className="flex h-5 w-5 items-center justify-center rounded text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
+          aria-label={`Add issue to ${name}`}
+          onClick={onAddIssue}
+          disabled={!onAddIssue}
+          className="flex h-5 w-5 items-center justify-center rounded text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           <svg
             width="14"

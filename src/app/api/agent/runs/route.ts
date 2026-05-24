@@ -2,11 +2,42 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { resolveEffectiveAgentGuidance } from "@/lib/agent-guidance";
 import { createAgentRun, listAgentRuns } from "@/lib/agent-runs";
 import { requireApiSession } from "@/lib/api-auth";
+import { db } from "@/lib/db";
+import { member, workspace } from "@/lib/db/schema";
 import { findAccessibleTeam } from "@/lib/teams";
+import {
+  canUseWorkspaceAgents,
+  readWorkspaceAiSettings,
+} from "@/lib/workspace-ai-settings";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 function normalizeString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+async function resolveWorkspaceAgentCapability(input: {
+  workspaceId: string;
+  userId: string;
+}) {
+  const [record] = await db
+    .select({ settings: workspace.settings, role: member.role })
+    .from(workspace)
+    .innerJoin(
+      member,
+      and(
+        eq(member.workspaceId, workspace.id),
+        eq(member.userId, input.userId),
+      ),
+    )
+    .where(eq(workspace.id, input.workspaceId))
+    .limit(1);
+
+  const aiSettings = readWorkspaceAiSettings(record?.settings);
+  return {
+    canCreateRuns: canUseWorkspaceAgents(record?.role, aiSettings),
+    aiSettings,
+  };
 }
 
 export async function GET() {
@@ -20,9 +51,14 @@ export async function GET() {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
   }
 
+  const capability = await resolveWorkspaceAgentCapability({
+    workspaceId,
+    userId: session.user.id,
+  });
+
   return NextResponse.json({
     runs: listAgentRuns(workspaceId),
-    canCreateRuns: true,
+    canCreateRuns: capability.canCreateRuns,
   });
 }
 
@@ -35,6 +71,21 @@ export async function POST(request: Request) {
   const workspaceId = await resolveActiveWorkspaceId(session.user.id);
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
+  }
+
+  const capability = await resolveWorkspaceAgentCapability({
+    workspaceId,
+    userId: session.user.id,
+  });
+  if (!capability.canCreateRuns) {
+    return NextResponse.json(
+      {
+        error: capability.aiSettings.aiFeaturesEnabled
+          ? "You do not have permission to create agent runs in this workspace"
+          : "Workspace AI and agent features are disabled",
+      },
+      { status: 403 },
+    );
   }
 
   let body: Record<string, unknown>;

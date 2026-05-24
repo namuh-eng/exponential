@@ -19,6 +19,7 @@ import {
   it,
   vi,
 } from "vitest";
+import { describeDb } from "./_helpers/db-integration";
 
 const ADMIN_USER_ID = "23900000-0000-0000-0000-000000000001";
 const MEMBER_USER_ID = "23900000-0000-0000-0000-000000000002";
@@ -135,7 +136,7 @@ async function seed() {
   });
 }
 
-describe("Team members API route", () => {
+describeDb("Team members API route", () => {
   beforeAll(async () => {
     await cleanup();
   });

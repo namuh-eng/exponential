@@ -72,8 +72,41 @@ function buildViewsResponse() {
           issueFilters: [
             { type: "priority", operator: "is", values: ["high"] },
           ],
+          issueDisplayOptions: {
+            groupBy: "assignee",
+            subGroupBy: "none",
+            orderBy: "updated",
+            displayProperties: {
+              id: true,
+              status: true,
+              assignee: true,
+              priority: true,
+              project: true,
+              dueDate: true,
+              milestone: false,
+              labels: false,
+              links: false,
+              timeInStatus: false,
+              created: true,
+              updated: false,
+              pullRequests: false,
+            },
+            showSubIssues: true,
+            showTriageIssues: false,
+            showEmptyColumns: true,
+          },
           projectStatusFilter: "all",
           projectSortBy: "created-desc",
+          projectDisplayOptions: {
+            groupBy: "status",
+            visibleProperties: {
+              lead: true,
+              team: true,
+              targetDate: true,
+              progress: true,
+              status: true,
+            },
+          },
         },
         createdAt: "2026-01-01T00:00:00Z",
         updatedAt: "2026-01-01T00:00:00Z",
@@ -93,13 +126,101 @@ function buildViewsResponse() {
           entityType: "projects",
           scope: "workspace",
           issueFilters: [],
+          issueDisplayOptions: {
+            groupBy: "status",
+            subGroupBy: "none",
+            orderBy: "priority",
+            displayProperties: {
+              id: true,
+              status: true,
+              assignee: true,
+              priority: true,
+              project: true,
+              dueDate: true,
+              milestone: false,
+              labels: true,
+              links: false,
+              timeInStatus: false,
+              created: true,
+              updated: false,
+              pullRequests: false,
+            },
+            showSubIssues: true,
+            showTriageIssues: false,
+            showEmptyColumns: false,
+          },
           projectStatusFilter: "started",
           projectSortBy: "progress-desc",
+          projectDisplayOptions: {
+            groupBy: "team",
+            visibleProperties: {
+              lead: true,
+              team: true,
+              targetDate: false,
+              progress: true,
+              status: true,
+            },
+          },
         },
         createdAt: "2026-01-02T00:00:00Z",
         updatedAt: "2026-01-02T00:00:00Z",
       },
     ],
+  };
+}
+
+function buildIssuePreviewResponse() {
+  return {
+    groups: [
+      {
+        issues: [
+          {
+            id: "issue-1",
+            stateId: "started",
+            priority: "high",
+            assigneeId: "user-1",
+            labelIds: [],
+            projectId: null,
+            creatorId: "user-1",
+            cycleId: null,
+            dueDate: null,
+            estimate: null,
+            teamId: "team-1",
+          },
+          {
+            id: "issue-2",
+            stateId: "backlog",
+            priority: "low",
+            assigneeId: null,
+            labelIds: [],
+            projectId: null,
+            creatorId: "user-1",
+            cycleId: null,
+            dueDate: null,
+            estimate: null,
+            teamId: "team-1",
+          },
+        ],
+      },
+    ],
+    filterOptions: {
+      statuses: [
+        { id: "started", name: "Started", category: "started", color: "#00f" },
+        { id: "backlog", name: "Backlog", category: "backlog", color: "#999" },
+      ],
+      assignees: [{ id: "user-1", name: "John Doe" }],
+      labels: [],
+      projects: [],
+      creators: [{ id: "user-1", name: "John Doe" }],
+      cycles: [],
+      estimates: [],
+      dueDates: [],
+      priorities: [
+        { value: "high", label: "High" },
+        { value: "low", label: "Low" },
+      ],
+      teams: [{ id: "team-1", name: "Onboarding QA Team" }],
+    },
   };
 }
 
@@ -154,6 +275,28 @@ describe("ViewsPage", () => {
     expect(
       screen.queryByText("High priority onboarding"),
     ).not.toBeInTheDocument();
+  });
+
+  it("renders /views/all as the canonical all-views landing route", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => buildViewsResponse(),
+    });
+
+    const { default: ViewsAllPage } = await import(
+      "@/app/(app)/views/all/page"
+    );
+
+    render(<ViewsAllPage />);
+    await waitForLoaded();
+
+    expect(screen.getByRole("heading", { name: "Views" })).toBeInTheDocument();
+    expect(screen.getByText("High priority onboarding")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Projects" }));
+
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.getByText("Project progress")).toBeInTheDocument();
   });
 
   it("shows the empty state when the active tab has no views", async () => {
@@ -248,11 +391,27 @@ describe("ViewsPage", () => {
       "exponential-filters:team:ONB",
       JSON.stringify([{ type: "status", operator: "is", values: ["started"] }]),
     );
+    window.localStorage.setItem(
+      "exponential-display-options:team:ONB",
+      JSON.stringify({
+        groupBy: "assignee",
+        subGroupBy: "none",
+        orderBy: "updated",
+        displayProperties: { labels: false },
+        showSubIssues: false,
+        showTriageIssues: true,
+        showEmptyColumns: true,
+      }),
+    );
 
     mockFetch
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ teams: buildViewsResponse().teams, views: [] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => buildIssuePreviewResponse(),
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -278,6 +437,90 @@ describe("ViewsPage", () => {
           body: expect.stringContaining('"issueFilters":[{"type":"status"'),
         }),
       );
+      const postCall = mockFetch.mock.calls.find(
+        ([url, options]) =>
+          url === "/api/views" &&
+          (options as RequestInit | undefined)?.method === "POST",
+      );
+      expect(postCall).toBeTruthy();
+      const body = JSON.parse((postCall?.[1] as RequestInit).body as string);
+      expect(body.filterState.issueDisplayOptions).toMatchObject({
+        groupBy: "assignee",
+        orderBy: "updated",
+        showSubIssues: false,
+        showTriageIssues: true,
+        showEmptyColumns: true,
+      });
+      expect(
+        body.filterState.issueDisplayOptions.displayProperties.labels,
+      ).toBe(false);
+    });
+  });
+
+  it("creates issue views with editable filters, timeline, and display options", async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ teams: buildViewsResponse().teams, views: [] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => buildIssuePreviewResponse(),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          view: {
+            ...buildViewsResponse().views[0],
+            name: "Timeline bugs",
+            layout: "timeline",
+          },
+        }),
+      });
+
+    render(<ViewsPage initialTab="issues" />);
+    await waitForLoaded();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /create view/i })[0]);
+    fireEvent.change(screen.getByPlaceholderText(/view name/i), {
+      target: { value: "Timeline bugs" },
+    });
+
+    await screen.findByText("2 of 2 matching");
+    fireEvent.click(screen.getByRole("button", { name: "Add filter" }));
+    fireEvent.click(screen.getByRole("button", { name: /status/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Started" }));
+    await screen.findByText("1 of 2 matching");
+
+    fireEvent.click(screen.getByRole("button", { name: "timeline" }));
+    fireEvent.change(screen.getByLabelText("Select issue group by"), {
+      target: { value: "assignee" },
+    });
+    fireEvent.change(screen.getByLabelText("Select issue order by"), {
+      target: { value: "updated" },
+    });
+    fireEvent.click(screen.getByLabelText("Labels"));
+    fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
+
+    await waitFor(() => {
+      const postCall = mockFetch.mock.calls.find(
+        ([url, options]) =>
+          url === "/api/views" &&
+          (options as RequestInit | undefined)?.method === "POST",
+      );
+      expect(postCall).toBeTruthy();
+      const body = JSON.parse((postCall?.[1] as RequestInit).body as string);
+      expect(body.layout).toBe("timeline");
+      expect(body.filterState.issueFilters).toEqual([
+        { type: "status", operator: "is", values: ["started"] },
+      ]);
+      expect(body.filterState.issueDisplayOptions).toMatchObject({
+        groupBy: "assignee",
+        orderBy: "updated",
+      });
+      expect(
+        body.filterState.issueDisplayOptions.displayProperties.labels,
+      ).toBe(false);
     });
   });
 
@@ -295,6 +538,12 @@ describe("ViewsPage", () => {
     expect(window.localStorage.getItem("exponential-filters:team:ONB")).toBe(
       JSON.stringify([{ type: "priority", operator: "is", values: ["high"] }]),
     );
+    expect(
+      JSON.parse(
+        window.localStorage.getItem("exponential-display-options:team:ONB") ??
+          "{}",
+      ),
+    ).toMatchObject({ groupBy: "assignee", orderBy: "updated" });
     expect(push).toHaveBeenCalledWith("/team/ONB/all");
   });
 
@@ -326,6 +575,10 @@ describe("ViewsPage", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => buildViewsResponse(),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => buildIssuePreviewResponse(),
       })
       .mockResolvedValueOnce({
         ok: true,

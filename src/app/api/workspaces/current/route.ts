@@ -4,8 +4,8 @@ import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
 import {
   MAX_WORKSPACE_NAME_LENGTH,
-  sanitizeWorkspaceSlug,
   validateWorkspaceName,
+  validateWorkspaceSlug,
 } from "@/lib/workspace-creation";
 import { and, desc, eq, ne } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -47,11 +47,14 @@ function readWorkspaceSettings(settings: unknown) {
       : DEFAULT_FISCAL_MONTH;
 
   const plan = typeof parsed.plan === "string" ? parsed.plan : "free";
+  const welcomeMessage =
+    typeof parsed.welcomeMessage === "string" ? parsed.welcomeMessage : "";
 
   return {
     region,
     fiscalMonth,
     plan,
+    welcomeMessage,
   };
 }
 
@@ -113,7 +116,8 @@ export async function GET() {
       logo: currentWorkspace.logoUrl,
       region: currentWorkspace.region,
       fiscalMonth: currentWorkspace.fiscalMonth,
-      plan: readWorkspaceSettings(currentWorkspace.settings).plan,
+      welcomeMessage: currentWorkspace.welcomeMessage,
+      plan: currentWorkspace.plan,
     },
   });
 }
@@ -137,6 +141,7 @@ export async function PATCH(request: Request) {
     urlSlug?: unknown;
     logo?: unknown;
     fiscalMonth?: unknown;
+    welcomeMessage?: unknown;
   } | null;
 
   const name =
@@ -146,14 +151,11 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: nameError }, { status: 400 });
   }
 
-  const rawSlug =
+  const urlSlug =
     typeof body?.urlSlug === "string" ? body.urlSlug : currentWorkspace.urlSlug;
-  const urlSlug = sanitizeWorkspaceSlug(rawSlug);
-  if (urlSlug.length < 2 || urlSlug.length > 63) {
-    return NextResponse.json(
-      { error: "URL slug must be between 2 and 63 characters" },
-      { status: 400 },
-    );
+  const slugError = validateWorkspaceSlug(urlSlug);
+  if (slugError) {
+    return NextResponse.json({ error: slugError }, { status: 400 });
   }
 
   if (urlSlug !== currentWorkspace.urlSlug) {
@@ -211,6 +213,10 @@ export async function PATCH(request: Request) {
       : typeof rawLogo === "string" && rawLogo
         ? rawLogo
         : null;
+  const welcomeMessage =
+    typeof body?.welcomeMessage === "string"
+      ? body.welcomeMessage.trim().slice(0, 2000)
+      : currentWorkspace.welcomeMessage;
 
   await db
     .update(workspace)
@@ -222,6 +228,7 @@ export async function PATCH(request: Request) {
         ...asRecord(currentWorkspace.settings),
         region: currentWorkspace.region,
         fiscalMonth,
+        welcomeMessage,
       },
       updatedAt: new Date(),
     })
@@ -235,7 +242,8 @@ export async function PATCH(request: Request) {
       logo,
       region: currentWorkspace.region,
       fiscalMonth,
-      plan: readWorkspaceSettings(currentWorkspace.settings).plan,
+      welcomeMessage,
+      plan: currentWorkspace.plan,
     },
   });
 }

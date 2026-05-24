@@ -20,7 +20,26 @@ interface CreateIssueModalProps {
   defaultStateId?: string;
   defaultStateName?: string;
   defaultProjectId?: string | null;
+  defaultCycleId?: string | null;
+  defaultCycleName?: string | null;
   onCreated?: () => void | Promise<void>;
+}
+
+interface IssueTemplateOption {
+  id: string;
+  name: string;
+  description: string;
+  settings: {
+    title?: string;
+    body?: string;
+    defaultPriority?: string;
+    defaultStatusId?: string;
+    defaultStatusName?: string;
+    defaultTeamId?: string;
+    defaultTeamKey?: string;
+    defaultScope?: string;
+    defaultProjectId?: string | null;
+  };
 }
 
 interface CreateIssueOptions {
@@ -28,6 +47,8 @@ interface CreateIssueOptions {
     id: string;
     name: string;
     key: string;
+    cyclesEnabled?: boolean;
+    estimateType?: string | null;
   };
   statuses: Array<{
     id: string;
@@ -54,9 +75,32 @@ interface CreateIssueOptions {
     name: string;
     icon?: string | null;
   }>;
+  cycles: Array<{
+    id: string;
+    name: string;
+    number: number;
+    startDate?: string | Date;
+    endDate?: string | Date;
+  }>;
+  estimates: Array<{ value: number; label: string }>;
+  templates?: IssueTemplateOption[];
+  relationIssues: Array<{ id: string; identifier: string; title: string }>;
+  dueDatePresets?: Array<{ value: string; label: string }>;
 }
 
-type ToolbarMenu = "status" | "priority" | "assignee" | "project" | "labels";
+type ToolbarMenu =
+  | "status"
+  | "priority"
+  | "assignee"
+  | "project"
+  | "labels"
+  | "cycle"
+  | "estimate"
+  | "dueDate"
+  | "template"
+  | "more"
+  | "parent"
+  | "related";
 
 function getInitials(name: string): string {
   return name
@@ -165,6 +209,106 @@ function AssigneeIcon() {
   );
 }
 
+function CycleIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <path d="M21 3v6h-6" />
+    </svg>
+  );
+}
+
+function EstimateIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 2v20" />
+      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6" />
+    </svg>
+  );
+}
+
+function DueDateIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4" />
+      <path d="M8 2v4" />
+      <path d="M3 10h18" />
+    </svg>
+  );
+}
+
+function TemplateIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 2v6h6" />
+      <path d="M8 13h8" />
+      <path d="M8 17h5" />
+    </svg>
+  );
+}
+
+function MoreIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+      <circle cx="5" cy="12" r="1" />
+    </svg>
+  );
+}
+
 function ProjectIcon() {
   return (
     <svg
@@ -245,6 +389,8 @@ export function CreateIssueModal({
   defaultStateId,
   defaultStateName = "Backlog",
   defaultProjectId = null,
+  defaultCycleId = null,
+  defaultCycleName = null,
   onCreated,
 }: CreateIssueModalProps) {
   const [title, setTitle] = useState("");
@@ -254,6 +400,8 @@ export function CreateIssueModal({
   const [submitting, setSubmitting] = useState(false);
   const [openMenu, setOpenMenu] = useState<ToolbarMenu | null>(null);
   const [options, setOptions] = useState<CreateIssueOptions | null>(null);
+  const [templates, setTemplates] = useState<IssueTemplateOption[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedStateId, setSelectedStateId] = useState(defaultStateId ?? "");
@@ -264,6 +412,16 @@ export function CreateIssueModal({
     null,
   );
   const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
+  const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
+  const [selectedEstimate, setSelectedEstimate] = useState<number | null>(null);
+  const [selectedDueDate, setSelectedDueDate] = useState<string | null>(null);
+  const [selectedParentIssueId, setSelectedParentIssueId] = useState<
+    string | null
+  >(null);
+  const [selectedRelatedIssueId, setSelectedRelatedIssueId] = useState<
+    string | null
+  >(null);
+  const [subscribeToIssue, setSubscribeToIssue] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
 
   const titleRef = useRef<HTMLDivElement>(null);
@@ -285,7 +443,14 @@ export function CreateIssueModal({
     setSelectedAssigneeId(null);
     setSelectedProjectId(defaultProjectId);
     setSelectedLabelIds([]);
+    setSelectedCycleId(defaultCycleId);
+    setSelectedEstimate(null);
+    setSelectedDueDate(null);
+    setSelectedParentIssueId(null);
+    setSelectedRelatedIssueId(null);
+    setSubscribeToIssue(false);
     setAttachments([]);
+    setSelectedTemplateId("");
     setError(null);
 
     if (titleRef.current) {
@@ -295,7 +460,7 @@ export function CreateIssueModal({
     if (descriptionRef.current) {
       descriptionRef.current.innerHTML = "";
     }
-  }, [defaultProjectId, defaultStateId, open]);
+  }, [defaultCycleId, defaultProjectId, defaultStateId, open]);
 
   useEffect(() => {
     if (!open) {
@@ -321,6 +486,9 @@ export function CreateIssueModal({
         }
 
         setOptions(data);
+        if (data.templates?.length) {
+          setTemplates(data.templates);
+        }
 
         const nextStateId =
           defaultStateId ||
@@ -352,6 +520,29 @@ export function CreateIssueModal({
   }, [defaultStateId, defaultStateName, open, teamKey]);
 
   useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    async function loadTemplates() {
+      try {
+        const response = await fetch(
+          `/api/teams/${encodeURIComponent(teamKey)}/templates`,
+        );
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          templates?: IssueTemplateOption[];
+        };
+        if (!cancelled) setTemplates(data.templates ?? []);
+      } catch {
+        if (!cancelled) setTemplates([]);
+      }
+    }
+    void loadTemplates();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, teamKey]);
+
+  useEffect(() => {
     if (!openMenu) {
       return;
     }
@@ -376,13 +567,17 @@ export function CreateIssueModal({
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
+        if (openMenu) {
+          setOpenMenu(null);
+          return;
+        }
         onClose();
       }
     }
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, open]);
+  }, [onClose, open, openMenu]);
 
   if (!open) {
     return null;
@@ -404,8 +599,46 @@ export function CreateIssueModal({
   const selectedLabels = (options?.labels ?? []).filter((labelItem) =>
     selectedLabelIds.includes(labelItem.id),
   );
+  const selectedCycle =
+    (options?.cycles ?? []).find((item) => item.id === selectedCycleId) ?? null;
+  const selectedEstimateOption =
+    (options?.estimates ?? []).find(
+      (item) => item.value === selectedEstimate,
+    ) ?? null;
+  const selectedTemplate =
+    templates.find((item) => item.id === selectedTemplateId) ?? null;
+  const selectedParentIssue =
+    (options?.relationIssues ?? []).find(
+      (item) => item.id === selectedParentIssueId,
+    ) ?? null;
+  const selectedRelatedIssue =
+    (options?.relationIssues ?? []).find(
+      (item) => item.id === selectedRelatedIssueId,
+    ) ?? null;
   const canSubmit = title.trim().length > 0 && !submitting && !loadingOptions;
   const isFullscreen = variant === "fullscreen";
+
+  function formatDueDateValue(value: string | null): string {
+    if (!value) return "Due date";
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+
+  function resolveDueDatePreset(value: string): string | null {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    if (value === "today") {
+      // keep current date
+    } else if (value === "tomorrow") {
+      date.setDate(date.getDate() + 1);
+    } else if (value === "next-week") {
+      date.setDate(date.getDate() + 7);
+    } else {
+      return null;
+    }
+    return date.toISOString().split("T")[0] ?? null;
+  }
 
   async function handleSubmit() {
     if (!canSubmit) {
@@ -427,7 +660,14 @@ export function CreateIssueModal({
           priority,
           assigneeId: selectedAssigneeId,
           projectId: selectedProjectId,
+          cycleId: selectedCycleId,
           labelIds: selectedLabelIds,
+          estimate: selectedEstimate,
+          dueDate: selectedDueDate,
+          parentIssueId: selectedParentIssueId,
+          relatedIssueId: selectedRelatedIssueId,
+          relationType: selectedRelatedIssueId ? "related" : undefined,
+          subscribe: subscribeToIssue,
         }),
       });
 
@@ -473,6 +713,12 @@ export function CreateIssueModal({
         setSelectedAssigneeId(null);
         setSelectedProjectId(defaultProjectId);
         setSelectedLabelIds([]);
+        setSelectedCycleId(defaultCycleId);
+        setSelectedEstimate(null);
+        setSelectedDueDate(null);
+        setSelectedParentIssueId(null);
+        setSelectedRelatedIssueId(null);
+        setSubscribeToIssue(false);
         setAttachments([]);
 
         if (titleRef.current) {
@@ -496,6 +742,37 @@ export function CreateIssueModal({
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function applyTemplate(templateId: string) {
+    setSelectedTemplateId(templateId);
+    const template = templates.find((item) => item.id === templateId);
+    if (!template) return;
+    const settings = template.settings ?? {};
+    const nextTitle = settings.title || template.name;
+    const nextBody = settings.body || template.description;
+    if (!title.trim() && titleRef.current) {
+      titleRef.current.textContent = nextTitle;
+      setTitle(nextTitle);
+    }
+    const currentDescriptionText =
+      descriptionRef.current?.textContent?.trim() ?? "";
+    if (!currentDescriptionText && descriptionRef.current) {
+      descriptionRef.current.textContent = nextBody;
+      setDescriptionHtml(descriptionRef.current.innerHTML);
+    }
+    if (settings.defaultPriority) setPriority(settings.defaultPriority);
+    if (settings.defaultStatusId) setSelectedStateId(settings.defaultStatusId);
+    else if (settings.defaultStatusName) {
+      const matchingStatus = options?.statuses.find(
+        (status) =>
+          status.name.toLowerCase() ===
+          settings.defaultStatusName?.toLowerCase(),
+      );
+      if (matchingStatus) setSelectedStateId(matchingStatus.id);
+    }
+    if (settings.defaultProjectId !== undefined)
+      setSelectedProjectId(settings.defaultProjectId);
   }
 
   function handleLabelToggle(labelId: string) {
@@ -535,9 +812,26 @@ export function CreateIssueModal({
       return null;
     }
 
+    const menuClass =
+      "absolute bottom-full left-0 z-20 mb-2 w-[260px] rounded-lg border border-[var(--color-border)] bg-[var(--color-content-bg)] py-1 shadow-xl";
+    const headerLabel: Record<ToolbarMenu, string> = {
+      status: "Status",
+      priority: "Priority",
+      assignee: "Assignee",
+      project: "Project",
+      labels: "Labels",
+      cycle: "Cycle",
+      estimate: "Estimate",
+      dueDate: "Due date",
+      template: "Template",
+      more: "More actions",
+      parent: "Parent issue",
+      related: "Related issue",
+    };
+
     if (openMenu === "labels") {
       return (
-        <div className="absolute bottom-full left-0 z-20 mb-2 w-[220px] rounded-lg border border-[var(--color-border)] bg-[var(--color-content-bg)] py-1 shadow-xl">
+        <div className={menuClass} role="menu" aria-label="Labels">
           <div className="px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-secondary)]">
             Labels
           </div>
@@ -548,6 +842,7 @@ export function CreateIssueModal({
                 <button
                   key={labelItem.id}
                   type="button"
+                  aria-checked={selected}
                   onClick={() => handleLabelToggle(labelItem.id)}
                   className={classNames(
                     "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] transition-colors",
@@ -560,8 +855,8 @@ export function CreateIssueModal({
                     className="inline-block h-2.5 w-2.5 rounded-full"
                     style={{ backgroundColor: labelItem.color }}
                   />
-                  <span className="flex-1">{labelItem.name}</span>
-                  {selected && <span>✓</span>}
+                  <span className="flex-1 truncate">{labelItem.name}</span>
+                  {selected && <span aria-hidden="true">✓</span>}
                 </button>
               );
             })
@@ -573,6 +868,105 @@ export function CreateIssueModal({
         </div>
       );
     }
+
+    if (openMenu === "dueDate") {
+      return (
+        <div className={menuClass} role="menu" aria-label="Due date">
+          <div className="px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-secondary)]">
+            Due date
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedDueDate(null);
+              setOpenMenu(null);
+            }}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+          >
+            <DueDateIcon />
+            <span>No due date</span>
+          </button>
+          {(options?.dueDatePresets ?? []).map((preset) => {
+            if (preset.value === "custom") return null;
+            return (
+              <button
+                key={preset.value}
+                type="button"
+                onClick={() => {
+                  setSelectedDueDate(resolveDueDatePreset(preset.value));
+                  setOpenMenu(null);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+              >
+                <DueDateIcon />
+                <span>{preset.label}</span>
+              </button>
+            );
+          })}
+          <label className="mt-1 block border-t border-[var(--color-border)] px-3 py-2 text-[12px] text-[var(--color-text-secondary)]">
+            Custom date
+            <input
+              type="date"
+              aria-label="Custom due date"
+              value={selectedDueDate ?? ""}
+              onChange={(event) => {
+                setSelectedDueDate(event.target.value || null);
+                setOpenMenu(null);
+              }}
+              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-[13px] text-[var(--color-text-primary)]"
+            />
+          </label>
+        </div>
+      );
+    }
+
+    if (openMenu === "more") {
+      return (
+        <div className={menuClass} role="menu" aria-label="More actions">
+          <div className="px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-secondary)]">
+            More actions
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpenMenu("parent")}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+          >
+            <span aria-hidden="true">↳</span>
+            <span>
+              {selectedParentIssue
+                ? `Parent: ${selectedParentIssue.identifier}`
+                : "Set parent issue"}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpenMenu("related")}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+          >
+            <span aria-hidden="true">⛓</span>
+            <span>
+              {selectedRelatedIssue
+                ? `Related: ${selectedRelatedIssue.identifier}`
+                : "Link related issue"}
+            </span>
+          </button>
+          <button
+            type="button"
+            aria-checked={subscribeToIssue}
+            onClick={() => setSubscribeToIssue((value) => !value)}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+          >
+            <span aria-hidden="true">{subscribeToIssue ? "✓" : "○"}</span>
+            <span>Subscribe me to updates</span>
+          </button>
+        </div>
+      );
+    }
+
+    const relationChoices = (options?.relationIssues ?? []).filter(
+      (item) =>
+        item.id !== selectedParentIssueId && item.id !== selectedRelatedIssueId,
+    );
 
     const menuItems =
       openMenu === "status"
@@ -625,35 +1019,140 @@ export function CreateIssueModal({
                   },
                 })),
               ]
-            : [
-                {
-                  id: "no-project",
-                  label: "No project",
-                  icon: <ProjectIcon />,
-                  onSelect: () => {
-                    setSelectedProjectId(null);
-                    setOpenMenu(null);
+            : openMenu === "project"
+              ? [
+                  {
+                    id: "no-project",
+                    label: "No project",
+                    icon: <ProjectIcon />,
+                    onSelect: () => {
+                      setSelectedProjectId(null);
+                      setOpenMenu(null);
+                    },
                   },
-                },
-                ...(options?.projects ?? []).map((projectItem) => ({
-                  id: projectItem.id,
-                  label: projectItem.name,
-                  icon: (
-                    <span className="flex h-4 w-4 items-center justify-center rounded bg-[var(--color-surface-active)] text-[10px] text-[var(--color-text-primary)]">
-                      {projectItem.icon || "P"}
-                    </span>
-                  ),
-                  onSelect: () => {
-                    setSelectedProjectId(projectItem.id);
-                    setOpenMenu(null);
-                  },
-                })),
-              ];
+                  ...(options?.projects ?? []).map((projectItem) => ({
+                    id: projectItem.id,
+                    label: projectItem.name,
+                    icon: (
+                      <span className="flex h-4 w-4 items-center justify-center rounded bg-[var(--color-surface-active)] text-[10px] text-[var(--color-text-primary)]">
+                        {projectItem.icon || "P"}
+                      </span>
+                    ),
+                    onSelect: () => {
+                      setSelectedProjectId(projectItem.id);
+                      setOpenMenu(null);
+                    },
+                  })),
+                ]
+              : openMenu === "cycle"
+                ? [
+                    {
+                      id: "no-cycle",
+                      label: "No cycle",
+                      icon: <CycleIcon />,
+                      onSelect: () => {
+                        setSelectedCycleId(null);
+                        setOpenMenu(null);
+                      },
+                    },
+                    ...(options?.cycles ?? []).map((cycleItem) => ({
+                      id: cycleItem.id,
+                      label: cycleItem.name ?? `Cycle ${cycleItem.number}`,
+                      icon: <CycleIcon />,
+                      onSelect: () => {
+                        setSelectedCycleId(cycleItem.id);
+                        setOpenMenu(null);
+                      },
+                    })),
+                  ]
+                : openMenu === "estimate"
+                  ? [
+                      {
+                        id: "no-estimate",
+                        label: "No estimate",
+                        icon: <EstimateIcon />,
+                        onSelect: () => {
+                          setSelectedEstimate(null);
+                          setOpenMenu(null);
+                        },
+                      },
+                      ...(options?.estimates ?? []).map((estimateItem) => ({
+                        id: String(estimateItem.value),
+                        label: estimateItem.label,
+                        icon: <EstimateIcon />,
+                        onSelect: () => {
+                          setSelectedEstimate(estimateItem.value);
+                          setOpenMenu(null);
+                        },
+                      })),
+                    ]
+                  : openMenu === "template"
+                    ? [
+                        {
+                          id: "no-template",
+                          label: "No template",
+                          icon: <TemplateIcon />,
+                          onSelect: () => {
+                            setSelectedTemplateId("");
+                            setOpenMenu(null);
+                          },
+                        },
+                        ...templates.map((template) => ({
+                          id: template.id,
+                          label: template.name,
+                          icon: <TemplateIcon />,
+                          onSelect: () => {
+                            applyTemplate(template.id);
+                            setOpenMenu(null);
+                          },
+                        })),
+                      ]
+                    : openMenu === "parent"
+                      ? [
+                          {
+                            id: "no-parent",
+                            label: "No parent issue",
+                            icon: <span aria-hidden="true">↳</span>,
+                            onSelect: () => {
+                              setSelectedParentIssueId(null);
+                              setOpenMenu(null);
+                            },
+                          },
+                          ...relationChoices.map((issueItem) => ({
+                            id: issueItem.id,
+                            label: `${issueItem.identifier} ${issueItem.title}`,
+                            icon: <span aria-hidden="true">↳</span>,
+                            onSelect: () => {
+                              setSelectedParentIssueId(issueItem.id);
+                              setOpenMenu(null);
+                            },
+                          })),
+                        ]
+                      : [
+                          {
+                            id: "no-related",
+                            label: "No related issue",
+                            icon: <span aria-hidden="true">⛓</span>,
+                            onSelect: () => {
+                              setSelectedRelatedIssueId(null);
+                              setOpenMenu(null);
+                            },
+                          },
+                          ...relationChoices.map((issueItem) => ({
+                            id: issueItem.id,
+                            label: `${issueItem.identifier} ${issueItem.title}`,
+                            icon: <span aria-hidden="true">⛓</span>,
+                            onSelect: () => {
+                              setSelectedRelatedIssueId(issueItem.id);
+                              setOpenMenu(null);
+                            },
+                          })),
+                        ];
 
     return (
-      <div className="absolute bottom-full left-0 z-20 mb-2 w-[220px] rounded-lg border border-[var(--color-border)] bg-[var(--color-content-bg)] py-1 shadow-xl">
+      <div className={menuClass} role="menu" aria-label={headerLabel[openMenu]}>
         <div className="px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-secondary)]">
-          {openMenu}
+          {headerLabel[openMenu]}
         </div>
         {menuItems.length ? (
           menuItems.map((item) => (
@@ -664,7 +1163,7 @@ export function CreateIssueModal({
               className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
             >
               {item.icon}
-              <span>{item.label}</span>
+              <span className="truncate">{item.label}</span>
             </button>
           ))
         ) : (
@@ -770,6 +1269,25 @@ export function CreateIssueModal({
             isFullscreen && "flex-1 overflow-y-auto px-8 py-8",
           )}
         >
+          {templates.length > 0 && (
+            <label className="mt-3 block text-[12px] text-[var(--color-text-secondary)]">
+              Template
+              <select
+                aria-label="Issue template"
+                className="mt-1 w-full max-w-[320px] rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-[13px] text-[var(--color-text-primary)]"
+                value={selectedTemplateId}
+                onChange={(event) => applyTemplate(event.target.value)}
+              >
+                <option value="">No template</option>
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
           <div
             ref={titleRef}
             role="textbox"
@@ -917,6 +1435,53 @@ export function CreateIssueModal({
               }
             />
             <ToolbarButton
+              label="Cycle"
+              value={selectedCycle?.name ?? defaultCycleName ?? "Cycle"}
+              active={openMenu === "cycle" || Boolean(selectedCycleId)}
+              onClick={() =>
+                setOpenMenu((current) => (current === "cycle" ? null : "cycle"))
+              }
+              icon={<CycleIcon />}
+              ariaLabel={
+                defaultCycleName && selectedCycleId === defaultCycleId
+                  ? `Cycle ${defaultCycleName}`
+                  : "Cycle"
+              }
+            />
+            <ToolbarButton
+              label="Estimate"
+              value={selectedEstimateOption?.label ?? "Estimate"}
+              active={openMenu === "estimate" || selectedEstimate !== null}
+              onClick={() =>
+                setOpenMenu((current) =>
+                  current === "estimate" ? null : "estimate",
+                )
+              }
+              icon={<EstimateIcon />}
+            />
+            <ToolbarButton
+              label="Due date"
+              value={formatDueDateValue(selectedDueDate)}
+              active={openMenu === "dueDate" || Boolean(selectedDueDate)}
+              onClick={() =>
+                setOpenMenu((current) =>
+                  current === "dueDate" ? null : "dueDate",
+                )
+              }
+              icon={<DueDateIcon />}
+            />
+            <ToolbarButton
+              label="Template"
+              value={selectedTemplate?.name ?? "Template"}
+              active={openMenu === "template" || Boolean(selectedTemplate)}
+              onClick={() =>
+                setOpenMenu((current) =>
+                  current === "template" ? null : "template",
+                )
+              }
+              icon={<TemplateIcon />}
+            />
+            <ToolbarButton
               label="Labels"
               value={
                 selectedLabels.length === 0
@@ -938,23 +1503,20 @@ export function CreateIssueModal({
             <button
               type="button"
               aria-label="More actions"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+              onClick={() =>
+                setOpenMenu((current) => (current === "more" ? null : "more"))
+              }
+              className={classNames(
+                "flex h-7 w-7 items-center justify-center rounded-md transition-colors",
+                openMenu === "more" ||
+                  selectedParentIssue ||
+                  selectedRelatedIssue ||
+                  subscribeToIssue
+                  ? "bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)] text-[var(--color-text-primary)]"
+                  : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]",
+              )}
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="12" cy="12" r="1" />
-                <circle cx="19" cy="12" r="1" />
-                <circle cx="5" cy="12" r="1" />
-              </svg>
+              <MoreIcon />
             </button>
           </div>
         </div>

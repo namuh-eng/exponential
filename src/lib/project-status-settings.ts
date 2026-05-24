@@ -75,6 +75,23 @@ const DEFAULT_KEYS = new Set(
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const MAX_STATUSES = 30;
 
+export function isDefaultProjectStatusKey(
+  value: string,
+): value is ProjectStatusKey {
+  return DEFAULT_KEYS.has(value);
+}
+
+export function findProjectStatusConfig(
+  settings: unknown,
+  key: string | null | undefined,
+) {
+  if (!key) return null;
+  return (
+    readProjectStatusSettings(settings).find((status) => status.key === key) ??
+    null
+  );
+}
+
 export type ProjectStatusValidationResult =
   | { ok: true; statuses: ProjectStatusConfig[] }
   | { ok: false; error: string };
@@ -237,6 +254,15 @@ export function validateProjectStatusesInput(
           projectCount > 0
             ? `${defaultStatus.name} cannot be removed while projects use it.`
             : "Default project statuses cannot be removed.",
+      };
+    }
+  }
+
+  for (const [statusKey, projectCount] of projectCountsByKey) {
+    if (projectCount > 0 && !seenKeys.has(statusKey)) {
+      return {
+        ok: false,
+        error: "Project statuses with assigned projects cannot be removed.",
       };
     }
   }

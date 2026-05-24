@@ -13,6 +13,20 @@ import {
 } from "@/lib/theme";
 import { useEffect } from "react";
 
+const publicPreferenceSkipPaths = new Set([
+  "/login",
+  "/signup",
+  "/homepage",
+  "/pricing",
+  "/customers",
+  "/changelog",
+  "/now",
+]);
+
+function shouldLoadAccountPreferences(pathname: string) {
+  return !publicPreferenceSkipPaths.has(pathname);
+}
+
 export function ThemeInitializer() {
   useEffect(() => {
     const syncTheme = () => {
@@ -37,30 +51,32 @@ export function ThemeInitializer() {
     window.addEventListener("storage", syncTheme);
     mediaQuery?.addEventListener("change", handleMediaChange);
 
-    void fetch("/api/account/preferences", { credentials: "include" })
-      .then(async (response) => {
-        if (!response.ok) {
-          return null;
-        }
+    if (shouldLoadAccountPreferences(window.location.pathname)) {
+      void fetch("/api/account/preferences", { credentials: "include" })
+        .then(async (response) => {
+          if (!response.ok) {
+            return null;
+          }
 
-        return (await response.json()) as { accountPreferences?: unknown };
-      })
-      .then((data) => {
-        if (!data?.accountPreferences) {
-          return;
-        }
+          return (await response.json()) as { accountPreferences?: unknown };
+        })
+        .then((data) => {
+          if (!data?.accountPreferences) {
+            return;
+          }
 
-        const accountPreferences = readAccountPreferencesFromUserSettings({
-          accountPreferences: data.accountPreferences,
+          const accountPreferences = readAccountPreferencesFromUserSettings({
+            accountPreferences: data.accountPreferences,
+          });
+          setThemePreference(accountPreferences.theme);
+          applyFontSizePreference(accountPreferences.fontSize);
+          applyPointerCursorPreference(accountPreferences.pointerCursors);
+        })
+        .catch(() => {
+          applyFontSizePreference("default");
+          applyPointerCursorPreference(false);
         });
-        setThemePreference(accountPreferences.theme);
-        applyFontSizePreference(accountPreferences.fontSize);
-        applyPointerCursorPreference(accountPreferences.pointerCursors);
-      })
-      .catch(() => {
-        applyFontSizePreference("default");
-        applyPointerCursorPreference(false);
-      });
+    }
 
     return () => {
       window.removeEventListener(APP_THEME_CHANGE_EVENT, syncTheme);

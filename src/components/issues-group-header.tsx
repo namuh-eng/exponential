@@ -26,9 +26,7 @@ export function IssuesGroupHeader({
   return (
     <div className="flex h-[36px] items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 text-[13px]">
       <StatusIcon category={statusCategory} color={statusColor} size={14} />
-      <span className="font-medium text-[var(--color-text-primary)]">
-        {name}
-      </span>
+      <span className="editorial-section-title">{name}</span>
       <span className="text-[var(--color-text-secondary)]">{count}</span>
       <div className="flex-1" />
       <button

@@ -79,6 +79,7 @@ export default function MembersPage() {
   ]);
   const [inviting, setInviting] = useState(false);
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
+  const [actingMemberId, setActingMemberId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -255,6 +256,88 @@ export default function MembersPage() {
     }
   }
 
+  async function revokeOrRemove(memberEntry: MemberData) {
+    const action =
+      memberEntry.kind === "invitation"
+        ? "revoke this invitation"
+        : "remove this member from the workspace";
+    if (!globalThis.confirm(`Are you sure you want to ${action}?`)) {
+      return;
+    }
+
+    const previousMembers = members;
+    setActingMemberId(memberEntry.id);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    setMembers((currentMembers) =>
+      currentMembers.filter(
+        (currentMember) => currentMember.id !== memberEntry.id,
+      ),
+    );
+
+    try {
+      const response = await fetch("/api/workspaces/members", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: memberEntry.id, kind: memberEntry.kind }),
+      });
+      const data = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+
+      if (!response.ok) {
+        setMembers(previousMembers);
+        setErrorMessage(data?.error ?? "Unable to update workspace access.");
+        return;
+      }
+
+      setStatusMessage(
+        memberEntry.kind === "invitation"
+          ? "Invitation revoked."
+          : "Member removed from workspace.",
+      );
+      await loadMembers();
+    } catch {
+      setMembers(previousMembers);
+      setErrorMessage("Unable to update workspace access.");
+    } finally {
+      setActingMemberId(null);
+    }
+  }
+
+  async function resendInvitation(memberEntry: MemberData) {
+    setActingMemberId(memberEntry.id);
+    setErrorMessage(null);
+    setStatusMessage(null);
+
+    try {
+      const response = await fetch("/api/workspaces/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: memberEntry.id,
+          kind: "invitation",
+          action: "resend",
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+
+      if (!response.ok) {
+        setErrorMessage(data?.error ?? "Unable to resend invitation.");
+        return;
+      }
+
+      setStatusMessage(`Resent invitation to ${memberEntry.email}.`);
+      await loadMembers();
+    } catch {
+      setErrorMessage("Unable to resend invitation.");
+    } finally {
+      setActingMemberId(null);
+    }
+  }
+
   function exportCsv() {
     const rows = [
       ["Name", "Email", "Role", "Status", "Teams", "Joined", "Last seen"],
@@ -358,6 +441,7 @@ export default function MembersPage() {
         <div className="w-[120px] shrink-0">Teams</div>
         <div className="w-[100px] shrink-0">Joined</div>
         <div className="w-[100px] shrink-0">Last seen</div>
+        <div className="w-[148px] shrink-0 text-right">Actions</div>
       </div>
 
       {members.length === 0 ? (
@@ -374,6 +458,11 @@ export default function MembersPage() {
               canManageMembers &&
               !isSelf &&
               !(viewerRole !== "owner" && memberEntry.role === "owner");
+            const canRemove =
+              canEditRole && memberEntry.kind === "member" && !isSelf;
+            const canManageInvitation =
+              canManageMembers && memberEntry.kind === "invitation";
+            const actionDisabled = actingMemberId === memberEntry.id;
 
             return (
               <div
@@ -446,6 +535,32 @@ export default function MembersPage() {
                 </div>
                 <div className="w-[100px] shrink-0 text-[12px] text-[var(--color-text-tertiary)]">
                   {formatDate(memberEntry.lastSeenAt)}
+                </div>
+                <div className="flex w-[148px] shrink-0 justify-end gap-1 pr-4">
+                  {canManageInvitation ? (
+                    <button
+                      type="button"
+                      disabled={actionDisabled}
+                      onClick={() => void resendInvitation(memberEntry)}
+                      className="rounded-md px-2 py-1 text-[11px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-active)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Resend
+                    </button>
+                  ) : null}
+                  {canRemove || canManageInvitation ? (
+                    <button
+                      type="button"
+                      disabled={actionDisabled}
+                      onClick={() => void revokeOrRemove(memberEntry)}
+                      className="rounded-md px-2 py-1 text-[11px] text-red-400 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {memberEntry.kind === "invitation" ? "Revoke" : "Remove"}
+                    </button>
+                  ) : (
+                    <span className="text-[12px] text-[var(--color-text-tertiary)]">
+                      —
+                    </span>
+                  )}
                 </div>
               </div>
             );

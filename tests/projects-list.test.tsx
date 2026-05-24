@@ -268,6 +268,75 @@ describe("ProjectsPage", () => {
           body: JSON.stringify({
             name: "New Project",
             description: "A new description",
+            labelIds: [],
+          }),
+        }),
+      );
+    });
+  });
+
+  it("lets project creation apply a selected project template", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation((url, init) => {
+        if (url === "/api/projects" && init?.method === "POST") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ id: "p3" }),
+          } as Response);
+        }
+
+        if (url === "/api/project-templates") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              templates: [
+                {
+                  id: "template-1",
+                  name: "Launch template",
+                  settings: { milestones: ["Plan", "Build"] },
+                },
+              ],
+            }),
+          } as Response);
+        }
+
+        if (url === "/api/project-labels") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ labels: [] }),
+          } as Response);
+        }
+
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ projects: [] }),
+        } as Response);
+      });
+
+    render(<ProjectsPage />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Create project" }),
+    );
+    fireEvent.change(screen.getByPlaceholderText("Project name"), {
+      target: { value: "Templated project" },
+    });
+    fireEvent.change(screen.getByLabelText("Apply project template"), {
+      target: { value: "template-1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create project" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/projects",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            name: "Templated project",
+            description: "",
+            labelIds: [],
+            templateId: "template-1",
           }),
         }),
       );
@@ -345,6 +414,7 @@ describe("ProjectsPage", () => {
           body: JSON.stringify({
             name: "Onboarding roadmap",
             description: "",
+            labelIds: [],
             teamKey: "ONB",
           }),
         }),

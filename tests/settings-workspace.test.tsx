@@ -11,12 +11,13 @@ import WorkspaceSettingsPage from "@/app/(app)/settings/workspace/page";
 
 const routerPushMock = vi.fn();
 const routerRefreshMock = vi.fn();
+const routerReplaceMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: routerPushMock,
     refresh: routerRefreshMock,
-    replace: vi.fn(),
+    replace: routerReplaceMock,
     back: vi.fn(),
   }),
   usePathname: () => "/settings/workspace",
@@ -48,6 +49,7 @@ function mockWorkspace() {
         logo: null,
         region: "United States",
         fiscalMonth: "january",
+        welcomeMessage: "",
       },
     }),
   });
@@ -68,6 +70,7 @@ describe("Workspace Settings Page", () => {
     vi.clearAllMocks();
     routerPushMock.mockReset();
     routerRefreshMock.mockReset();
+    routerReplaceMock.mockReset();
   });
 
   it("renders Workspace heading", async () => {
@@ -132,6 +135,7 @@ describe("Workspace Settings Page", () => {
           logo: null,
           region: "United States",
           fiscalMonth: "january",
+          welcomeMessage: "",
         },
       }),
     });
@@ -155,11 +159,15 @@ describe("Workspace Settings Page", () => {
           urlSlug: "acme-qa",
           logo: null,
           fiscalMonth: "january",
+          welcomeMessage: "",
         }),
       }),
     );
 
     expect(screen.getByText("Workspace updated.")).toBeInTheDocument();
+    expect(routerReplaceMock).toHaveBeenCalledWith(
+      "/acme-qa/settings/workspace",
+    );
   });
 
   it("uploads and persists a workspace logo", async () => {
@@ -174,6 +182,7 @@ describe("Workspace Settings Page", () => {
           logo: "data:image/png;base64,uploaded-logo",
           region: "United States",
           fiscalMonth: "january",
+          welcomeMessage: "",
         },
       }),
     });
@@ -197,6 +206,7 @@ describe("Workspace Settings Page", () => {
           urlSlug: "acme",
           logo: "data:image/png;base64,uploaded-logo",
           fiscalMonth: "january",
+          welcomeMessage: "",
         }),
       }),
     );
@@ -204,14 +214,63 @@ describe("Workspace Settings Page", () => {
     expect(screen.getByText("Selected: logo.png")).toBeInTheDocument();
   });
 
-  it("renders Welcome message configure button", async () => {
+  it("configures and persists the workspace welcome message", async () => {
     mockWorkspace();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        workspace: {
+          id: "workspace-1",
+          name: "Acme Corp",
+          urlSlug: "acme",
+          logo: null,
+          region: "United States",
+          fiscalMonth: "january",
+          welcomeMessage: "Welcome aboard",
+        },
+      }),
+    });
+
     render(<WorkspaceSettingsPage />);
     await waitForLoaded();
     expect(screen.getByText("Welcome message")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Configure" }));
+    fireEvent.change(screen.getByLabelText("Welcome message text"), {
+      target: { value: "Welcome aboard" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/current", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Acme Corp",
+          urlSlug: "acme",
+          logo: null,
+          fiscalMonth: "january",
+          welcomeMessage: "Welcome aboard",
+        }),
+      }),
+    );
+    expect(screen.getByText("Welcome aboard")).toBeInTheDocument();
+  });
+
+  it("shows inline slug validation and does not save invalid slugs", async () => {
+    mockWorkspace();
+    render(<WorkspaceSettingsPage />);
+    await waitForLoaded();
+
+    const slugInput = screen.getByLabelText("Workspace URL slug");
+    fireEvent.change(slugInput, { target: { value: "bad slug!" } });
+    fireEvent.blur(slugInput);
+
     expect(
-      screen.getByRole("button", { name: "Configure" }),
+      screen.getByText(
+        "URL slug can only use lowercase letters, numbers, and single hyphens",
+      ),
     ).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   it("renders Danger zone with delete button", async () => {

@@ -464,10 +464,10 @@ export default function TeamIssuesPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-1 border-b border-[var(--color-border)] px-4 py-2">
-        <h1 className="mr-4 text-[15px] font-medium text-[var(--color-text-primary)]">
+      <div className="flex min-w-0 flex-wrap items-center gap-1 border-b border-[var(--color-border)] px-4 py-2">
+        <h1 className="mr-4 text-[18px] font-semibold text-[var(--color-text-primary)]">
           {data.team.name}
         </h1>
         {/* Tabs */}
@@ -480,9 +480,10 @@ export default function TeamIssuesPage() {
                 const query = searchParams.toString();
                 router.push(`${teamPath(tab.id)}${query ? `?${query}` : ""}`);
               }}
-              className={`rounded-md px-2.5 py-1 text-[13px] transition-colors ${
+              data-editorial-control="true"
+              className={`rounded-md px-2.5 py-1 text-[13px] font-medium transition-colors ${
                 routeTab === tab.id
-                  ? "bg-[var(--color-surface-active)] text-[var(--color-text-primary)]"
+                  ? "bg-[var(--color-surface-active)] text-[var(--color-text-primary)] shadow-[inset_0_-1px_0_var(--color-surface-active-line)]"
                   : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
               }`}
             >
@@ -579,7 +580,7 @@ export default function TeamIssuesPage() {
       </div>
 
       {/* Issues list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
         {filteredGroups.map((group) => (
           <div key={group.state.id} className="group">
             <IssuesGroupHeader
@@ -606,6 +607,8 @@ export default function TeamIssuesPage() {
                 assigneeImage={iss.assignee?.image ?? undefined}
                 labels={iss.labels}
                 projectName={iss.projectName ?? undefined}
+                cycleName={iss.cycleName}
+                estimate={iss.estimate}
                 dueDate={iss.dueDate}
                 createdAt={iss.createdAt}
                 href={withWorkspaceSlug(

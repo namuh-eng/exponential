@@ -35,7 +35,7 @@ vi.mock("@/lib/db", () => ({
 
       return {
         from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(groupedCountsMock()),
         groupBy: vi.fn().mockResolvedValue(groupedCountsMock()),
       };
     }),
@@ -68,9 +68,12 @@ describe("project statuses settings route", () => {
       { workspaceId: "workspace-1", role: "admin", settings: {} },
     ]);
     groupedCountsMock.mockReturnValue([
-      { status: "planned", count: 2 },
-      { status: "started", count: 3 },
-      { status: "completed", count: "1" },
+      { status: "planned", settings: {} },
+      { status: "planned", settings: {} },
+      { status: "started", settings: {} },
+      { status: "started", settings: {} },
+      { status: "started", settings: {} },
+      { status: "completed", settings: {} },
     ]);
     updateWhereMock.mockResolvedValue(undefined);
   });
@@ -153,6 +156,10 @@ describe("project statuses settings route", () => {
         },
       },
     ]);
+    groupedCountsMock.mockReturnValue([
+      { status: "started", settings: {} },
+      { status: "started", settings: { projectStatusKey: "blocked" } },
+    ]);
     const { GET } = await import("@/app/api/project-statuses/route");
 
     const response = await GET();
@@ -160,8 +167,53 @@ describe("project statuses settings route", () => {
 
     expect(payload.statuses).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ key: "started", name: "Building" }),
-        expect.objectContaining({ key: "blocked", name: "Blocked" }),
+        expect.objectContaining({
+          key: "started",
+          name: "Building",
+          projectCount: 1,
+        }),
+        expect.objectContaining({
+          key: "blocked",
+          name: "Blocked",
+          projectCount: 1,
+        }),
+      ]),
+    );
+  });
+
+  it("counts projects assigned to custom project statuses", async () => {
+    workspaceAccessMock.mockReturnValue([
+      {
+        workspaceId: "workspace-1",
+        role: "admin",
+        settings: {
+          projectStatuses: [
+            {
+              id: "blocked",
+              key: "blocked",
+              name: "Blocked",
+              description: "Waiting on dependency",
+              color: "#654321",
+              icon: "!",
+              position: 5,
+            },
+          ],
+        },
+      },
+    ]);
+    groupedCountsMock.mockReturnValue([
+      { status: "started", settings: { projectStatusKey: "blocked" } },
+      { status: "started", settings: {} },
+    ]);
+    const { GET } = await import("@/app/api/project-statuses/route");
+
+    const response = await GET();
+    const payload = await response.json();
+
+    expect(payload.statuses).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "blocked", projectCount: 1 }),
+        expect.objectContaining({ key: "started", projectCount: 1 }),
       ]),
     );
   });

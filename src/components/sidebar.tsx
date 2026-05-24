@@ -11,7 +11,7 @@ import { OPEN_COMMAND_PALETTE_EVENT } from "@/lib/command-palette";
 import {
   KEYBOARD_SHORTCUTS,
   formatShortcutKeys,
-  isPlainKeyShortcut,
+  isEditableShortcutTarget,
 } from "@/lib/keyboard-shortcuts";
 import {
   SIDEBAR_FAVORITES_CHANGED_EVENT,
@@ -25,6 +25,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -437,6 +438,9 @@ export function Sidebar({
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [helpMenuOpen, setHelpMenuOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const helpButtonRef = useRef<HTMLButtonElement>(null);
+  const shortcutsCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const lastFocusedBeforeShortcutsRef = useRef<HTMLElement | null>(null);
   const [favorites, setFavorites] = useState<SidebarFavorite[]>([]);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [managingFavorites, setManagingFavorites] = useState(false);
@@ -508,27 +512,82 @@ export function Sidebar({
     );
   }, [accountPreferences]);
 
+  const openShortcuts = useCallback((restoreFocusTo?: HTMLElement | null) => {
+    lastFocusedBeforeShortcutsRef.current =
+      restoreFocusTo ?? (document.activeElement as HTMLElement);
+    setShortcutsOpen(true);
+    setHelpMenuOpen(false);
+    setWorkspaceMenuOpen(false);
+  }, []);
+
+  const closeShortcuts = useCallback(() => {
+    setShortcutsOpen(false);
+    requestAnimationFrame(() => {
+      const restoreTarget =
+        lastFocusedBeforeShortcutsRef.current &&
+        document.contains(lastFocusedBeforeShortcutsRef.current)
+          ? lastFocusedBeforeShortcutsRef.current
+          : helpButtonRef.current;
+      restoreTarget?.focus();
+    });
+  }, []);
+
+  useEffect(() => {
+    if (shortcutsOpen) {
+      requestAnimationFrame(() => shortcutsCloseButtonRef.current?.focus());
+    }
+  }, [shortcutsOpen]);
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (shortcutsOpen && event.key === "Escape") {
         event.preventDefault();
-        setShortcutsOpen(false);
+        closeShortcuts();
         return;
       }
 
-      if (!isPlainKeyShortcut(event, "/")) {
+      if (shortcutsOpen && event.key === "Tab") {
+        const dialog = document.getElementById("keyboard-shortcuts-dialog");
+        const focusable = Array.from(
+          dialog?.querySelectorAll<HTMLElement>(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+          ) ?? [],
+        ).filter((element) => !element.hasAttribute("disabled"));
+
+        if (focusable.length === 0) {
+          event.preventDefault();
+          return;
+        }
+
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+        return;
+      }
+
+      if (
+        event.key !== "?" ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        isEditableShortcutTarget(event.target)
+      ) {
         return;
       }
 
       event.preventDefault();
-      setShortcutsOpen(true);
-      setHelpMenuOpen(false);
-      setWorkspaceMenuOpen(false);
+      openShortcuts();
     }
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [shortcutsOpen]);
+  }, [closeShortcuts, openShortcuts, shortcutsOpen]);
 
   useEffect(() => {
     const nextTeams =
@@ -1307,8 +1366,7 @@ export function Sidebar({
               <button
                 type="button"
                 onClick={() => {
-                  setShortcutsOpen(true);
-                  setHelpMenuOpen(false);
+                  openShortcuts(helpButtonRef.current);
                 }}
                 className="block w-full rounded-md px-3 py-2 text-left text-[13px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
               >
@@ -1327,6 +1385,7 @@ export function Sidebar({
             className="flex h-7 w-7 items-center justify-center rounded-[6px] border border-transparent text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
             aria-label="Help"
             aria-expanded={helpMenuOpen}
+            ref={helpButtonRef}
             onClick={() => {
               setHelpMenuOpen(!helpMenuOpen);
               setWorkspaceMenuOpen(false);
@@ -1353,7 +1412,9 @@ export function Sidebar({
         {shortcutsOpen && (
           <div className="fixed inset-0 z-30 flex items-center justify-center bg-[rgba(20,18,14,0.40)] p-4 backdrop-blur-[2px]">
             <dialog
+              id="keyboard-shortcuts-dialog"
               open
+              aria-modal="true"
               aria-labelledby="keyboard-shortcuts-title"
               className="max-h-[80vh] w-full max-w-[560px] overflow-y-auto rounded-[10px] border border-[var(--color-border-strong)] bg-[var(--color-content-bg)] p-5 shadow-[var(--shadow-editorial-md)]"
             >
@@ -1367,7 +1428,8 @@ export function Sidebar({
                 <button
                   type="button"
                   aria-label="Close shortcuts"
-                  onClick={() => setShortcutsOpen(false)}
+                  onClick={closeShortcuts}
+                  ref={shortcutsCloseButtonRef}
                   className="rounded-md p-1 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
                 >
                   <svg

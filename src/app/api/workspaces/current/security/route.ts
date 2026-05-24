@@ -1,9 +1,14 @@
 import { randomBytes } from "node:crypto";
-import { isIP } from "node:net";
-import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
+import { resolveRequestWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
+import {
+  evaluateWorkspaceIpAccess,
+  isValidCidrRange,
+  normalizeIpRestrictions,
+  workspaceIpRestrictionError,
+} from "@/lib/workspace-ip-restrictions";
 import {
   DEFAULT_WORKSPACE_PERMISSION_SETTINGS,
   type PermissionLevel,
@@ -12,6 +17,11 @@ import {
   isWorkspaceAdminRole,
   readPermissionLevel,
 } from "@/lib/workspace-permissions";
+import {
+  normalizeDomains,
+  readWorkspaceSamlScimSettings,
+  toPublicSamlScim,
+} from "@/lib/workspace-saml-scim";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -69,86 +79,6 @@ const DEFAULT_SECURITY_STATE: WorkspaceSecurityState = {
   hipaa: false,
   ipRestrictions: [],
 };
-
-function normalizeDomain(value: string) {
-  return value.trim().toLowerCase().replace(/^@+/, "");
-}
-
-function normalizeDomains(value: unknown) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return Array.from(
-    new Set(
-      value
-        .filter((domain): domain is string => typeof domain === "string")
-        .map(normalizeDomain)
-        .filter((domain) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)),
-    ),
-  );
-}
-
-function isValidCidrRange(value: string) {
-  const trimmed = value.trim();
-  const [address, prefix, extra] = trimmed.split("/");
-  if (!address || extra !== undefined) {
-    return false;
-  }
-
-  const version = isIP(address);
-  if (version === 0) {
-    return false;
-  }
-
-  if (prefix === undefined) {
-    return true;
-  }
-
-  if (!/^\d+$/.test(prefix)) {
-    return false;
-  }
-
-  const prefixNumber = Number(prefix);
-  return version === 4
-    ? prefixNumber >= 0 && prefixNumber <= 32
-    : prefixNumber >= 0 && prefixNumber <= 128;
-}
-
-function normalizeIpRange(value: string) {
-  return value.trim().toLowerCase();
-}
-
-function normalizeIpRestrictions(value: unknown) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const seenRanges = new Set<string>();
-  const restrictions: IpRestriction[] = [];
-
-  for (const item of value) {
-    const record = asRecord(item);
-    const rawRange = typeof record.range === "string" ? record.range : "";
-    const range = normalizeIpRange(rawRange);
-    if (!range || !isValidCidrRange(range) || seenRanges.has(range)) {
-      continue;
-    }
-
-    seenRanges.add(range);
-    restrictions.push({
-      range,
-      description:
-        typeof record.description === "string"
-          ? record.description.trim().slice(0, 120)
-          : "",
-      enabled: typeof record.enabled === "boolean" ? record.enabled : true,
-      type: "allow",
-    });
-  }
-
-  return restrictions;
-}
 
 function validateIpRestrictions(value: unknown) {
   if (!Array.isArray(value)) {
@@ -253,8 +183,8 @@ function serializeSecurityState(security: WorkspaceSecurityState) {
   };
 }
 
-async function findCurrentWorkspace(userId: string) {
-  const activeWorkspaceId = await resolveActiveWorkspaceId(userId);
+async function findCurrentWorkspace(userId: string, request: Request) {
+  const activeWorkspaceId = await resolveRequestWorkspaceId(userId, request);
   if (!activeWorkspaceId) {
     return null;
   }
@@ -310,12 +240,23 @@ function buildInviteUrl(request: Request, inviteLinkToken: string) {
   return url.toString();
 }
 
+function buildScimBaseUrl(request: Request, workspaceId: string) {
+  const url = new URL(request.url);
+  return `${url.origin}/api/scim/${workspaceId}`;
+}
+
 function buildResponse(
   request: Request,
   currentWorkspace: CurrentWorkspaceRecord,
   inviteLinkToken: string,
 ) {
   const securityState = readWorkspaceSecurityState(currentWorkspace.settings);
+  const samlScim = toPublicSamlScim(
+    readWorkspaceSamlScimSettings(
+      currentWorkspace.settings,
+      buildScimBaseUrl(request, currentWorkspace.id),
+    ),
+  );
   const { permissions } = securityState;
 
   return {
@@ -326,6 +267,8 @@ function buildResponse(
         currentWorkspace.approvedEmailDomains,
       ),
       ...securityState,
+      saml: samlScim.saml,
+      scim: samlScim.scim,
       capabilities: {
         canInviteMembers: canPerformWorkspacePermission(
           currentWorkspace.role,
@@ -358,12 +301,22 @@ export async function GET(request: Request) {
     return authResponse;
   }
 
-  const currentWorkspace = await findCurrentWorkspace(session.user.id);
+  const currentWorkspace = await findCurrentWorkspace(session.user.id, request);
   if (!currentWorkspace) {
     return NextResponse.json(
       { error: "No active workspace found" },
       { status: 404 },
     );
+  }
+
+  const ipAccess = evaluateWorkspaceIpAccess(
+    request.headers,
+    currentWorkspace.settings,
+  );
+  if (!ipAccess.allowed) {
+    return NextResponse.json(workspaceIpRestrictionError(ipAccess), {
+      status: 403,
+    });
   }
 
   const inviteLinkToken = await ensureInviteToken(currentWorkspace);
@@ -385,12 +338,22 @@ export async function PATCH(request: Request) {
     return authResponse;
   }
 
-  const currentWorkspace = await findCurrentWorkspace(session.user.id);
+  const currentWorkspace = await findCurrentWorkspace(session.user.id, request);
   if (!currentWorkspace) {
     return NextResponse.json(
       { error: "No active workspace found" },
       { status: 404 },
     );
+  }
+
+  const ipAccess = evaluateWorkspaceIpAccess(
+    request.headers,
+    currentWorkspace.settings,
+  );
+  if (!ipAccess.allowed) {
+    return NextResponse.json(workspaceIpRestrictionError(ipAccess), {
+      status: 403,
+    });
   }
 
   if (!isWorkspaceAdminRole(currentWorkspace.role)) {
@@ -558,9 +521,13 @@ export async function PATCH(request: Request) {
       : (currentWorkspace.inviteLinkEnabled ?? true);
   const inviteLinkToken =
     currentWorkspace.inviteLinkToken ?? createInviteToken();
+  const currentSettings = asRecord(currentWorkspace.settings);
   const settings = {
-    ...asRecord(currentWorkspace.settings),
-    security: serializeSecurityState(nextSecurity),
+    ...currentSettings,
+    security: {
+      ...asRecord(currentSettings.security),
+      ...serializeSecurityState(nextSecurity),
+    },
   };
 
   await db
