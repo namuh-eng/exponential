@@ -127,6 +127,7 @@ services:
       EXPONENTIAL_API_ENVIRONMENT: development
       EXPONENTIAL_API_SERVICE_NAME: exponential-api
       EXPONENTIAL_API_OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      PLAYWRIGHT_TEST: "true"
     ports:
       - "3016:3016"
     depends_on:
