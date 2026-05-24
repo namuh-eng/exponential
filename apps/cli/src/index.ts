@@ -1,17 +1,26 @@
 #!/usr/bin/env node
 import { createExponentialClient, syncWebSocketUrl } from "@exponential/sdk";
 import { parseIssueBody, readOption, requireOption } from "./args.js";
+import {
+  assertPatToken,
+  resolveBaseUrl,
+  resolveToken,
+  writeConfig,
+} from "./config.js";
 
-const [resource, action = "list", ...args] = process.argv.slice(2);
-const token = process.env.EXPONENTIAL_TOKEN;
-const baseUrl = process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1";
+const rawArgs = process.argv.slice(2);
+const [resource, action = "list", ...args] = rawArgs;
+const baseUrl = resolveBaseUrl();
+const token = resource === "login" ? undefined : resolveToken();
 
-if (!token) {
-  console.error("EXPONENTIAL_TOKEN is required");
+if (resource !== "login" && !token) {
+  console.error(
+    "EXPONENTIAL_TOKEN is required or run `exponential login --token pat_...`",
+  );
   process.exit(1);
 }
 
-const apiToken = token;
+const apiToken = token ?? "";
 const client = createExponentialClient({ token: apiToken, baseUrl });
 const idempotencyKey = readOption(args, "idempotency-key");
 
@@ -63,6 +72,11 @@ async function streamSyncWatch(input: { version: number; once: boolean }) {
 }
 
 async function main() {
+  if (resource === "login") {
+    loginCommand();
+    return;
+  }
+
   if (resource === "workspaces") {
     await workspaceCommand();
     return;
@@ -265,6 +279,14 @@ async function main() {
   }
 
   usage();
+}
+
+function loginCommand() {
+  const loginArgs = rawArgs.slice(1);
+  const loginToken = assertPatToken(requireOption(loginArgs, "token"));
+  const loginBaseUrl = readOption(loginArgs, "api-url") ?? baseUrl;
+  writeConfig({ token: loginToken, baseUrl: loginBaseUrl });
+  console.log(JSON.stringify({ ok: true, baseUrl: loginBaseUrl }, null, 2));
 }
 
 async function workspaceCommand() {
@@ -1012,6 +1034,7 @@ function readJSONOption(args: string[], name: string) {
 
 function usage(): never {
   console.error(`Usage:
+  exponential login --token pat_<token> [--api-url http://localhost:3016/v1]
   exponential issues list [--team-id <uuid>] [--cursor <cursor>] [--limit <n>]
   exponential issues search --query <text> [--workspace-id <uuid>]
   exponential issues get --id <id-or-identifier>
