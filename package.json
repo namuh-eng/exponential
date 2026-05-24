@@ -17,7 +17,8 @@
     "db:migrate": "pnpm --filter @exponential/web db:migrate",
     "db:push": "pnpm --filter @exponential/web db:push",
     "api:build": "cd apps/api && go build ./...",
-    "api:test": "cd apps/api && go test ./..."
+    "api:test": "cd apps/api && go test ./...",
+    "web-api-empty": "node scripts/check-web-api-empty.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",

@@ -1,4 +1,4 @@
-.PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd api-build api-test openapi-coverage
+.PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd api-build api-test openapi-coverage web-api-empty
 .PHONY: check-header test-header check-verbose test-verbose
 .PHONY: dev-services dev-services-down
 
@@ -6,7 +6,7 @@
 all: check test
 
 # Static analysis: typecheck + lint/format
-check: check-header typecheck lint api-build openapi-coverage
+check: check-header typecheck lint api-build openapi-coverage web-api-empty
 
 # TypeScript type checking
 typecheck:
@@ -32,6 +32,11 @@ api-test:
 openapi-coverage:
 	@. ./hack/run_silent.sh && \
 	run_silent "OpenAPI coverage passed" "node scripts/check-openapi-coverage.mjs"
+
+# Ensure Next.js remains UI-only.
+web-api-empty:
+	@. ./hack/run_silent.sh && \
+	run_silent "Web API route directory is empty" "pnpm web-api-empty"
 
 # Auto-fix lint and format issues
 fix:
