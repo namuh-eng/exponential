@@ -58,9 +58,9 @@ log:
 
 secrets:
   cookie:
-    - dev-cookie-secret-32-byte-value
+    - 0123456789abcdef0123456789abcdef
   cipher:
-    - dev-cipher-secret-32-byte-value
+    - abcdef0123456789abcdef0123456789
 
 ciphers:
   algorithm: xchacha20-poly1305
