@@ -69,6 +69,7 @@ type createRequest struct {
 	TargetDate  *string  `json:"target_date"`
 	TeamIDs     []string `json:"team_ids"`
 	TeamKeys    []string `json:"team_keys"`
+	TeamKey     string   `json:"teamKey"`
 }
 
 type updateRequest struct {
@@ -83,6 +84,7 @@ type updateRequest struct {
 	TargetDate  *string  `json:"target_date"`
 	TeamIDs     []string `json:"team_ids"`
 	TeamKeys    []string `json:"team_keys"`
+	TeamKey     *string  `json:"teamKey"`
 }
 
 func (h Handler) Routes() chi.Router {
@@ -163,7 +165,11 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 400, "Invalid target date", err.Error())
 		return
 	}
-	teams, err := h.resolveTeams(r.Context(), p.WorkspaceID, input.TeamIDs, input.TeamKeys)
+	teamKeys := append([]string{}, input.TeamKeys...)
+	if strings.TrimSpace(input.TeamKey) != "" {
+		teamKeys = append(teamKeys, input.TeamKey)
+	}
+	teams, err := h.resolveTeams(r.Context(), p.WorkspaceID, input.TeamIDs, teamKeys)
 	if err != nil {
 		problem.Write(w, 400, "Team not found in active workspace", err.Error())
 		return
@@ -284,10 +290,14 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 		add("slug=$%d", slug)
 	}
-	teamsChanged := input.TeamIDs != nil || input.TeamKeys != nil
+	teamsChanged := input.TeamIDs != nil || input.TeamKeys != nil || input.TeamKey != nil
 	teams := existing.Teams
 	if teamsChanged {
-		teams, err = h.resolveTeams(r.Context(), p.WorkspaceID, input.TeamIDs, input.TeamKeys)
+		teamKeys := append([]string{}, input.TeamKeys...)
+		if input.TeamKey != nil && strings.TrimSpace(*input.TeamKey) != "" {
+			teamKeys = append(teamKeys, *input.TeamKey)
+		}
+		teams, err = h.resolveTeams(r.Context(), p.WorkspaceID, input.TeamIDs, teamKeys)
 		if err != nil {
 			problem.Write(w, 400, "Team not found in active workspace", err.Error())
 			return
@@ -403,6 +413,9 @@ func (h Handler) loadProjects(ctx context.Context, where string, args ...any) ([
 	}
 	for i := range projects {
 		projects[i].Teams = teams[projects[i].ID]
+		if projects[i].Teams == nil {
+			projects[i].Teams = []ProjectTeam{}
+		}
 	}
 	return projects, nil
 }

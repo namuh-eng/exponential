@@ -861,8 +861,10 @@ export function CommandPalette({
                             : "text-[var(--color-text-secondary)]"
                         }`}
                       >
-                        {project.teams.length > 0
-                          ? project.teams.map((team) => team.key).join(", ")
+                        {(project.teams ?? []).length > 0
+                          ? (project.teams ?? [])
+                              .map((team) => team.key)
+                              .join(", ")
                           : "Workspace project"}
                       </span>
                     </span>
