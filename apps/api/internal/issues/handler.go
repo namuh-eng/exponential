@@ -266,7 +266,101 @@ func (h Handler) Get(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusInternalServerError, "Get issue failed", err.Error())
 		return
 	}
-	problem.JSON(w, http.StatusOK, issue)
+	detail, err := h.issueDetail(r.Context(), issue, p.UserID)
+	if err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Get issue failed", err.Error())
+		return
+	}
+	problem.JSON(w, http.StatusOK, detail)
+}
+
+func (h Handler) issueDetail(ctx context.Context, issue Issue, userID string) (map[string]any, error) {
+	state, err := h.issueState(ctx, issue.StateID)
+	if err != nil {
+		return nil, err
+	}
+	team, err := h.issueTeam(ctx, issue.TeamID)
+	if err != nil {
+		return nil, err
+	}
+	creator, err := h.issueUser(ctx, issue.CreatorID)
+	if err != nil {
+		return nil, err
+	}
+	var assignee map[string]any
+	if issue.AssigneeID != nil {
+		assignee, err = h.issueUserWithID(ctx, *issue.AssigneeID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var project map[string]any
+	if issue.ProjectID != nil {
+		project, err = h.issueProject(ctx, *issue.ProjectID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var cycle map[string]any
+	if issue.CycleID != nil {
+		cycle, err = h.issueCycle(ctx, *issue.CycleID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var parentIssue map[string]any
+	if issue.ParentIssueID != nil {
+		parentIssue, err = h.issueSummary(ctx, *issue.ParentIssueID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	labels, err := h.issueLabels(ctx, issue.ID)
+	if err != nil {
+		return nil, err
+	}
+	subIssues, err := h.issueSubIssues(ctx, issue.ID)
+	if err != nil {
+		return nil, err
+	}
+	subscription, err := h.subscriptionSummary(ctx, issue.ID, userID)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"id":                   issue.ID,
+		"number":               issue.Number,
+		"identifier":           issue.Identifier,
+		"title":                issue.Title,
+		"description":          issue.Description,
+		"priority":             issue.Priority,
+		"estimate":             issue.Estimate,
+		"dueDate":              issue.DueDate,
+		"createdAt":            issue.CreatedAt,
+		"updatedAt":            issue.UpdatedAt,
+		"state":                state,
+		"assignee":             assignee,
+		"creator":              creator,
+		"team":                 team,
+		"project":              project,
+		"cycle":                cycle,
+		"parentIssue":          parentIssue,
+		"relations":            []any{},
+		"labels":               labels,
+		"subscription":         subscription,
+		"reactions":            []any{},
+		"discussionSummary":    map[string]any{"enabled": false, "status": "disabled", "text": nil, "generatedAt": nil, "sourceCommentCount": 0},
+		"comments":             []any{},
+		"subIssues":            subIssues,
+		"team_id":              issue.TeamID,
+		"state_id":             issue.StateID,
+		"assignee_id":          issue.AssigneeID,
+		"creator_id":           issue.CreatorID,
+		"parent_issue_id":      issue.ParentIssueID,
+		"project_id":           issue.ProjectID,
+		"project_milestone_id": issue.ProjectMilestoneID,
+		"cycle_id":             issue.CycleID,
+	}, nil
 }
 
 func (h Handler) GetSubscription(w http.ResponseWriter, r *http.Request) {
@@ -353,6 +447,127 @@ func (h Handler) subscriptionSummary(ctx context.Context, issueID, userID string
 		}
 	}
 	return summary, rows.Err()
+}
+
+func (h Handler) issueState(ctx context.Context, stateID string) (map[string]any, error) {
+	var id, name, category, color string
+	err := h.DB.QueryRow(ctx, `select id::text,name,category::text,color from workflow_state where id=$1::uuid`, stateID).Scan(&id, &name, &category, &color)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"id": id, "name": name, "category": category, "color": color}, nil
+}
+
+func (h Handler) issueTeam(ctx context.Context, teamID string) (map[string]any, error) {
+	var id, name, key string
+	err := h.DB.QueryRow(ctx, `select id::text,name,key from team where id=$1::uuid`, teamID).Scan(&id, &name, &key)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"id": id, "name": name, "key": key}, nil
+}
+
+func (h Handler) issueUser(ctx context.Context, userID string) (map[string]any, error) {
+	var name string
+	var image *string
+	err := h.DB.QueryRow(ctx, `select name,image from "user" where id=$1`, userID).Scan(&name, &image)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return map[string]any{"name": userID, "image": nil}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"name": name, "image": image}, nil
+}
+
+func (h Handler) issueUserWithID(ctx context.Context, userID string) (map[string]any, error) {
+	user, err := h.issueUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	user["id"] = userID
+	return user, nil
+}
+
+func (h Handler) issueProject(ctx context.Context, projectID string) (map[string]any, error) {
+	var id, name string
+	var icon *string
+	err := h.DB.QueryRow(ctx, `select id::text,name,icon from project where id=$1::uuid`, projectID).Scan(&id, &name, &icon)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"id": id, "name": name, "icon": icon}, nil
+}
+
+func (h Handler) issueCycle(ctx context.Context, cycleID string) (map[string]any, error) {
+	var id string
+	var name *string
+	var number int32
+	err := h.DB.QueryRow(ctx, `select id::text,name,number from cycle where id=$1::uuid`, cycleID).Scan(&id, &name, &number)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"id": id, "name": name, "number": number}, nil
+}
+
+func (h Handler) issueSummary(ctx context.Context, issueID string) (map[string]any, error) {
+	var id, identifier, title string
+	err := h.DB.QueryRow(ctx, `select id::text,identifier,title from issue where id=$1::uuid`, issueID).Scan(&id, &identifier, &title)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"id": id, "identifier": identifier, "title": title}, nil
+}
+
+func (h Handler) issueLabels(ctx context.Context, issueID string) ([]map[string]any, error) {
+	rows, err := h.DB.Query(ctx, `select l.id::text,l.name,l.color from issue_label il join label l on l.id=il.label_id where il.issue_id=$1::uuid order by l.name`, issueID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	labels := []map[string]any{}
+	for rows.Next() {
+		var id, name, color string
+		if err := rows.Scan(&id, &name, &color); err != nil {
+			return nil, err
+		}
+		labels = append(labels, map[string]any{"id": id, "name": name, "color": color})
+	}
+	return labels, rows.Err()
+}
+
+func (h Handler) issueSubIssues(ctx context.Context, issueID string) ([]map[string]any, error) {
+	rows, err := h.DB.Query(ctx, `select i.id::text,i.identifier,i.title,i.priority::text,ws.id::text,ws.name,ws.category::text,ws.color from issue i left join workflow_state ws on ws.id=i.state_id where i.parent_issue_id=$1::uuid order by i.created_at`, issueID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	subIssues := []map[string]any{}
+	for rows.Next() {
+		var id, identifier, title, priority string
+		var stateID, stateName, stateCategory, stateColor *string
+		if err := rows.Scan(&id, &identifier, &title, &priority, &stateID, &stateName, &stateCategory, &stateColor); err != nil {
+			return nil, err
+		}
+		var state map[string]any
+		if stateID != nil {
+			state = map[string]any{"id": *stateID, "name": stringPtrDefault(stateName, "Unknown"), "category": stringPtrDefault(stateCategory, "backlog"), "color": stringPtrDefault(stateColor, "#6b6f76")}
+		}
+		subIssues = append(subIssues, map[string]any{"id": id, "identifier": identifier, "title": title, "priority": priority, "state": state})
+	}
+	return subIssues, rows.Err()
 }
 
 func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
@@ -676,6 +891,12 @@ func validPriority(value string) bool {
 func valueOrEmpty(value *string) string {
 	if value == nil {
 		return ""
+	}
+	return *value
+}
+func stringPtrDefault(value *string, fallback string) string {
+	if value == nil || *value == "" {
+		return fallback
 	}
 	return *value
 }
