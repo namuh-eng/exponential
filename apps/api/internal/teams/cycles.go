@@ -19,14 +19,14 @@ type Cycle struct {
 	ID                  string  `json:"id"`
 	Name                *string `json:"name"`
 	Number              int32   `json:"number"`
-	TeamID              string  `json:"team_id"`
-	StartDate           string  `json:"start_date"`
-	EndDate             string  `json:"end_date"`
-	AutoRollover        bool    `json:"auto_rollover"`
-	IssueCount          int32   `json:"issue_count"`
-	CompletedIssueCount int32   `json:"completed_issue_count"`
-	CreatedAt           string  `json:"created_at"`
-	UpdatedAt           string  `json:"updated_at"`
+	TeamID              string  `json:"teamId"`
+	StartDate           string  `json:"startDate"`
+	EndDate             string  `json:"endDate"`
+	AutoRollover        bool    `json:"autoRollover"`
+	IssueCount          int32   `json:"issueCount"`
+	CompletedIssueCount int32   `json:"completedIssueCount"`
+	CreatedAt           string  `json:"createdAt"`
+	UpdatedAt           string  `json:"updatedAt"`
 }
 
 type cyclesResponse struct {
@@ -52,6 +52,13 @@ type cycleRequest struct {
 	EndDateAlt   string  `json:"endDate"`
 	AutoRollover *bool   `json:"auto_rollover"`
 	AutoAlt      *bool   `json:"autoRollover"`
+}
+
+type cycleDetailResponse struct {
+	Team          teamIssuesTeam         `json:"team"`
+	Cycle         Cycle                  `json:"cycle"`
+	Groups        []teamIssueGroup       `json:"groups"`
+	FilterOptions teamIssueFilterOptions `json:"filterOptions"`
 }
 
 func (r *cycleRequest) normalize() {
@@ -150,6 +157,76 @@ func (h Handler) CreateCycle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	problem.JSON(w, 201, cycle)
+}
+
+func (h Handler) GetCycle(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	team, err := h.findTeamRecord(r, p.WorkspaceID, chi.URLParam(r, "key"))
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "Team not found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Load cycle failed", err.Error())
+		return
+	}
+	cycle, err := h.findCycle(r.Context(), team.ID, chi.URLParam(r, "cycleID"))
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "Cycle not found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Load cycle failed", err.Error())
+		return
+	}
+	teamIDs, err := h.hierarchyTeamIDs(r.Context(), team.ID)
+	if err != nil {
+		problem.Write(w, 500, "Load cycle failed", err.Error())
+		return
+	}
+	states, err := h.teamIssueStates(r.Context(), teamIDs)
+	if err != nil {
+		problem.Write(w, 500, "Load cycle failed", err.Error())
+		return
+	}
+	issues, err := h.teamIssueRecords(r.Context(), teamIDs)
+	if err != nil {
+		problem.Write(w, 500, "Load cycle failed", err.Error())
+		return
+	}
+	cycleIssues := make([]teamIssueRecord, 0, len(issues))
+	for _, issue := range issues {
+		if issue.CycleID != nil && *issue.CycleID == cycle.ID {
+			cycleIssues = append(cycleIssues, issue)
+		}
+	}
+	labels, err := h.teamIssueLabels(r.Context(), issueIDsForTeamIssues(cycleIssues))
+	if err != nil {
+		problem.Write(w, 500, "Load cycle failed", err.Error())
+		return
+	}
+	creators, err := h.creatorNames(r.Context(), cycleIssues)
+	if err != nil {
+		problem.Write(w, 500, "Load cycle failed", err.Error())
+		return
+	}
+	cycles, err := h.cycleNames(r.Context(), issues)
+	if err != nil {
+		problem.Write(w, 500, "Load cycle failed", err.Error())
+		return
+	}
+	teams, err := h.teamOptions(r.Context(), teamIDs)
+	if err != nil {
+		problem.Write(w, 500, "Load cycle failed", err.Error())
+		return
+	}
+	issueResponse := buildTeamIssuesResponse(team, states, cycleIssues, labels, creators, cycles, teams)
+	problem.JSON(w, 200, cycleDetailResponse{
+		Team:          issueResponse.Team,
+		Cycle:         cycle,
+		Groups:        issueResponse.Groups,
+		FilterOptions: issueResponse.FilterOptions,
+	})
 }
 
 func (h Handler) UpdateCycle(w http.ResponseWriter, r *http.Request) {

@@ -2,7 +2,10 @@ package teams
 
 import (
 	"errors"
+	"math"
 	"net/http"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -37,6 +40,23 @@ type analyticsCycle struct {
 	EndDate   time.Time
 	Total     int
 	Completed int
+}
+
+var analyticsMeasureLabels = map[string]string{
+	"issue_count": "Issue count",
+	"effort":      "Effort",
+	"cycle_time":  "Cycle time",
+	"lead_time":   "Lead time",
+	"triage_time": "Triage time",
+	"issue_age":   "Issue age",
+}
+
+var analyticsSliceLabels = map[string]string{
+	"status":       "Status",
+	"project":      "Project",
+	"cycle":        "Cycle",
+	"label":        "Label",
+	"created_week": "Created week",
 }
 
 func (h Handler) Analytics(w http.ResponseWriter, r *http.Request) {
@@ -160,12 +180,16 @@ func analyticsQuery(r *http.Request) map[string]any {
 		"label":          optionalQuery(q.Get("label")),
 		"createdAfter":   optionalQuery(q.Get("createdAfter")),
 		"completedAfter": optionalQuery(q.Get("completedAfter")),
+		"issueIds":       analyticsIssueIDs(q.Get("issueIds")),
 	}
 }
 
 func filterAnalyticsIssues(issues []analyticsIssue, query map[string]any) []analyticsIssue {
 	out := []analyticsIssue{}
 	for _, issue := range issues {
+		if ids, _ := query["issueIds"].([]string); len(ids) > 0 && !stringSliceContains(ids, issue.ID) {
+			continue
+		}
 		if status, _ := query["status"].(string); status != "" && !ptrEquals(issue.StatusCategory, status) && !ptrEquals(issue.StatusName, status) {
 			continue
 		}
@@ -208,6 +232,14 @@ func buildTeamAnalyticsResponse(team teamRecordForSettings, query map[string]any
 	for _, row := range buckets {
 		rows = append(rows, row)
 	}
+	sort.Slice(rows, func(i, j int) bool {
+		left := rows[i]["value"].(float64)
+		right := rows[j]["value"].(float64)
+		if left != right {
+			return left > right
+		}
+		return rows[i]["label"].(string) < rows[j]["label"].(string)
+	})
 	completed := 0
 	effort := float64(0)
 	for _, issue := range filtered {
@@ -218,6 +250,8 @@ func buildTeamAnalyticsResponse(team teamRecordForSettings, query map[string]any
 			effort += float64(*issue.Estimate)
 		}
 	}
+	measure := query["measure"].(string)
+	slice := query["slice"].(string)
 	return map[string]any{
 		"team":  map[string]any{"id": team.ID, "name": team.Name, "key": team.Key},
 		"query": query,
@@ -228,9 +262,9 @@ func buildTeamAnalyticsResponse(team teamRecordForSettings, query map[string]any
 			"ranges":   []map[string]string{{"value": "30d", "label": "Last 30 days"}, {"value": "90d", "label": "Last 90 days"}, {"value": "180d", "label": "Last 180 days"}, {"value": "all", "label": "All time"}},
 		},
 		"filters":      analyticsFilters(team, allIssues),
-		"summary":      map[string]any{"issueCount": len(filtered), "completedCount": completed, "effort": effort, "velocity": completed / 4, "period": "Current selection"},
-		"chart":        map[string]any{"title": "Team analytics", "points": rows},
-		"metricCards":  []any{},
+		"summary":      map[string]any{"issueCount": len(filtered), "completedCount": completed, "effort": effort, "velocity": completed / 4, "period": analyticsPeriod(query["range"].(string))},
+		"chart":        map[string]any{"title": analyticsChartTitle(measure, slice), "points": rows},
+		"metricCards":  analyticsMetricCards(filtered, query),
 		"trend":        map[string]any{"title": "Created, completed, and active issues over time", "points": []any{}},
 		"tableRows":    rows,
 		"cycleMetrics": analyticsCycleMetrics(cycles),
@@ -265,6 +299,154 @@ func analyticsMeasure(issue analyticsIssue, measure string) float64 {
 		return float64(*issue.Estimate)
 	}
 	return 1
+}
+
+func analyticsChartTitle(measure, slice string) string {
+	measureLabel := analyticsMeasureLabels[measure]
+	if measureLabel == "" {
+		measureLabel = "Issue count"
+	}
+	sliceLabel := analyticsSliceLabels[slice]
+	if sliceLabel == "" {
+		sliceLabel = "Status"
+	}
+	return measureLabel + " by " + sliceLabel
+}
+
+func analyticsPeriod(rangeValue string) string {
+	if rangeValue == "all" {
+		return "All time"
+	}
+	if rangeValue == "" {
+		rangeValue = "90d"
+	}
+	return "Last " + rangeValue[:len(rangeValue)-1] + " days"
+}
+
+func analyticsMetricCards(issues []analyticsIssue, query map[string]any) []map[string]any {
+	rangeValue, _ := query["range"].(string)
+	currentStart := analyticsRangeStart(rangeValue)
+	var previousStart *time.Time
+	if currentStart != nil {
+		prev := currentStart.AddDate(0, 0, -analyticsRangeDays(rangeValue))
+		previousStart = &prev
+	}
+
+	completedCurrent := []analyticsIssue{}
+	completedPrevious := []analyticsIssue{}
+	active := []analyticsIssue{}
+	backlog := []analyticsIssue{}
+	cycleTimes := []float64{}
+	previousCycleTimes := []float64{}
+
+	for _, issue := range issues {
+		if ptrEquals(issue.StatusCategory, "started") || ptrEquals(issue.StatusCategory, "unstarted") {
+			active = append(active, issue)
+		}
+		if ptrEquals(issue.StatusCategory, "backlog") {
+			backlog = append(backlog, issue)
+		}
+		if issue.CompletedAt == nil {
+			continue
+		}
+		inCurrent := currentStart == nil || !issue.CompletedAt.Before(*currentStart)
+		inPrevious := previousStart != nil && currentStart != nil && !issue.CompletedAt.Before(*previousStart) && issue.CompletedAt.Before(*currentStart)
+		if inCurrent {
+			completedCurrent = append(completedCurrent, issue)
+			cycleTimes = append(cycleTimes, float64(daysBetween(issue.UpdatedAt, *issue.CompletedAt)))
+		}
+		if inPrevious {
+			completedPrevious = append(completedPrevious, issue)
+			previousCycleTimes = append(previousCycleTimes, float64(daysBetween(issue.UpdatedAt, *issue.CompletedAt)))
+		}
+	}
+
+	completionRate := 0
+	previousCompletionRate := 0
+	if len(issues) > 0 {
+		completionRate = int(math.Round((float64(len(completedCurrent)) / float64(len(issues))) * 100))
+		previousCompletionRate = int(math.Round((float64(len(completedPrevious)) / float64(len(issues))) * 100))
+	}
+
+	return []map[string]any{
+		analyticsMetricCard("throughput", "Throughput", len(completedCurrent), analyticsCompletedHelper(rangeValue), len(completedCurrent)-len(completedPrevious), "vs previous period", "Completed throughput", "metric:throughput", issueIDs(completedCurrent)),
+		analyticsMetricCard("cycle_time", "Cycle time", averageFloat(cycleTimes), "avg days from start to done", roundFloat(averageFloat(cycleTimes)-averageFloat(previousCycleTimes)), "days vs previous", "Cycle time issues", "metric:cycle_time", issueIDs(completedCurrent)),
+		analyticsMetricCard("workload", "Workload", len(active), "started or unstarted issues", len(active)-len(backlog), "active minus backlog", "Active workload", "metric:workload", issueIDs(active)),
+		analyticsMetricCard("completion_rate", "Completion rate", completionRate, "% of matching issues completed", completionRate-previousCompletionRate, "points vs previous", "Completion rate", "metric:completion_rate", issueIDs(completedCurrent)),
+	}
+}
+
+func analyticsMetricCard(id, label string, value any, helper string, delta any, deltaLabel, drilldownLabel, analyticsKey string, ids []string) map[string]any {
+	return map[string]any{
+		"id":         id,
+		"label":      label,
+		"value":      value,
+		"helper":     helper,
+		"delta":      delta,
+		"deltaLabel": deltaLabel,
+		"issueIds":   ids,
+		"drilldown":  map[string]any{"label": drilldownLabel, "analyticsKey": analyticsKey, "issueIds": ids},
+	}
+}
+
+func analyticsCompletedHelper(rangeValue string) string {
+	if rangeValue == "all" {
+		return "completed in all time"
+	}
+	if rangeValue == "" {
+		rangeValue = "90d"
+	}
+	return "completed in last " + rangeValue[:len(rangeValue)-1] + " days"
+}
+
+func analyticsRangeDays(rangeValue string) int {
+	switch rangeValue {
+	case "30d":
+		return 30
+	case "180d":
+		return 180
+	default:
+		return 90
+	}
+}
+
+func analyticsRangeStart(rangeValue string) *time.Time {
+	if rangeValue == "all" {
+		return nil
+	}
+	start := time.Now().AddDate(0, 0, -analyticsRangeDays(rangeValue))
+	return &start
+}
+
+func daysBetween(start, end time.Time) int {
+	days := int(math.Round(end.Sub(start).Hours() / 24))
+	if days < 0 {
+		return 0
+	}
+	return days
+}
+
+func averageFloat(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := float64(0)
+	for _, value := range values {
+		sum += value
+	}
+	return roundFloat(sum / float64(len(values)))
+}
+
+func roundFloat(value float64) float64 {
+	return math.Round(value*10) / 10
+}
+
+func issueIDs(issues []analyticsIssue) []string {
+	ids := make([]string, 0, len(issues))
+	for _, issue := range issues {
+		ids = append(ids, issue.ID)
+	}
+	return ids
 }
 
 func analyticsFilters(team teamRecordForSettings, issues []analyticsIssue) map[string]any {
@@ -308,6 +490,20 @@ func validAnalyticsValue(value string, allowed []string, fallback string) string
 		}
 	}
 	return fallback
+}
+func analyticsIssueIDs(raw string) []string {
+	if raw == "" {
+		return []string{}
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 func optionalQuery(value string) any {
 	if value == "" {

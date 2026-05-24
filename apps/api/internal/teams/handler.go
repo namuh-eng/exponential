@@ -84,6 +84,7 @@ func (h Handler) Routes() chi.Router {
 	r.Delete("/{key}/recurring-issues/{id}", h.DeleteRecurringIssue)
 	r.Get("/{key}/cycles", h.ListCycles)
 	r.Post("/{key}/cycles", h.CreateCycle)
+	r.Get("/{key}/cycles/{cycleID}", h.GetCycle)
 	r.Patch("/{key}/cycles/{cycleID}", h.UpdateCycle)
 	r.Delete("/{key}/cycles/{cycleID}", h.DeleteCycle)
 	return r

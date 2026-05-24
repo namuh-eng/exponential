@@ -635,7 +635,9 @@ export function InsightsPanel({
           </p>
           {data.emptyState ? (
             <div className="rounded-lg border border-dashed border-[var(--color-border)] p-8 text-center text-[13px] text-[var(--color-text-secondary)]">
-              {data.emptyState}
+              {mode === "drawer"
+                ? "No chart buckets match this issue set. Broaden the current view filters to build an Insights chart."
+                : data.emptyState}
             </div>
           ) : (
             <div className="space-y-3" aria-label="Insights chart">
