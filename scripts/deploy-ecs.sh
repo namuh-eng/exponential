@@ -39,10 +39,10 @@ export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
 
 aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
-docker build -f infra/docker/api.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-api:$IMAGE_TAG" .
-docker build -f infra/docker/web.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-web:$IMAGE_TAG" .
-docker build -f infra/docker/kratos.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-kratos:$IMAGE_TAG" .
-docker build -f infra/docker/web-schema.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-schema:$IMAGE_TAG" .
+docker build --platform linux/amd64 -f infra/docker/api.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-api:$IMAGE_TAG" .
+docker build --platform linux/amd64 -f infra/docker/web.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-web:$IMAGE_TAG" .
+docker build --platform linux/amd64 -f infra/docker/kratos.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-kratos:$IMAGE_TAG" .
+docker build --platform linux/amd64 -f infra/docker/web-schema.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-schema:$IMAGE_TAG" .
 
 docker push "$ECR_REGISTRY/${APP_NAME}-api:$IMAGE_TAG"
 docker push "$ECR_REGISTRY/${APP_NAME}-web:$IMAGE_TAG"
