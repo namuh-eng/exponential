@@ -299,7 +299,7 @@ export default function DocumentsSettingsPage() {
       {notice ? (
         <p className="mt-4 text-[13px] text-green-400">{notice}</p>
       ) : null}
-      {error ? (
+      {error && !dialog ? (
         <div
           className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-[13px] text-red-500"
           role="alert"

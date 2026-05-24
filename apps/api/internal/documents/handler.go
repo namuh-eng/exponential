@@ -38,8 +38,10 @@ type Folder struct {
 }
 
 type Settings struct {
-	Templates []Template `json:"templates"`
-	Folders   []Folder   `json:"folders"`
+	Templates                []Template `json:"templates"`
+	Folders                  []Folder   `json:"folders"`
+	DefaultVisibility        string     `json:"defaultVisibility"`
+	AutoLinkProjectDocuments bool       `json:"autoLinkProjectDocuments"`
 }
 
 type access struct {
@@ -53,6 +55,7 @@ var folderColors = map[string]bool{"gray": true, "blue": true, "green": true, "y
 func (h Handler) SettingsRoutes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.GetSettings)
+	r.Patch("/", h.UpdateSettings)
 	return r
 }
 
@@ -84,6 +87,40 @@ func (h Handler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	problem.JSON(w, 200, map[string]Settings{"documents": readSettings(access.Settings)})
+}
+
+func (h Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
+	access, ok := h.requireManager(w, r)
+	if !ok {
+		return
+	}
+	var body map[string]any
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	documents := readSettings(access.Settings)
+	if raw, ok := body["defaultVisibility"]; ok {
+		visibility, _ := raw.(string)
+		visibility = strings.TrimSpace(visibility)
+		if visibility != "workspace" && visibility != "private" {
+			problem.Write(w, 400, "Default document visibility must be workspace or private", "")
+			return
+		}
+		documents.DefaultVisibility = visibility
+	}
+	if raw, ok := body["autoLinkProjectDocuments"]; ok {
+		value, ok := raw.(bool)
+		if !ok {
+			problem.Write(w, 400, "Auto-link project documents must be a boolean", "")
+			return
+		}
+		documents.AutoLinkProjectDocuments = value
+	}
+	if err := h.persist(r.Context(), access, documents); err != nil {
+		problem.Write(w, 500, "Update document settings failed", err.Error())
+		return
+	}
+	problem.JSON(w, 200, map[string]Settings{"documents": documents})
 }
 
 func (h Handler) CreateFolder(w http.ResponseWriter, r *http.Request) {
@@ -274,7 +311,13 @@ func readSettings(raw []byte) Settings {
 	root := map[string]any{}
 	_ = json.Unmarshal(raw, &root)
 	documents, _ := root["documents"].(map[string]any)
-	settings := Settings{Templates: []Template{}, Folders: []Folder{}}
+	settings := Settings{Templates: []Template{}, Folders: []Folder{}, DefaultVisibility: "workspace", AutoLinkProjectDocuments: true}
+	if visibility := readString(documents, "defaultVisibility", "workspace"); visibility == "private" {
+		settings.DefaultVisibility = "private"
+	}
+	if value, ok := documents["autoLinkProjectDocuments"].(bool); ok {
+		settings.AutoLinkProjectDocuments = value
+	}
 	if values, ok := documents["templates"].([]any); ok {
 		for _, value := range values {
 			if template, ok := normalizeTemplate(value); ok {

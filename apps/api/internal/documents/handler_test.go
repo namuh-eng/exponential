@@ -6,7 +6,7 @@ import (
 )
 
 func TestReadSettingsNormalizesDocuments(t *testing.T) {
-	raw, _ := json.Marshal(map[string]any{"documents": map[string]any{"templates": []map[string]any{{"id": "t1", "name": " Spec ", "content": " Body ", "createdAt": "bad"}}, "folders": []map[string]any{{"id": "f1", "name": " Docs ", "color": "chartreuse"}}}})
+	raw, _ := json.Marshal(map[string]any{"documents": map[string]any{"defaultVisibility": "private", "autoLinkProjectDocuments": false, "templates": []map[string]any{{"id": "t1", "name": " Spec ", "content": " Body ", "createdAt": "bad"}}, "folders": []map[string]any{{"id": "f1", "name": " Docs ", "color": "chartreuse"}}}})
 
 	settings := readSettings(raw)
 
@@ -15,6 +15,9 @@ func TestReadSettingsNormalizesDocuments(t *testing.T) {
 	}
 	if len(settings.Folders) != 1 || settings.Folders[0].Color != "gray" {
 		t.Fatalf("folders = %#v", settings.Folders)
+	}
+	if settings.DefaultVisibility != "private" || settings.AutoLinkProjectDocuments {
+		t.Fatalf("document defaults = %#v", settings)
 	}
 }
 
