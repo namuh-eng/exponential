@@ -208,8 +208,9 @@ export function ProjectDetailPage() {
           return;
         }
         const json = await res.json();
-        setData(json);
-        setDescriptionDraft(json.project.description ?? "");
+        const normalized = normalizeProjectResponse(json);
+        setData(normalized);
+        setDescriptionDraft(normalized.project.description ?? "");
       } finally {
         setLoading(false);
       }
@@ -1096,4 +1097,69 @@ export function ProjectDetailPage() {
       ) : null}
     </div>
   );
+}
+
+type ApiProjectResponse = Partial<ProjectResponse> &
+  Partial<ProjectDetail> & {
+    project?: Partial<ProjectDetail> & {
+      start_date?: string | null;
+      target_date?: string | null;
+    };
+    start_date?: string | null;
+    target_date?: string | null;
+    progress?: unknown;
+  };
+
+function normalizeProjectResponse(input: ApiProjectResponse): ProjectResponse {
+  const projectInput = input.project ?? input;
+  const progressInput = input.progress as
+    | ProjectResponse["progress"]
+    | { percentage?: number | null }
+    | undefined;
+  const progress =
+    progressInput && "total" in progressInput
+      ? progressInput
+      : {
+          total: 0,
+          completed: 0,
+          percentage:
+            typeof progressInput?.percentage === "number"
+              ? progressInput.percentage
+              : 0,
+          assignees: [],
+          labels: [],
+        };
+
+  return {
+    project: {
+      id: projectInput.id ?? "",
+      name: projectInput.name ?? "Untitled project",
+      description: projectInput.description ?? null,
+      icon: projectInput.icon ?? null,
+      slug: projectInput.slug ?? "",
+      status: projectInput.status ?? "planned",
+      statusLabel: projectInput.statusLabel ?? projectInput.status ?? "Planned",
+      statusColor: projectInput.statusColor ?? "#6b6f76",
+      statusIcon: projectInput.statusIcon ?? "circle",
+      statusIsDefault: projectInput.statusIsDefault ?? false,
+      priority: projectInput.priority ?? "none",
+      startDate: projectInput.startDate ?? projectInput.start_date ?? null,
+      targetDate: projectInput.targetDate ?? projectInput.target_date ?? null,
+    },
+    lead: input.lead ?? null,
+    members: input.members ?? [],
+    teams: input.teams ?? [],
+    labels: input.labels ?? [],
+    availableMembers: input.availableMembers ?? [],
+    availableTeams: input.availableTeams ?? [],
+    availableLabels: input.availableLabels ?? [],
+    availableStatuses: input.availableStatuses ?? [],
+    slackChannel: input.slackChannel ?? null,
+    projectStatuses: input.projectStatuses ?? [],
+    resources: input.resources ?? [],
+    activity: input.activity ?? [],
+    milestones: input.milestones ?? [],
+    issueGroups: input.issueGroups ?? [],
+    progress,
+  };
 }
