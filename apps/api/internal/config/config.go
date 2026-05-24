@@ -4,11 +4,13 @@ import "github.com/spf13/viper"
 
 // Config contains runtime settings for the headless API process.
 type Config struct {
-	Addr        string
-	DatabaseURL string
-	RedisURL    string
-	KratosURL   string
-	Environment string
+	Addr         string
+	DatabaseURL  string
+	RedisURL     string
+	KratosURL    string
+	Environment  string
+	ServiceName  string
+	OTLPEndpoint string
 }
 
 // Load reads configuration from environment variables with local-dev defaults.
@@ -22,12 +24,16 @@ func Load() Config {
 	v.SetDefault("REDIS_URL", "redis://localhost:6379")
 	v.SetDefault("KRATOS_URL", "http://localhost:4433")
 	v.SetDefault("ENVIRONMENT", "development")
+	v.SetDefault("SERVICE_NAME", "exponential-api")
+	v.SetDefault("OTEL_EXPORTER_OTLP_ENDPOINT", "")
 
 	return Config{
-		Addr:        v.GetString("ADDR"),
-		DatabaseURL: v.GetString("DATABASE_URL"),
-		RedisURL:    v.GetString("REDIS_URL"),
-		KratosURL:   v.GetString("KRATOS_URL"),
-		Environment: v.GetString("ENVIRONMENT"),
+		Addr:         v.GetString("ADDR"),
+		DatabaseURL:  v.GetString("DATABASE_URL"),
+		RedisURL:     v.GetString("REDIS_URL"),
+		KratosURL:    v.GetString("KRATOS_URL"),
+		Environment:  v.GetString("ENVIRONMENT"),
+		ServiceName:  v.GetString("SERVICE_NAME"),
+		OTLPEndpoint: v.GetString("OTEL_EXPORTER_OTLP_ENDPOINT"),
 	}
 }

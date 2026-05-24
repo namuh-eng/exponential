@@ -13,6 +13,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/database"
 	httpserver "github.com/namuh-eng/exponential/apps/api/internal/http"
 	"github.com/namuh-eng/exponential/apps/api/internal/logging"
+	"github.com/namuh-eng/exponential/apps/api/internal/observability"
 	"go.uber.org/zap"
 )
 
@@ -23,6 +24,22 @@ func main() {
 		panic(err)
 	}
 	defer func() { _ = logger.Sync() }()
+
+	shutdownTracing, err := observability.ConfigureTracing(context.Background(), observability.TracingConfig{
+		ServiceName:  cfg.ServiceName,
+		Environment:  cfg.Environment,
+		OTLPEndpoint: cfg.OTLPEndpoint,
+	})
+	if err != nil {
+		logger.Fatal("configure tracing failed", zap.Error(err))
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownTracing(ctx); err != nil {
+			logger.Error("shutdown tracing failed", zap.Error(err))
+		}
+	}()
 
 	db, err := database.Open(context.Background(), cfg.DatabaseURL)
 	if err != nil {

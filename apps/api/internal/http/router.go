@@ -42,6 +42,7 @@ import (
 func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 	metrics := &observability.Metrics{}
 	r := chi.NewRouter()
+	r.Use(observability.TraceMiddleware("exponential-api"))
 	r.Use(observability.RequestLogger(logger, metrics))
 	r.Get("/healthz", func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		w.Header().Set("Content-Type", "application/json")

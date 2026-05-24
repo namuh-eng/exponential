@@ -93,6 +93,8 @@ services:
       EXPONENTIAL_API_REDIS_URL: redis://redis:6379
       EXPONENTIAL_API_KRATOS_URL: http://kratos:4433
       EXPONENTIAL_API_ENVIRONMENT: development
+      EXPONENTIAL_API_SERVICE_NAME: exponential-api
+      EXPONENTIAL_API_OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     ports:
       - "3016:3016"
     depends_on:
