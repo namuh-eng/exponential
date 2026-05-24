@@ -386,14 +386,56 @@ ensure_listener_rule() {
 ensure_listener_rule 10 "$API_TG_ARN" 'Field=path-pattern,Values=/api/*'
 ensure_listener_rule 20 "$KRATOS_TG_ARN" 'Field=path-pattern,Values=/auth/*'
 
+set_env_file() {
+  local key="$1"
+  local value="$2"
+  KEY="$key" VALUE="$value" python3 - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(".env")
+key = os.environ["KEY"]
+value = os.environ["VALUE"]
+lines = path.read_text().splitlines() if path.exists() else []
+for index, line in enumerate(lines):
+    if line.startswith(f"{key}="):
+        lines[index] = f"{key}={value}"
+        break
+else:
+    lines.append(f"{key}={value}")
+path.write_text("\n".join(lines) + "\n")
+PY
+}
+
 ALB_DNS=$(aws elbv2 describe-load-balancers --load-balancer-arns $ALB_ARN --region $REGION \
   --query 'LoadBalancers[0].DNSName' --output text)
-grep -q '^ALB_DNS=' .env || echo "ALB_DNS=$ALB_DNS" >> .env
-grep -q '^ALB_ARN=' .env || echo "ALB_ARN=$ALB_ARN" >> .env
-grep -q '^ALB_LISTENER_ARN=' .env || echo "ALB_LISTENER_ARN=$LISTENER_ARN" >> .env
-grep -q '^WEB_TG_ARN=' .env || echo "WEB_TG_ARN=$WEB_TG_ARN" >> .env
-grep -q '^API_TG_ARN=' .env || echo "API_TG_ARN=$API_TG_ARN" >> .env
-grep -q '^KRATOS_TG_ARN=' .env || echo "KRATOS_TG_ARN=$KRATOS_TG_ARN" >> .env
+set_env_file ALB_DNS "$ALB_DNS"
+set_env_file ALB_ARN "$ALB_ARN"
+set_env_file ALB_LISTENER_ARN "$LISTENER_ARN"
+set_env_file WEB_TG_ARN "$WEB_TG_ARN"
+set_env_file API_TG_ARN "$API_TG_ARN"
+set_env_file KRATOS_TG_ARN "$KRATOS_TG_ARN"
+
+PRIVATE_DNS_ZONE="${PRIVATE_DNS_ZONE:-${APP_NAME}.internal}"
+PRIVATE_DNS_ZONE_ID=$(aws route53 list-hosted-zones-by-name --dns-name "${PRIVATE_DNS_ZONE}." \
+  --query "HostedZones[?Name=='${PRIVATE_DNS_ZONE}.' && Config.PrivateZone==\`true\`].Id | [0]" \
+  --output text 2>/dev/null || true)
+if [ "$PRIVATE_DNS_ZONE_ID" = "None" ] || [ -z "$PRIVATE_DNS_ZONE_ID" ]; then
+  PRIVATE_DNS_ZONE_ID=$(aws route53 create-hosted-zone \
+    --name "$PRIVATE_DNS_ZONE" \
+    --vpc "VPCRegion=$REGION,VPCId=$VPC_ID" \
+    --caller-reference "${APP_NAME}-private-$(date +%s)" \
+    --hosted-zone-config "Comment=Private ECS service names for ${APP_NAME},PrivateZone=true" \
+    --query 'HostedZone.Id' --output text)
+else
+  aws route53 associate-vpc-with-hosted-zone \
+    --hosted-zone-id "$PRIVATE_DNS_ZONE_ID" \
+    --vpc "VPCRegion=$REGION,VPCId=$VPC_ID" >/dev/null 2>&1 || true
+fi
+PRIVATE_DNS_ZONE_ID="${PRIVATE_DNS_ZONE_ID##*/}"
+set_env_file PRIVATE_DNS_ZONE "$PRIVATE_DNS_ZONE"
+set_env_file PRIVATE_DNS_ZONE_ID "$PRIVATE_DNS_ZONE_ID"
+set_env_file KRATOS_INTERNAL_URL "http://kratos.${PRIVATE_DNS_ZONE}:4433"
 
 # 9. SES (email - magic links, notifications)
 echo ""
@@ -419,12 +461,12 @@ echo "ALB DNS: $ALB_DNS"
 echo "Deploy target: ECS Fargate split services + ALB (/api/* → api, /auth/* → Kratos, default → web)"
 
 # Store infrastructure IDs in .env
-grep -q '^PRIV_SUBNET_A=' .env || echo "PRIV_SUBNET_A=$PRIV_SUBNET_A" >> .env
-grep -q '^PRIV_SUBNET_B=' .env || echo "PRIV_SUBNET_B=$PRIV_SUBNET_B" >> .env
-grep -q '^PUB_SUBNET_A=' .env || echo "PUB_SUBNET_A=$PUB_SUBNET_A" >> .env
-grep -q '^PUB_SUBNET_B=' .env || echo "PUB_SUBNET_B=$PUB_SUBNET_B" >> .env
-grep -q '^APP_SG=' .env || echo "APP_SG=$APP_SG" >> .env
-grep -q '^DB_SG=' .env || echo "DB_SG=$DB_SG" >> .env
-grep -q '^REDIS_SG=' .env || echo "REDIS_SG=$REDIS_SG" >> .env
-grep -q '^ALB_SG=' .env || echo "ALB_SG=$ALB_SG" >> .env
-grep -q '^VPC_ID=' .env || echo "VPC_ID=$VPC_ID" >> .env
+set_env_file PRIV_SUBNET_A "$PRIV_SUBNET_A"
+set_env_file PRIV_SUBNET_B "$PRIV_SUBNET_B"
+set_env_file PUB_SUBNET_A "$PUB_SUBNET_A"
+set_env_file PUB_SUBNET_B "$PUB_SUBNET_B"
+set_env_file APP_SG "$APP_SG"
+set_env_file DB_SG "$DB_SG"
+set_env_file REDIS_SG "$REDIS_SG"
+set_env_file ALB_SG "$ALB_SG"
+set_env_file VPC_ID "$VPC_ID"

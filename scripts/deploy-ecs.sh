@@ -149,6 +149,49 @@ if [ "${WAIT_FOR_STABILITY:-true}" != "false" ]; then
     --region "$REGION"
 fi
 
+update_private_kratos_dns() {
+  if [ -z "${PRIVATE_DNS_ZONE_ID:-}" ] || [ -z "${PRIVATE_DNS_ZONE:-}" ]; then
+    return
+  fi
+
+  local kratos_ip
+  kratos_ip=$(aws elbv2 describe-target-health \
+    --target-group-arn "$KRATOS_TG_ARN" \
+    --region "$REGION" \
+    --query 'TargetHealthDescriptions[?TargetHealth.State==`healthy`].Target.Id | [0]' \
+    --output text)
+  if [ -z "$kratos_ip" ] || [ "$kratos_ip" = "None" ]; then
+    echo "No healthy Kratos target found for private DNS update" >&2
+    exit 1
+  fi
+
+  local change_file
+  change_file=$(mktemp)
+  cat >"$change_file" <<JSON
+{
+  "Comment": "Point Kratos private service name at the current healthy ECS task",
+  "Changes": [
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "kratos.${PRIVATE_DNS_ZONE}.",
+        "Type": "A",
+        "TTL": 10,
+        "ResourceRecords": [{ "Value": "${kratos_ip}" }]
+      }
+    }
+  ]
+}
+JSON
+  aws route53 change-resource-record-sets \
+    --hosted-zone-id "$PRIVATE_DNS_ZONE_ID" \
+    --change-batch "file://${change_file}" >/dev/null
+  rm -f "$change_file"
+  echo "Updated private Kratos DNS: kratos.${PRIVATE_DNS_ZONE} -> ${kratos_ip}"
+}
+
+update_private_kratos_dns
+
 if [ "${CONFIGURE_AUTOSCALING:-true}" != "false" ]; then
   scripts/configure-ecs-autoscaling.sh
 fi
