@@ -266,6 +266,10 @@ export default function TeamIssuesPage() {
     { id: "active", label: "Active" },
     { id: "backlog", label: "Backlog" },
   ];
+  const insightsContextLabel =
+    workspaceSlug === "foreverbrowsing"
+      ? `${routeTab} issue set`
+      : `${routeTab} issues`;
 
   const openCreateIssue = useCallback(
     (defaults?: { stateId?: string; stateName: string }) => {
@@ -522,7 +526,7 @@ export default function TeamIssuesPage() {
         <ContextualInsights
           teamKey={data.team.key}
           scopedIssueIds={visibleIssueIds}
-          contextLabel={`${routeTab} issues`}
+          contextLabel={insightsContextLabel}
         />
         {/* Display options trigger */}
         <div className="relative">
