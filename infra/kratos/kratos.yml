@@ -1,6 +1,6 @@
 version: v1.3.1
 
-dsn: postgres://postgres:password@postgres:5432/exponential?sslmode=disable
+dsn: ${DSN}
 
 serve:
   public:

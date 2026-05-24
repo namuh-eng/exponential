@@ -42,14 +42,30 @@ services:
       - "${MAILHOG_SMTP_PORT:-1025}:1025"
       - "${MAILHOG_UI_PORT:-8025}:8025"
 
-  kratos-migrate:
-    image: oryd/kratos:v1.3.1
+  kratos-db:
+    image: postgres:15-alpine
     environment:
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-dev-google-client-id}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-dev-google-client-secret}
+      PGPASSWORD: ${DB_PASSWORD:-password}
     depends_on:
       postgres:
         condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        if ! psql -h postgres -U postgres -d postgres -tAc "select 1 from pg_database where datname = 'kratos'" | grep -q 1; then
+          psql -h postgres -U postgres -d postgres -c "create database kratos"
+        fi
+
+  kratos-migrate:
+    image: oryd/kratos:v1.3.1
+    environment:
+      DSN: postgres://postgres:${DB_PASSWORD:-password}@postgres:5432/kratos?sslmode=disable
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-dev-google-client-id}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-dev-google-client-secret}
+    depends_on:
+      kratos-db:
+        condition: service_completed_successfully
     volumes:
       - ./infra/kratos:/etc/config/kratos:ro
     command: migrate sql -e --yes --config /etc/config/kratos/kratos.yml
@@ -57,6 +73,7 @@ services:
   kratos:
     image: oryd/kratos:v1.3.1
     environment:
+      DSN: postgres://postgres:${DB_PASSWORD:-password}@postgres:5432/kratos?sslmode=disable
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-dev-google-client-id}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-dev-google-client-secret}
     depends_on:
