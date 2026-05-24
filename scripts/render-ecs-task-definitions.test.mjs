@@ -26,6 +26,7 @@ const env = {
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:google-secret",
   OTEL_EXPORTER_OTLP_ENDPOINT: "collector.example:4318",
   KRATOS_PUBLIC_URL: "https://app.example/auth",
+  KRATOS_INTERNAL_URL: "http://kratos.internal:4433",
   PUBLIC_BASE_URL: "https://app.example",
 };
 

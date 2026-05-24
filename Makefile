@@ -1,4 +1,4 @@
-.PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd api-build api-test api-dockerfile ecs-task-definitions ecs-render deploy-scripts openapi-coverage web-api-empty
+.PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd api-build api-test api-dockerfile ecs-task-definitions ecs-render deploy-scripts smoke-script openapi-coverage web-api-empty
 .PHONY: check-header test-header check-verbose test-verbose
 .PHONY: dev-services dev-services-down
 
@@ -6,7 +6,7 @@
 all: check test
 
 # Static analysis: typecheck + lint/format
-check: check-header typecheck lint api-build api-dockerfile ecs-task-definitions ecs-render deploy-scripts openapi-coverage web-api-empty
+check: check-header typecheck lint api-build api-dockerfile ecs-task-definitions ecs-render deploy-scripts smoke-script openapi-coverage web-api-empty
 
 # TypeScript type checking
 typecheck:
@@ -47,6 +47,11 @@ ecs-render:
 deploy-scripts:
 	@. ./hack/run_silent.sh && \
 	run_silent "Deploy scripts are syntactically valid" "sh -n scripts/deploy-ecs.sh && sh -n scripts/configure-ecs-autoscaling.sh && node scripts/check-deploy-scripts.mjs"
+
+# Production smoke script shape
+smoke-script:
+	@. ./hack/run_silent.sh && \
+	run_silent "Production smoke script covers web/api/kratos/metrics" "sh -n scripts/smoke-prod.sh && node scripts/check-smoke-script.mjs"
 
 # OpenAPI coverage
 openapi-coverage:

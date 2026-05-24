@@ -41,7 +41,7 @@
         },
         {
           "name": "EXPONENTIAL_API_KRATOS_URL",
-          "value": "${KRATOS_PUBLIC_URL}"
+          "value": "${KRATOS_INTERNAL_URL}"
         }
       ],
       "secrets": [
