@@ -15,7 +15,9 @@ put_target_tracking_policy() {
   local service="$1"
   local metric="$2"
   local target="$3"
-  local policy_name="${service}-${metric,,}-target-tracking"
+  local metric_slug
+  metric_slug=$(printf '%s' "$metric" | tr '[:upper:]' '[:lower:]')
+  local policy_name="${service}-${metric_slug}-target-tracking"
 
   aws application-autoscaling put-scaling-policy \
     --service-namespace ecs \
