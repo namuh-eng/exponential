@@ -19,3 +19,19 @@ func TestBearerTokenReadsAccessTokenQuery(t *testing.T) {
 		t.Fatalf("token = %q", got)
 	}
 }
+
+func TestKratosWhoamiEmail(t *testing.T) {
+	payload := kratosWhoami{}
+	payload.Identity.Traits = map[string]any{"email": " user@example.com "}
+	if got := payload.Email(); got != "user@example.com" {
+		t.Fatalf("email = %q", got)
+	}
+}
+
+func TestRequestedWorkspaceID(t *testing.T) {
+	req := httptest.NewRequest("GET", "/v1/issues?workspace_id=query-workspace", nil)
+	req.Header.Set("X-Workspace-Id", "header-workspace")
+	if got := requestedWorkspaceID(req); got != "header-workspace" {
+		t.Fatalf("workspace id = %q", got)
+	}
+}
