@@ -1,6 +1,10 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { workspaceIntegration } from "@/lib/db/schema";
+import {
+  headlessAuthProvidersEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { getWorkspaceAccess } from "@/lib/workspace-integrations";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -22,6 +26,19 @@ export async function POST(request: Request) {
       { error: "No active workspace found" },
       { status: 404 },
     );
+  }
+
+  if (headlessAuthProvidersEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: access.workspaceId,
+    });
+    const upstream = await fetch(
+      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1"}/test/slack-integration`,
+      { method: "POST", headers: { authorization: `Bearer ${token}` } },
+    );
+    const data = await upstream.json();
+    return NextResponse.json(data, { status: upstream.status });
   }
 
   const now = new Date();
@@ -70,6 +87,19 @@ export async function DELETE(request: Request) {
       { error: "No active workspace found" },
       { status: 404 },
     );
+  }
+
+  if (headlessAuthProvidersEnabled()) {
+    const token = await mintInternalApiToken({
+      userId: session.user.id,
+      workspaceId: access.workspaceId,
+    });
+    const upstream = await fetch(
+      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1"}/test/slack-integration`,
+      { method: "DELETE", headers: { authorization: `Bearer ${token}` } },
+    );
+    const data = await upstream.json();
+    return NextResponse.json(data, { status: upstream.status });
   }
 
   await db

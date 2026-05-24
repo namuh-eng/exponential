@@ -2416,6 +2416,75 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /test:
+    get:
+      operationId: testHelpersMount
+      responses:
+        '404':
+          description: Test helper mount marker
+        default:
+          $ref: '#/components/responses/Problem'
+  /test/authorized-application:
+    post:
+      operationId: createTestAuthorizedApplication
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Test grants cleared
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+        '201':
+          description: Test authorized application created
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: clearTestAuthorizedApplications
+      responses:
+        '200':
+          description: Test grants cleared
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+        default:
+          $ref: '#/components/responses/Problem'
+  /test/slack-integration:
+    post:
+      operationId: createTestSlackIntegration
+      responses:
+        '200':
+          description: Test Slack integration connected
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, id]
+                properties:
+                  success: { type: boolean }
+                  id: { type: string }
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deleteTestSlackIntegration
+      responses:
+        '200':
+          description: Test Slack integration deleted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+        default:
+          $ref: '#/components/responses/Problem'
   /workspaces:
     get:
       operationId: listWorkspaces

@@ -31,6 +31,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/sidebar"
 	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
 	"github.com/namuh-eng/exponential/apps/api/internal/teams"
+	"github.com/namuh-eng/exponential/apps/api/internal/testhelpers"
 	"github.com/namuh-eng/exponential/apps/api/internal/tokens"
 	"github.com/namuh-eng/exponential/apps/api/internal/views"
 	"github.com/namuh-eng/exponential/apps/api/internal/workspaces"
@@ -98,6 +99,7 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 			protected.Mount("/projects", projects.Handler{DB: db}.Routes())
 			protected.Mount("/sidebar", sidebar.Handler{DB: db}.Routes())
 			protected.Mount("/teams", teams.Handler{DB: db}.Routes())
+			protected.Mount("/test", testhelpers.Handler{DB: db}.Routes())
 			protected.Mount("/views", views.Handler{DB: db}.Routes())
 			protected.Mount("/workspaces", workspaces.Handler{DB: db}.Routes())
 			protected.Get("/sync/ws", syncapi.Handler{DB: db}.WebSocket)

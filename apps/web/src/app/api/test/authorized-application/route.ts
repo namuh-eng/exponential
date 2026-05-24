@@ -1,7 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { authorizedApplicationGrant } from "@/lib/db/schema";
+import { authorizedApplicationGrant, member } from "@/lib/db/schema";
+import {
+  headlessAuthProvidersEnabled,
+  mintInternalApiToken,
+} from "@/lib/headless-api";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -27,6 +31,38 @@ export async function POST(request: Request) {
   }
 
   const authSession = session as AuthSession;
+
+  if (headlessAuthProvidersEnabled()) {
+    const [membership] = await db
+      .select({ workspaceId: member.workspaceId })
+      .from(member)
+      .where(eq(member.userId, authSession.user.id))
+      .limit(1);
+    if (!membership) {
+      return NextResponse.json(
+        { error: "No active workspace found" },
+        { status: 404 },
+      );
+    }
+    const token = await mintInternalApiToken({
+      userId: authSession.user.id,
+      workspaceId: membership.workspaceId,
+    });
+    const upstream = await fetch(
+      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1"}/test/authorized-application`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: await request.clone().text(),
+      },
+    );
+    const data = await upstream.json();
+    return NextResponse.json(data, { status: upstream.status });
+  }
+
   const body = (await request.json().catch(() => null)) as {
     action?: string;
     name?: string;
@@ -84,6 +120,31 @@ export async function DELETE() {
   }
 
   const authSession = session as AuthSession;
+
+  if (headlessAuthProvidersEnabled()) {
+    const [membership] = await db
+      .select({ workspaceId: member.workspaceId })
+      .from(member)
+      .where(eq(member.userId, authSession.user.id))
+      .limit(1);
+    if (!membership) {
+      return NextResponse.json(
+        { error: "No active workspace found" },
+        { status: 404 },
+      );
+    }
+    const token = await mintInternalApiToken({
+      userId: authSession.user.id,
+      workspaceId: membership.workspaceId,
+    });
+    const upstream = await fetch(
+      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1"}/test/authorized-application`,
+      { method: "DELETE", headers: { authorization: `Bearer ${token}` } },
+    );
+    const data = await upstream.json();
+    return NextResponse.json(data, { status: upstream.status });
+  }
+
   await db
     .delete(authorizedApplicationGrant)
     .where(eq(authorizedApplicationGrant.userId, authSession.user.id));
