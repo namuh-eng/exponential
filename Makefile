@@ -1,4 +1,4 @@
-.PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd api-build api-test openapi-coverage web-api-empty
+.PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd api-build api-test api-dockerfile openapi-coverage web-api-empty
 .PHONY: check-header test-header check-verbose test-verbose
 .PHONY: dev-services dev-services-down
 
@@ -6,7 +6,7 @@
 all: check test
 
 # Static analysis: typecheck + lint/format
-check: check-header typecheck lint api-build openapi-coverage web-api-empty
+check: check-header typecheck lint api-build api-dockerfile openapi-coverage web-api-empty
 
 # TypeScript type checking
 typecheck:
@@ -27,6 +27,11 @@ api-build:
 api-test:
 	@. ./hack/run_silent.sh && \
 	run_silent "Go API tests passed" "pnpm api:test"
+
+# API Dockerfile production shape
+api-dockerfile:
+	@. ./hack/run_silent.sh && \
+	run_silent "API Dockerfile uses distroless image" "bash infra/docker/api.Dockerfile.test.sh"
 
 # OpenAPI coverage
 openapi-coverage:
