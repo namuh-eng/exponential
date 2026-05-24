@@ -46,7 +46,7 @@ ecs-render:
 # Deploy script syntax
 deploy-scripts:
 	@. ./hack/run_silent.sh && \
-	run_silent "Deploy scripts are syntactically valid" "sh -n scripts/deploy-ecs.sh"
+	run_silent "Deploy scripts are syntactically valid" "sh -n scripts/deploy-ecs.sh && sh -n scripts/configure-ecs-autoscaling.sh && node scripts/check-deploy-scripts.mjs"
 
 # OpenAPI coverage
 openapi-coverage:
