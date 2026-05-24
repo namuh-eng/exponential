@@ -1118,7 +1118,13 @@ function normalizeProjectResponse(input: ApiProjectResponse): ProjectResponse {
     | undefined;
   const progress =
     progressInput && "total" in progressInput
-      ? progressInput
+      ? {
+          total: progressInput.total ?? 0,
+          completed: progressInput.completed ?? 0,
+          percentage: progressInput.percentage ?? 0,
+          assignees: progressInput.assignees ?? [],
+          labels: progressInput.labels ?? [],
+        }
       : {
           total: 0,
           completed: 0,
