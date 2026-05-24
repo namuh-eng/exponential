@@ -34,6 +34,14 @@ function normalizeSameSite(value: string | undefined) {
   return "lax" as const;
 }
 
+function shouldSetBrowserCookies(request: Request) {
+  return (
+    process.env.VITEST === "true" ||
+    request.headers.has("sec-fetch-mode") ||
+    request.headers.get("x-set-test-session-cookies") === "true"
+  );
+}
+
 export async function POST(request: Request) {
   if (
     process.env.NODE_ENV !== "test" &&
@@ -70,7 +78,12 @@ export async function POST(request: Request) {
     );
     const payload = await upstream.json();
     const response = NextResponse.json(payload, { status: upstream.status });
-    if (upstream.ok && payload?.sessionToken && payload?.workspace) {
+    if (
+      upstream.ok &&
+      payload?.sessionToken &&
+      payload?.workspace &&
+      shouldSetBrowserCookies(request)
+    ) {
       const shouldSecure = new URL(request.url).protocol === "https:";
       response.cookies.set("activeWorkspaceId", payload.workspace.id, {
         path: "/",
@@ -186,28 +199,30 @@ async function createTestSession(
     team: canonicalContext.team,
   });
 
-  response.cookies.set("activeWorkspaceId", canonicalContext.workspace.id, {
-    path: "/",
-    sameSite: "lax",
-    secure: shouldSecureActiveWorkspaceCookie,
-  });
-  response.cookies.set(
-    "activeWorkspaceSlug",
-    canonicalContext.workspace.urlSlug,
-    {
+  if (shouldSetBrowserCookies(request)) {
+    response.cookies.set("activeWorkspaceId", canonicalContext.workspace.id, {
       path: "/",
       sameSite: "lax",
       secure: shouldSecureActiveWorkspaceCookie,
-    },
-  );
+    });
+    response.cookies.set(
+      "activeWorkspaceSlug",
+      canonicalContext.workspace.urlSlug,
+      {
+        path: "/",
+        sameSite: "lax",
+        secure: shouldSecureActiveWorkspaceCookie,
+      },
+    );
 
-  response.cookies.set(sessionCookie.name, signedToken, {
-    expires: createdSession.expiresAt,
-    httpOnly: sessionCookie.attributes.httpOnly ?? true,
-    path: sessionCookie.attributes.path ?? "/",
-    sameSite: normalizeSameSite(sessionCookie.attributes.sameSite),
-    secure: sessionCookie.attributes.secure ?? false,
-  });
+    response.cookies.set(sessionCookie.name, signedToken, {
+      expires: createdSession.expiresAt,
+      httpOnly: sessionCookie.attributes.httpOnly ?? true,
+      path: sessionCookie.attributes.path ?? "/",
+      sameSite: normalizeSameSite(sessionCookie.attributes.sameSite),
+      secure: sessionCookie.attributes.secure ?? false,
+    });
+  }
 
   return response;
 }
