@@ -1,6 +1,5 @@
 import { chooseActiveWorkspace } from "@/lib/active-workspace";
 import { autoJoinWorkspaceForApprovedDomain } from "@/lib/approved-domain-auto-join";
-import { auth } from "@/lib/auth";
 import { CANONICAL_WORKSPACE_SLUG } from "@/lib/canonical-routes";
 import { db } from "@/lib/db";
 import { member, team, workspace } from "@/lib/db/schema";
@@ -11,6 +10,7 @@ import {
   shouldRenderDatabaseBootstrapError,
 } from "@/lib/dev-database-error";
 import { activeTeamFilter } from "@/lib/team-lifecycle";
+import { getWebSession } from "@/lib/web-session";
 import { evaluateWorkspaceIpAccess } from "@/lib/workspace-ip-restrictions";
 import { isAppRoutePrefix, normalizeAppPath } from "@/lib/workspace-paths";
 import { and, desc, eq } from "drizzle-orm";
@@ -71,10 +71,10 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const requestHeaders = await headers();
-  let session: Awaited<ReturnType<typeof auth.api.getSession>>;
+  let session: Awaited<ReturnType<typeof getWebSession>>;
 
   try {
-    session = await auth.api.getSession({ headers: requestHeaders });
+    session = await getWebSession(requestHeaders);
   } catch (error) {
     if (shouldRenderDatabaseBootstrapError(error)) {
       return <DatabaseBootstrapError />;

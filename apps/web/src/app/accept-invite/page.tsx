@@ -1,4 +1,3 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
   member,
@@ -8,6 +7,7 @@ import {
   workspaceInvitation,
 } from "@/lib/db/schema";
 import { verifyInviteToken } from "@/lib/invite-tokens";
+import { getWebSession } from "@/lib/web-session";
 import { and, asc, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -110,7 +110,7 @@ export default async function AcceptInvitePage({
     );
   }
 
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getWebSession(await headers());
   if (!session) {
     redirect(
       `/login?callbackUrl=${encodeURIComponent(`/accept-invite?token=${token}`)}`,

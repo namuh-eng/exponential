@@ -1,15 +1,15 @@
 import { readAccountPreferencesFromUserSettings } from "@/lib/account-preferences";
 import { autoJoinWorkspaceForApprovedDomain } from "@/lib/approved-domain-auto-join";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { member, team, user, workspace } from "@/lib/db/schema";
 import { activeTeamFilter } from "@/lib/team-lifecycle";
+import { getWebSession } from "@/lib/web-session";
 import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 export default async function Home() {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getWebSession(await headers());
 
   if (!session) {
     redirect("/login");

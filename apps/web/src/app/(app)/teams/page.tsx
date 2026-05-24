@@ -1,11 +1,11 @@
 import { WorkspaceTeamsDirectory } from "@/components/workspace-teams-directory";
-import { auth } from "@/lib/auth";
+import { getWebSession } from "@/lib/web-session";
 import { getWorkspaceTeamsDirectory } from "@/lib/workspace-directory";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
 export default async function TeamsPage() {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getWebSession(await headers());
   if (!session) {
     redirect("/login");
   }
