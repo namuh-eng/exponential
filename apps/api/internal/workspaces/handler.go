@@ -337,7 +337,18 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create workspace failed", err.Error())
 		return
 	}
+	setActiveWorkspaceCookies(w, r, ws.ID, ws.URLSlug)
 	problem.JSON(w, 201, createWorkspaceResponse{Workspace: ws, Team: team})
+}
+
+func setActiveWorkspaceCookies(w http.ResponseWriter, r *http.Request, workspaceID string, workspaceSlug string) {
+	secure := r.TLS != nil || strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")), "https")
+	for _, cookie := range []*http.Cookie{
+		{Name: "activeWorkspaceId", Value: workspaceID, Path: "/", SameSite: http.SameSiteLaxMode, Secure: secure},
+		{Name: "activeWorkspaceSlug", Value: workspaceSlug, Path: "/", SameSite: http.SameSiteLaxMode, Secure: secure},
+	} {
+		http.SetCookie(w, cookie)
+	}
 }
 
 type billingPlan struct {

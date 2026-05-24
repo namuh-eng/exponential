@@ -135,7 +135,7 @@ func (m Middleware) authenticateKratosSession(ctx context.Context, r *http.Reque
 	if email == "" {
 		return Principal{}, errUnauthorized("kratos identity missing email")
 	}
-	return m.authenticateKratosEmail(ctx, email, requestedWorkspaceID(r))
+	return m.authenticateKratosEmail(ctx, email, requestedWorkspace(r))
 }
 
 func TestMode() bool {
@@ -183,6 +183,50 @@ func (m Middleware) TestBrowserSession(ctx context.Context, r *http.Request) (Br
 	}
 	var session BrowserSession
 	var principal Principal
+	requested := requestedWorkspace(r)
+	if requested.ID != "" {
+		err := m.DB.QueryRow(ctx, `
+			select u.id, u.name, u.email, u.image, m.workspace_id::text, m.role::text
+			from session s
+			join "user" u on u.id = s.user_id
+			join member m on m.user_id = u.id
+			where s.token = $1 and s.expires_at > now() and m.workspace_id = $2::uuid
+			limit 1`, rawToken, requested.ID).Scan(
+			&session.User.ID,
+			&session.User.Name,
+			&session.User.Email,
+			&session.User.Image,
+			&principal.WorkspaceID,
+			&principal.Role,
+		)
+		if err == nil {
+			principal.UserID = session.User.ID
+			principal.APIKeyID = "playwright_test_session"
+			return session, principal, nil
+		}
+	}
+	if requested.Slug != "" {
+		err := m.DB.QueryRow(ctx, `
+			select u.id, u.name, u.email, u.image, m.workspace_id::text, m.role::text
+			from session s
+			join "user" u on u.id = s.user_id
+			join member m on m.user_id = u.id
+			join workspace w on w.id = m.workspace_id
+			where s.token = $1 and s.expires_at > now() and w.url_slug = $2
+			limit 1`, rawToken, requested.Slug).Scan(
+			&session.User.ID,
+			&session.User.Name,
+			&session.User.Email,
+			&session.User.Image,
+			&principal.WorkspaceID,
+			&principal.Role,
+		)
+		if err == nil {
+			principal.UserID = session.User.ID
+			principal.APIKeyID = "playwright_test_session"
+			return session, principal, nil
+		}
+	}
 	err := m.DB.QueryRow(ctx, `
 		select u.id, u.name, u.email, u.image, m.workspace_id::text, m.role::text
 		from session s
@@ -206,15 +250,28 @@ func (m Middleware) TestBrowserSession(ctx context.Context, r *http.Request) (Br
 	return session, principal, nil
 }
 
-func (m Middleware) authenticateKratosEmail(ctx context.Context, email string, workspaceID string) (Principal, error) {
+func (m Middleware) authenticateKratosEmail(ctx context.Context, email string, requested requestedWorkspaceChoice) (Principal, error) {
 	var p Principal
-	if workspaceID != "" {
+	if requested.ID != "" {
 		err := m.DB.QueryRow(ctx, `
 			select u.id, m.workspace_id::text, m.role::text
 			from "user" u
 			join member m on m.user_id = u.id
 			where lower(u.email)=lower($1) and m.workspace_id=$2::uuid
-			limit 1`, email, workspaceID).Scan(&p.UserID, &p.WorkspaceID, &p.Role)
+			limit 1`, email, requested.ID).Scan(&p.UserID, &p.WorkspaceID, &p.Role)
+		if err == nil {
+			p.APIKeyID = "kratos_session"
+			return p, nil
+		}
+	}
+	if requested.Slug != "" {
+		err := m.DB.QueryRow(ctx, `
+			select u.id, m.workspace_id::text, m.role::text
+			from "user" u
+			join member m on m.user_id = u.id
+			join workspace w on w.id = m.workspace_id
+			where lower(u.email)=lower($1) and w.url_slug=$2
+			limit 1`, email, requested.Slug).Scan(&p.UserID, &p.WorkspaceID, &p.Role)
 		if err == nil {
 			p.APIKeyID = "kratos_session"
 			return p, nil
@@ -248,13 +305,80 @@ func (w kratosWhoami) Email() string {
 	return ""
 }
 
+type requestedWorkspaceChoice struct {
+	ID   string
+	Slug string
+}
+
+func requestedWorkspace(r *http.Request) requestedWorkspaceChoice {
+	if id := requestedWorkspaceID(r); id != "" {
+		return requestedWorkspaceChoice{ID: id}
+	}
+	if slug := requestedWorkspaceSlug(r); slug != "" {
+		return requestedWorkspaceChoice{Slug: slug}
+	}
+	if id := cookieValue(r, "activeWorkspaceId"); id != "" {
+		return requestedWorkspaceChoice{ID: id}
+	}
+	if slug := cookieValue(r, "activeWorkspaceSlug"); slug != "" {
+		return requestedWorkspaceChoice{Slug: slug}
+	}
+	return requestedWorkspaceChoice{}
+}
+
 func requestedWorkspaceID(r *http.Request) string {
-	for _, value := range []string{r.Header.Get("X-Workspace-Id"), r.Header.Get("X-Workspace-ID"), r.URL.Query().Get("workspace_id")} {
+	for _, value := range []string{
+		r.Header.Get("X-Workspace-Id"),
+		r.Header.Get("X-Workspace-ID"),
+		r.URL.Query().Get("workspace_id"),
+	} {
 		if trimmed := strings.TrimSpace(value); trimmed != "" {
 			return trimmed
 		}
 	}
 	return ""
+}
+
+func requestedWorkspaceSlug(r *http.Request) string {
+	for _, value := range []string{
+		r.Header.Get("X-Workspace-Slug"),
+		r.URL.Query().Get("workspace_slug"),
+		workspaceSlugFromReferer(r.Header.Get("Referer")),
+	} {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func cookieValue(r *http.Request, name string) string {
+	cookie, err := r.Cookie(name)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(cookie.Value)
+}
+
+func workspaceSlugFromReferer(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return ""
+	}
+	request, err := http.NewRequest(http.MethodGet, value, nil)
+	if err != nil {
+		return ""
+	}
+	segments := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
+	if len(segments) == 0 || segments[0] == "" {
+		return ""
+	}
+	first := segments[0]
+	switch first {
+	case "api", "v1", "login", "signup", "homepage", "pricing", "customers", "changelog", "now":
+		return ""
+	default:
+		return first
+	}
 }
 
 func (m Middleware) authenticateLegacyAPIKey(ctx context.Context, keyHash string) (Principal, error) {

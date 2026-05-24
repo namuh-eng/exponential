@@ -10,6 +10,7 @@ type Problem struct {
 	Title  string `json:"title"`
 	Status int    `json:"status"`
 	Detail string `json:"detail,omitempty"`
+	Error  string `json:"error,omitempty"`
 }
 
 func Write(w http.ResponseWriter, status int, title string, detail string) {
@@ -20,6 +21,7 @@ func Write(w http.ResponseWriter, status int, title string, detail string) {
 		Title:  title,
 		Status: status,
 		Detail: detail,
+		Error:  title,
 	})
 }
 

@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 )
@@ -36,6 +37,18 @@ func TestRequestedWorkspaceID(t *testing.T) {
 	req.Header.Set("X-Workspace-Id", "header-workspace")
 	if got := requestedWorkspaceID(req); got != "header-workspace" {
 		t.Fatalf("workspace id = %q", got)
+	}
+}
+
+func TestRequestedWorkspacePrefersRefererSlugOverActiveCookie(t *testing.T) {
+	req := httptest.NewRequest("GET", "/v1/issues", nil)
+	req.Header.Set("Referer", "http://localhost:3015/new-workspace/team/ENG/all")
+	req.AddCookie(&http.Cookie{Name: "activeWorkspaceId", Value: "cookie-id"})
+	req.AddCookie(&http.Cookie{Name: "activeWorkspaceSlug", Value: "old-workspace"})
+
+	got := requestedWorkspace(req)
+	if got.ID != "" || got.Slug != "new-workspace" {
+		t.Fatalf("workspace = %#v", got)
 	}
 }
 
