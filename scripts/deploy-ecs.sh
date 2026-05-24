@@ -72,8 +72,21 @@ ensure_service "${APP_NAME}-api" "$API_TASK_ARN" "$API_TG_ARN" api 3016
 ensure_service "${APP_NAME}-web" "$WEB_TASK_ARN" "$WEB_TG_ARN" web 3000
 ensure_service "${APP_NAME}-kratos" "$KRATOS_TASK_ARN" "$KRATOS_TG_ARN" kratos 4433
 
+if [ "${WAIT_FOR_STABILITY:-true}" != "false" ]; then
+  aws ecs wait services-stable \
+    --cluster "$CLUSTER" \
+    --services "${APP_NAME}-api" "${APP_NAME}-web" "${APP_NAME}-kratos" \
+    --region "$REGION"
+fi
+
 if [ "${CONFIGURE_AUTOSCALING:-true}" != "false" ]; then
   scripts/configure-ecs-autoscaling.sh
+fi
+
+if [ "${RUN_PROD_SMOKE:-false}" = "true" ]; then
+  PUBLIC_BASE_URL="$PUBLIC_BASE_URL" scripts/smoke-prod.sh
+else
+  echo "Skipping production smoke. Set RUN_PROD_SMOKE=true to run scripts/smoke-prod.sh after service stability."
 fi
 
 echo "Deployed ECS services: ${APP_NAME}-api, ${APP_NAME}-web, ${APP_NAME}-kratos"

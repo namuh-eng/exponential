@@ -6,6 +6,9 @@ for (const expected of [
   "${APP_NAME}-web",
   "${APP_NAME}-kratos",
   "configure-ecs-autoscaling.sh",
+  "aws ecs wait services-stable",
+  "RUN_PROD_SMOKE",
+  "scripts/smoke-prod.sh",
 ]) {
   if (!deploy.includes(expected)) {
     throw new Error(`deploy-ecs.sh must manage ${expected}`);
