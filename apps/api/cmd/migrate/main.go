@@ -12,6 +12,8 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/config"
 )
 
+const migrationTable = "exponential_schema_migration"
+
 func main() {
 	ctx := context.Background()
 	cfg := config.Load()
@@ -30,7 +32,7 @@ func migrate(ctx context.Context, databaseURL string, migrationsDir string) erro
 	defer pool.Close()
 
 	if _, err := pool.Exec(ctx, `
-		create table if not exists schema_migration (
+		create table if not exists `+migrationTable+` (
 			version text primary key,
 			applied_at timestamp not null default now()
 		)`); err != nil {
@@ -45,7 +47,7 @@ func migrate(ctx context.Context, databaseURL string, migrationsDir string) erro
 	for _, file := range files {
 		version := filepath.Base(file)
 		var alreadyApplied bool
-		if err := pool.QueryRow(ctx, `select exists(select 1 from schema_migration where version = $1)`, version).Scan(&alreadyApplied); err != nil {
+		if err := pool.QueryRow(ctx, `select exists(select 1 from `+migrationTable+` where version = $1)`, version).Scan(&alreadyApplied); err != nil {
 			return err
 		}
 		if alreadyApplied {
@@ -66,7 +68,7 @@ func migrate(ctx context.Context, databaseURL string, migrationsDir string) erro
 			_ = tx.Rollback(ctx)
 			return fmt.Errorf("%s: %w", version, err)
 		}
-		if _, err := tx.Exec(ctx, `insert into schema_migration (version) values ($1)`, version); err != nil {
+		if _, err := tx.Exec(ctx, `insert into `+migrationTable+` (version) values ($1)`, version); err != nil {
 			_ = tx.Rollback(ctx)
 			return err
 		}

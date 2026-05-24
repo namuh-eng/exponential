@@ -71,6 +71,21 @@ services:
       - ./infra/kratos:/etc/config/kratos:ro
     command: serve --dev --config /etc/config/kratos/kratos.yml
 
+  web-schema:
+    image: node:20-alpine
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm install --frozen-lockfile=false && pnpm db:push -- --force"
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/exponential?sslmode=disable
+    volumes:
+      - .:/workspace
+      - pnpm_store:/root/.local/share/pnpm/store
+      - web_node_modules:/workspace/node_modules
+      - web_app_node_modules:/workspace/apps/web/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api-migrate:
     build:
       context: .
@@ -80,8 +95,8 @@ services:
       EXPONENTIAL_API_DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/exponential?sslmode=disable
       MIGRATIONS_DIR: /migrations
     depends_on:
-      postgres:
-        condition: service_healthy
+      web-schema:
+        condition: service_completed_successfully
 
   api:
     build:
@@ -102,6 +117,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      web-schema:
+        condition: service_completed_successfully
       kratos:
         condition: service_started
       api-migrate:
@@ -164,6 +181,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      web-schema:
+        condition: service_completed_successfully
       api:
         condition: service_started
       kratos:
