@@ -6,6 +6,10 @@ import { mintInternalApiToken } from "@/lib/headless-api";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
+function headlessProxyEnabled() {
+  return process.env.EXPONENTIAL_HEADLESS_API_PROXY !== "false";
+}
+
 function apiBaseUrl() {
   return (
     process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1"
@@ -25,6 +29,10 @@ async function proxyHeadless(
   request: Request,
   params: Promise<{ headless?: string[] }>,
 ) {
+  if (!headlessProxyEnabled()) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const { response: authResponse, session } = await requireApiSession();
   if (authResponse) return authResponse;
 
