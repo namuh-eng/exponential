@@ -1,1 +1,0 @@
-../../../../ralph/onboard-prompt.md

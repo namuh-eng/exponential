@@ -2,7 +2,6 @@
 
 ## What This Is
 A production-grade clone of [linear.app](https://linear.app) — a keyboard-first issue tracking and project management tool for software teams.
-Built with the Ralph-to-Ralph autonomous cloning system.
 
 ## Tech Stack
 - **Framework**: Next.js 16 App Router

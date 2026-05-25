@@ -1,61 +1,79 @@
-# Ralph-to-Ralph: QA Agent Guide
+# Agent Guide
 
-## Your Role
-You are the independent QA evaluator. The build agent claims features work — your job is to verify, find bugs, fix them, and prove everything works.
+Project-specific instructions for AI coding agents working in this repo. Read this before making changes. See `CLAUDE.md` for the canonical project overview (tech stack, commands, quality standards).
 
-## What This Is
-An autonomously-built clone of a SaaS product. It has its own backend (AWS services + Postgres) and is deployed to AWS. Your job is to make sure it actually works.
+## Project at a Glance
+- **What it is**: exponential — a Linear-style issue tracker (issues, projects, cycles, initiatives, triage, inbox).
+- **Stack**: Next.js 16 App Router, TypeScript strict (no `any`), Tailwind, Radix UI, Drizzle + Postgres, Redis, Better Auth.
+- **Tests**: Vitest (unit) and Playwright (E2E). Both are required for every feature.
 
 ## Commands
 - `make check` — typecheck + Biome lint/format. Run after every code change.
-- `make test` — run unit tests (Vitest). Must all pass.
-- `make test-e2e` — run Playwright E2E tests. Run FIRST before manual testing.
-- `make all` — check + test
-- `npm run dev` — start dev server (if not already running)
+- `make test` — unit tests (Vitest).
+- `make test-e2e` — Playwright E2E (requires dev server on port 3000).
+- `make all` — check + test.
+- `npm run dev` — dev server (default port 3000).
+- `npm run db:push` — push Drizzle schema to Postgres.
 
-## How To Test
+## Repository Layout
+- `src/app/` — Next.js App Router pages and API routes (`/api/*`).
+  - `src/app/(app)/` — authenticated app shell and routes.
+  - `src/app/(auth)/` — login / signup.
+  - `src/app/globals.css`, `src/app/editorial-theme.css` — global styles.
+- `src/components/` — React components (one file per component, kebab-case).
+- `src/components/icons/` — shared icon components (priority, status, etc.).
+- `src/lib/` — utilities and clients (db, ses, s3, redis, auth).
+- `src/lib/db/` — Drizzle ORM schema and client.
+- `src/hooks/` — React hooks.
+- `src/types/` — shared TypeScript types.
+- `tests/` — Vitest unit tests.
+- `tests/e2e/` — Playwright E2E tests.
+- `packages/sdk/` — TypeScript SDK package.
+- `scripts/` — infrastructure / deployment helpers (`preflight.sh`, etc.).
 
-### Step 1: Automated regression (fast)
-Run `make test-e2e` first. This catches obvious breakage in seconds.
+## Working Rules
+- **TypeScript strict**: no `any`, no `as unknown as` shortcuts. Add real types.
+- **One feature per commit**, with a short, descriptive message.
+- **Tests required**: at least one Vitest unit test AND one Playwright E2E test for every new user-visible feature.
+- **Never weaken or delete tests to make them pass.** Fix the code, not the test.
+- **Run `make check && make test`** before every commit.
+- **Don't reinstall pre-configured tooling**: Playwright (`playwright.config.ts`, `tests/e2e/`), Biome (`biome.json`), and the Makefile are set up already.
+- **Auth is via Better Auth** — don't bring in NextAuth or roll your own.
+- **Out of scope**: paywalls, billing, subscription management, payment processing. Do not add these.
 
-### Step 2: Manual verification (Ever CLI)
-- `ever snapshot` — see current page state
-- `ever click <id>` — click elements
-- `ever input <id> <text>` — fill inputs
-- Read `ralph/ever-cli-reference.md` for full command reference
+## UI / Design Conventions
+- Tailwind utility classes; theme tokens live in `tailwind.config.ts` (`font-sans`, `font-display`, `font-mono` map to the editorial CSS variables).
+- Global theme tokens (colors, spacing, surfaces) are defined in `src/app/globals.css` and `src/app/editorial-theme.css`. Prefer existing tokens over hard-coded hex values.
+- Radix primitives wrap interactive UI (menus, dialogs, popovers). Reuse before introducing a new component library.
+- Keyboard-first: every interaction should have a shortcut or be reachable from the command palette (`src/components/command-palette.tsx`). New surfaces should respect this.
+- Dark mode is class-based (`darkMode: "class"` in `tailwind.config.ts`). Style for both modes.
 
-### Step 3: Real API testing
-Test the clone's API directly:
+## Verifying Changes
+1. `make check` — typecheck + lint.
+2. `make test` — unit tests.
+3. `make test-e2e` — E2E (start `npm run dev` first if not running).
+4. For UI changes, open the affected page in a browser and exercise both the golden path and at least one edge case.
+
+## API Testing
+For API routes:
 ```bash
 curl -X POST http://localhost:3000/api/<endpoint> \
   -H "Authorization: Bearer <dev-api-key>" \
   -H "Content-Type: application/json" \
-  -d '{"<request body>"}'
+  -d '{ ... }'
 ```
-Check `build-progress.txt` or API routes for the dev API key and available endpoints.
 
-### Step 4: SDK testing (if packages/sdk/ exists)
+For the SDK:
 ```bash
 cd packages/sdk && npm test
 ```
-Test the SDK manually: import it, call the API, verify response.
-
-## Architecture
-- `src/app/` — Next.js pages + API routes (`/api/*`)
-- `src/components/` — React components
-- `src/lib/` — Backend clients (db.ts, ses.ts, s3.ts, etc.)
-- `tests/` — unit tests (Vitest)
-- `tests/e2e/` — E2E tests (Playwright)
-- `packages/sdk/` — TypeScript SDK package
 
 ## Environment
-- AWS CLI configured via `~/.aws/credentials` (works out of the box)
-- `.env` has credentials (DATABASE_URL, Cloudflare, etc.)
-- Dev server on port **3015**
+- AWS CLI configured via `~/.aws/credentials` (works out of the box for `aws` and `@aws-sdk/*`).
+- `.env` holds local credentials — copy from `.env.example`.
+- Infrastructure provisioning: `bash scripts/preflight.sh` (RDS, ElastiCache, S3, ECR, ECS, ALB, SES).
 
-## Bug Fixing Rules
-- Fix bugs directly in source code
-- Fix ALL bugs for a feature, then run `make check && make test` once before committing
-- Commit fixes: `git commit -m "fix: <description>"`
-- Push after every commit: `git push`
-- **NEVER weaken or delete tests to make them pass.** Fix the code, not the test.
+## When You Find a Bug
+- Fix it in source. Don't paper over it in tests.
+- Group fixes for one feature into a single commit after `make check && make test` passes.
+- Commit message: `fix: <one-line description>`.

@@ -14,7 +14,7 @@ A fully functional clone of [Linear](https://linear.app) built with Next.js 16, 
 
 exponential is a production-grade issue tracking and project management tool built to match Linear's speed and keyboard-first UX. Whether you're a startup building in public or an enterprise needing self-hosted infrastructure, exponential is a fully open source alternative that you can deploy, customize, and extend.
 
-Built by [ralph-to-ralph](https://github.com/namuh-eng/ralph-to-ralph), an autonomous product cloning system, exponential represents 41 features across issues, projects, cycles, initiatives, and real-time notifications — all tested and deployed from day one.
+exponential covers 41 features across issues, projects, cycles, initiatives, and real-time notifications — all tested and deployed from day one.
 
 ---
 
@@ -204,20 +204,6 @@ This script will:
 - Create S3 bucket for uploads
 - Configure SES for email delivery
 - Create ECR registry for Docker images
-
----
-
-## Built by AI
-
-exponential was built autonomously by **[ralph-to-ralph](https://github.com/namuh-eng/ralph-to-ralph)**, a multi-agent system that clones SaaS products end-to-end.
-
-The system:
-1. **Inspects** the target product (Linear) using Claude + Ever CLI
-2. **Builds** a working clone with TDD — 41 features, 24,000+ lines of code
-3. **Tests** every feature with Vitest + Playwright
-4. **Deploys** to AWS with real infrastructure
-
-The entire process runs fully autonomous with zero human intervention. This README and documentation are human-written to ensure clarity and accuracy.
 
 ---
 
