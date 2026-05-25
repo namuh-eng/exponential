@@ -32,6 +32,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/projecttemplates"
 	"github.com/namuh-eng/exponential/apps/api/internal/projectupdateconfigs"
 	"github.com/namuh-eng/exponential/apps/api/internal/projectupdates"
+	"github.com/namuh-eng/exponential/apps/api/internal/ratelimit"
 	"github.com/namuh-eng/exponential/apps/api/internal/sidebar"
 	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
 	"github.com/namuh-eng/exponential/apps/api/internal/teams"
@@ -92,6 +93,7 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool) {
 		v1.Post("/test/create-session", testhelpers.Handler{DB: db}.CreateSession)
 		v1.Group(func(protected chi.Router) {
 			protected.Use(authMiddleware.Require)
+			protected.Use(ratelimit.Middleware())
 			protected.Post("/issues/{id}/comments", commentsHandler.CreateForIssue)
 			protected.Post("/issues/{id}/reactions", commentsHandler.ToggleIssueReaction)
 			protected.Delete("/issues/{id}/reactions", commentsHandler.DeleteIssueReaction)

@@ -44,6 +44,10 @@ func FromContext(ctx context.Context) (Principal, bool) {
 	return principal, ok
 }
 
+func WithPrincipal(ctx context.Context, principal Principal) context.Context {
+	return context.WithValue(ctx, principalKey, principal)
+}
+
 type Middleware struct {
 	DB     *pgxpool.Pool
 	Client *http.Client
