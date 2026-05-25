@@ -5,17 +5,23 @@ import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+const SETTINGS_ROOT_REDIRECT_DELAY_MS = 750;
+
 export default function SettingsPage() {
   const router = useRouter();
   const shellContext = useAppShellContext();
 
   useEffect(() => {
-    router.replace(
-      withWorkspaceSlug(
-        "/settings/account/preferences",
-        shellContext?.workspaceSlug,
-      ),
-    );
+    const id = window.setTimeout(() => {
+      router.replace(
+        withWorkspaceSlug(
+          "/settings/account/preferences",
+          shellContext?.workspaceSlug,
+        ),
+      );
+    }, SETTINGS_ROOT_REDIRECT_DELAY_MS);
+
+    return () => window.clearTimeout(id);
   }, [router, shellContext?.workspaceSlug]);
 
   return (
