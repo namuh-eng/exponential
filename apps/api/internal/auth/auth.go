@@ -226,15 +226,15 @@ func TestMode() bool {
 	return os.Getenv("NODE_ENV") == "test" || os.Getenv("PLAYWRIGHT_TEST") == "true"
 }
 
-func BetterAuthSecret() string {
-	if s := os.Getenv("BETTER_AUTH_SECRET"); s != "" {
+func DevSessionSecret() string {
+	if s := os.Getenv("EXPONENTIAL_DEV_SESSION_SECRET"); s != "" {
 		return s
 	}
-	return "dev-only-better-auth-secret-not-for-production"
+	return "dev-only-kratos-session-secret-not-for-production"
 }
 
 func signedBrowserSessionCookie(r *http.Request) string {
-	for _, name := range []string{"ory_kratos_session", "better-auth.session_token", "better-auth.session-token"} {
+	for _, name := range []string{"ory_kratos_session"} {
 		cookie, err := r.Cookie(name)
 		if err == nil && strings.TrimSpace(cookie.Value) != "" {
 			return strings.TrimSpace(cookie.Value)
@@ -248,7 +248,7 @@ func VerifySignedSessionToken(value string) (string, bool) {
 	if !ok || raw == "" || sig == "" {
 		return "", false
 	}
-	mac := hmac.New(sha256.New, []byte(BetterAuthSecret()))
+	mac := hmac.New(sha256.New, []byte(DevSessionSecret()))
 	mac.Write([]byte(raw))
 	expected := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 	if !hmac.Equal([]byte(sig), []byte(expected)) {

@@ -69,21 +69,17 @@ function testSessionEnabled() {
   );
 }
 
-function betterAuthSecret() {
+function devSessionSecret() {
   return (
-    process.env.BETTER_AUTH_SECRET ??
-    "dev-only-better-auth-secret-not-for-production"
+    process.env.EXPONENTIAL_DEV_SESSION_SECRET ??
+    "dev-only-kratos-session-secret-not-for-production"
   );
 }
 
 function signedSessionCookie(headerList: Headers) {
   const cookieHeader = headerList.get("cookie") ?? "";
   const cookies = cookieHeader.split(";").map((part) => part.trim());
-  for (const name of [
-    "ory_kratos_session",
-    "better-auth.session_token",
-    "better-auth.session-token",
-  ]) {
+  for (const name of ["ory_kratos_session"]) {
     const prefix = `${name}=`;
     const found = cookies.find((cookie) => cookie.startsWith(prefix));
     if (found) return decodeURIComponent(found.slice(prefix.length));
@@ -96,7 +92,7 @@ function verifySignedSessionToken(value: string) {
   if (dot <= 0 || dot === value.length - 1) return null;
   const rawToken = value.slice(0, dot);
   const signature = value.slice(dot + 1);
-  const expected = createHmac("sha256", betterAuthSecret())
+  const expected = createHmac("sha256", devSessionSecret())
     .update(rawToken)
     .digest("base64");
   const signatureBuffer = Buffer.from(signature);

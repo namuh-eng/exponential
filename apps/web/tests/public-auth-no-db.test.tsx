@@ -62,7 +62,7 @@ describe("public auth pages without a database", () => {
     render(<SignupPage />);
 
     expect(
-      screen.getByRole("heading", { name: "Create your workspace" }),
+      screen.getByRole("heading", { name: "Create your account" }),
     ).toBeDefined();
     expect(screen.getByRole("img", { name: "Linear logo" })).toBeDefined();
     expect(screen.getByText("Already have an account?")).toBeDefined();

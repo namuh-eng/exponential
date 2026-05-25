@@ -10,10 +10,12 @@ export interface InviteTokenPayload {
 }
 
 function getInviteSecret(): string {
-  const secret = process.env.BETTER_AUTH_SECRET;
+  const secret = process.env.EXPONENTIAL_INVITE_TOKEN_SECRET;
   if (!secret) {
     if (process.env.NODE_ENV === "production") {
-      throw new Error("BETTER_AUTH_SECRET must be set in production");
+      throw new Error(
+        "EXPONENTIAL_INVITE_TOKEN_SECRET must be set in production",
+      );
     }
     return "dev-only-invite-secret-not-for-production";
   }

@@ -178,7 +178,7 @@ func (h Handler) securityPayload(r *http.Request, userID, workspaceID, createdSe
 }
 
 func currentBrowserSessionToken(r *http.Request) string {
-	for _, name := range []string{"ory_kratos_session", "better-auth.session_token", "better-auth.session-token"} {
+	for _, name := range []string{"ory_kratos_session"} {
 		cookie, err := r.Cookie(name)
 		if err != nil || strings.TrimSpace(cookie.Value) == "" {
 			continue

@@ -98,7 +98,7 @@ export const estimateType = pgEnum("estimate_type", [
   "tshirt",
 ]);
 
-// ─── Better Auth Tables ──────────────────────────────────────────────
+// ─── Auth Tables ─────────────────────────────────────────────────────
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),

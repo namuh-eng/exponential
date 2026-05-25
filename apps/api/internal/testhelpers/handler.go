@@ -145,7 +145,7 @@ func (h Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create test session failed", err.Error())
 		return
 	}
-	signed := rawToken + "." + signBetterAuthToken(rawToken, betterAuthSecret())
+	signed := rawToken + "." + signDevSessionToken(rawToken, devSessionSecret())
 	if shouldSetBrowserSessionCookies(r) {
 		setBrowserSessionCookies(w, r, workspace, signed, expires)
 	}
@@ -194,8 +194,6 @@ func setBrowserSessionCookies(w http.ResponseWriter, r *http.Request, workspace 
 		{Name: "activeWorkspaceId", Value: workspace.ID, Path: "/", SameSite: http.SameSiteLaxMode, Secure: secure},
 		{Name: "activeWorkspaceSlug", Value: workspace.URLSlug, Path: "/", SameSite: http.SameSiteLaxMode, Secure: secure},
 		{Name: "ory_kratos_session", Value: signedToken, Path: "/", Expires: expires, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: secure},
-		{Name: "better-auth.session_token", Value: signedToken, Path: "/", Expires: expires, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: secure},
-		{Name: "better-auth.session-token", Value: signedToken, Path: "/", Expires: expires, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: secure},
 	} {
 		http.SetCookie(w, cookie)
 	}
@@ -292,13 +290,13 @@ func randomBase64URL(size int) string {
 	_, _ = rand.Read(b)
 	return base64.RawURLEncoding.EncodeToString(b)
 }
-func betterAuthSecret() string {
-	if s := os.Getenv("BETTER_AUTH_SECRET"); s != "" {
+func devSessionSecret() string {
+	if s := os.Getenv("EXPONENTIAL_DEV_SESSION_SECRET"); s != "" {
 		return s
 	}
-	return "dev-only-better-auth-secret-not-for-production"
+	return "dev-only-kratos-session-secret-not-for-production"
 }
-func signBetterAuthToken(value, secret string) string {
+func signDevSessionToken(value, secret string) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(value))
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))

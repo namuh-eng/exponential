@@ -1,18 +1,11 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("@/lib/auth-client", () => ({
-  signIn: {
-    social: vi.fn(),
-    magicLink: vi.fn(() => Promise.resolve()),
-  },
-  signInWithPasskey: vi.fn(),
-  browserSupportsPasskeys: vi.fn(() => true),
-  enrollPasskey: vi.fn(),
-  signOut: vi.fn(),
-  useSession: vi.fn(() => ({ data: null, isPending: false })),
-  authClient: {},
-}));
 
 const assignMock = vi.fn();
 const fetchMock = vi.fn();
@@ -20,6 +13,7 @@ const mockLocation = {
   ...window.location,
   assign: assignMock,
   origin: "http://localhost:3015",
+  pathname: "/login",
   search: "",
 };
 
@@ -28,1077 +22,266 @@ vi.stubGlobal("fetch", fetchMock);
 
 import LoginPage from "@/app/(auth)/login/page";
 import SignupPage from "@/app/(auth)/signup/page";
-import { signIn, signInWithPasskey } from "@/lib/auth-client";
+
+function providerCapabilities(
+  body: Record<string, unknown> = { providers: { google: true } },
+) {
+  return { ok: true, json: async () => body };
+}
+
+function kratosFlow(
+  action = "http://localhost:4433/self-service/login?flow=abc",
+) {
+  return {
+    ok: true,
+    json: async () => ({
+      id: "flow-id",
+      ui: {
+        action,
+        nodes: [{ attributes: { name: "csrf_token", value: "csrf" } }],
+      },
+    }),
+  };
+}
+
+function kratosSuccess(redirect = "http://localhost:3015/team/ABC") {
+  return { ok: true, json: async () => ({ redirect_browser_to: redirect }) };
+}
 
 describe("Login page", () => {
   beforeEach(() => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({ providers: { google: true, passkey: true } }),
-    });
+    fetchMock.mockResolvedValue(providerCapabilities());
+    mockLocation.pathname = "/login";
+    mockLocation.search = "";
   });
 
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
     assignMock.mockReset();
-    mockLocation.pathname = "/login";
-    mockLocation.search = "";
-    Object.defineProperty(window.navigator, "credentials", {
-      value: undefined,
-      configurable: true,
-    });
   });
 
-  it("renders the login title", () => {
-    render(<LoginPage />);
-    expect(screen.getByText("Log in to Linear")).toBeDefined();
-  });
-
-  it("shows Continue with Google button", async () => {
-    render(<LoginPage />);
-    expect(
-      await screen.findByRole("button", { name: /Continue with Google/i }),
-    ).toBeDefined();
-  });
-
-  it("shows Continue with email button", () => {
-    render(<LoginPage />);
-    expect(screen.getByText("Continue with email")).toBeDefined();
-  });
-
-  it("matches Linear's login auth method surface", async () => {
-    render(<LoginPage />);
-    await screen.findByRole("button", { name: /Continue with Google/i });
-
-    expect(
-      screen.getAllByRole("button").map((button) => button.textContent?.trim()),
-    ).toEqual([
-      "Continue with Google",
-      "Continue with email",
-      "Continue with SAML SSO",
-      "Log in with passkey",
-    ]);
-    expect(
-      screen.getByRole("button", { name: /Continue with Google/i }),
-    ).toBeDefined();
-    expect(
-      screen.getByRole("button", { name: /Continue with email/i }),
-    ).toBeDefined();
-    expect(
-      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
-    ).toBeDefined();
-    expect(
-      screen.getByRole("button", { name: /Log in with passkey/i }),
-    ).toBeDefined();
-  });
-
-  it("hides workspace-disabled Google, email, and passkey methods", async () => {
-    mockLocation.search =
-      "?callbackUrl=%2Fforeverbrowsing%2Fsettings%2Fsecurity";
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        providers: {
-          google: false,
-          googleAllowed: false,
-          email: false,
-          passkey: false,
-        },
-        workspace: {
-          slug: "foreverbrowsing",
-          authentication: { google: false, emailPasskey: false },
-        },
-      }),
-    });
-
+  it("renders the Kratos-owned login surface", async () => {
     render(<LoginPage />);
 
-    await vi.waitFor(() => {
+    expect(
+      screen.getByRole("heading", { name: "Log in to Linear" }),
+    ).toBeDefined();
+    expect(
+      screen.getByText(/Authentication is handled by Ory Kratos/),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Continue with Google" }),
+    ).toBeDefined();
+    expect(screen.getByPlaceholderText("Email address")).toBeDefined();
+    expect(screen.getByPlaceholderText("Password")).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Log in with Kratos" }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Send magic link instead" }),
+    ).toBeDefined();
+    await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/api/auth/provider-capabilities?callbackUrl=%2Fforeverbrowsing%2Fsettings%2Fsecurity",
+        "/api/auth/provider-capabilities",
         expect.objectContaining({ cache: "no-store" }),
       );
-      expect(
-        screen.queryByRole("button", { name: /Continue with email/i }),
-      ).toBeNull();
     });
-    expect(
-      screen.queryByRole("button", { name: /Continue with Google/i }),
-    ).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: /Log in with passkey/i }),
-    ).toBeNull();
-    expect(
-      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
-    ).toBeDefined();
-    expect(
-      screen.getByText(/Google, email, and passkey login are disabled/),
-    ).toBeDefined();
   });
 
-  it("does not leave passkey login stuck checking when capabilities are slow", () => {
-    fetchMock.mockReturnValueOnce(new Promise(() => {}));
+  it("starts Google OAuth through the Kratos browser flow with a safe callback", async () => {
+    mockLocation.search = "?callbackUrl=%2Fteam%2FABC";
+    fetchMock
+      .mockResolvedValueOnce(providerCapabilities())
+      .mockResolvedValueOnce(kratosFlow())
+      .mockResolvedValueOnce(kratosSuccess("http://localhost:3015/team/ABC"));
 
     render(<LoginPage />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Continue with Google" }),
+    );
 
-    const passkeyButton = screen.getByRole("button", {
-      name: /Log in with passkey/i,
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        "/api/auth/kratos/self-service/login/browser?return_to=http%3A%2F%2Flocalhost%3A3015%2Fteam%2FABC",
+        expect.objectContaining({ credentials: "include" }),
+      );
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        3,
+        "/api/auth/kratos/self-service/login?flow=abc",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            method: "oidc",
+            provider: "google",
+            csrf_token: "csrf",
+          }),
+        }),
+      );
+      expect(assignMock).toHaveBeenCalledWith("/team/ABC");
     });
-    expect(passkeyButton).toBeDefined();
-    expect(passkeyButton.hasAttribute("disabled")).toBe(false);
-    expect(screen.queryByText("Checking passkey sign-in")).toBeNull();
   });
 
-  it("keeps passkey login available when provider capabilities fail to load", async () => {
-    fetchMock.mockRejectedValueOnce(new Error("network failed"));
+  it("submits password login to Kratos", async () => {
+    fetchMock
+      .mockResolvedValueOnce(providerCapabilities())
+      .mockResolvedValueOnce(kratosFlow())
+      .mockResolvedValueOnce(kratosSuccess("http://localhost:3015/"));
 
     render(<LoginPage />);
+    fireEvent.change(screen.getByPlaceholderText("Email address"), {
+      target: { value: "person@example.com" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Password"), {
+      target: { value: "correct horse battery staple" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Log in with Kratos" }));
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        3,
+        "/api/auth/kratos/self-service/login?flow=abc",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            method: "password",
+            identifier: "person@example.com",
+            password: "correct horse battery staple",
+            csrf_token: "csrf",
+          }),
+        }),
+      );
+      expect(assignMock).toHaveBeenCalledWith("/");
+    });
+  });
+
+  it("requests a Kratos magic link and shows the email confirmation", async () => {
+    fetchMock
+      .mockResolvedValueOnce(providerCapabilities())
+      .mockResolvedValueOnce(kratosFlow())
+      .mockResolvedValueOnce(kratosSuccess("http://localhost:3015/"));
+
+    render(<LoginPage />);
+    fireEvent.change(screen.getByPlaceholderText("Email address"), {
+      target: { value: "person@example.com" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Send magic link instead" }),
+    );
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        3,
+        "/api/auth/kratos/self-service/login?flow=abc",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            method: "link",
+            identifier: "person@example.com",
+            csrf_token: "csrf",
+          }),
+        }),
+      );
       expect(
-        screen.getByRole("button", { name: /Log in with passkey/i }),
+        screen.getByText("Check your email for the sign-in link."),
       ).toBeDefined();
     });
-    expect(screen.queryByText("Checking passkey sign-in")).toBeNull();
   });
 
-  it("hides Google, email, and passkey for a workspace-scoped login when capabilities disable workspace auth methods", async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
+  it("shows SAML when workspace policy disables Google and email/passkey", async () => {
+    fetchMock.mockResolvedValueOnce(
+      providerCapabilities({
         providers: {
-          google: { configured: false },
+          google: false,
           googleAllowed: false,
           emailPasskey: false,
           passkey: false,
         },
       }),
-    });
-    mockLocation.pathname = "/auth-methods-off/inbox";
+    );
 
     render(<LoginPage />);
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(
-        screen.queryByRole("button", { name: /Continue with Google/i }),
+        screen.queryByRole("button", { name: "Continue with Google" }),
       ).toBeNull();
       expect(
-        screen.queryByRole("button", { name: /Continue with email/i }),
-      ).toBeNull();
-      expect(
-        screen.queryByRole("button", { name: /Log in with passkey/i }),
-      ).toBeNull();
+        screen.getByRole("button", { name: "Continue with SAML SSO" }),
+      ).toBeDefined();
     });
-    expect(
-      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
-    ).toBeDefined();
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/auth/provider-capabilities?callbackUrl=%2Fauth-methods-off%2Finbox",
-      expect.objectContaining({ cache: "no-store" }),
-    );
+  });
+});
+
+describe("Signup page", () => {
+  beforeEach(() => {
+    fetchMock.mockResolvedValue(providerCapabilities());
+    mockLocation.pathname = "/signup";
+    mockLocation.search = "";
   });
 
-  it("matches Linear's focused SAML email step from the login chooser", () => {
-    render(<LoginPage />);
-
-    fireEvent.click(
-      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
-    );
-
-    expect(screen.getByText("What’s your email address?")).toBeDefined();
-    const samlInput = screen.getByPlaceholderText("Enter your email address…");
-    expect(samlInput).toBeDefined();
-    expect(samlInput.getAttribute("type")).toBe("email");
-    expect(
-      screen.getByRole("button", { name: "Continue with SAML" }),
-    ).toBeDefined();
-    expect(screen.getByText("Back to login")).toBeDefined();
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    assignMock.mockReset();
   });
 
-  it("keeps SAML submit enabled and shows Linear empty validation on click", () => {
-    render(<LoginPage />);
-
-    fireEvent.click(
-      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
-    );
-
-    const submitButton = screen.getByRole("button", {
-      name: "Continue with SAML",
-    });
-    expect(submitButton.hasAttribute("disabled")).toBe(false);
-
-    fireEvent.click(submitButton);
+  it("renders the Kratos-owned signup surface", () => {
+    render(<SignupPage />);
 
     expect(
-      screen.getByText("Please enter an email address for login."),
+      screen.getByRole("heading", { name: "Create your account" }),
     ).toBeDefined();
-    expect(fetchMock).not.toHaveBeenCalledWith(
-      "/api/auth/saml/discovery",
-      expect.anything(),
-    );
-  });
-
-  it("shows Linear empty validation when the SAML form is submitted with Enter", () => {
-    render(<LoginPage />);
-
-    fireEvent.click(
-      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
-    );
-
-    const input = screen.getByPlaceholderText("Enter your email address…");
-    fireEvent.submit(input.closest("form") as HTMLFormElement);
-
+    expect(screen.getByPlaceholderText("Your name")).toBeDefined();
+    expect(screen.getByPlaceholderText("Email address")).toBeDefined();
+    expect(screen.getByPlaceholderText("Password")).toBeDefined();
     expect(
-      screen.getByText("Please enter an email address for login."),
+      screen.getByRole("button", { name: "Sign up with Kratos" }),
     ).toBeDefined();
-    expect(fetchMock).not.toHaveBeenCalledWith(
-      "/api/auth/saml/discovery",
-      expect.anything(),
-    );
   });
 
-  it("submits SAML email lookup to the API with callback intent and shows pending state", async () => {
-    let resolveSamlLookup:
-      | ((value: {
-          ok: boolean;
-          json: () => Promise<{ error: string }>;
-        }) => void)
-      | undefined;
-    fetchMock.mockImplementation((url: string) => {
-      if (url === "/api/auth/provider-capabilities") {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ providers: { google: true, passkey: true } }),
-        });
-      }
+  it("submits Kratos password registration with traits", async () => {
+    fetchMock
+      .mockResolvedValueOnce(providerCapabilities())
+      .mockResolvedValueOnce(
+        kratosFlow("http://localhost:4433/self-service/registration?flow=abc"),
+      )
+      .mockResolvedValueOnce(kratosSuccess("http://localhost:3015/"));
 
-      return new Promise((resolve) => {
-        resolveSamlLookup = resolve;
-      });
+    render(<SignupPage />);
+    fireEvent.change(screen.getByPlaceholderText("Your name"), {
+      target: { value: "Person Example" },
     });
-    mockLocation.search = "?callbackUrl=%2Fworkspace%2Fissues";
-    render(<LoginPage />);
-
+    fireEvent.change(screen.getByPlaceholderText("Email address"), {
+      target: { value: "person@example.com" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Password"), {
+      target: { value: "correct horse battery staple" },
+    });
     fireEvent.click(
-      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
+      screen.getByRole("button", { name: "Sign up with Kratos" }),
     );
-    fireEvent.change(screen.getByPlaceholderText("Enter your email address…"), {
-      target: { value: "person@missing.example" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Continue with SAML" }));
 
-    await vi.waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/auth/saml/discovery",
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        "/api/auth/kratos/self-service/registration/browser?return_to=http%3A%2F%2Flocalhost%3A3015%2F",
+        expect.objectContaining({ credentials: "include" }),
+      );
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        3,
+        "/api/auth/kratos/self-service/registration?flow=abc",
         expect.objectContaining({
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            email: "person@missing.example",
-            isDesktop: false,
-            type: "login",
-            callbackURL: "http://localhost:3015/workspace/issues",
+            method: "password",
+            password: "correct horse battery staple",
+            traits: { email: "person@example.com", name: "Person Example" },
+            csrf_token: "csrf",
           }),
         }),
       );
     });
-    const pendingButton = screen.getByRole("button", {
-      name: "Checking SAML…",
-    });
-    expect(pendingButton.hasAttribute("disabled")).toBe(true);
-
-    resolveSamlLookup?.({
-      ok: false,
-      json: async () => ({
-        error: "No SAML SSO enabled workspace could be found.",
-      }),
-    });
-
-    expect(
-      await screen.findByText("No SAML SSO enabled workspace could be found."),
-    ).toBeDefined();
-  });
-
-  it("does not show server-backed invalid-email text for client-side malformed SAML email", async () => {
-    fetchMock.mockImplementation((url: string) => {
-      if (url === "/api/auth/provider-capabilities") {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ providers: { google: true, passkey: true } }),
-        });
-      }
-
-      return Promise.resolve({
-        ok: false,
-        json: async () => ({ error: "Enter a valid email address." }),
-      });
-    });
-    render(<LoginPage />);
-
-    fireEvent.click(
-      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
-    );
-    fireEvent.change(screen.getByPlaceholderText("Enter your email address…"), {
-      target: { value: "invalid" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Continue with SAML" }));
-
-    await vi.waitFor(() => {
-      expect(screen.queryByText("Enter a valid email address.")).toBeNull();
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("redirects to the discovered SAML IdP URL", async () => {
-    fetchMock.mockImplementation((url: string) => {
-      if (url === "/api/auth/provider-capabilities") {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ providers: { google: true, passkey: true } }),
-        });
-      }
-
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ url: "https://idp.example.com/saml/start" }),
-      });
-    });
-    render(<LoginPage />);
-
-    fireEvent.click(
-      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
-    );
-    fireEvent.change(screen.getByPlaceholderText("Enter your email address…"), {
-      target: { value: "person@example.com" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Continue with SAML" }));
-
-    await vi.waitFor(() => {
-      expect(assignMock).toHaveBeenCalledWith(
-        "https://idp.example.com/saml/start",
-      );
-    });
-  });
-
-  it("matches Linear's passkey waiting state while WebAuthn is pending", async () => {
-    vi.mocked(signInWithPasskey).mockReturnValueOnce(new Promise(() => {}));
-    render(<LoginPage />);
-
-    fireEvent.click(
-      await screen.findByRole("button", { name: /Log in with passkey/i }),
-    );
-
-    expect(signInWithPasskey).toHaveBeenCalledWith({
-      callbackURL: "http://localhost:3015/",
-    });
-    expect(
-      screen
-        .getByRole("button", { name: /Waiting for passkey/ })
-        .hasAttribute("disabled"),
-    ).toBe(true);
-  });
-
-  it("starts WebAuthn and recovers when passkey login is rejected", async () => {
-    const credentialsGet = vi.fn(() =>
-      Promise.reject(new DOMException("User canceled", "NotAllowedError")),
-    );
-    Object.defineProperty(window.navigator, "credentials", {
-      value: { get: credentialsGet },
-      configurable: true,
-    });
-    vi.mocked(signInWithPasskey).mockImplementationOnce(
-      async ({ callbackURL }) => {
-        await navigator.credentials.get({
-          publicKey: { challenge: new Uint8Array([1, 2, 3]) },
-        });
-        return { redirectTo: callbackURL };
-      },
-    );
-    render(<LoginPage />);
-
-    fireEvent.click(
-      await screen.findByRole("button", { name: /Log in with passkey/i }),
-    );
-
-    await vi.waitFor(() => {
-      expect(credentialsGet).toHaveBeenCalledTimes(1);
-      expect(
-        screen.getByRole("button", { name: /Log in with passkey/i }),
-      ).toBeDefined();
-      expect(
-        screen.getByText(
-          "Passkey sign-in failed. Try again or use another method.",
-        ),
-      ).toBeDefined();
-    });
-    expect(
-      screen
-        .getByRole("button", { name: /Log in with passkey/i })
-        .hasAttribute("disabled"),
-    ).toBe(false);
-  });
-
-  it("hides passkey login when provider capabilities disable passkeys", async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ providers: { google: true, passkey: false } }),
-    });
-
-    render(<LoginPage />);
-
-    expect(
-      screen.getByRole("button", { name: /Log in with passkey/i }),
-    ).toBeDefined();
-    await vi.waitFor(() => {
-      expect(
-        screen.queryByRole("button", { name: /Log in with passkey/i }),
-      ).toBeNull();
-    });
-  });
-
-  it("calls signIn.social with google provider on Google click", async () => {
-    render(<LoginPage />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: /Continue with Google/i }),
-    );
-    await vi.waitFor(() => {
-      expect(signIn.social).toHaveBeenCalledWith({
-        provider: "google",
-        callbackURL: "http://localhost:3015/",
-      });
-    });
-  });
-
-  it("starts Google OAuth and uses the callbackUrl query param for Google sign-in", async () => {
-    vi.mocked(signIn.social).mockResolvedValueOnce({
-      data: {
-        url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=test",
-        redirect: true,
-      },
-    });
-    mockLocation.search = "?callbackUrl=%2Fteam%2FABC%2Fboard";
-    render(<LoginPage />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: /Continue with Google/i }),
-    );
-    await vi.waitFor(() => {
-      expect(signIn.social).toHaveBeenCalledWith({
-        provider: "google",
-        callbackURL: "http://localhost:3015/team/ABC/board",
-      });
-      expect(assignMock).toHaveBeenCalledWith(
-        "https://accounts.google.com/o/oauth2/v2/auth?client_id=test",
-      );
-    });
-  });
-
-  it("uses the current workspace deep-link URL for Google sign-in when login is rendered by rewrite", async () => {
-    mockLocation.pathname = "/foreverbrowsing/settings/account/security";
-    mockLocation.search = "?tab=sessions";
-    render(<LoginPage />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: /Continue with Google/i }),
-    );
-    await vi.waitFor(() => {
-      expect(signIn.social).toHaveBeenCalledWith({
-        provider: "google",
-        callbackURL:
-          "http://localhost:3015/foreverbrowsing/settings/account/security?tab=sessions",
-      });
-    });
-  });
-
-  it("sanitizes explicit callbackUrl values before falling back to the rewritten workspace URL", async () => {
-    mockLocation.pathname = "/foreverbrowsing/projects";
-    mockLocation.search = "?callbackUrl=https%3A%2F%2Fevil.example%2Fphish";
-    render(<LoginPage />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: /Continue with Google/i }),
-    );
-    await vi.waitFor(() => {
-      expect(signIn.social).toHaveBeenCalledWith({
-        provider: "google",
-        callbackURL:
-          "http://localhost:3015/foreverbrowsing/projects?callbackUrl=https%3A%2F%2Fevil.example%2Fphish",
-      });
-    });
-  });
-
-  it("does not show a Google configuration warning on initial login load when Google is unavailable", async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ providers: { google: false } }),
-    });
-
-    render(<LoginPage />);
-
-    const button = await screen.findByRole("button", {
-      name: /Continue with Google/i,
-    });
-
-    expect(button.hasAttribute("disabled")).toBe(false);
-    expect(
-      screen.queryByText(
-        "Google sign-in is not configured. Use email or SAML SSO instead.",
-      ),
-    ).toBeNull();
-    expect(signIn.social).not.toHaveBeenCalled();
-  });
-
-  it("does not show a Google configuration warning on initial workspace login load", async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ providers: { google: false } }),
-    });
-    mockLocation.pathname = "/foreverbrowsing/inbox";
-
-    render(<LoginPage />);
-
-    await screen.findByRole("button", { name: /Continue with Google/i });
-
-    expect(
-      screen.queryByText(
-        "Google sign-in is not configured. Use email or SAML SSO instead.",
-      ),
-    ).toBeNull();
-    expect(signIn.social).not.toHaveBeenCalled();
-  });
-
-  it("shows a visible Google error after clicking Google when Google is not configured", async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ providers: { google: false } }),
-    });
-    render(<LoginPage />);
-
-    const button = await screen.findByRole("button", {
-      name: /Continue with Google/i,
-    });
-    fireEvent.click(button);
-
-    expect(
-      screen.getByText(
-        "Google sign-in is not configured. Use email or SAML SSO instead.",
-      ),
-    ).toBeDefined();
-    expect(button.hasAttribute("disabled")).toBe(false);
-    expect(signIn.social).not.toHaveBeenCalled();
-  });
-
-  it("shows a visible Google error and clears loading when Better Auth reports a missing provider", async () => {
-    vi.mocked(signIn.social).mockResolvedValueOnce({
-      error: {
-        code: "PROVIDER_NOT_FOUND",
-        status: 404,
-        message: "Provider not found",
-      },
-    });
-    render(<LoginPage />);
-
-    const button = await screen.findByRole("button", {
-      name: /Continue with Google/i,
-    });
-    fireEvent.click(button);
-
-    await vi.waitFor(() => {
-      expect(
-        screen.getByText(
-          "Google sign-in is not configured. Use email or SAML SSO instead.",
-        ),
-      ).toBeDefined();
-      expect(button.hasAttribute("disabled")).toBe(false);
-    });
-  });
-
-  it("matches Linear's focused login email step", () => {
-    const { container } = render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    expect(
-      screen.getByRole("heading", { name: "What’s your email address?" }),
-    ).toBeDefined();
-    expect(
-      screen.queryByRole("heading", { name: "Log in to Linear" }),
-    ).toBeNull();
-    expect(
-      screen.getByPlaceholderText("Enter your email address…"),
-    ).toBeDefined();
-    expect(
-      container.querySelector('input[name="cf-turnstile-response"]'),
-    ).toBeDefined();
-    expect(screen.getByRole("button", { name: "Back to login" })).toBeDefined();
-    expect(screen.queryByText("Back to login options")).toBeNull();
-  });
-
-  it("returns to choose step when clicking back", async () => {
-    render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-    fireEvent.click(screen.getByText("Back to login"));
-    expect(
-      await screen.findByRole("button", { name: /Continue with Google/i }),
-    ).toBeDefined();
-  });
-
-  it("keeps login email submit enabled and shows Linear empty validation on click", () => {
-    render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    const submitButton = screen.getByRole("button", {
-      name: "Continue with email",
-    });
-    expect(submitButton.hasAttribute("disabled")).toBe(false);
-
-    fireEvent.click(submitButton);
-
-    expect(
-      screen.getByText("Please enter an email address for login."),
-    ).toBeDefined();
-    expect(signIn.magicLink).not.toHaveBeenCalled();
-  });
-
-  it("shows Linear empty validation when the login email form is submitted with Enter", () => {
-    render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    const input = screen.getByPlaceholderText("Enter your email address…");
-    fireEvent.submit(input.closest("form") as HTMLFormElement);
-
-    expect(
-      screen.getByText("Please enter an email address for login."),
-    ).toBeDefined();
-    expect(signIn.magicLink).not.toHaveBeenCalled();
-  });
-
-  it("uses native validation without inline text for a non-empty invalid login email", () => {
-    render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    const input = screen.getByPlaceholderText("Enter your email address…");
-    fireEvent.change(input, { target: { value: "invalid" } });
-    fireEvent.submit(input.closest("form") as HTMLFormElement);
-
-    expect(screen.queryByText("Enter a valid email address.")).toBeNull();
-    expect(signIn.magicLink).not.toHaveBeenCalled();
-  });
-
-  it("shows the Linear-like verification step before email-sent after submitting email", async () => {
-    let resolveMagicLink: (() => void) | undefined;
-    vi.mocked(signIn.magicLink).mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        resolveMagicLink = resolve;
-      }),
-    );
-    render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    const input = screen.getByPlaceholderText("Enter your email address…");
-    fireEvent.change(input, { target: { value: "test@example.com" } });
-
-    const form = input.closest("form") as HTMLFormElement;
-    fireEvent.submit(form);
-
-    expect(
-      await screen.findByRole("heading", { name: "Verifying it’s you" }),
-    ).toBeDefined();
-    expect(screen.getByRole("button", { name: "Back to login" })).toBeDefined();
-    expect(screen.queryByText("Check your email")).toBeNull();
-    expect(screen.queryByPlaceholderText("Enter 6-digit code")).toBeNull();
-    expect(screen.queryByText("Continue with code")).toBeNull();
-
-    resolveMagicLink?.();
-
-    await vi.waitFor(() => {
-      expect(screen.getByText("Check your email")).toBeDefined();
-    });
-    expect(screen.getByPlaceholderText("Enter 6-digit code")).toBeDefined();
-
-    expect(signIn.magicLink).toHaveBeenCalledWith({
-      email: "test@example.com",
-      callbackURL: "http://localhost:3015/",
-      errorCallbackURL: "http://localhost:3015/login",
-    });
-  });
-
-  it("returns from email verification to the login chooser without showing the eventual email-sent state", async () => {
-    let resolveMagicLink: (() => void) | undefined;
-    vi.mocked(signIn.magicLink).mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        resolveMagicLink = resolve;
-      }),
-    );
-    render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    const input = screen.getByPlaceholderText("Enter your email address…");
-    fireEvent.change(input, { target: { value: "test@example.com" } });
-    fireEvent.submit(input.closest("form") as HTMLFormElement);
-
-    expect(
-      await screen.findByRole("heading", { name: "Verifying it’s you" }),
-    ).toBeDefined();
-
-    fireEvent.click(screen.getByRole("button", { name: "Back to login" }));
-    expect(
-      await screen.findByRole("button", { name: /Continue with Google/i }),
-    ).toBeDefined();
-
-    resolveMagicLink?.();
-
-    await vi.waitFor(() => {
-      expect(screen.queryByText("Check your email")).toBeNull();
-    });
-  });
-
-  it("passes the Turnstile response header when requesting a login magic link", async () => {
-    const { container } = render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    const input = screen.getByPlaceholderText("Enter your email address…");
-    fireEvent.change(input, { target: { value: "test@example.com" } });
-    const turnstileInput = container.querySelector(
-      'input[name="cf-turnstile-response"]',
-    ) as HTMLInputElement;
-    turnstileInput.value = "turnstile-token";
-
-    fireEvent.submit(input.closest("form") as HTMLFormElement);
-
-    await vi.waitFor(() => {
-      expect(signIn.magicLink).toHaveBeenCalledWith({
-        email: "test@example.com",
-        callbackURL: "http://localhost:3015/",
-        errorCallbackURL: "http://localhost:3015/login",
-        fetchOptions: {
-          headers: { "x-captcha-response": "turnstile-token" },
-        },
-      });
-    });
-  });
-
-  it("preserves callbackUrl when requesting a magic link", async () => {
-    mockLocation.search = "?callbackUrl=%2Fteam%2FABC%2Fboard";
-    render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    const input = screen.getByPlaceholderText("Enter your email address…");
-    fireEvent.change(input, { target: { value: "test@example.com" } });
-    fireEvent.submit(input.closest("form") as HTMLFormElement);
-
-    await vi.waitFor(() => {
-      expect(signIn.magicLink).toHaveBeenCalledWith({
-        email: "test@example.com",
-        callbackURL: "http://localhost:3015/team/ABC/board",
-        errorCallbackURL:
-          "http://localhost:3015/login?callbackUrl=%2Fteam%2FABC%2Fboard",
-      });
-    });
-  });
-
-  it("preserves callbackUrl query params when requesting a magic link", async () => {
-    mockLocation.search =
-      "?callbackUrl=%2Faccept-invite%3Ftoken%3Dsigned-token";
-    render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    const input = screen.getByPlaceholderText("Enter your email address…");
-    fireEvent.change(input, { target: { value: "invitee@example.com" } });
-    fireEvent.submit(input.closest("form") as HTMLFormElement);
-
-    await vi.waitFor(() => {
-      expect(signIn.magicLink).toHaveBeenCalledWith({
-        email: "invitee@example.com",
-        callbackURL: "http://localhost:3015/accept-invite?token=signed-token",
-        errorCallbackURL:
-          "http://localhost:3015/login?callbackUrl=%2Faccept-invite%3Ftoken%3Dsigned-token",
-      });
-    });
-  });
-
-  it("uses the current workspace root URL when requesting a magic link from a rewritten login", async () => {
-    mockLocation.pathname = "/foreverbrowsing";
-    mockLocation.search = "";
-    render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    const input = screen.getByPlaceholderText("Enter your email address…");
-    fireEvent.change(input, { target: { value: "test@example.com" } });
-    fireEvent.submit(input.closest("form") as HTMLFormElement);
-
-    await vi.waitFor(() => {
-      expect(signIn.magicLink).toHaveBeenCalledWith({
-        email: "test@example.com",
-        callbackURL: "http://localhost:3015/foreverbrowsing",
-        errorCallbackURL: "http://localhost:3015/foreverbrowsing",
-      });
-    });
-  });
-
-  it("uses the current workspace deep-link URL when requesting a magic link from a rewritten login", async () => {
-    mockLocation.pathname = "/foreverbrowsing/team/ENG/all";
-    mockLocation.search = "?view=list&error=INVALID_TOKEN";
-    render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    const input = screen.getByPlaceholderText("Enter your email address…");
-    fireEvent.change(input, { target: { value: "test@example.com" } });
-    fireEvent.submit(input.closest("form") as HTMLFormElement);
-
-    await vi.waitFor(() => {
-      expect(signIn.magicLink).toHaveBeenCalledWith({
-        email: "test@example.com",
-        callbackURL:
-          "http://localhost:3015/foreverbrowsing/team/ENG/all?view=list",
-        errorCallbackURL:
-          "http://localhost:3015/foreverbrowsing/team/ENG/all?view=list",
-      });
-    });
-  });
-
-  it("matches Linear's login footer copy", () => {
-    const { container } = render(<LoginPage />);
-
-    expect(container.textContent).toContain(
-      "Don’t have an account? Sign up or learn more",
-    );
-    expect(screen.getByText("Sign up")).toBeDefined();
-    const learnMore = screen.getByText("learn more");
-    expect(learnMore).toBeDefined();
-    expect(learnMore.getAttribute("href")).toBe("/homepage");
-
-    const footerLinks = Array.from(
-      container.querySelectorAll<HTMLAnchorElement>("p:last-child a"),
-    ).map((link) => link.getAttribute("href"));
-
-    expect(footerLinks).toEqual(["/signup", "/homepage"]);
-    expect(footerLinks.join(" ")).not.toContain("linear.app");
-    expect(container.innerHTML).not.toContain("https://linear.app/homepage");
-    expect(screen.queryByText("Terms of Service")).toBeNull();
-    expect(screen.queryByText("Privacy Policy")).toBeNull();
-  });
-
-  it("shows error when magic link fails", async () => {
-    vi.mocked(signIn.magicLink).mockRejectedValueOnce(new Error("fail"));
-    render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    const input = screen.getByPlaceholderText("Enter your email address…");
-    fireEvent.change(input, { target: { value: "bad@example.com" } });
-    fireEvent.submit(input.closest("form") as HTMLFormElement);
-
-    await vi.waitFor(() => {
-      expect(
-        screen.getByText("Failed to send magic link. Please try again."),
-      ).toBeDefined();
-    });
-  });
-
-  it("allows returning from email-sent to choose step", async () => {
-    render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    const input = screen.getByPlaceholderText("Enter your email address…");
-    fireEvent.change(input, { target: { value: "test@example.com" } });
-    fireEvent.submit(input.closest("form") as HTMLFormElement);
-
-    await vi.waitFor(() => {
-      expect(screen.getByText("Check your email")).toBeDefined();
-    });
-
-    fireEvent.click(screen.getByText("Use a different method"));
-    expect(
-      await screen.findByRole("button", { name: /Continue with Google/i }),
-    ).toBeDefined();
-  });
-
-  it("displays the submitted email in confirmation", async () => {
-    render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    const input = screen.getByPlaceholderText("Enter your email address…");
-    fireEvent.change(input, { target: { value: "hello@linear.app" } });
-    fireEvent.submit(input.closest("form") as HTMLFormElement);
-
-    await vi.waitFor(() => {
-      expect(screen.getByText("hello@linear.app")).toBeDefined();
-    });
-  });
-
-  it("navigates to magic-link verification when a valid code is submitted", async () => {
-    render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    const emailInput = screen.getByPlaceholderText("Enter your email address…");
-    fireEvent.change(emailInput, { target: { value: "test@example.com" } });
-    fireEvent.submit(emailInput.closest("form") as HTMLFormElement);
-
-    await vi.waitFor(() => {
-      expect(screen.getByPlaceholderText("Enter 6-digit code")).toBeDefined();
-    });
-
-    const codeInput = screen.getByPlaceholderText("Enter 6-digit code");
-    fireEvent.change(codeInput, { target: { value: "123456" } });
-    fireEvent.submit(codeInput.closest("form") as HTMLFormElement);
-
-    expect(assignMock).toHaveBeenCalledWith(
-      "http://localhost:3015/api/auth/magic-link/verify?token=123456&callbackURL=http%3A%2F%2Flocalhost%3A3015%2F&errorCallbackURL=http%3A%2F%2Flocalhost%3A3015%2Flogin",
-    );
-  });
-
-  it("preserves callbackUrl when verifying a valid code", async () => {
-    mockLocation.search = "?callbackUrl=%2Fteam%2FABC%2Fboard";
-    render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    const emailInput = screen.getByPlaceholderText("Enter your email address…");
-    fireEvent.change(emailInput, { target: { value: "test@example.com" } });
-    fireEvent.submit(emailInput.closest("form") as HTMLFormElement);
-
-    await vi.waitFor(() => {
-      expect(screen.getByPlaceholderText("Enter 6-digit code")).toBeDefined();
-    });
-
-    const codeInput = screen.getByPlaceholderText("Enter 6-digit code");
-    fireEvent.change(codeInput, { target: { value: "123456" } });
-    fireEvent.submit(codeInput.closest("form") as HTMLFormElement);
-
-    expect(assignMock).toHaveBeenCalledWith(
-      "http://localhost:3015/api/auth/magic-link/verify?token=123456&callbackURL=http%3A%2F%2Flocalhost%3A3015%2Fteam%2FABC%2Fboard&errorCallbackURL=http%3A%2F%2Flocalhost%3A3015%2Flogin%3FcallbackUrl%3D%252Fteam%252FABC%252Fboard",
-    );
-  });
-
-  it("preserves callbackUrl query params when verifying a valid code", async () => {
-    mockLocation.search =
-      "?callbackUrl=%2Faccept-invite%3Ftoken%3Dsigned-token";
-    render(<LoginPage />);
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    const emailInput = screen.getByPlaceholderText("Enter your email address…");
-    fireEvent.change(emailInput, { target: { value: "invitee@example.com" } });
-    fireEvent.submit(emailInput.closest("form") as HTMLFormElement);
-
-    await vi.waitFor(() => {
-      expect(screen.getByPlaceholderText("Enter 6-digit code")).toBeDefined();
-    });
-
-    const codeInput = screen.getByPlaceholderText("Enter 6-digit code");
-    fireEvent.change(codeInput, { target: { value: "123456" } });
-    fireEvent.submit(codeInput.closest("form") as HTMLFormElement);
-
-    expect(assignMock).toHaveBeenCalledWith(
-      "http://localhost:3015/api/auth/magic-link/verify?token=123456&callbackURL=http%3A%2F%2Flocalhost%3A3015%2Faccept-invite%3Ftoken%3Dsigned-token&errorCallbackURL=http%3A%2F%2Flocalhost%3A3015%2Flogin%3FcallbackUrl%3D%252Faccept-invite%253Ftoken%253Dsigned-token",
-    );
-  });
-
-  it("renders the signup variant", () => {
-    render(<SignupPage />);
-    expect(screen.getByText("Create your workspace")).toBeDefined();
-    expect(screen.getByText("Already have an account?")).toBeDefined();
-    expect(screen.getByText("Log in")).toBeDefined();
-    expect(screen.getByText("Terms of Service")).toBeDefined();
-    expect(screen.getByText("Data Processing Agreement")).toBeDefined();
-  });
-
-  it("matches Linear's signup auth method surface", async () => {
-    render(<SignupPage />);
-    await screen.findByRole("button", { name: /Continue with Google/i });
-
-    expect(
-      screen.getAllByRole("button").map((button) => button.textContent?.trim()),
-    ).toEqual([
-      "Continue with Google",
-      "Continue with email",
-      "Continue with SAML SSO",
-    ]);
-    expect(
-      screen.getByRole("button", { name: /Continue with Google/i }),
-    ).toBeDefined();
-    expect(
-      screen.getByRole("button", { name: /Continue with email/i }),
-    ).toBeDefined();
-    expect(
-      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
-    ).toBeDefined();
-    expect(
-      screen.queryByRole("button", { name: /Log in with passkey/i }),
-    ).toBeNull();
-  });
-
-  it("starts Google OAuth from signup with a safe local callback", async () => {
-    vi.mocked(signIn.social).mockResolvedValueOnce({
-      data: {
-        url: "https://accounts.google.com/o/oauth2/v2/auth?signup=1",
-        redirect: true,
-      },
-    });
-    mockLocation.pathname = "/signup";
-    mockLocation.search = "?callbackUrl=https%3A%2F%2Fevil.example%2Fphish";
-    render(<SignupPage />);
-
-    fireEvent.click(
-      await screen.findByRole("button", { name: /Continue with Google/i }),
-    );
-
-    await vi.waitFor(() => {
-      expect(signIn.social).toHaveBeenCalledWith({
-        provider: "google",
-        callbackURL: "http://localhost:3015/",
-      });
-      expect(assignMock).toHaveBeenCalledWith(
-        "https://accounts.google.com/o/oauth2/v2/auth?signup=1",
-      );
-    });
-  });
-
-  it("matches Linear's focused signup email step", () => {
-    const { container } = render(<SignupPage />);
-
-    fireEvent.click(screen.getByText("Continue with email"));
-
-    expect(screen.getByText("What’s your email address?")).toBeDefined();
-    expect(
-      screen.getByPlaceholderText("Enter your email address…"),
-    ).toBeDefined();
-    expect(
-      screen.getByRole("button", { name: "Continue with email" }),
-    ).toBeDefined();
-    expect(screen.getByText("Back to signup")).toBeDefined();
-    expect(screen.queryByText("Already have an account?")).toBeNull();
-    expect(screen.queryByText("Terms of Service")).toBeNull();
-    expect(
-      container.querySelector('input[name="cf-turnstile-response"]'),
-    ).toBeDefined();
-  });
-
-  it("matches Linear's focused signup SAML step", async () => {
-    render(<SignupPage />);
-
-    fireEvent.click(
-      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
-    );
-
-    expect(screen.getByText("What’s your email address?")).toBeDefined();
-    expect(
-      screen.getByPlaceholderText("Enter your email address…"),
-    ).toBeDefined();
-    expect(
-      screen.getByRole("button", { name: "Continue with SAML" }),
-    ).toBeDefined();
-    expect(screen.getByText("Back to signup")).toBeDefined();
-    expect(screen.queryByText("Already have an account?")).toBeNull();
-    expect(screen.queryByText("Terms of Service")).toBeNull();
-
-    fireEvent.click(screen.getByText("Back to signup"));
-    expect(
-      await screen.findByRole("button", { name: /Continue with Google/i }),
-    ).toBeDefined();
-    expect(
-      screen.getByRole("button", { name: /Continue with email/i }),
-    ).toBeDefined();
-    expect(
-      screen.getByRole("button", { name: /Continue with SAML SSO/i }),
-    ).toBeDefined();
-    expect(
-      screen.queryByRole("button", { name: /Log in with passkey/i }),
-    ).toBeNull();
   });
 });

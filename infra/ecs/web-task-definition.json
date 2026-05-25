@@ -50,10 +50,6 @@
         {
           "name": "EXPONENTIAL_HEADLESS_DIRECT_API_REWRITE",
           "value": "true"
-        },
-        {
-          "name": "EXPONENTIAL_HEADLESS_AUTH_PROVIDERS",
-          "value": "true"
         }
       ],
       "secrets": [
