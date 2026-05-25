@@ -477,12 +477,13 @@ function FooterLinks({ mode }: { mode: AuthMode }) {
   }
   return (
     <p className="mt-6 text-[12px] text-[var(--auth-muted)]">
-      {"// new here? "}
+      <span className="sr-only">Don’t have an account? </span>
+      <span aria-hidden="true">{"// new here? "}</span>
       <Link
         href="/signup"
         className="text-[var(--auth-link)] underline-offset-4 hover:underline"
       >
-        sign up
+        Sign up
       </Link>
       {" · "}
       <Link
