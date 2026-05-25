@@ -29,12 +29,31 @@ require_env() {
 for name in \
   ECS_EXECUTION_ROLE_ARN ECS_TASK_ROLE_ARN DATABASE_URL_SECRET_ARN REDIS_URL_SECRET_ARN \
   GOOGLE_CLIENT_ID_SECRET_ARN GOOGLE_CLIENT_SECRET_SECRET_ARN PUBLIC_BASE_URL \
-  PRIV_SUBNET_A PRIV_SUBNET_B APP_SG API_TG_ARN WEB_TG_ARN; do
+  PRIV_SUBNET_A PRIV_SUBNET_B APP_SG ALB_SG API_TG_ARN WEB_TG_ARN; do
   require_env "$name"
 done
 
 export AWS_ACCOUNT_ID REGION AWS_REGION="$REGION" IMAGE_TAG
 export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+
+ensure_app_ingress() {
+  local port="$1"
+  local source_group="$2"
+
+  aws ec2 authorize-security-group-ingress \
+    --group-id "$APP_SG" \
+    --protocol tcp \
+    --port "$port" \
+    --source-group "$source_group" \
+    --region "$REGION" >/dev/null 2>&1 || true
+}
+
+# Keep deploy idempotent after service port changes. Existing environments may
+# have been provisioned with the old monolith/API ports, so do not assume a
+# fresh preflight has already opened the split-service API port.
+ensure_app_ingress 3000 "$ALB_SG"
+ensure_app_ingress 7016 "$ALB_SG"
+ensure_app_ingress 7016 "$APP_SG"
 
 aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
