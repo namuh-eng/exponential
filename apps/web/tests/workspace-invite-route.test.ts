@@ -138,7 +138,7 @@ describe("workspace invite route", () => {
   });
 
   it("uses configured app URL override for invitation links", async () => {
-    vi.stubEnv("BETTER_AUTH_URL", "https://whetline.example");
+    vi.stubEnv("EXPONENTIAL_APP_URL", "https://whetline.example");
     const { POST } = await import("legacy-api/workspaces/invite/route");
 
     const response = await POST(

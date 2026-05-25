@@ -12,8 +12,8 @@ describe("app URL helpers", () => {
     expect(getConfiguredAppUrl()).toBe("http://localhost:7015");
   });
 
-  it("uses explicit BETTER_AUTH_URL before public app URL", async () => {
-    vi.stubEnv("BETTER_AUTH_URL", "https://auth.example");
+  it("uses explicit app URL before public app URL", async () => {
+    vi.stubEnv("EXPONENTIAL_APP_URL", "https://auth.example");
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://public.example");
     const { getConfiguredAppUrl } = await import("@/lib/app-url");
 

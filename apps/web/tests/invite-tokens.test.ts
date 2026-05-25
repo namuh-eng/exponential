@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 describe("invite tokens", () => {
   beforeEach(() => {
     vi.useRealTimers();
-    vi.stubEnv("BETTER_AUTH_SECRET", "invite-secret");
+    vi.stubEnv("EXPONENTIAL_INVITE_TOKEN_SECRET", "invite-secret");
   });
 
   it("creates and verifies an invite token", async () => {

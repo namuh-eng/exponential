@@ -263,7 +263,7 @@ func randomState() (string, error) {
 }
 
 func configuredAppURL() string {
-	if v := strings.TrimSpace(os.Getenv("BETTER_AUTH_URL")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("EXPONENTIAL_APP_URL")); v != "" {
 		return v
 	}
 	if v := strings.TrimSpace(os.Getenv("NEXT_PUBLIC_APP_URL")); v != "" {

@@ -2,7 +2,7 @@ const DEV_APP_URL = "http://localhost:7015";
 
 export function getConfiguredAppUrl() {
   return (
-    process.env.BETTER_AUTH_URL ??
+    process.env.EXPONENTIAL_APP_URL ??
     process.env.NEXT_PUBLIC_APP_URL ??
     DEV_APP_URL
   );
@@ -10,7 +10,7 @@ export function getConfiguredAppUrl() {
 
 export function getRequestAppUrl(request: Request) {
   return (
-    process.env.BETTER_AUTH_URL ??
+    process.env.EXPONENTIAL_APP_URL ??
     process.env.NEXT_PUBLIC_APP_URL ??
     new URL(request.url).origin
   );
