@@ -118,7 +118,13 @@ ensure_service() {
   local container_port="$5"
 
   if aws ecs describe-services --cluster "$CLUSTER" --services "$service" --region "$REGION" --query 'services[0].status' --output text 2>/dev/null | grep -q ACTIVE; then
-    aws ecs update-service --cluster "$CLUSTER" --service "$service" --task-definition "$task_arn" --desired-count "$DESIRED_COUNT" --region "$REGION" >/dev/null
+    aws ecs update-service \
+      --cluster "$CLUSTER" \
+      --service "$service" \
+      --task-definition "$task_arn" \
+      --desired-count "$DESIRED_COUNT" \
+      --load-balancers "targetGroupArn=$target_group_arn,containerName=$container_name,containerPort=$container_port" \
+      --region "$REGION" >/dev/null
   else
     aws ecs create-service \
       --cluster "$CLUSTER" \
