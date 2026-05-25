@@ -148,7 +148,7 @@ services:
     command: sh -c "corepack enable && pnpm install --frozen-lockfile=false && cd apps/web && node scripts/check-dev-db.mjs && pnpm exec next dev --webpack --hostname 0.0.0.0"
     environment:
       NODE_ENV: development
-      NODE_OPTIONS: "--max-old-space-size=8192"
+      NODE_OPTIONS: "--max-old-space-size=4096"
       PLAYWRIGHT_TEST: "true"
       PORT: 3015
       SKIP_DB_PREFLIGHT: "true"

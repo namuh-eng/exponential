@@ -8,7 +8,7 @@ const workers = Number(process.env.PLAYWRIGHT_WORKERS ?? "1");
 process.env.PLAYWRIGHT_TEST ??= "true";
 process.env.DB_PORT ??= "15532";
 process.env.REDIS_URL ??= "redis://localhost:16379";
-process.env.NODE_OPTIONS ??= "--max-old-space-size=8192";
+process.env.NODE_OPTIONS ??= "--max-old-space-size=4096";
 
 export default defineConfig({
   testDir: "./tests/e2e",
