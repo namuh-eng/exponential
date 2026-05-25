@@ -29,7 +29,7 @@ async function readBody(request: Request) {
 export async function POST(request: Request) {
   if (headlessAuthProvidersEnabled()) {
     const upstream = await fetch(
-      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1"}/oauth/token`,
+      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:7016/v1"}/oauth/token`,
       {
         method: "POST",
         headers: {

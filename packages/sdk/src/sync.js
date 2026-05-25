@@ -1,5 +1,5 @@
 export function syncWebSocketUrl(input) {
-  const base = new URL(input.baseUrl ?? "http://localhost:3016/v1");
+  const base = new URL(input.baseUrl ?? "http://localhost:7016/v1");
   base.protocol = base.protocol === "https:" ? "wss:" : "ws:";
   base.pathname = `${base.pathname.replace(/\/$/, "")}/sync/ws`;
   base.searchParams.set("version", String(input.version ?? 0));

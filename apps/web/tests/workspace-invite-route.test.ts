@@ -118,7 +118,7 @@ describe("workspace invite route", () => {
     const { POST } = await import("legacy-api/workspaces/invite/route");
 
     const response = await POST(
-      new Request("http://localhost:3015/api/workspaces/invite", {
+      new Request("http://localhost:7015/api/workspaces/invite", {
         method: "POST",
         body: JSON.stringify({
           invites: [{ email: "new@test.com", role: "member" }],
@@ -133,7 +133,7 @@ describe("workspace invite route", () => {
       "new@test.com",
       "Namuh",
       "Ashley",
-      "http://localhost:3015/accept-invite?token=token-123",
+      "http://localhost:7015/accept-invite?token=token-123",
     );
   });
 
@@ -142,7 +142,7 @@ describe("workspace invite route", () => {
     const { POST } = await import("legacy-api/workspaces/invite/route");
 
     const response = await POST(
-      new Request("http://localhost:3015/api/workspaces/invite", {
+      new Request("http://localhost:7015/api/workspaces/invite", {
         method: "POST",
         body: JSON.stringify({
           invites: [{ email: "new@test.com", role: "member" }],

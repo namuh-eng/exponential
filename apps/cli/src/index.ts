@@ -1043,7 +1043,7 @@ function readJSONOption(args: string[], name: string) {
 
 function usage(): never {
   console.error(`Usage:
-  exponential login --token pat_<token> [--api-url http://localhost:3016/v1]
+  exponential login --token pat_<token> [--api-url http://localhost:7016/v1]
   exponential issues list [--team-id <uuid>] [--cursor <cursor>] [--limit <n>]
   exponential issues search --query <text> [--workspace-id <uuid>]
   exponential issues get --id <id-or-identifier>

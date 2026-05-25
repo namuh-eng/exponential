@@ -61,8 +61,8 @@ services:
     image: oryd/kratos:v1.3.1
     environment:
       DSN: postgres://postgres:${DB_PASSWORD:-password}@postgres:5432/kratos?sslmode=disable
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-dev-google-client-id}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-dev-google-client-secret}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-${AUTH_GOOGLE_ID:-dev-google-client-id}}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-${AUTH_GOOGLE_SECRET:-dev-google-client-secret}}
     depends_on:
       kratos-db:
         condition: service_completed_successfully
@@ -74,8 +74,8 @@ services:
     image: oryd/kratos:v1.3.1
     environment:
       DSN: postgres://postgres:${DB_PASSWORD:-password}@postgres:5432/kratos?sslmode=disable
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-dev-google-client-id}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-dev-google-client-secret}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-${AUTH_GOOGLE_ID:-dev-google-client-id}}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-${AUTH_GOOGLE_SECRET:-dev-google-client-secret}}
     depends_on:
       kratos-migrate:
         condition: service_completed_successfully
@@ -120,7 +120,7 @@ services:
       context: .
       dockerfile: infra/docker/api.Dockerfile
     environment:
-      EXPONENTIAL_API_ADDR: ":3016"
+      EXPONENTIAL_API_ADDR: ":7016"
       EXPONENTIAL_API_DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/exponential?sslmode=disable
       EXPONENTIAL_API_REDIS_URL: redis://redis:6379
       EXPONENTIAL_API_KRATOS_URL: http://kratos:4433
@@ -129,7 +129,7 @@ services:
       EXPONENTIAL_API_OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       PLAYWRIGHT_TEST: "true"
     ports:
-      - "3016:3016"
+      - "${API_PORT:-7016}:7016"
     depends_on:
       postgres:
         condition: service_healthy
@@ -152,13 +152,14 @@ services:
     environment:
       NODE_ENV: development
       NODE_OPTIONS: "--max-old-space-size=4096"
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
       PLAYWRIGHT_TEST: "true"
-      PORT: 3015
+      PORT: 7015
       SKIP_DB_PREFLIGHT: "true"
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/exponential?sslmode=disable
       REDIS_URL: redis://redis:6379
-      NEXT_PUBLIC_APP_URL: http://localhost:3015
-      EXPONENTIAL_API_URL: http://api:3016/v1
+      NEXT_PUBLIC_APP_URL: http://localhost:7015
+      EXPONENTIAL_API_URL: http://api:7016/v1
       EXPONENTIAL_HEADLESS_DIRECT_API_REWRITE: "true"
       EXPONENTIAL_KRATOS_PUBLIC_URL: http://kratos:4433
       EXPONENTIAL_HEADLESS_ISSUES: "true"
@@ -191,7 +192,7 @@ services:
       EXPONENTIAL_HEADLESS_INBOUND: "true"
       EXPONENTIAL_HEADLESS_INITIATIVES: "true"
     ports:
-      - "3015:3015"
+      - "${WEB_PORT:-7015}:7015"
     volumes:
       - .:/workspace
       - pnpm_store:/root/.local/share/pnpm/store

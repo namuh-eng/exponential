@@ -54,7 +54,7 @@ type TestSecurity = {
 function defaultSecurity(): TestSecurity {
   return {
     inviteLinkEnabled: true,
-    inviteUrl: "http://localhost:3015/accept-invite?token=invite-token",
+    inviteUrl: "http://localhost:7015/accept-invite?token=invite-token",
     approvedEmailDomains: [] as string[],
     authentication: {
       google: true,

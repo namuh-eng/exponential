@@ -14,8 +14,8 @@ Design references:
    - `ever snapshot`
    - Navigate each surface below, then capture focused screenshots or snapshots that show the changed region.
 2. If Ever CLI is blocked, record the exact blocker in the PR and use focused Playwright fallback:
-   - `PLAYWRIGHT_BASE_URL=http://localhost:3015 npx playwright test tests/e2e/editorial-theme.spec.ts --project=chromium`
-   - Or let Playwright start the app on an alternate port: `PLAYWRIGHT_PORT=3015 npx playwright test tests/e2e/editorial-theme.spec.ts --project=chromium`
+   - `PLAYWRIGHT_BASE_URL=http://localhost:7015 npx playwright test tests/e2e/editorial-theme.spec.ts --project=chromium`
+   - Or let Playwright start the app on an alternate port: `PLAYWRIGHT_PORT=7015 npx playwright test tests/e2e/editorial-theme.spec.ts --project=chromium`
 3. Attach before/after evidence for the surfaces affected by the PR. Keep screenshots focused enough to inspect spacing, typography, borders, elevation, hover/active state, and empty/error copy.
 
 ## Acceptance checklist

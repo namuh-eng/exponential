@@ -182,7 +182,7 @@ describe("API settings page", () => {
       target: { value: "Partner portal" },
     });
     fireEvent.change(screen.getByLabelText("Redirect URL"), {
-      target: { value: "http://localhost:3015/oauth/callback" },
+      target: { value: "http://localhost:7015/oauth/callback" },
     });
     fireEvent.click(
       screen.getByRole("button", { name: "Create OAuth application" }),

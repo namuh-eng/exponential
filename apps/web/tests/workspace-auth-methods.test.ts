@@ -47,7 +47,7 @@ describeDb("workspace-scoped auth method enforcement", () => {
   it("hides disabled methods in provider capabilities for workspace callbacks", async () => {
     const response = await capabilitiesGET(
       new Request(
-        `http://localhost:3015/api/auth/provider-capabilities?callbackUrl=/${WORKSPACE_SLUG}/inbox`,
+        `http://localhost:7015/api/auth/provider-capabilities?callbackUrl=/${WORKSPACE_SLUG}/inbox`,
       ),
     );
     const data = await response.json();
@@ -61,12 +61,12 @@ describeDb("workspace-scoped auth method enforcement", () => {
 
   it("rejects direct Google and magic-link auth calls for disabled workspace callbacks", async () => {
     const googleResponse = await authPOST(
-      new Request("http://localhost:3015/api/auth/sign-in/social", {
+      new Request("http://localhost:7015/api/auth/sign-in/social", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           provider: "google",
-          callbackURL: `http://localhost:3015/${WORKSPACE_SLUG}/inbox`,
+          callbackURL: `http://localhost:7015/${WORKSPACE_SLUG}/inbox`,
         }),
       }),
     );
@@ -76,12 +76,12 @@ describeDb("workspace-scoped auth method enforcement", () => {
     });
 
     const magicLinkResponse = await authPOST(
-      new Request("http://localhost:3015/api/auth/sign-in/magic-link", {
+      new Request("http://localhost:7015/api/auth/sign-in/magic-link", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           email: EMAIL,
-          callbackURL: `http://localhost:3015/${WORKSPACE_SLUG}/inbox`,
+          callbackURL: `http://localhost:7015/${WORKSPACE_SLUG}/inbox`,
         }),
       }),
     );

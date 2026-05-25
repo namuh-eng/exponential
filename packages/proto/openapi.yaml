@@ -4,7 +4,7 @@ info:
   version: 0.1.0
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 servers:
-  - url: http://localhost:3016/v1
+  - url: http://localhost:7016/v1
 security:
   - bearerAuth: []
 paths:

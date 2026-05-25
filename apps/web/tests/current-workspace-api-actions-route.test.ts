@@ -223,7 +223,7 @@ describe("current workspace api actions route", () => {
     ],
     [
       "localhost callback",
-      "https://localhost:3015/oauth/callback",
+      "https://localhost:7015/oauth/callback",
       "Redirect URL must not use localhost, loopback, private, or link-local hosts.",
     ],
     [

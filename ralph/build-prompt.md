@@ -127,7 +127,7 @@ Auth is **P1 priority** — build it before core product features.
 ### Environment variables to add to `.env.example`
 ```
 BETTER_AUTH_SECRET=       # generate with: openssl rand -base64 32
-BETTER_AUTH_URL=          # e.g. http://localhost:3015
+BETTER_AUTH_URL=          # e.g. http://localhost:7015
 AUTH_GOOGLE_ID=           # if target uses Google OAuth
 AUTH_GOOGLE_SECRET=
 AUTH_GITHUB_ID=           # if target uses GitHub OAuth

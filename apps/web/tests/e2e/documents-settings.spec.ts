@@ -84,7 +84,7 @@ test.describe("Documents settings", () => {
 
     const apiResponse = await page.request.get("/api/document-settings", {
       headers: {
-        referer: `http://localhost:3015/${workspaceSlug}/settings/documents`,
+        referer: `http://localhost:7015/${workspaceSlug}/settings/documents`,
       },
     });
     expect(apiResponse.status()).toBe(200);

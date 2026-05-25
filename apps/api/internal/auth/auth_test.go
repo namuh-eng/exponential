@@ -42,7 +42,7 @@ func TestRequestedWorkspaceID(t *testing.T) {
 
 func TestRequestedWorkspacePrefersRefererSlugOverActiveCookie(t *testing.T) {
 	req := httptest.NewRequest("GET", "/v1/issues", nil)
-	req.Header.Set("Referer", "http://localhost:3015/new-workspace/team/ENG/all")
+	req.Header.Set("Referer", "http://localhost:7015/new-workspace/team/ENG/all")
 	req.AddCookie(&http.Cookie{Name: "activeWorkspaceId", Value: "cookie-id"})
 	req.AddCookie(&http.Cookie{Name: "activeWorkspaceSlug", Value: "old-workspace"})
 

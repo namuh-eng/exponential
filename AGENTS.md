@@ -51,7 +51,7 @@ Test the SDK manually: import it, call the API, verify response.
 ## Environment
 - AWS CLI configured via `~/.aws/credentials` (works out of the box)
 - `.env` has credentials (DATABASE_URL, Cloudflare, etc.)
-- Dev server on port **3015**
+- Dev server on port **7015**
 
 ## Bug Fixing Rules
 - Fix bugs directly in source code

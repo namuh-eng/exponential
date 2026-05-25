@@ -182,7 +182,7 @@ test.describe("Project status settings", () => {
     const projectName = `Apply status ${suffix}`;
     const projectResponse = await page.request.post("/api/projects", {
       data: { name: projectName, description: "Custom status target" },
-      headers: { referer: `http://localhost:3015/${workspaceSlug}/projects` },
+      headers: { referer: `http://localhost:7015/${workspaceSlug}/projects` },
     });
     expect(projectResponse.status()).toBe(201);
     const project = (await projectResponse.json()) as { slug: string };

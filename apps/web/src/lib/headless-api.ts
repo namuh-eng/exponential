@@ -127,7 +127,7 @@ export function headlessInitiativesEnabled() {
 
 export function createHeadlessClient(token: string) {
   return createExponentialClient({
-    baseUrl: process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1",
+    baseUrl: process.env.EXPONENTIAL_API_URL ?? "http://localhost:7016/v1",
     token,
   });
 }

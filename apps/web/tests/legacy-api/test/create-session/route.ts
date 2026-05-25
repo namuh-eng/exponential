@@ -62,7 +62,7 @@ export async function POST(request: Request) {
 
   if (headlessAuthProvidersEnabled()) {
     const upstream = await fetch(
-      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1"}/test/create-session`,
+      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:7016/v1"}/test/create-session`,
       {
         method: "POST",
         headers: {

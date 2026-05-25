@@ -5,7 +5,7 @@ async function deleteExistingProjectUpdateConfigurations(
 ) {
   const response = await page.request.get("/api/project-updates", {
     headers: {
-      referer: "http://localhost:3015/foreverbrowsing/settings/project-updates",
+      referer: "http://localhost:7015/foreverbrowsing/settings/project-updates",
     },
   });
   expect(response.status()).toBe(200);
@@ -19,7 +19,7 @@ async function deleteExistingProjectUpdateConfigurations(
       {
         headers: {
           referer:
-            "http://localhost:3015/foreverbrowsing/settings/project-updates",
+            "http://localhost:7015/foreverbrowsing/settings/project-updates",
         },
       },
     );

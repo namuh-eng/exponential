@@ -12,7 +12,7 @@ const SAML_URL = "https://idp.example.com/saml/start";
 
 function post(body: unknown) {
   return POST(
-    new Request("http://localhost:3015/api/auth/saml/discovery", {
+    new Request("http://localhost:7015/api/auth/saml/discovery", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -78,7 +78,7 @@ describeDb("SAML discovery API route", () => {
       email: "Person@Example.com",
       isDesktop: false,
       type: "login",
-      callbackURL: "http://localhost:3015/issues",
+      callbackURL: "http://localhost:7015/issues",
     });
 
     expect(response.status).toBe(200);

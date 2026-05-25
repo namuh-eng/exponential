@@ -19,7 +19,7 @@ Everything listed here is already installed and configured. Do NOT reinstall, re
 - `make all` — check + test
 - `make fix` — auto-fix lint/format issues
 - `make db-push` — push Drizzle schema to Postgres
-- `npm run dev` — dev server on port **3015**
+- `npm run dev` — dev server on port **7015**
 - `npm run build` — production build
 
 ## AWS Infrastructure (provision with scripts/preflight.sh)
@@ -54,4 +54,4 @@ scripts/           — Infrastructure and deploy scripts
 ```
 
 ## Port
-Dev server runs on **3015**. Do not change this.
+Dev server runs on **7015**. Do not change this.

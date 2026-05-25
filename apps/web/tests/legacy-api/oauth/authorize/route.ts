@@ -70,7 +70,7 @@ export async function GET(request: Request) {
       workspaceId,
     });
     const upstream = await fetch(
-      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1"}/oauth/authorize?${url.searchParams.toString()}`,
+      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:7016/v1"}/oauth/authorize?${url.searchParams.toString()}`,
       {
         headers: { Authorization: `Bearer ${token}` },
         redirect: "manual",

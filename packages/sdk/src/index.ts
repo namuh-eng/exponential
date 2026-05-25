@@ -17,7 +17,7 @@ export function createExponentialClient(options: {
     },
   };
   const client = createClient<paths>({
-    baseUrl: options.baseUrl ?? "http://localhost:3016/v1",
+    baseUrl: options.baseUrl ?? "http://localhost:7016/v1",
     fetch: options.fetch,
   });
   client.use(auth);

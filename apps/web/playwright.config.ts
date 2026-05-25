@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 const authFile = "tests/e2e/.auth/user.json";
-const port = Number(process.env.PLAYWRIGHT_PORT ?? process.env.PORT ?? "3015");
+const port = Number(process.env.PLAYWRIGHT_PORT ?? process.env.PORT ?? "7015");
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${port}`;
 const workers = Number(process.env.PLAYWRIGHT_WORKERS ?? "1");
 

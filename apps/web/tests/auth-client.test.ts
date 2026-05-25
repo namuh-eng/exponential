@@ -6,7 +6,7 @@ const assignMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
 vi.stubGlobal("location", {
   ...window.location,
-  origin: "http://localhost:3015",
+  origin: "http://localhost:7015",
   assign: assignMock,
 });
 
@@ -23,7 +23,7 @@ function mockKratosFlow() {
     })
     .mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ redirect_browser_to: "http://localhost:3015/" }),
+      json: async () => ({ redirect_browser_to: "http://localhost:7015/" }),
     });
 }
 
@@ -47,13 +47,13 @@ describe("headless auth client", () => {
 
     const result = await signIn.social({
       provider: "google",
-      callbackURL: "http://localhost:3015/team/ABC",
+      callbackURL: "http://localhost:7015/team/ABC",
     });
 
-    expect(result?.data?.url).toBe("http://localhost:3015/");
+    expect(result?.data?.url).toBe("http://localhost:7015/");
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      "/api/auth/kratos/self-service/login/browser?return_to=http%3A%2F%2Flocalhost%3A3015%2Fteam%2FABC",
+      "/api/auth/kratos/self-service/login/browser?return_to=http%3A%2F%2Flocalhost%3A7015%2Fteam%2FABC",
       expect.objectContaining({ credentials: "include" }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -76,7 +76,7 @@ describe("headless auth client", () => {
 
     await signIn.magicLink({
       email: "person@example.com",
-      callbackURL: "http://localhost:3015/",
+      callbackURL: "http://localhost:7015/",
     });
 
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -97,7 +97,7 @@ describe("headless auth client", () => {
     const { signInWithPasskey } = await import("@/lib/auth-client");
 
     await expect(
-      signInWithPasskey({ callbackURL: "http://localhost:3015/" }),
+      signInWithPasskey({ callbackURL: "http://localhost:7015/" }),
     ).rejects.toMatchObject({ code: "BROWSER_UNSUPPORTED" });
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -115,7 +115,7 @@ describe("headless auth client", () => {
     const { signInWithPasskey } = await import("@/lib/auth-client");
 
     await expect(
-      signInWithPasskey({ callbackURL: "http://localhost:3015/" }),
+      signInWithPasskey({ callbackURL: "http://localhost:7015/" }),
     ).rejects.toMatchObject({ code: "NOT_CONFIGURED" });
   });
 });

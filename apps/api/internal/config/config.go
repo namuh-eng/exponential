@@ -19,7 +19,7 @@ func Load() Config {
 	v.SetEnvPrefix("EXPONENTIAL_API")
 	v.AutomaticEnv()
 
-	v.SetDefault("ADDR", ":3016")
+	v.SetDefault("ADDR", ":7016")
 	v.SetDefault("DATABASE_URL", "postgresql://postgres:password@localhost:5432/exponential?sslmode=disable")
 	v.SetDefault("REDIS_URL", "redis://localhost:6379")
 	v.SetDefault("KRATOS_URL", "http://localhost:4433")

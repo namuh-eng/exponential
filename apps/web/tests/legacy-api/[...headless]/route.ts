@@ -12,7 +12,7 @@ function headlessProxyEnabled() {
 
 function apiBaseUrl() {
   return (
-    process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1"
+    process.env.EXPONENTIAL_API_URL ?? "http://localhost:7016/v1"
   ).replace(/\/$/, "");
 }
 

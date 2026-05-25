@@ -38,7 +38,7 @@ test.describe("Settings API OAuth applications", () => {
     await expect(page.getByText("Redirect URL is required.")).toBeVisible();
     await expect(page.getByText("OAuth application created.")).toHaveCount(0);
 
-    await redirectInput.fill("https://localhost:3015/oauth/callback");
+    await redirectInput.fill("https://localhost:7015/oauth/callback");
     await page
       .getByRole("button", { name: "Create OAuth application" })
       .click();
@@ -82,7 +82,7 @@ test.describe("Settings API OAuth applications", () => {
         data: {
           action: "createWebhook",
           label: `Bad webhook ${suffix}`,
-          url: "http://localhost:3015/hook",
+          url: "http://localhost:7015/hook",
           events: ["created"],
         },
       },

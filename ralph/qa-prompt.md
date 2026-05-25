@@ -56,7 +56,7 @@ If Google OAuth is too complex for Playwright (it involves third-party redirects
 
 ### Step 2: Authenticate Before Testing
 5. Start dev server if not running (`npm run dev`).
-6. Open clone in Ever CLI: `ever start --url http://localhost:3015` (reuse existing session if running).
+6. Open clone in Ever CLI: `ever start --url http://localhost:7015` (reuse existing session if running).
 7. **Check if you're logged in** — navigate to any app page. If redirected to `/login`, authenticate first:
    - Read `TEST_ACCOUNT_EMAIL` from `.env` for the Google account to use. If not set, check `ralph-config.json` for `testAccount.provider`.
    - **Always use Google OAuth** (click "Continue with Google" and select the test account email) unless you are SPECIFICALLY testing email/magic-link auth (e.g. `auth-002`).

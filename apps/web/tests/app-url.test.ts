@@ -9,7 +9,7 @@ describe("app URL helpers", () => {
   it("defaults server-side canonical app URL to the dev app port", async () => {
     const { getConfiguredAppUrl } = await import("@/lib/app-url");
 
-    expect(getConfiguredAppUrl()).toBe("http://localhost:3015");
+    expect(getConfiguredAppUrl()).toBe("http://localhost:7015");
   });
 
   it("uses explicit BETTER_AUTH_URL before public app URL", async () => {
@@ -25,9 +25,9 @@ describe("app URL helpers", () => {
 
     expect(
       getRequestAppUrl(
-        new Request("http://localhost:3015/api/workspaces/invite"),
+        new Request("http://localhost:7015/api/workspaces/invite"),
       ),
-    ).toBe("http://localhost:3015");
+    ).toBe("http://localhost:7015");
   });
 
   it("uses explicit app URL override for per-request URLs", async () => {
@@ -36,7 +36,7 @@ describe("app URL helpers", () => {
 
     expect(
       getRequestAppUrl(
-        new Request("http://localhost:3015/api/workspaces/invite"),
+        new Request("http://localhost:7015/api/workspaces/invite"),
       ),
     ).toBe("https://staging.example");
   });

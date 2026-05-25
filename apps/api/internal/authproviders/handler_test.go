@@ -3,11 +3,11 @@ package authproviders
 import "testing"
 
 func TestWorkspaceSlugFromCallbackURL(t *testing.T) {
-	got := workspaceSlugFromCallbackURL("/foreverbrowsing/settings/security", "http://localhost:3015")
+	got := workspaceSlugFromCallbackURL("/foreverbrowsing/settings/security", "http://localhost:7015")
 	if got != "foreverbrowsing" {
 		t.Fatalf("slug = %q", got)
 	}
-	if got := workspaceSlugFromCallbackURL("https://evil.example/foreverbrowsing/inbox", "http://localhost:3015"); got != "" {
+	if got := workspaceSlugFromCallbackURL("https://evil.example/foreverbrowsing/inbox", "http://localhost:7015"); got != "" {
 		t.Fatalf("cross-origin slug = %q", got)
 	}
 }

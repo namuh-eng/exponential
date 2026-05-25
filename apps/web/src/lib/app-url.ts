@@ -1,4 +1,4 @@
-const DEV_APP_URL = "http://localhost:3015";
+const DEV_APP_URL = "http://localhost:7015";
 
 export function getConfiguredAppUrl() {
   return (

@@ -373,7 +373,7 @@ describe("workspace members route", () => {
     const { PATCH } = await import("legacy-api/workspaces/members/route");
 
     const response = await PATCH(
-      new Request("http://localhost:3015/api/workspaces/members", {
+      new Request("http://localhost:7015/api/workspaces/members", {
         method: "PATCH",
         body: JSON.stringify({
           kind: "invitation",
@@ -393,7 +393,7 @@ describe("workspace members route", () => {
       "pending@test.com",
       "Namuh",
       "Ashley",
-      "http://localhost:3015/accept-invite?token=token-456",
+      "http://localhost:7015/accept-invite?token=token-456",
     );
     expect(updateSetMock).toHaveBeenCalledWith(
       expect.objectContaining({ token: "token-456" }),

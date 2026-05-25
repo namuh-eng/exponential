@@ -24,7 +24,7 @@ const assignMock = vi.fn();
 const mockLocation = {
   ...window.location,
   assign: assignMock,
-  href: "http://localhost:3015/foreverbrowsing/settings/account/connections",
+  href: "http://localhost:7015/foreverbrowsing/settings/account/connections",
   pathname: "/foreverbrowsing/settings/account/connections",
   search: "",
 };
@@ -68,7 +68,7 @@ describe("ConnectedAccountsPage component", () => {
   beforeEach(() => {
     vi.stubGlobal("location", mockLocation);
     mockLocation.href =
-      "http://localhost:3015/foreverbrowsing/settings/account/connections";
+      "http://localhost:7015/foreverbrowsing/settings/account/connections";
     mockLocation.pathname = "/foreverbrowsing/settings/account/connections";
     mockLocation.search = "";
   });
@@ -146,9 +146,9 @@ describe("ConnectedAccountsPage component", () => {
       expect(linkSocialAccount).toHaveBeenCalledWith({
         provider: "github",
         callbackURL:
-          "http://localhost:3015/foreverbrowsing/settings/account/connections?connection=linked",
+          "http://localhost:7015/foreverbrowsing/settings/account/connections?connection=linked",
         errorCallbackURL:
-          "http://localhost:3015/foreverbrowsing/settings/account/connections",
+          "http://localhost:7015/foreverbrowsing/settings/account/connections",
       });
       expect(assignMock).toHaveBeenCalledWith(
         "https://github.com/login/oauth/authorize?client_id=test",
@@ -224,7 +224,7 @@ describe("ConnectedAccountsPage component", () => {
   it("surfaces cancelled and failed OAuth callback states from the URL", async () => {
     mockLocation.search = "?error=access_denied";
     mockLocation.href =
-      "http://localhost:3015/foreverbrowsing/settings/account/connections?error=access_denied";
+      "http://localhost:7015/foreverbrowsing/settings/account/connections?error=access_denied";
     mockFetch({ capabilities: { github: { configured: true } } });
 
     render(<ConnectedAccountsPage />);

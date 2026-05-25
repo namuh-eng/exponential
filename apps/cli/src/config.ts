@@ -48,7 +48,7 @@ export function resolveBaseUrl(env: NodeJS.ProcessEnv = process.env) {
   return (
     env.EXPONENTIAL_API_URL ??
     readConfig(env).baseUrl ??
-    "http://localhost:3016/v1"
+    "http://localhost:7016/v1"
   );
 }
 

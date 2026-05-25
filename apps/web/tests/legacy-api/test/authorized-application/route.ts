@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       workspaceId: activeWorkspaceId,
     });
     const upstream = await fetch(
-      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1"}/test/authorized-application`,
+      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:7016/v1"}/test/authorized-application`,
       {
         method: "POST",
         headers: {
@@ -134,7 +134,7 @@ export async function DELETE() {
       workspaceId: activeWorkspaceId,
     });
     const upstream = await fetch(
-      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1"}/test/authorized-application`,
+      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:7016/v1"}/test/authorized-application`,
       { method: "DELETE", headers: { authorization: `Bearer ${token}` } },
     );
     const data = await upstream.json();

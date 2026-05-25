@@ -54,7 +54,7 @@ fi
 
 # Start browser agent session for QA
 if [ "$BROWSER_AGENT" = "ever" ]; then
-  ever start --url http://localhost:3015
+  ever start --url http://localhost:7015
   echo "Ever CLI session started for QA."
 fi
 echo ""

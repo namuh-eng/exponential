@@ -269,7 +269,7 @@ func configuredAppURL() string {
 	if v := strings.TrimSpace(os.Getenv("NEXT_PUBLIC_APP_URL")); v != "" {
 		return v
 	}
-	return "http://localhost:3015"
+	return "http://localhost:7015"
 }
 
 func slackAuthorizationURL(clientID, appURL, state string) string {

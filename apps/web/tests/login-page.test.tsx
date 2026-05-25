@@ -12,7 +12,7 @@ const fetchMock = vi.fn();
 const mockLocation = {
   ...window.location,
   assign: assignMock,
-  origin: "http://localhost:3015",
+  origin: "http://localhost:7015",
   pathname: "/login",
   search: "",
 };
@@ -44,7 +44,7 @@ function kratosFlow(
   };
 }
 
-function kratosSuccess(redirect = "http://localhost:3015/team/ABC") {
+function kratosSuccess(redirect = "http://localhost:7015/team/ABC") {
   return { ok: true, json: async () => ({ redirect_browser_to: redirect }) };
 }
 
@@ -94,7 +94,7 @@ describe("Login page", () => {
     fetchMock
       .mockResolvedValueOnce(providerCapabilities())
       .mockResolvedValueOnce(kratosFlow())
-      .mockResolvedValueOnce(kratosSuccess("http://localhost:3015/team/ABC"));
+      .mockResolvedValueOnce(kratosSuccess("http://localhost:7015/team/ABC"));
 
     render(<LoginPage />);
     fireEvent.click(
@@ -104,7 +104,7 @@ describe("Login page", () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenNthCalledWith(
         2,
-        "/api/auth/kratos/self-service/login/browser?return_to=http%3A%2F%2Flocalhost%3A3015%2Fteam%2FABC",
+        "/api/auth/kratos/self-service/login/browser?return_to=http%3A%2F%2Flocalhost%3A7015%2Fteam%2FABC",
         expect.objectContaining({ credentials: "include" }),
       );
       expect(fetchMock).toHaveBeenNthCalledWith(
@@ -127,7 +127,7 @@ describe("Login page", () => {
     fetchMock
       .mockResolvedValueOnce(providerCapabilities())
       .mockResolvedValueOnce(kratosFlow())
-      .mockResolvedValueOnce(kratosSuccess("http://localhost:3015/"));
+      .mockResolvedValueOnce(kratosSuccess("http://localhost:7015/"));
 
     render(<LoginPage />);
     fireEvent.change(screen.getByPlaceholderText("Email address"), {
@@ -160,7 +160,7 @@ describe("Login page", () => {
     fetchMock
       .mockResolvedValueOnce(providerCapabilities())
       .mockResolvedValueOnce(kratosFlow())
-      .mockResolvedValueOnce(kratosSuccess("http://localhost:3015/"));
+      .mockResolvedValueOnce(kratosSuccess("http://localhost:7015/"));
 
     render(<LoginPage />);
     fireEvent.change(screen.getByPlaceholderText("Email address"), {
@@ -247,7 +247,7 @@ describe("Signup page", () => {
       .mockResolvedValueOnce(
         kratosFlow("http://localhost:4433/self-service/registration?flow=abc"),
       )
-      .mockResolvedValueOnce(kratosSuccess("http://localhost:3015/"));
+      .mockResolvedValueOnce(kratosSuccess("http://localhost:7015/"));
 
     render(<SignupPage />);
     fireEvent.change(screen.getByPlaceholderText("Your name"), {
@@ -266,7 +266,7 @@ describe("Signup page", () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenNthCalledWith(
         2,
-        "/api/auth/kratos/self-service/registration/browser?return_to=http%3A%2F%2Flocalhost%3A3015%2F",
+        "/api/auth/kratos/self-service/registration/browser?return_to=http%3A%2F%2Flocalhost%3A7015%2F",
         expect.objectContaining({ credentials: "include" }),
       );
       expect(fetchMock).toHaveBeenNthCalledWith(

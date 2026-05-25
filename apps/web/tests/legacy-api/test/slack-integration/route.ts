@@ -34,7 +34,7 @@ export async function POST(request: Request) {
       workspaceId: access.workspaceId,
     });
     const upstream = await fetch(
-      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1"}/test/slack-integration`,
+      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:7016/v1"}/test/slack-integration`,
       { method: "POST", headers: { authorization: `Bearer ${token}` } },
     );
     const data = await upstream.json();
@@ -95,7 +95,7 @@ export async function DELETE(request: Request) {
       workspaceId: access.workspaceId,
     });
     const upstream = await fetch(
-      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:3016/v1"}/test/slack-integration`,
+      `${process.env.EXPONENTIAL_API_URL ?? "http://localhost:7016/v1"}/test/slack-integration`,
       { method: "DELETE", headers: { authorization: `Bearer ${token}` } },
     );
     const data = await upstream.json();

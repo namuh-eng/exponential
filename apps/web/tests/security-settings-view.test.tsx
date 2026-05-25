@@ -66,7 +66,7 @@ describe("SecurityPage component", () => {
       },
       scim: {
         enabled: false,
-        baseUrl: "http://localhost:3015/api/scim/workspace-1",
+        baseUrl: "http://localhost:7015/api/scim/workspace-1",
         tokens: [],
         lastSyncAt: null,
         status: "disabled",
