@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
+	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
 )
 
 type Handler struct{ DB *pgxpool.Pool }
@@ -384,10 +385,5 @@ func scanReactions(rows pgx.Rows, issueShape bool) ([]ReactionSummary, error) {
 }
 
 func insertOperation(ctx context.Context, tx pgx.Tx, workspaceID, entityType, entityID, opType string, payload any, createdBy string) error {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(ctx, `insert into operation (workspace_id, entity_type, entity_id, op_type, payload, version, created_by) values ($1::uuid,$2,$3,$4,$5::jsonb,nextval('operation_version_seq'),$6)`, workspaceID, entityType, entityID, opType, body, createdBy)
-	return err
+	return syncapi.InsertOperation(ctx, tx, workspaceID, entityType, entityID, opType, payload, createdBy)
 }

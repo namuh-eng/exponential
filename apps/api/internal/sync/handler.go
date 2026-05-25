@@ -51,6 +51,11 @@ func (h Handler) WebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = wsjsonWrite(r.Context(), conn, replayMessage{Type: "replay", Operations: ops})
 
+	subscription, _ := SubscribeOperations(r.Context(), principal.WorkspaceID)
+	if subscription != nil {
+		defer subscription.Close()
+	}
+
 	clientClosed := make(chan struct{})
 	go func() {
 		defer close(clientClosed)
@@ -69,6 +74,14 @@ func (h Handler) WebSocket(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-clientClosed:
 			return
+		case op, ok := <-operationStream(subscription):
+			if !ok {
+				subscription = nil
+				continue
+			}
+			if err := wsjsonWrite(r.Context(), conn, replayMessage{Type: "operation", Operations: []Operation{op}}); err != nil {
+				return
+			}
 		case <-ticker.C:
 			if err := conn.Ping(r.Context()); err != nil {
 				return
@@ -107,4 +120,11 @@ func wsjsonWrite(ctx context.Context, conn *websocket.Conn, value any) error {
 		return err
 	}
 	return conn.Write(ctx, websocket.MessageText, payload)
+}
+
+func operationStream(subscription *OperationSubscription) <-chan Operation {
+	if subscription == nil {
+		return nil
+	}
+	return subscription.Operations
 }

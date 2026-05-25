@@ -14,12 +14,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
 	dbsqlc "github.com/namuh-eng/exponential/apps/api/internal/sqlc/generated"
+	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
 )
 
 type Handler struct{ DB *pgxpool.Pool }
@@ -1118,20 +1118,8 @@ func assertStateForTeam(ctx context.Context, q queryer, stateID, teamID string) 
 	return q.QueryRow(ctx, `select id::text from workflow_state where id=$1::uuid and team_id=$2::uuid`, stateID, teamID).Scan(&found)
 }
 
-type execer interface {
-	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
-}
-
-func insertOperation(ctx context.Context, exec execer, workspaceID, entityType, entityID, opType string, payload any, userID string) error {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-	_, err = exec.Exec(ctx, `
-		insert into operation (workspace_id, entity_type, entity_id, op_type, payload, version, created_by)
-		values ($1::uuid, $2, $3, $4, $5, nextval('operation_version_seq'), $6)`,
-		workspaceID, entityType, entityID, opType, body, userID)
-	return err
+func insertOperation(ctx context.Context, exec syncapi.OperationStore, workspaceID, entityType, entityID, opType string, payload any, userID string) error {
+	return syncapi.InsertOperation(ctx, exec, workspaceID, entityType, entityID, opType, payload, userID)
 }
 
 func writeLookupErr(w http.ResponseWriter, err error, title string) {
