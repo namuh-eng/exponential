@@ -31,56 +31,22 @@ test.describe("Unauthenticated workspace deep links", () => {
     });
   }
 
-  test("Kratos login from workspace root uses the root as return_to URL", async ({
+  test("magic link from workspace root uses the root as callback URL", async ({
     page,
   }) => {
     let magicLinkPayload: Record<string, unknown> | undefined;
-    let flowReturnTo: string | null = null;
 
-    await page.route(
-      "**/api/auth/kratos/self-service/login/browser?**",
-      async (route) => {
-        const requestUrl = new URL(route.request().url());
-        flowReturnTo = requestUrl.searchParams.get("return_to");
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
-            id: "playwright-flow",
-            ui: {
-              action:
-                "http://localhost:4433/self-service/login?flow=playwright-flow",
-              nodes: [
-                {
-                  attributes: {
-                    name: "csrf_token",
-                    value: "playwright-csrf",
-                  },
-                },
-              ],
-            },
-          }),
-        });
-      },
-    );
-
-    await page.route(
-      "**/api/auth/kratos/self-service/login?**",
-      async (route) => {
-        if (route.request().method() === "POST") {
-          magicLinkPayload = route.request().postDataJSON() as Record<
-            string,
-            unknown
-          >;
-        }
-
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ redirect_browser_to: flowReturnTo }),
-        });
-      },
-    );
+    await page.route("**/api/auth/magic-link", async (route) => {
+      magicLinkPayload = route.request().postDataJSON() as Record<
+        string,
+        unknown
+      >;
+      await route.fulfill({
+        status: 202,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true }),
+      });
+    });
 
     await page.goto("/foreverbrowsing");
     await expect(
@@ -95,20 +61,16 @@ test.describe("Unauthenticated workspace deep links", () => {
     const emailInput = page.getByPlaceholder("Email address");
     await emailInput.fill("test@example.com");
     await expect(emailInput).toHaveValue("test@example.com");
-    await page
-      .getByPlaceholder("Password")
-      .fill("correct horse battery staple");
-    await page.getByRole("button", { name: "Log in with Kratos" }).click();
+    await page.getByRole("button", { name: "Send magic link instead" }).click();
     await expect.poll(() => magicLinkPayload).not.toBeUndefined();
 
-    const expectedCallbackURL = new URL("/foreverbrowsing", page.url()).href;
-    expect(flowReturnTo).toBe(expectedCallbackURL);
     expect(magicLinkPayload).toMatchObject({
-      method: "password",
-      identifier: "test@example.com",
-      password: "correct horse battery staple",
-      csrf_token: "playwright-csrf",
+      email: "test@example.com",
+      callbackURL: "/foreverbrowsing",
     });
+    await expect(
+      page.getByText("Check your email for the sign-in link."),
+    ).toBeVisible();
   });
 
   test("public marketing routes render unauthenticated with local navigation", async ({
@@ -253,7 +215,7 @@ test.describe("Unauthenticated workspace deep links", () => {
 
     const emailInput = page.getByPlaceholder("Email address");
     const submitButton = page.getByRole("button", {
-      name: "Log in with Kratos",
+      name: "Log in",
     });
     await expect(submitButton).toBeEnabled();
 
@@ -285,7 +247,7 @@ test.describe("Unauthenticated workspace deep links", () => {
 
     const emailInput = page.getByPlaceholder("Email address");
     await emailInput.fill("not-an-email");
-    await page.getByRole("button", { name: "Log in with Kratos" }).click();
+    await page.getByRole("button", { name: "Log in" }).click();
 
     await expect(
       page.getByRole("heading", { name: "Log in to Linear" }),
@@ -298,21 +260,19 @@ test.describe("Unauthenticated workspace deep links", () => {
     await expect(page.getByText("Enter a valid email address.")).toHaveCount(0);
   });
 
-  test("Kratos login hides legacy SAML controls", async ({ page }) => {
+  test("first-party Go auth hides legacy SAML controls", async ({ page }) => {
     await page.goto("/login");
     await expect(
-      page.getByText("Authentication is handled by Ory Kratos"),
+      page.getByText("Authentication is handled by the headless Go API"),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Continue with SAML SSO" }),
     ).toHaveCount(0);
-    await expect(
-      page.getByRole("button", { name: "Log in with Kratos" }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Log in" })).toBeVisible();
   });
 });
 
-test("headless auth hides legacy workspace provider controls", async ({
+test("first-party auth hides legacy workspace provider controls", async ({
   page,
 }) => {
   await page.route("**/api/auth/provider-capabilities**", async (route) => {
@@ -349,7 +309,7 @@ test("headless auth hides legacy workspace provider controls", async ({
     page.getByRole("button", { name: "Continue with SAML SSO" }),
   ).toHaveCount(0);
   await expect(
-    page.getByText("Authentication is handled by Ory Kratos"),
+    page.getByText("Authentication is handled by the headless Go API"),
   ).toBeVisible();
 });
 

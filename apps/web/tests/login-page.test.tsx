@@ -29,25 +29,6 @@ function providerCapabilities(
   return { ok: true, json: async () => body };
 }
 
-function kratosFlow(
-  action = "http://localhost:4433/self-service/login?flow=abc",
-) {
-  return {
-    ok: true,
-    json: async () => ({
-      id: "flow-id",
-      ui: {
-        action,
-        nodes: [{ attributes: { name: "csrf_token", value: "csrf" } }],
-      },
-    }),
-  };
-}
-
-function kratosSuccess(redirect = "http://localhost:7015/team/ABC") {
-  return { ok: true, json: async () => ({ redirect_browser_to: redirect }) };
-}
-
 describe("Login page", () => {
   beforeEach(() => {
     fetchMock.mockResolvedValue(providerCapabilities());
@@ -61,23 +42,21 @@ describe("Login page", () => {
     assignMock.mockReset();
   });
 
-  it("renders the Kratos-owned login surface", async () => {
+  it("renders the first-party Go auth login surface", async () => {
     render(<LoginPage />);
 
     expect(
       screen.getByRole("heading", { name: "Log in to Linear" }),
     ).toBeDefined();
     expect(
-      screen.getByText(/Authentication is handled by Ory Kratos/),
+      screen.getByText(/Authentication is handled by the headless Go API/),
     ).toBeDefined();
     expect(
       screen.getByRole("button", { name: "Continue with Google" }),
     ).toBeDefined();
     expect(screen.getByPlaceholderText("Email address")).toBeDefined();
     expect(screen.getByPlaceholderText("Password")).toBeDefined();
-    expect(
-      screen.getByRole("button", { name: "Log in with Kratos" }),
-    ).toBeDefined();
+    expect(screen.getByRole("button", { name: "Log in" })).toBeDefined();
     expect(
       screen.getByRole("button", { name: "Send magic link instead" }),
     ).toBeDefined();
@@ -89,12 +68,9 @@ describe("Login page", () => {
     });
   });
 
-  it("starts Google OAuth through the Kratos browser flow with a safe callback", async () => {
+  it("starts Google OAuth through the first-party Go API with a safe callback", async () => {
     mockLocation.search = "?callbackUrl=%2Fteam%2FABC";
-    fetchMock
-      .mockResolvedValueOnce(providerCapabilities())
-      .mockResolvedValueOnce(kratosFlow())
-      .mockResolvedValueOnce(kratosSuccess("http://localhost:7015/team/ABC"));
+    fetchMock.mockResolvedValueOnce(providerCapabilities());
 
     render(<LoginPage />);
     fireEvent.click(
@@ -102,32 +78,14 @@ describe("Login page", () => {
     );
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenNthCalledWith(
-        2,
-        "/api/auth/kratos/self-service/login/browser?return_to=http%3A%2F%2Flocalhost%3A7015%2Fteam%2FABC",
-        expect.objectContaining({ credentials: "include" }),
+      expect(assignMock).toHaveBeenCalledWith(
+        "/api/auth/google/start?callback_url=%2Fteam%2FABC",
       );
-      expect(fetchMock).toHaveBeenNthCalledWith(
-        3,
-        "/api/auth/kratos/self-service/login?flow=abc",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({
-            method: "oidc",
-            provider: "google",
-            csrf_token: "csrf",
-          }),
-        }),
-      );
-      expect(assignMock).toHaveBeenCalledWith("/team/ABC");
     });
   });
 
-  it("submits password login to Kratos", async () => {
-    fetchMock
-      .mockResolvedValueOnce(providerCapabilities())
-      .mockResolvedValueOnce(kratosFlow())
-      .mockResolvedValueOnce(kratosSuccess("http://localhost:7015/"));
+  it("shows password login as not configured", async () => {
+    fetchMock.mockResolvedValueOnce(providerCapabilities());
 
     render(<LoginPage />);
     fireEvent.change(screen.getByPlaceholderText("Email address"), {
@@ -136,31 +94,21 @@ describe("Login page", () => {
     fireEvent.change(screen.getByPlaceholderText("Password"), {
       target: { value: "correct horse battery staple" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Log in with Kratos" }));
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenNthCalledWith(
-        3,
-        "/api/auth/kratos/self-service/login?flow=abc",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({
-            method: "password",
-            identifier: "person@example.com",
-            password: "correct horse battery staple",
-            csrf_token: "csrf",
-          }),
-        }),
-      );
-      expect(assignMock).toHaveBeenCalledWith("/");
+      expect(
+        screen.getByText(
+          "Password login is not configured yet. Use Google or magic link.",
+        ),
+      ).toBeDefined();
     });
   });
 
-  it("requests a Kratos magic link and shows the email confirmation", async () => {
+  it("requests a first-party magic link and shows the email confirmation", async () => {
     fetchMock
       .mockResolvedValueOnce(providerCapabilities())
-      .mockResolvedValueOnce(kratosFlow())
-      .mockResolvedValueOnce(kratosSuccess("http://localhost:7015/"));
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
 
     render(<LoginPage />);
     fireEvent.change(screen.getByPlaceholderText("Email address"), {
@@ -172,14 +120,13 @@ describe("Login page", () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenNthCalledWith(
-        3,
-        "/api/auth/kratos/self-service/login?flow=abc",
+        2,
+        "/api/auth/magic-link",
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({
-            method: "link",
-            identifier: "person@example.com",
-            csrf_token: "csrf",
+            email: "person@example.com",
+            callbackURL: "/",
           }),
         }),
       );
@@ -227,7 +174,7 @@ describe("Signup page", () => {
     assignMock.mockReset();
   });
 
-  it("renders the Kratos-owned signup surface", () => {
+  it("renders the first-party Go auth signup surface", () => {
     render(<SignupPage />);
 
     expect(
@@ -237,17 +184,12 @@ describe("Signup page", () => {
     expect(screen.getByPlaceholderText("Email address")).toBeDefined();
     expect(screen.getByPlaceholderText("Password")).toBeDefined();
     expect(
-      screen.getByRole("button", { name: "Sign up with Kratos" }),
+      screen.getByRole("button", { name: "Create account" }),
     ).toBeDefined();
   });
 
-  it("submits Kratos password registration with traits", async () => {
-    fetchMock
-      .mockResolvedValueOnce(providerCapabilities())
-      .mockResolvedValueOnce(
-        kratosFlow("http://localhost:4433/self-service/registration?flow=abc"),
-      )
-      .mockResolvedValueOnce(kratosSuccess("http://localhost:7015/"));
+  it("shows signup password registration as not configured", async () => {
+    fetchMock.mockResolvedValueOnce(providerCapabilities());
 
     render(<SignupPage />);
     fireEvent.change(screen.getByPlaceholderText("Your name"), {
@@ -259,29 +201,14 @@ describe("Signup page", () => {
     fireEvent.change(screen.getByPlaceholderText("Password"), {
       target: { value: "correct horse battery staple" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Sign up with Kratos" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenNthCalledWith(
-        2,
-        "/api/auth/kratos/self-service/registration/browser?return_to=http%3A%2F%2Flocalhost%3A7015%2F",
-        expect.objectContaining({ credentials: "include" }),
-      );
-      expect(fetchMock).toHaveBeenNthCalledWith(
-        3,
-        "/api/auth/kratos/self-service/registration?flow=abc",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({
-            method: "password",
-            password: "correct horse battery staple",
-            traits: { email: "person@example.com", name: "Person Example" },
-            csrf_token: "csrf",
-          }),
-        }),
-      );
+      expect(
+        screen.getByText(
+          "Password login is not configured yet. Use Google or magic link.",
+        ),
+      ).toBeDefined();
     });
   });
 });

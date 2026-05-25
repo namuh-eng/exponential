@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
@@ -20,6 +19,8 @@ import (
 type contextKey string
 
 const principalKey contextKey = "principal"
+
+const BrowserSessionCookieName = "exponential_session"
 
 type Principal struct {
 	UserID      string
@@ -52,8 +53,6 @@ type Middleware struct {
 	DB     *pgxpool.Pool
 	Client *http.Client
 }
-
-var defaultHTTPClient = &http.Client{Timeout: 5 * time.Second}
 
 func (m Middleware) Require(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +141,8 @@ func ipInRange(ip net.IP, value string) bool {
 		_, network, err := net.ParseCIDR(value)
 		return err == nil && network.Contains(ip)
 	}
-	return net.ParseIP(value).Equal(ip)
+	parsed := net.ParseIP(value)
+	return parsed != nil && parsed.Equal(ip)
 }
 
 func bearerToken(r *http.Request) string {
@@ -157,13 +157,8 @@ func bearerToken(r *http.Request) string {
 func (m Middleware) authenticate(ctx context.Context, r *http.Request) (Principal, error) {
 	token := bearerToken(r)
 	if token == "" {
-		if TestMode() {
-			_, principal, err := m.TestBrowserSession(ctx, r)
-			if err == nil {
-				return principal, nil
-			}
-		}
-		return m.authenticateKratosSession(ctx, r)
+		_, principal, err := m.BrowserSession(ctx, r)
+		return principal, err
 	}
 	if !(strings.HasPrefix(token, "lin_api_") || strings.HasPrefix(token, "pat_")) {
 		return Principal{}, errUnauthorized("unsupported token prefix")
@@ -177,75 +172,49 @@ func (m Middleware) authenticate(ctx context.Context, r *http.Request) (Principa
 	return m.authenticateLegacyAPIKey(ctx, keyHash)
 }
 
-func (m Middleware) authenticateKratosSession(ctx context.Context, r *http.Request) (Principal, error) {
-	baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("EXPONENTIAL_API_KRATOS_URL")), "/")
-	if baseURL == "" {
-		baseURL = strings.TrimRight(strings.TrimSpace(os.Getenv("KRATOS_PUBLIC_URL")), "/")
-	}
-	if baseURL == "" {
-		return Principal{}, errUnauthorized("missing bearer token")
-	}
-	if r.Header.Get("Cookie") == "" && r.Header.Get("X-Session-Token") == "" {
-		return Principal{}, errUnauthorized("missing bearer token")
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/sessions/whoami", nil)
-	if err != nil {
-		return Principal{}, errUnauthorized("invalid kratos configuration")
-	}
-	request.Header.Set("Accept", "application/json")
-	if cookie := r.Header.Get("Cookie"); cookie != "" {
-		request.Header.Set("Cookie", cookie)
-	}
-	if token := r.Header.Get("X-Session-Token"); token != "" {
-		request.Header.Set("X-Session-Token", token)
-	}
-	client := m.Client
-	if client == nil {
-		client = defaultHTTPClient
-	}
-	response, err := client.Do(request)
-	if err != nil {
-		return Principal{}, errUnauthorized("kratos session verification failed")
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return Principal{}, errUnauthorized("invalid kratos session")
-	}
-	var payload kratosWhoami
-	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
-		return Principal{}, errUnauthorized("invalid kratos session payload")
-	}
-	email := payload.Email()
-	if email == "" {
-		return Principal{}, errUnauthorized("kratos identity missing email")
-	}
-	return m.authenticateKratosEmail(ctx, email, requestedWorkspace(r))
-}
-
 func TestMode() bool {
 	return os.Getenv("NODE_ENV") == "test" || os.Getenv("PLAYWRIGHT_TEST") == "true"
 }
 
 func DevSessionSecret() string {
+	if s := os.Getenv("EXPONENTIAL_SESSION_SECRET"); s != "" {
+		return s
+	}
 	if s := os.Getenv("EXPONENTIAL_DEV_SESSION_SECRET"); s != "" {
 		return s
 	}
-	return "dev-only-kratos-session-secret-not-for-production"
+	return "dev-only-exponential-session-secret-not-for-production"
 }
 
-func signedBrowserSessionCookie(r *http.Request) string {
-	for _, name := range []string{"ory_kratos_session"} {
+func BrowserSessionCookie(r *http.Request) string {
+	for _, name := range []string{BrowserSessionCookieName, "session_token"} {
 		cookie, err := r.Cookie(name)
 		if err == nil && strings.TrimSpace(cookie.Value) != "" {
 			return strings.TrimSpace(cookie.Value)
 		}
 	}
-	return ""
+	return strings.TrimSpace(r.Header.Get("X-Session-Token"))
+}
+
+func SignSessionToken(raw string) string {
+	mac := hmac.New(sha256.New, []byte(DevSessionSecret()))
+	mac.Write([]byte(raw))
+	return raw + "." + base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
 
 func VerifySignedSessionToken(value string) (string, bool) {
-	raw, sig, ok := strings.Cut(strings.TrimSpace(value), ".")
-	if !ok || raw == "" || sig == "" {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", false
+	}
+	raw, sig, ok := strings.Cut(value, ".")
+	if !ok {
+		// Session cookies are already high-entropy opaque tokens. Signing is
+		// supported for test/dev helpers, but unsigned DB-backed opaque tokens are
+		// valid for production browser sessions.
+		return value, true
+	}
+	if raw == "" || sig == "" {
 		return "", false
 	}
 	mac := hmac.New(sha256.New, []byte(DevSessionSecret()))
@@ -257,14 +226,22 @@ func VerifySignedSessionToken(value string) (string, bool) {
 	return raw, true
 }
 
+func (m Middleware) BrowserSession(ctx context.Context, r *http.Request) (BrowserSession, Principal, error) {
+	rawToken, ok := VerifySignedSessionToken(BrowserSessionCookie(r))
+	if !ok {
+		return BrowserSession{}, Principal{}, errUnauthorized("missing bearer token")
+	}
+	return m.browserSessionByToken(ctx, r, rawToken)
+}
+
 func (m Middleware) TestBrowserSession(ctx context.Context, r *http.Request) (BrowserSession, Principal, error) {
 	if !TestMode() {
 		return BrowserSession{}, Principal{}, errUnauthorized("test sessions are disabled")
 	}
-	rawToken, ok := VerifySignedSessionToken(signedBrowserSessionCookie(r))
-	if !ok {
-		return BrowserSession{}, Principal{}, errUnauthorized("invalid test session")
-	}
+	return m.BrowserSession(ctx, r)
+}
+
+func (m Middleware) browserSessionByToken(ctx context.Context, r *http.Request, rawToken string) (BrowserSession, Principal, error) {
 	var session BrowserSession
 	var principal Principal
 	requested := requestedWorkspace(r)
@@ -285,7 +262,7 @@ func (m Middleware) TestBrowserSession(ctx context.Context, r *http.Request) (Br
 		)
 		if err == nil {
 			principal.UserID = session.User.ID
-			principal.APIKeyID = "playwright_test_session"
+			principal.APIKeyID = "browser_session"
 			return session, principal, nil
 		}
 	}
@@ -307,7 +284,7 @@ func (m Middleware) TestBrowserSession(ctx context.Context, r *http.Request) (Br
 		)
 		if err == nil {
 			principal.UserID = session.User.ID
-			principal.APIKeyID = "playwright_test_session"
+			principal.APIKeyID = "browser_session"
 			return session, principal, nil
 		}
 	}
@@ -327,66 +304,11 @@ func (m Middleware) TestBrowserSession(ctx context.Context, r *http.Request) (Br
 		&principal.Role,
 	)
 	if err != nil {
-		return BrowserSession{}, Principal{}, errUnauthorized("test session not found")
+		return BrowserSession{}, Principal{}, errUnauthorized("browser session not found")
 	}
 	principal.UserID = session.User.ID
-	principal.APIKeyID = "playwright_test_session"
+	principal.APIKeyID = "browser_session"
 	return session, principal, nil
-}
-
-func (m Middleware) authenticateKratosEmail(ctx context.Context, email string, requested requestedWorkspaceChoice) (Principal, error) {
-	var p Principal
-	if requested.ID != "" {
-		err := m.DB.QueryRow(ctx, `
-			select u.id, m.workspace_id::text, m.role::text
-			from "user" u
-			join member m on m.user_id = u.id
-			where lower(u.email)=lower($1) and m.workspace_id=$2::uuid
-			limit 1`, email, requested.ID).Scan(&p.UserID, &p.WorkspaceID, &p.Role)
-		if err == nil {
-			p.APIKeyID = "kratos_session"
-			return p, nil
-		}
-	}
-	if requested.Slug != "" {
-		err := m.DB.QueryRow(ctx, `
-			select u.id, m.workspace_id::text, m.role::text
-			from "user" u
-			join member m on m.user_id = u.id
-			join workspace w on w.id = m.workspace_id
-			where lower(u.email)=lower($1) and w.url_slug=$2
-			limit 1`, email, requested.Slug).Scan(&p.UserID, &p.WorkspaceID, &p.Role)
-		if err == nil {
-			p.APIKeyID = "kratos_session"
-			return p, nil
-		}
-	}
-	err := m.DB.QueryRow(ctx, `
-		select u.id, m.workspace_id::text, m.role::text
-		from "user" u
-		join member m on m.user_id = u.id
-		where lower(u.email)=lower($1)
-		order by m.created_at desc
-		limit 1`, email).Scan(&p.UserID, &p.WorkspaceID, &p.Role)
-	if err != nil {
-		return Principal{}, errUnauthorized("kratos identity is not linked to a local workspace")
-	}
-	p.APIKeyID = "kratos_session"
-	return p, nil
-}
-
-type kratosWhoami struct {
-	Identity struct {
-		ID     string         `json:"id"`
-		Traits map[string]any `json:"traits"`
-	} `json:"identity"`
-}
-
-func (w kratosWhoami) Email() string {
-	if email, ok := w.Identity.Traits["email"].(string); ok {
-		return strings.TrimSpace(email)
-	}
-	return ""
 }
 
 type requestedWorkspaceChoice struct {

@@ -18,7 +18,7 @@ func TestSetBrowserSessionCookies(t *testing.T) {
 	for _, cookie := range response.Result().Cookies() {
 		cookies[cookie.Name] = cookie
 	}
-	for _, name := range []string{"activeWorkspaceId", "activeWorkspaceSlug", "ory_kratos_session"} {
+	for _, name := range []string{"activeWorkspaceId", "activeWorkspaceSlug", "exponential_session"} {
 		if cookies[name] == nil {
 			t.Fatalf("missing cookie %s in %#v", name, cookies)
 		}
@@ -29,7 +29,7 @@ func TestSetBrowserSessionCookies(t *testing.T) {
 	if got := cookies["activeWorkspaceSlug"].Value; got != "foreverbrowsing" {
 		t.Fatalf("active workspace slug = %q", got)
 	}
-	if got := cookies["ory_kratos_session"].Value; got != "signed-token" {
+	if got := cookies["exponential_session"].Value; got != "signed-token" {
 		t.Fatalf("session cookie = %q", got)
 	}
 }

@@ -1,4 +1,3 @@
-import { headlessAuthProvidersEnabled } from "@/lib/headless-api";
 import {
   type WorkspaceAuthMethod,
   isWorkspaceAuthMethodAllowed,
@@ -8,7 +7,9 @@ import { NextResponse } from "next/server";
 
 function removedBetterAuthResponse(_request?: Request) {
   return NextResponse.json(
-    { error: "Better Auth has been removed. Use Ory Kratos endpoints." },
+    {
+      error: "Better Auth has been removed. Use first-party Go auth endpoints.",
+    },
     { status: 410 },
   );
 }
@@ -17,39 +18,6 @@ const authHandlers = {
   GET: removedBetterAuthResponse,
   POST: removedBetterAuthResponse,
 };
-
-function kratosPublicUrl() {
-  return (
-    process.env.EXPONENTIAL_KRATOS_PUBLIC_URL ?? "http://localhost:4433"
-  ).replace(/\/$/, "");
-}
-
-async function proxyKratosRequest(request: Request) {
-  const url = new URL(request.url);
-  const marker = "/api/auth/kratos";
-  const suffix = url.pathname.includes(marker)
-    ? url.pathname.slice(url.pathname.indexOf(marker) + marker.length)
-    : "";
-  if (!suffix) return null;
-
-  const upstreamUrl = `${kratosPublicUrl()}${suffix || "/"}${url.search}`;
-  const headers = new Headers(request.headers);
-  headers.set("host", new URL(kratosPublicUrl()).host);
-  const upstream = await fetch(upstreamUrl, {
-    method: request.method,
-    headers,
-    body:
-      request.method === "GET" || request.method === "HEAD"
-        ? undefined
-        : await request.clone().arrayBuffer(),
-    redirect: "manual",
-  });
-  return new Response(upstream.body, {
-    status: upstream.status,
-    statusText: upstream.statusText,
-    headers: upstream.headers,
-  });
-}
 
 async function readJsonBody(request: Request) {
   return (await request
@@ -92,11 +60,6 @@ async function enforceWorkspaceAuthMethod(
 }
 
 export async function GET(request: Request) {
-  if (headlessAuthProvidersEnabled()) {
-    const kratosResponse = await proxyKratosRequest(request);
-    if (kratosResponse) return kratosResponse;
-  }
-
   const url = new URL(request.url);
   if (url.pathname.endsWith("/magic-link/verify")) {
     const blocked = await enforceWorkspaceAuthMethod(
@@ -113,11 +76,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (headlessAuthProvidersEnabled()) {
-    const kratosResponse = await proxyKratosRequest(request);
-    if (kratosResponse) return kratosResponse;
-  }
-
   const url = new URL(request.url);
 
   if (url.pathname.endsWith("/sign-in/social")) {

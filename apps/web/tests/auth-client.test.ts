@@ -10,23 +10,6 @@ vi.stubGlobal("location", {
   assign: assignMock,
 });
 
-function mockKratosFlow() {
-  fetchMock
-    .mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        ui: {
-          action: "http://localhost:4433/self-service/login?flow=abc",
-          nodes: [{ attributes: { name: "csrf_token", value: "csrf" } }],
-        },
-      }),
-    })
-    .mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ redirect_browser_to: "http://localhost:7015/" }),
-    });
-}
-
 describe("headless auth client", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -41,8 +24,7 @@ describe("headless auth client", () => {
     });
   });
 
-  it("starts a Kratos OIDC login through the same-origin proxy", async () => {
-    mockKratosFlow();
+  it("starts Google OAuth through the first-party Go API", async () => {
     const { signIn } = await import("@/lib/auth-client");
 
     const result = await signIn.social({
@@ -50,50 +32,39 @@ describe("headless auth client", () => {
       callbackURL: "http://localhost:7015/team/ABC",
     });
 
-    expect(result?.data?.url).toBe("http://localhost:7015/");
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
-      "/api/auth/kratos/self-service/login/browser?return_to=http%3A%2F%2Flocalhost%3A7015%2Fteam%2FABC",
-      expect.objectContaining({ credentials: "include" }),
+    expect(result?.data?.url).toBe(
+      "/api/auth/google/start?callback_url=%2Fteam%2FABC",
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      "/api/auth/kratos/self-service/login?flow=abc",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({
-          method: "oidc",
-          provider: "google",
-          csrf_token: "csrf",
-        }),
-      }),
-    );
+    expect(result?.data?.redirect).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("starts a Kratos magic-link login through the same-origin proxy", async () => {
-    mockKratosFlow();
+  it("starts a first-party magic-link login", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ok: true }),
+    });
     const { signIn } = await import("@/lib/auth-client");
 
     await signIn.magicLink({
       email: "person@example.com",
-      callbackURL: "http://localhost:7015/",
+      callbackURL: "http://localhost:7015/team/ABC",
     });
 
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      "/api/auth/kratos/self-service/login?flow=abc",
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/magic-link",
       expect.objectContaining({
         method: "POST",
+        credentials: "include",
         body: JSON.stringify({
-          method: "link",
-          identifier: "person@example.com",
-          csrf_token: "csrf",
+          email: "person@example.com",
+          callbackURL: "/team/ABC",
         }),
       }),
     );
   });
 
-  it("reports unsupported passkey sign-in before calling Kratos", async () => {
+  it("reports unsupported passkey sign-in before calling auth APIs", async () => {
     const { signInWithPasskey } = await import("@/lib/auth-client");
 
     await expect(
@@ -102,7 +73,7 @@ describe("headless auth client", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("maps configured-browser passkey sign-in to a Kratos-not-configured error", async () => {
+  it("maps configured-browser passkey sign-in to a not-configured error", async () => {
     Object.defineProperty(globalThis, "PublicKeyCredential", {
       value: function PublicKeyCredential() {},
       configurable: true,

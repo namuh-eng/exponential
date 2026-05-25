@@ -42,52 +42,6 @@ services:
       - "${MAILHOG_SMTP_PORT:-1025}:1025"
       - "${MAILHOG_UI_PORT:-8025}:8025"
 
-  kratos-db:
-    image: postgres:15-alpine
-    environment:
-      PGPASSWORD: ${DB_PASSWORD:-password}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    command:
-      - sh
-      - -c
-      - |
-        if ! psql -h postgres -U postgres -d postgres -tAc "select 1 from pg_database where datname = 'kratos'" | grep -q 1; then
-          psql -h postgres -U postgres -d postgres -c "create database kratos"
-        fi
-
-  kratos-migrate:
-    image: oryd/kratos:v1.3.1
-    environment:
-      DSN: postgres://postgres:${DB_PASSWORD:-password}@postgres:5432/kratos?sslmode=disable
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-${AUTH_GOOGLE_ID:-dev-google-client-id}}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-${AUTH_GOOGLE_SECRET:-dev-google-client-secret}}
-    depends_on:
-      kratos-db:
-        condition: service_completed_successfully
-    volumes:
-      - ./infra/kratos:/etc/config/kratos:ro
-    command: migrate sql -e --yes --config /etc/config/kratos/kratos.yml
-
-  kratos:
-    image: oryd/kratos:v1.3.1
-    environment:
-      DSN: postgres://postgres:${DB_PASSWORD:-password}@postgres:5432/kratos?sslmode=disable
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-${AUTH_GOOGLE_ID:-dev-google-client-id}}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-${AUTH_GOOGLE_SECRET:-dev-google-client-secret}}
-    depends_on:
-      kratos-migrate:
-        condition: service_completed_successfully
-      mailhog:
-        condition: service_started
-    ports:
-      - "4433:4433"
-      - "4434:4434"
-    volumes:
-      - ./infra/kratos:/etc/config/kratos:ro
-    command: serve --dev --config /etc/config/kratos/kratos.yml
-
   web-schema:
     image: node:20-alpine
     working_dir: /workspace
@@ -123,10 +77,12 @@ services:
       EXPONENTIAL_API_ADDR: ":7016"
       EXPONENTIAL_API_DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/exponential?sslmode=disable
       EXPONENTIAL_API_REDIS_URL: redis://redis:6379
-      EXPONENTIAL_API_KRATOS_URL: http://kratos:4433
       EXPONENTIAL_API_ENVIRONMENT: development
       EXPONENTIAL_API_SERVICE_NAME: exponential-api
       EXPONENTIAL_API_OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      PUBLIC_BASE_URL: http://localhost:7015
+      AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:-}
+      AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET:-}
       PLAYWRIGHT_TEST: "true"
     ports:
       - "${API_PORT:-7016}:7016"
@@ -137,8 +93,6 @@ services:
         condition: service_healthy
       web-schema:
         condition: service_completed_successfully
-      kratos:
-        condition: service_started
       api-migrate:
         condition: service_completed_successfully
 
@@ -161,7 +115,6 @@ services:
       NEXT_PUBLIC_APP_URL: http://localhost:7015
       EXPONENTIAL_API_URL: http://api:7016/v1
       EXPONENTIAL_HEADLESS_DIRECT_API_REWRITE: "true"
-      EXPONENTIAL_KRATOS_PUBLIC_URL: http://kratos:4433
       EXPONENTIAL_HEADLESS_ISSUES: "true"
       EXPONENTIAL_HEADLESS_ISSUE_BULK: "true"
       EXPONENTIAL_HEADLESS_ACCOUNT_NOTIFICATIONS: "true"
@@ -206,8 +159,6 @@ services:
       web-schema:
         condition: service_completed_successfully
       api:
-        condition: service_started
-      kratos:
         condition: service_started
 
 volumes:

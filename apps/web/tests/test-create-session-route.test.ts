@@ -19,7 +19,7 @@ vi.mock("@/lib/auth", () => ({
       secret: "test-secret",
       authCookies: {
         sessionToken: {
-          name: "ory_kratos_session",
+          name: "exponential_session",
           attributes: { httpOnly: true, path: "/", sameSite: "lax" },
         },
       },

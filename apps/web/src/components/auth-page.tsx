@@ -13,23 +13,6 @@ type ProviderCapabilities = {
   };
 };
 
-type KratosNode = {
-  attributes?: {
-    name?: string;
-    value?: string;
-  };
-  messages?: Array<{ text?: string }>;
-};
-
-type KratosFlow = {
-  id: string;
-  ui: {
-    action: string;
-    nodes?: KratosNode[];
-    messages?: Array<{ text?: string }>;
-  };
-};
-
 function isProviderEnabled(
   value: boolean | { configured?: boolean } | undefined,
 ) {
@@ -59,26 +42,6 @@ function getSafeCallbackPath(): string {
   );
   if (isSafeLocalCallback(callbackUrl)) return callbackUrl;
   return getCurrentPathCallback();
-}
-
-function getAbsoluteCallbackUrl(callbackPath: string): string {
-  return new URL(callbackPath, window.location.origin).toString();
-}
-
-function getSafeRedirectTarget(
-  redirectTo: string | undefined,
-  fallbackPath: string,
-): string {
-  if (!redirectTo) return fallbackPath;
-  try {
-    const redirectUrl = new URL(redirectTo, window.location.origin);
-    if (redirectUrl.origin === window.location.origin) {
-      return `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
-    }
-  } catch {
-    // Fall back to the already sanitized callback path below.
-  }
-  return fallbackPath;
 }
 
 function LinearLogo() {
@@ -134,88 +97,15 @@ function FooterLinks({ mode }: { mode: AuthMode }) {
   );
 }
 
-function kratosProxyAction(action: string) {
-  const url = new URL(action, window.location.origin);
-  return `/api/auth/kratos${url.pathname}${url.search}`;
-}
-
-function kratosCsrfToken(flow: KratosFlow | null) {
-  return flow?.ui.nodes?.find((node) => node.attributes?.name === "csrf_token")
-    ?.attributes?.value;
-}
-
-function kratosFlowMessage(flow: KratosFlow | null) {
-  return (
-    flow?.ui.messages?.find((message) => message.text)?.text ??
-    flow?.ui.nodes
-      ?.flatMap((node) => node.messages ?? [])
-      .find((message) => message.text)?.text ??
-    null
-  );
-}
-
 export function AuthPage({ mode }: { mode: AuthMode }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
-  const [flow, setFlow] = useState<KratosFlow | null>(null);
   const [googleAvailable, setGoogleAvailable] = useState(true);
   const [samlAvailable, setSamlAvailable] = useState(false);
   const [loading, setLoading] = useState(false);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [error, setError] = useState("");
-
-  async function getFlow() {
-    if (flow) return flow;
-    const callbackPath = getSafeCallbackPath();
-    const kind = mode === "signup" ? "registration" : "login";
-    const response = await fetch(
-      `/api/auth/kratos/self-service/${kind}/browser?return_to=${encodeURIComponent(
-        getAbsoluteCallbackUrl(callbackPath),
-      )}`,
-      {
-        credentials: "include",
-        headers: { accept: "application/json" },
-      },
-    );
-    if (!response.ok) throw new Error("Unable to start the auth flow.");
-    const nextFlow = (await response.json()) as KratosFlow;
-    setFlow(nextFlow);
-    return nextFlow;
-  }
-
-  async function submitKratos(body: Record<string, unknown>) {
-    const currentFlow = await getFlow();
-    const csrfToken = kratosCsrfToken(currentFlow);
-    const response = await fetch(kratosProxyAction(currentFlow.ui.action), {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(
-        csrfToken ? { ...body, csrf_token: csrfToken } : body,
-      ),
-    });
-    const payload = (await response.json().catch(() => null)) as
-      | (Partial<KratosFlow> & { redirect_browser_to?: string })
-      | null;
-    if (response.ok) {
-      window.location.assign(
-        getSafeRedirectTarget(
-          payload?.redirect_browser_to,
-          getSafeCallbackPath(),
-        ),
-      );
-      return;
-    }
-    if (payload?.ui) setFlow(payload as KratosFlow);
-    throw new Error(
-      kratosFlowMessage((payload as KratosFlow | null) ?? currentFlow) ??
-        "Authentication failed. Check your details and try again.",
-    );
-  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -272,30 +162,38 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   function handlePasswordSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void runAuth(async () => {
-      if (mode === "signup") {
-        await submitKratos({
-          method: "password",
-          password,
-          traits: { email: email.trim(), name: name.trim() || email.trim() },
-        });
-      } else {
-        await submitKratos({
-          method: "password",
-          identifier: email.trim(),
-          password,
-        });
-      }
+      throw new Error(
+        "Password login is not configured yet. Use Google or magic link.",
+      );
     });
   }
 
   function handleGoogleLogin() {
-    void runAuth(() => submitKratos({ method: "oidc", provider: "google" }));
+    void runAuth(async () => {
+      const callbackPath = getSafeCallbackPath();
+      const params = new URLSearchParams({ callback_url: callbackPath });
+      window.location.assign(`/api/auth/google/start?${params.toString()}`);
+    });
   }
 
   function handleMagicLink(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void runAuth(async () => {
-      await submitKratos({ method: "link", identifier: email.trim() });
+      const response = await fetch("/api/auth/magic-link", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          callbackURL: getSafeCallbackPath(),
+        }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new Error(payload?.error ?? "Unable to send magic link.");
+      }
       setMagicLinkSent(true);
     });
   }
@@ -308,7 +206,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
           {mode === "signup" ? "Create your account" : "Log in to Linear"}
         </h1>
         <p className="mt-3 text-[14px] leading-6 text-[var(--auth-muted)]">
-          Authentication is handled by Ory Kratos for the headless API.
+          Authentication is handled by the headless Go API.
         </p>
 
         {error ? (
@@ -374,8 +272,8 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             {loading
               ? "Please wait…"
               : mode === "signup"
-                ? "Sign up with Kratos"
-                : "Log in with Kratos"}
+                ? "Create account"
+                : "Log in"}
           </button>
         </form>
 

@@ -4,11 +4,10 @@ const deploy = readFileSync("scripts/deploy-ecs.sh", "utf8");
 for (const expected of [
   "${APP_NAME}-api",
   "${APP_NAME}-web",
-  "${APP_NAME}-kratos",
   "${APP_NAME}-schema",
   "run_migration_task",
   "api-migrate-task-definition.json",
-  "migrate sql",
+  "Go SQL migrations",
   "configure-ecs-autoscaling.sh",
   "aws ecs wait services-stable",
   "RUN_PROD_SMOKE",

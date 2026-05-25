@@ -28,9 +28,8 @@ require_env() {
 
 for name in \
   ECS_EXECUTION_ROLE_ARN ECS_TASK_ROLE_ARN DATABASE_URL_SECRET_ARN REDIS_URL_SECRET_ARN \
-  KRATOS_DSN_SECRET_ARN KRATOS_COOKIE_SECRET_ARN GOOGLE_CLIENT_ID_SECRET_ARN \
-  GOOGLE_CLIENT_SECRET_SECRET_ARN PUBLIC_BASE_URL KRATOS_PUBLIC_URL KRATOS_INTERNAL_URL \
-  PRIV_SUBNET_A PRIV_SUBNET_B APP_SG API_TG_ARN WEB_TG_ARN KRATOS_TG_ARN; do
+  GOOGLE_CLIENT_ID_SECRET_ARN GOOGLE_CLIENT_SECRET_SECRET_ARN PUBLIC_BASE_URL \
+  PRIV_SUBNET_A PRIV_SUBNET_B APP_SG API_TG_ARN WEB_TG_ARN; do
   require_env "$name"
 done
 
@@ -41,12 +40,10 @@ aws ecr get-login-password --region "$REGION" | docker login --username AWS --pa
 
 docker build --platform linux/amd64 -f infra/docker/api.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-api:$IMAGE_TAG" .
 docker build --platform linux/amd64 -f infra/docker/web.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-web:$IMAGE_TAG" .
-docker build --platform linux/amd64 -f infra/docker/kratos.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-kratos:$IMAGE_TAG" .
 docker build --platform linux/amd64 -f infra/docker/web-schema.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-schema:$IMAGE_TAG" .
 
 docker push "$ECR_REGISTRY/${APP_NAME}-api:$IMAGE_TAG"
 docker push "$ECR_REGISTRY/${APP_NAME}-web:$IMAGE_TAG"
-docker push "$ECR_REGISTRY/${APP_NAME}-kratos:$IMAGE_TAG"
 docker push "$ECR_REGISTRY/${APP_NAME}-schema:$IMAGE_TAG"
 
 ensure_log_group() {
@@ -63,7 +60,6 @@ ensure_log_group() {
 ensure_log_group "/ecs/${APP_NAME}-api"
 ensure_log_group "/ecs/${APP_NAME}-api-migrate"
 ensure_log_group "/ecs/${APP_NAME}-web"
-ensure_log_group "/ecs/${APP_NAME}-kratos"
 ensure_log_group "/ecs/${APP_NAME}-schema"
 
 node scripts/render-ecs-task-definitions.mjs --out-dir "$TASK_OUT_DIR"
@@ -71,7 +67,6 @@ node scripts/render-ecs-task-definitions.mjs --out-dir "$TASK_OUT_DIR"
 API_TASK_ARN=$(aws ecs register-task-definition --cli-input-json "file://${TASK_OUT_DIR}/api-task-definition.json" --region "$REGION" --query 'taskDefinition.taskDefinitionArn' --output text)
 API_MIGRATE_TASK_ARN=$(aws ecs register-task-definition --cli-input-json "file://${TASK_OUT_DIR}/api-migrate-task-definition.json" --region "$REGION" --query 'taskDefinition.taskDefinitionArn' --output text)
 WEB_TASK_ARN=$(aws ecs register-task-definition --cli-input-json "file://${TASK_OUT_DIR}/web-task-definition.json" --region "$REGION" --query 'taskDefinition.taskDefinitionArn' --output text)
-KRATOS_TASK_ARN=$(aws ecs register-task-definition --cli-input-json "file://${TASK_OUT_DIR}/kratos-task-definition.json" --region "$REGION" --query 'taskDefinition.taskDefinitionArn' --output text)
 SCHEMA_TASK_ARN=$(aws ecs register-task-definition --cli-input-json "file://${TASK_OUT_DIR}/schema-task-definition.json" --region "$REGION" --query 'taskDefinition.taskDefinitionArn' --output text)
 
 run_migration_task() {
@@ -114,7 +109,6 @@ run_migration_task() {
 
 run_migration_task "drizzle schema push" "$SCHEMA_TASK_ARN" schema
 run_migration_task "Go SQL migrations" "$API_MIGRATE_TASK_ARN" api-migrate
-run_migration_task "Kratos SQL migrations" "$KRATOS_TASK_ARN" kratos migrate sql -e --yes --config /etc/config/kratos/kratos.yml
 
 ensure_service() {
   local service="$1"
@@ -138,59 +132,15 @@ ensure_service() {
   fi
 }
 
-ensure_service "${APP_NAME}-api" "$API_TASK_ARN" "$API_TG_ARN" api 3016
+ensure_service "${APP_NAME}-api" "$API_TASK_ARN" "$API_TG_ARN" api 7016
 ensure_service "${APP_NAME}-web" "$WEB_TASK_ARN" "$WEB_TG_ARN" web 3000
-ensure_service "${APP_NAME}-kratos" "$KRATOS_TASK_ARN" "$KRATOS_TG_ARN" kratos 4433
 
 if [ "${WAIT_FOR_STABILITY:-true}" != "false" ]; then
   aws ecs wait services-stable \
     --cluster "$CLUSTER" \
-    --services "${APP_NAME}-api" "${APP_NAME}-web" "${APP_NAME}-kratos" \
+    --services "${APP_NAME}-api" "${APP_NAME}-web" \
     --region "$REGION"
 fi
-
-update_private_kratos_dns() {
-  if [ -z "${PRIVATE_DNS_ZONE_ID:-}" ] || [ -z "${PRIVATE_DNS_ZONE:-}" ]; then
-    return
-  fi
-
-  local kratos_ip
-  kratos_ip=$(aws elbv2 describe-target-health \
-    --target-group-arn "$KRATOS_TG_ARN" \
-    --region "$REGION" \
-    --query 'TargetHealthDescriptions[?TargetHealth.State==`healthy`].Target.Id | [0]' \
-    --output text)
-  if [ -z "$kratos_ip" ] || [ "$kratos_ip" = "None" ]; then
-    echo "No healthy Kratos target found for private DNS update" >&2
-    exit 1
-  fi
-
-  local change_file
-  change_file=$(mktemp)
-  cat >"$change_file" <<JSON
-{
-  "Comment": "Point Kratos private service name at the current healthy ECS task",
-  "Changes": [
-    {
-      "Action": "UPSERT",
-      "ResourceRecordSet": {
-        "Name": "kratos.${PRIVATE_DNS_ZONE}.",
-        "Type": "A",
-        "TTL": 10,
-        "ResourceRecords": [{ "Value": "${kratos_ip}" }]
-      }
-    }
-  ]
-}
-JSON
-  aws route53 change-resource-record-sets \
-    --hosted-zone-id "$PRIVATE_DNS_ZONE_ID" \
-    --change-batch "file://${change_file}" >/dev/null
-  rm -f "$change_file"
-  echo "Updated private Kratos DNS: kratos.${PRIVATE_DNS_ZONE} -> ${kratos_ip}"
-}
-
-update_private_kratos_dns
 
 if [ "${CONFIGURE_AUTOSCALING:-true}" != "false" ]; then
   scripts/configure-ecs-autoscaling.sh
@@ -202,4 +152,4 @@ else
   echo "Skipping production smoke. Set RUN_PROD_SMOKE=true to run scripts/smoke-prod.sh after service stability."
 fi
 
-echo "Deployed ECS services: ${APP_NAME}-api, ${APP_NAME}-web, ${APP_NAME}-kratos"
+echo "Deployed ECS services: ${APP_NAME}-api, ${APP_NAME}-web"

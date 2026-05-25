@@ -122,7 +122,7 @@ describe("Auth proxy", () => {
     mockRewrite.mockClear();
     const { proxy } = await import("@/proxy");
     const req = createMockRequest("/foreverbrowsing?view=list", {
-      ory_kratos_session: "valid-session-token",
+      exponential_session: "valid-session-token",
     });
     await proxy(req as never);
     expect(mockRewrite).not.toHaveBeenCalled();
@@ -183,7 +183,7 @@ describe("Auth proxy", () => {
     mockRedirect.mockClear();
     const { proxy } = await import("@/proxy");
     const req = createMockRequest("/settings/account/connected?tab=auth", {
-      ory_kratos_session: "valid-session-token",
+      exponential_session: "valid-session-token",
     });
     await proxy(req as never);
     expect(mockRedirect).toHaveBeenCalled();
@@ -198,7 +198,7 @@ describe("Auth proxy", () => {
     const req = createMockRequest(
       "/foreverbrowsing/settings/account/connected",
       {
-        ory_kratos_session: "valid-session-token",
+        exponential_session: "valid-session-token",
       },
     );
     await proxy(req as never);
@@ -213,7 +213,7 @@ describe("Auth proxy", () => {
     mockNext.mockClear();
     const { proxy } = await import("@/proxy");
     const req = createMockRequest("/inbox", {
-      ory_kratos_session: "valid-session-token",
+      exponential_session: "valid-session-token",
     });
     await proxy(req as never);
     expect(mockNext).toHaveBeenCalled();
@@ -230,7 +230,7 @@ describe("Auth proxy", () => {
       mockRedirect.mockClear();
       const { proxy } = await import("@/proxy");
       const req = createMockRequest(`${sourcePath}?view=list`, {
-        ory_kratos_session: "valid-session-token",
+        exponential_session: "valid-session-token",
       });
       await proxy(req as never);
       expect(mockRedirect).not.toHaveBeenCalled();
@@ -258,7 +258,7 @@ describe("Auth proxy", () => {
       const req = createMockRequest(
         `/foreverbrowsing/team/ENG${teamRoute}?group=status`,
         {
-          ory_kratos_session: "valid-session-token",
+          exponential_session: "valid-session-token",
         },
       );
       await proxy(req as never);
@@ -279,7 +279,7 @@ describe("Auth proxy", () => {
     const req = createMockRequest(
       "/foreverbrowsing/settings/project-updates?tab=reminders",
       {
-        ory_kratos_session: "valid-session-token",
+        exponential_session: "valid-session-token",
       },
     );
     await proxy(req as never);
@@ -321,7 +321,7 @@ describe("Auth proxy", () => {
       mockNext.mockClear();
       const { proxy } = await import("@/proxy");
       const req = createMockRequest(`${path}?view=list`, {
-        ory_kratos_session: "valid-session-token",
+        exponential_session: "valid-session-token",
       });
       await proxy(req as never);
       expect(mockRedirect).not.toHaveBeenCalled();
@@ -341,7 +341,7 @@ describe("Auth proxy", () => {
     mockNext.mockClear();
     const { proxy } = await import("@/proxy");
     const req = createMockRequest("/settings/teams/ENG/general", {
-      ory_kratos_session: "valid-session-token",
+      exponential_session: "valid-session-token",
     });
     await proxy(req as never);
     expect(mockRewrite).not.toHaveBeenCalled();
@@ -352,7 +352,7 @@ describe("Auth proxy", () => {
     mockRedirect.mockClear();
     const { proxy } = await import("@/proxy");
     const req = createMockRequest("/issue/ENG-1?focusedComment=c-1", {
-      ory_kratos_session: "valid-session-token",
+      exponential_session: "valid-session-token",
     });
     await proxy(req as never);
     expect(mockRedirect).toHaveBeenCalled();
@@ -365,7 +365,7 @@ describe("Auth proxy", () => {
     mockRedirect.mockClear();
     const { proxy } = await import("@/proxy");
     const req = createMockRequest("/search?q=cycle", {
-      ory_kratos_session: "valid-session-token",
+      exponential_session: "valid-session-token",
       activeWorkspaceSlug: "foreverbrowsing",
     });
     await proxy(req as never);
@@ -395,7 +395,7 @@ describe("Auth proxy", () => {
       mockRedirect.mockClear();
       const { proxy } = await import("@/proxy");
       const req = createMockRequest(`/team/ENG${teamRoute}?view=list`, {
-        ory_kratos_session: "valid-session-token",
+        exponential_session: "valid-session-token",
       });
       await proxy(req as never);
       expect(mockRedirect).toHaveBeenCalled();
@@ -432,7 +432,7 @@ describe("Auth proxy", () => {
     mockRewrite.mockClear();
     const { proxy } = await import("@/proxy");
     const req = createMockRequest("/foreverbrowsing/cycles?view=list", {
-      ory_kratos_session: "valid-session-token",
+      exponential_session: "valid-session-token",
     });
     await proxy(req as never);
     expect(mockRewrite).not.toHaveBeenCalled();
@@ -450,7 +450,7 @@ describe("Auth proxy", () => {
 });
 
 describe("Auth proxy headless auth mode", () => {
-  it("rejects non-Kratos legacy session cookies", async () => {
+  it("rejects legacy session cookies", async () => {
     vi.resetModules();
     vi.stubEnv("EXPONENTIAL_HEADLESS_AUTH_PROVIDERS", "true");
     mockRedirect.mockClear();
@@ -469,7 +469,7 @@ describe("Auth proxy headless auth mode", () => {
     vi.unstubAllEnvs();
   });
 
-  it("allows Kratos session cookies when headless auth is enabled", async () => {
+  it("allows first-party session cookies when headless auth is enabled", async () => {
     vi.resetModules();
     vi.stubEnv("EXPONENTIAL_HEADLESS_AUTH_PROVIDERS", "true");
     mockRedirect.mockClear();
@@ -478,7 +478,7 @@ describe("Auth proxy headless auth mode", () => {
 
     const { proxy } = await import("@/proxy");
     const req = createMockRequest("/inbox", {
-      ory_kratos_session: "kratos-session-token",
+      exponential_session: "session-token",
     });
     await proxy(req as never);
 

@@ -4,7 +4,7 @@ import fs from "node:fs";
 const openapi = fs.readFileSync("packages/proto/openapi.yaml", "utf8");
 const routerFiles = ["apps/api/internal/http/router.go"];
 const mountedRoutes = new Set();
-const nonContractProxyMounts = new Set(["/api/auth/kratos"]);
+const nonContractProxyMounts = new Set();
 
 for (const file of routerFiles) {
   const source = fs.readFileSync(file, "utf8");

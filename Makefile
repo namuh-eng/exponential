@@ -51,7 +51,7 @@ deploy-scripts:
 # Production smoke script shape
 smoke-script:
 	@. ./hack/run_silent.sh && \
-	run_silent "Production smoke script covers web/api/kratos/metrics" "sh -n scripts/smoke-prod.sh && node scripts/check-smoke-script.mjs"
+	run_silent "Production smoke script covers web/api/metrics" "sh -n scripts/smoke-prod.sh && node scripts/check-smoke-script.mjs"
 
 # OpenAPI coverage
 openapi-coverage:

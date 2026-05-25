@@ -16,17 +16,11 @@ const env = {
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:database",
   REDIS_URL_SECRET_ARN:
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:redis",
-  KRATOS_DSN_SECRET_ARN:
-    "arn:aws:secretsmanager:us-east-1:123456789012:secret:kratos-dsn",
-  KRATOS_COOKIE_SECRET_ARN:
-    "arn:aws:secretsmanager:us-east-1:123456789012:secret:kratos-cookie",
   GOOGLE_CLIENT_ID_SECRET_ARN:
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:google-id",
   GOOGLE_CLIENT_SECRET_SECRET_ARN:
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:google-secret",
   OTEL_EXPORTER_OTLP_ENDPOINT: "collector.example:4318",
-  KRATOS_PUBLIC_URL: "https://app.example/auth",
-  KRATOS_INTERNAL_URL: "http://kratos.internal:4433",
   PUBLIC_BASE_URL: "https://app.example",
 };
 
@@ -43,7 +37,6 @@ for (const file of [
   "infra/ecs/api-task-definition.json",
   "infra/ecs/api-migrate-task-definition.json",
   "infra/ecs/web-task-definition.json",
-  "infra/ecs/kratos-task-definition.json",
   "infra/ecs/schema-task-definition.json",
 ]) {
   const rendered = renderTaskDefinitionFile(file, env);

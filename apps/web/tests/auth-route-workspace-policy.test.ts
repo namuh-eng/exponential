@@ -81,7 +81,7 @@ describe("auth catch-all workspace policy", () => {
 
     expect(response.status).toBe(410);
     await expect(response.json()).resolves.toMatchObject({
-      error: "Better Auth has been removed. Use Ory Kratos endpoints.",
+      error: "Better Auth has been removed. Use first-party Go auth endpoints.",
     });
   });
 

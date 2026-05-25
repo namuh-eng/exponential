@@ -35,14 +35,6 @@ type UnlinkSocialAccountResult = {
   error?: { code?: string; status?: number; message?: string };
 };
 
-type KratosFlow = {
-  ui?: {
-    action?: string;
-    nodes?: Array<{ attributes?: { name?: string; value?: string } }>;
-  };
-  redirect_browser_to?: string;
-};
-
 type PasskeySignInOptions = {
   callbackURL: string;
 };
@@ -85,104 +77,61 @@ export class PasskeyRegistrationError extends Error {
   }
 }
 
-function kratosBrowserUrl(kind: "login" | "registration", returnTo: string) {
-  const params = new URLSearchParams({ return_to: returnTo });
-  return `/api/auth/kratos/self-service/${kind}/browser?${params.toString()}`;
+function localPathFromCallback(callbackURL: string) {
+  const parsed = new URL(callbackURL, window.location.origin);
+  if (parsed.origin !== window.location.origin) return "/";
+  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
 
-function kratosProxyAction(action: string) {
-  const url = new URL(action, window.location.origin);
-  return `/api/auth/kratos${url.pathname}${url.search}`;
-}
-
-function csrfToken(flow: KratosFlow | null) {
-  return flow?.ui?.nodes?.find((node) => node.attributes?.name === "csrf_token")
-    ?.attributes?.value;
-}
-
-async function startKratosFlow(
-  kind: "login" | "registration",
-  returnTo: string,
-) {
-  const response = await fetch(kratosBrowserUrl(kind, returnTo), {
-    credentials: "include",
-    headers: { accept: "application/json" },
+function googleStartURL(callbackURL: string) {
+  const params = new URLSearchParams({
+    callback_url: localPathFromCallback(callbackURL),
   });
-  if (!response.ok) {
-    throw new Error("Unable to start the Kratos authentication flow.");
-  }
-  return (await response.json()) as KratosFlow;
-}
-
-async function submitKratosFlow(
-  flow: KratosFlow,
-  body: Record<string, unknown>,
-): Promise<LinkSocialAccountResult> {
-  const action = flow.ui?.action;
-  if (!action) {
-    throw new Error("Kratos flow is missing a submit action.");
-  }
-
-  const token = csrfToken(flow);
-  const response = await fetch(kratosProxyAction(action), {
-    method: "POST",
-    credentials: "include",
-    headers: { accept: "application/json", "content-type": "application/json" },
-    body: JSON.stringify(token ? { ...body, csrf_token: token } : body),
-  });
-  const payload = (await response
-    .json()
-    .catch(() => null)) as KratosFlow | null;
-  if (!response.ok) {
-    return {
-      error: {
-        status: response.status,
-        message: "Kratos authentication flow failed.",
-      },
-    };
-  }
-
-  const redirect = payload?.redirect_browser_to;
-  return {
-    data: { url: redirect, redirect: Boolean(redirect) },
-    url: redirect,
-  };
+  return `/api/auth/google/start?${params.toString()}`;
 }
 
 export const signIn = {
-  async social(options: SocialSignInOptions) {
-    const flow = await startKratosFlow("login", options.callbackURL);
-    return submitKratosFlow(flow, {
-      method: "oidc",
-      provider: options.provider,
-    });
+  async social(options: SocialSignInOptions): Promise<LinkSocialAccountResult> {
+    if (options.provider !== "google") {
+      return {
+        error: {
+          code: "unsupported_provider",
+          message: `${options.provider} sign-in is not configured.`,
+        },
+      };
+    }
+    const url = googleStartURL(options.callbackURL);
+    return { data: { url, redirect: true }, url };
   },
   async magicLink(options: MagicLinkOptions): Promise<unknown> {
-    const flow = await startKratosFlow("login", options.callbackURL);
-    return submitKratosFlow(flow, {
-      method: "link",
-      identifier: options.email,
-      ...(options.fetchOptions?.headers?.["x-captcha-response"]
-        ? {
-            captcha_response:
-              options.fetchOptions.headers["x-captcha-response"],
-          }
-        : {}),
+    const response = await fetch("/api/auth/magic-link", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "content-type": "application/json",
+        ...(options.fetchOptions?.headers ?? {}),
+      },
+      body: JSON.stringify({
+        email: options.email,
+        callbackURL: localPathFromCallback(options.callbackURL),
+      }),
     });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      throw new Error(payload?.error ?? "Unable to send magic link.");
+    }
+    return response.json().catch(() => ({ ok: true }));
   },
 };
 
 export async function signOut() {
-  const flow = await fetch("/api/auth/kratos/self-service/logout/browser", {
+  await fetch("/api/auth/sign-out", {
+    method: "POST",
     credentials: "include",
-    headers: { accept: "application/json" },
   });
-  const payload = (await flow.json().catch(() => null)) as {
-    logout_url?: string;
-  } | null;
-  if (payload?.logout_url) {
-    window.location.assign(kratosProxyAction(payload.logout_url));
-  }
+  window.location.assign("/login");
 }
 
 export function useSession() {
@@ -194,8 +143,7 @@ export const authClient = { signIn, signOut, useSession };
 export async function linkSocialAccount(
   options: LinkSocialAccountOptions,
 ): Promise<LinkSocialAccountResult> {
-  const flow = await startKratosFlow("login", options.callbackURL);
-  return submitKratosFlow(flow, { method: "oidc", provider: options.provider });
+  return signIn.social(options);
 }
 
 export async function unlinkSocialAccount(
@@ -228,12 +176,13 @@ export function browserSupportsPasskeys() {
 }
 
 function passkeyUnavailableMessage() {
-  return "Passkey authentication has moved to Kratos and is not configured in this environment.";
+  return "Passkey authentication is not configured in this environment.";
 }
 
 export async function signInWithPasskey({
   callbackURL,
 }: PasskeySignInOptions): Promise<PasskeySignInResult> {
+  void callbackURL;
   if (!browserSupportsPasskeys()) {
     throw new PasskeySignInError(
       "This browser doesn't support passkeys. Use email or Google to log in.",

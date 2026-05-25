@@ -7,7 +7,6 @@ type Config struct {
 	Addr         string
 	DatabaseURL  string
 	RedisURL     string
-	KratosURL    string
 	Environment  string
 	ServiceName  string
 	OTLPEndpoint string
@@ -22,7 +21,6 @@ func Load() Config {
 	v.SetDefault("ADDR", ":7016")
 	v.SetDefault("DATABASE_URL", "postgresql://postgres:password@localhost:5432/exponential?sslmode=disable")
 	v.SetDefault("REDIS_URL", "redis://localhost:6379")
-	v.SetDefault("KRATOS_URL", "http://localhost:4433")
 	v.SetDefault("ENVIRONMENT", "development")
 	v.SetDefault("SERVICE_NAME", "exponential-api")
 	v.SetDefault("OTEL_EXPORTER_OTLP_ENDPOINT", "")
@@ -31,7 +29,6 @@ func Load() Config {
 		Addr:         v.GetString("ADDR"),
 		DatabaseURL:  v.GetString("DATABASE_URL"),
 		RedisURL:     v.GetString("REDIS_URL"),
-		KratosURL:    v.GetString("KRATOS_URL"),
 		Environment:  v.GetString("ENVIRONMENT"),
 		ServiceName:  v.GetString("SERVICE_NAME"),
 		OTLPEndpoint: v.GetString("OTEL_EXPORTER_OTLP_ENDPOINT"),

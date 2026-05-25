@@ -36,8 +36,7 @@ packages/
   sdk/      auto-generated TS client from OpenAPI
   proto/    OpenAPI spec + SQL migrations — single source of truth
 infra/
-  kratos/   Ory Kratos config (self-hosted)
-  docker/   docker-compose for local dev (postgres, redis, kratos, api, web)
+  docker/   docker-compose for local dev (postgres, redis, api, web)
 ```
 
 **Two deployables initially:** `apps/api` (stateless, ALB-fronted, autoscales) and `apps/web` (static-ish edge/Node). Sync engine lives **inside `apps/api`** as a WebSocket module until measured load justifies extraction.
@@ -53,7 +52,7 @@ These were validated via independent review (Codex consult). Do not relitigate w
 | **Go + chi + pgx + sqlc** for API | Fast enough (~80k RPS/core), DB is the real ceiling, predictable, mature ecosystem, fast dev velocity | Rust (over-engineering for HTTP layer); TS/Hono (would block real perf gains and keep monolith inertia) |
 | **WebSocket sync inside Go API** as module | Polyglot ops cost is real on day 1. Go WS libs are fast enough. Extract to Rust only if metrics demand. | Separate Rust sync service from day 1 (cargo-culted) |
 | **OpenAPI 3.1** as contract | CLI-first consumption demands stable curlable REST. SDK generated from spec. | gRPC / Connect-RPC (heavier CLI ergonomics); tRPC (TS-locked, kills CLI portability) |
-| **Ory Kratos** for auth | Rebuilding Better Auth (OAuth + magic links + sessions + recovery) in Go is security-product work, not framework glue. Integrate, don't rebuild. | Custom Go auth (security risk); Casdoor (heavier, less product UX flex); Hydra alone (only needed if we become an OAuth provider) |
+| **First-party Go auth** for auth | Owner override after implementation review: avoid a separate auth server. Use standard Go libraries (`golang.org/x/oauth2`, `go-oidc`), opaque HttpOnly sessions backed by the existing `session` table, magic-link tokens in `verification`, and PATs for CLI. | separate auth server (too much operational/product weight for current scope); custom password auth as first slice; Casdoor/Hydra |
 | **sqlc + SQL-first migrations** | Cross-language schema ownership creates drift. SQL is the single truth; Go types and TS types both generated from it. | Keeping Drizzle as schema authority (drift); ent/bun (worse fit for schema-driven flow) |
 | **Op log + monotonic versions** for sync | Linear-style delta sync needs ordered, idempotent, replayable deltas. CRDTs add complexity for conflicts a tracker doesn't need. | CRDTs (overkill); naive event broadcast + refetch (poor UX) |
 
@@ -69,7 +68,7 @@ Each phase is independently shippable. Do **not** start phase N+1 until phase N 
 - [ ] Set up `pnpm` workspaces (or keep `npm` if simpler — pick one, stick with it)
 - [ ] Move existing Next.js code into `apps/web/` (keep working, no behavior change)
 - [ ] Initialize `apps/api/` as Go module: `chi`, `pgx`, `sqlc`, `zap` (logging), `viper` (config)
-- [ ] Wire up `docker-compose.dev.yml` with: postgres, redis, kratos, api, web
+- [ ] Wire up `docker-compose.dev.yml` with: postgres, redis, api, web
 - [ ] CI: ensure Next.js still builds, Go builds, tests still pass
 
 **Verification:** `make check && make test` green; `docker compose up` boots all services; web app still works against existing Next.js API routes.
@@ -86,14 +85,14 @@ Each phase is independently shippable. Do **not** start phase N+1 until phase N 
 
 **Verification:** Web app's issues page works identically against Go API. CLI prototype (curl + jq is fine) round-trips an issue.
 
-### Phase 2 — Auth via Ory Kratos (½–1 day)
+### Phase 2 — First-party Go auth (½–1 day)
 
-- [ ] Stand up Kratos in `docker-compose.dev.yml` with email/password, Google OAuth, magic link flows
-- [ ] Migrate user records from Better Auth's tables to Kratos identities (one-time script in `apps/api/cmd/migrate-auth/`)
-- [ ] `apps/api` validates Kratos sessions on every request via middleware
+- [ ] Implement Google OAuth/OIDC in `apps/api` with `golang.org/x/oauth2` + `go-oidc`
+- [ ] Preserve existing Better Auth-compatible `user`, `account`, `session`, and `verification` records; add idempotent migration only if schema drift requires it
+- [ ] `apps/api` validates opaque HttpOnly session cookies against the `session` table on every request
 - [ ] Implement **Personal Access Tokens (PATs)** in `apps/api` for CLI auth — `pat_` prefix, hashed at rest, scopes, revocation, audit log
-- [ ] `apps/web` swaps Better Auth UI calls for Kratos self-service flows
-- [ ] Update middleware in `apps/web` to validate Kratos sessions for protected pages
+- [ ] `apps/web` swaps Better Auth UI calls for first-party Go auth routes
+- [ ] Update middleware in `apps/web` to recognize the first-party session cookie for protected pages
 
 **Verification:** Google OAuth login works end-to-end on web. Magic link delivered via SES, login completes. CLI can authenticate with a PAT and call `GET /issues`. Old Better Auth code path deleted.
 
@@ -135,7 +134,7 @@ For each:
 - [ ] `apps/api` Dockerfile (multi-stage, distroless, ~30MB image)
 - [ ] ECS task definitions: api (autoscale), web (autoscale)
 - [ ] ALB routes: `/api/*` → api service, everything else → web service
-- [ ] Kratos behind ALB on `/auth/*`
+- [ ] ALB routes `/api/*` to the Go API and all other app traffic to web
 - [ ] OpenTelemetry: traces from web → api → postgres, exported to whatever (CloudWatch / Honeycomb / etc.)
 - [ ] Structured logs (zap JSON) → CloudWatch
 - [ ] RED metrics: req rate, error rate, duration p50/p95/p99 per endpoint
@@ -149,7 +148,7 @@ For each:
 
 Codex flagged these. Treat as risk areas:
 
-1. **Auth migration is the highest-risk step.** Preserving user/session semantics across Better Auth → Kratos is product-critical. Test exhaustively: existing users must log in without password reset, OAuth-linked accounts must stay linked, magic link tokens in flight must work or fail gracefully.
+1. **Auth migration is the highest-risk step.** Preserving existing user/session/account semantics while moving flows into Go is product-critical. Test exhaustively: existing users must log in without password reset, OAuth-linked accounts must stay linked, magic link tokens in flight must work or fail gracefully.
 2. **Authorization boundaries.** Better Auth's session shape leaks into existing handlers. When porting to Go, define a single `Authz` interface in `apps/api/internal/authz/` and force every handler through it. No ad-hoc permission checks.
 3. **OpenAPI coverage validation.** A route ported without a spec entry is a contract regression. CI must enforce: every Go handler is referenced from `packages/proto/openapi.yaml`, every spec path has a handler. Use `oapi-codegen --generate strict-server` to make this compile-time.
 4. **Dev velocity during dual-stack.** Web team still works on `apps/web` while API team ports routes. Avoid blocking: web keeps using SDK; if SDK doesn't have the endpoint yet, web falls back to remaining Next.js API route (don't delete prematurely).
@@ -181,7 +180,7 @@ Codex flagged these. Treat as risk areas:
 | OpenAPI codegen (Go) | `oapi-codegen` (strict-server mode) | Best in class |
 | OpenAPI codegen (TS) | `openapi-typescript` + `openapi-fetch` | Tiny, no runtime bloat |
 | Migrations | `goose` | SQL files, simple |
-| Auth | Ory Kratos | Don't roll your own |
+| Auth | First-party Go auth (`oauth2`, `go-oidc`, opaque DB sessions) | Standard Go stack without a separate auth server |
 | Realtime | nhooyr/websocket (Go) | Modern, ergonomic |
 | Local dev | docker-compose | Same as today |
 | CI | existing | No change |
@@ -206,7 +205,7 @@ Codex flagged these. Treat as risk areas:
 - [ ] `apps/api` (Go) serves 100% of business endpoints
 - [ ] OpenAPI spec at `packages/proto/openapi.yaml` is the contract
 - [ ] `packages/sdk/` is auto-generated and used by both `apps/web` and `apps/cli`
-- [ ] Ory Kratos handles all auth flows
+- [ ] First-party Go auth handles Google OAuth, magic links, browser sessions, and PATs
 - [ ] CLI in `apps/cli` can: login (PAT), list/create/update/delete issues, watch realtime
 - [ ] All existing Vitest + Playwright tests pass
 - [ ] New Go integration tests pass

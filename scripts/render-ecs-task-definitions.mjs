@@ -6,7 +6,6 @@ const templates = [
   "infra/ecs/api-task-definition.json",
   "infra/ecs/api-migrate-task-definition.json",
   "infra/ecs/web-task-definition.json",
-  "infra/ecs/kratos-task-definition.json",
   "infra/ecs/schema-task-definition.json",
 ];
 

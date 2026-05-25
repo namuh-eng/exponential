@@ -313,8 +313,8 @@ export async function proxy(request: NextRequest) {
   }
 
   const sessionToken =
-    request.cookies.get("ory_kratos_session")?.value ??
-    request.cookies.get("ory_kratos_continuity")?.value;
+    request.cookies.get("exponential_session")?.value ??
+    request.cookies.get("exponential_session_continuity")?.value;
 
   if (!sessionToken) {
     const callbackUrl = `${pathname}${search}`;

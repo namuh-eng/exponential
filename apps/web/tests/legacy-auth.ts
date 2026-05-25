@@ -32,7 +32,7 @@ type LegacyAuthContext = {
 /**
  * Deprecated Better Auth compatibility shim.
  *
- * Runtime authentication is handled by Ory Kratos in the headless split. This
+ * Runtime authentication is handled by first-party Go auth in the headless split. This
  * module remains only so legacy route tests can keep importing `@/lib/auth`
  * while those test fixtures are migrated to Go/API coverage.
  */
@@ -61,10 +61,10 @@ export const auth: {
         throw new Error("Better Auth session creation has been removed");
       },
     },
-    secret: "kratos-auth-shim",
+    secret: "go-auth-shim",
     authCookies: {
       sessionToken: {
-        name: "ory_kratos_session",
+        name: "exponential_session",
         attributes: { httpOnly: true, path: "/", sameSite: "lax" },
       },
     },

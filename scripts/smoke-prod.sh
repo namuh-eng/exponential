@@ -34,9 +34,6 @@ echo "Smoking RED metrics through /api: ${PUBLIC_BASE_URL}/api/metrics/red"
 metrics_json=$(curl_json "${PUBLIC_BASE_URL}/api/metrics/red")
 expect_json_field "$metrics_json" endpoints
 
-echo "Smoking Kratos public proxy through API: ${PUBLIC_BASE_URL}/api/auth/kratos/health/ready"
-kratos_json=$(curl_json "${PUBLIC_BASE_URL}/api/auth/kratos/health/ready")
-expect_json_field "$kratos_json" status
 
 if [ -n "$API_TOKEN" ]; then
   echo "Smoking authenticated issues endpoint"
@@ -45,4 +42,4 @@ else
   echo "Skipping authenticated API smoke because EXPONENTIAL_TOKEN is unset"
 fi
 
-echo "Smoke passed: web, API health, RED metrics, Kratos proxy${API_TOKEN:+, authenticated API}."
+echo "Smoke passed: web, API health, RED metrics${API_TOKEN:+, authenticated API}."

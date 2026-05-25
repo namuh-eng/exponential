@@ -7,32 +7,16 @@ const nextConfig = {
     }
 
     const apiUrl = process.env.EXPONENTIAL_API_URL?.replace(/\/$/, "");
-    const kratosUrl = process.env.EXPONENTIAL_KRATOS_PUBLIC_URL?.replace(
-      /\/$/,
-      "",
-    );
-    if (!apiUrl && !kratosUrl) {
+    if (!apiUrl) {
       return [];
     }
 
     return {
       beforeFiles: [
-        ...(kratosUrl
-          ? [
-              {
-                source: "/api/auth/kratos/:path*",
-                destination: `${kratosUrl}/:path*`,
-              },
-            ]
-          : []),
-        ...(apiUrl
-          ? [
-              {
-                source: "/api/:path*",
-                destination: `${apiUrl}/:path*`,
-              },
-            ]
-          : []),
+        {
+          source: "/api/:path*",
+          destination: `${apiUrl}/:path*`,
+        },
       ],
     };
   },

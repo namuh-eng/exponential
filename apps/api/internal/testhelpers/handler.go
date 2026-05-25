@@ -1,9 +1,7 @@
 package testhelpers
 
 import (
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -145,7 +143,7 @@ func (h Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create test session failed", err.Error())
 		return
 	}
-	signed := rawToken + "." + signDevSessionToken(rawToken, devSessionSecret())
+	signed := auth.SignSessionToken(rawToken)
 	if shouldSetBrowserSessionCookies(r) {
 		setBrowserSessionCookies(w, r, workspace, signed, expires)
 	}
@@ -193,7 +191,7 @@ func setBrowserSessionCookies(w http.ResponseWriter, r *http.Request, workspace 
 	for _, cookie := range []*http.Cookie{
 		{Name: "activeWorkspaceId", Value: workspace.ID, Path: "/", SameSite: http.SameSiteLaxMode, Secure: secure},
 		{Name: "activeWorkspaceSlug", Value: workspace.URLSlug, Path: "/", SameSite: http.SameSiteLaxMode, Secure: secure},
-		{Name: "ory_kratos_session", Value: signedToken, Path: "/", Expires: expires, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: secure},
+		{Name: auth.BrowserSessionCookieName, Value: signedToken, Path: "/", Expires: expires, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: secure},
 	} {
 		http.SetCookie(w, cookie)
 	}
@@ -289,17 +287,6 @@ func randomBase64URL(size int) string {
 	b := make([]byte, size)
 	_, _ = rand.Read(b)
 	return base64.RawURLEncoding.EncodeToString(b)
-}
-func devSessionSecret() string {
-	if s := os.Getenv("EXPONENTIAL_DEV_SESSION_SECRET"); s != "" {
-		return s
-	}
-	return "dev-only-kratos-session-secret-not-for-production"
-}
-func signDevSessionToken(value, secret string) string {
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(value))
-	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
 func clientIP(r *http.Request) string {
 	if v := strings.TrimSpace(strings.Split(r.Header.Get("x-forwarded-for"), ",")[0]); v != "" {

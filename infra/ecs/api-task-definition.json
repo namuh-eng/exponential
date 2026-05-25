@@ -17,15 +17,15 @@
       "essential": true,
       "portMappings": [
         {
-          "containerPort": 3016,
-          "hostPort": 3016,
+          "containerPort": 7016,
+          "hostPort": 7016,
           "protocol": "tcp"
         }
       ],
       "environment": [
         {
           "name": "EXPONENTIAL_API_ADDR",
-          "value": ":3016"
+          "value": ":7016"
         },
         {
           "name": "EXPONENTIAL_API_ENVIRONMENT",
@@ -40,8 +40,8 @@
           "value": "${OTEL_EXPORTER_OTLP_ENDPOINT}"
         },
         {
-          "name": "EXPONENTIAL_API_KRATOS_URL",
-          "value": "${KRATOS_INTERNAL_URL}"
+          "name": "PUBLIC_BASE_URL",
+          "value": "${PUBLIC_BASE_URL}"
         }
       ],
       "secrets": [
@@ -52,6 +52,14 @@
         {
           "name": "EXPONENTIAL_API_REDIS_URL",
           "valueFrom": "${REDIS_URL_SECRET_ARN}"
+        },
+        {
+          "name": "AUTH_GOOGLE_ID",
+          "valueFrom": "${GOOGLE_CLIENT_ID_SECRET_ARN}"
+        },
+        {
+          "name": "AUTH_GOOGLE_SECRET",
+          "valueFrom": "${GOOGLE_CLIENT_SECRET_SECRET_ARN}"
         }
       ],
       "logConfiguration": {

@@ -4,7 +4,6 @@ const source = readFileSync("scripts/smoke-prod.sh", "utf8");
 for (const expected of [
   "/api/healthz",
   "/api/metrics/red",
-  "/api/auth/kratos/health/ready",
   "EXPONENTIAL_TOKEN",
 ]) {
   if (!source.includes(expected)) {

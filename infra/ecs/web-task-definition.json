@@ -44,10 +44,6 @@
           "value": "${PUBLIC_BASE_URL}/api"
         },
         {
-          "name": "EXPONENTIAL_KRATOS_PUBLIC_URL",
-          "value": "${PUBLIC_BASE_URL}/api/auth/kratos"
-        },
-        {
           "name": "EXPONENTIAL_HEADLESS_DIRECT_API_REWRITE",
           "value": "true"
         }

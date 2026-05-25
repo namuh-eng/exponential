@@ -24,7 +24,7 @@ describe("headless auth compatibility", () => {
     expect(useSession()).toEqual({ data: null, isPending: false });
   });
 
-  it("legacy auth API route returns removed responses outside Kratos proxy paths", async () => {
+  it("legacy auth API route returns removed responses outside first-party Go auth paths", async () => {
     const route = await import("legacy-api/auth/[...all]/route");
 
     const getResponse = await route.GET(

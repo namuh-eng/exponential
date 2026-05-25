@@ -1,7 +1,6 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -21,25 +20,19 @@ func TestRouterServesPublicAPIHealthAndMetricsAliases(t *testing.T) {
 	}
 }
 
-func TestRouterProxiesKratosWithPublicAPIAuthPrefixStripped(t *testing.T) {
-	kratos := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/self-service/login/browser" {
-			t.Fatalf("proxied path = %s", r.URL.Path)
-		}
-		if r.URL.RawQuery != "return_to=http%3A%2F%2Fapp.test" {
-			t.Fatalf("proxied query = %s", r.URL.RawQuery)
-		}
-		_ = json.NewEncoder(w).Encode(map[string]string{"ok": "true"})
-	}))
-	defer kratos.Close()
-	t.Setenv("EXPONENTIAL_API_KRATOS_URL", kratos.URL)
-
+func TestRouterServesFirstPartyAuthRoutes(t *testing.T) {
 	router := NewRouter(zap.NewNop(), nil)
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/auth/kratos/self-service/login/browser?return_to=http%3A%2F%2Fapp.test", nil))
 
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/auth/provider-capabilities", nil))
 	if recorder.Code != http.StatusOK {
-		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+		t.Fatalf("provider capabilities status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	recorder = httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/auth/google/start?callback_url=/team/ABC", nil))
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("google start status = %d body = %s", recorder.Code, recorder.Body.String())
 	}
 }
 

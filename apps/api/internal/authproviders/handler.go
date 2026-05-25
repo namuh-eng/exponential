@@ -43,17 +43,20 @@ func (h Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/get-session", h.GetSession)
 	r.Get("/provider-capabilities", h.ProviderCapabilities)
+	r.Get("/google/start", h.StartGoogle)
+	r.Get("/google/callback", h.GoogleCallback)
+	r.Post("/magic-link", h.StartMagicLink)
+	r.Get("/magic-link/callback", h.MagicLinkCallback)
+	r.Post("/sign-out", h.SignOut)
 	r.Post("/saml/discovery", h.SAMLDiscovery)
 	return r
 }
 
 func (h Handler) GetSession(w http.ResponseWriter, r *http.Request) {
-	if auth.TestMode() {
-		session, _, err := (auth.Middleware{DB: h.DB}).TestBrowserSession(r.Context(), r)
-		if err == nil {
-			problem.JSON(w, 200, session)
-			return
-		}
+	session, _, err := (auth.Middleware{DB: h.DB}).BrowserSession(r.Context(), r)
+	if err == nil {
+		problem.JSON(w, 200, session)
+		return
 	}
 	problem.JSON(w, 200, nil)
 }

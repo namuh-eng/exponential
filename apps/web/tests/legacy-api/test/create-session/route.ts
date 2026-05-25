@@ -95,7 +95,7 @@ export async function POST(request: Request) {
         sameSite: "lax",
         secure: shouldSecure,
       });
-      response.cookies.set("ory_kratos_session", payload.sessionToken, {
+      response.cookies.set("exponential_session", payload.sessionToken, {
         expires: new Date(payload.expiresAt),
         httpOnly: true,
         path: "/",

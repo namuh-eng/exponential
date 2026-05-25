@@ -5,7 +5,7 @@ const required = [
     file: "infra/ecs/api-task-definition.json",
     family: "exponential-api",
     container: "api",
-    port: 3016,
+    port: 7016,
   },
   {
     file: "infra/ecs/api-migrate-task-definition.json",
@@ -19,13 +19,6 @@ const required = [
     family: "exponential-web",
     container: "web",
     port: 3000,
-  },
-  {
-    file: "infra/ecs/kratos-task-definition.json",
-    family: "exponential-kratos",
-    container: "kratos",
-    port: 4433,
-    imageIncludes: "exponential-kratos",
   },
   {
     file: "infra/ecs/schema-task-definition.json",

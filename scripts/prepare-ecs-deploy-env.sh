@@ -162,28 +162,15 @@ set_env ECS_TASK_ROLE_ARN "$TASK_ROLE_ARN"
 if [ -z "${DB_PASSWORD:-}" ]; then
   set_env DB_PASSWORD "$(random_hex 24)"
 fi
-if [ -z "${KRATOS_COOKIE_SECRET:-}" ]; then
-  set_env KRATOS_COOKIE_SECRET "$(random_hex 32)"
-fi
-
 if [ -n "${ALB_DNS:-}" ] && [ -z "${PUBLIC_BASE_URL:-}" ]; then
   set_env PUBLIC_BASE_URL "http://${ALB_DNS}"
 fi
-if [ -n "${PUBLIC_BASE_URL:-}" ]; then
-  set_env KRATOS_PUBLIC_URL "${KRATOS_PUBLIC_URL:-${PUBLIC_BASE_URL%/}/auth}"
-  set_env KRATOS_INTERNAL_URL "${KRATOS_INTERNAL_URL:-${PUBLIC_BASE_URL%/}/api/auth/kratos}"
-fi
-
 if [ -n "${DATABASE_URL:-}" ]; then
   set_env DATABASE_URL_SECRET_ARN "$(secret_arn "${APP_NAME}/database-url" "$DATABASE_URL")"
 fi
 if [ -n "${REDIS_URL:-}" ]; then
   set_env REDIS_URL_SECRET_ARN "$(secret_arn "${APP_NAME}/redis-url" "$REDIS_URL")"
 fi
-if [ -n "${KRATOS_DSN:-${DATABASE_URL:-}}" ]; then
-  set_env KRATOS_DSN_SECRET_ARN "$(secret_arn "${APP_NAME}/kratos-dsn" "${KRATOS_DSN:-$DATABASE_URL}")"
-fi
-set_env KRATOS_COOKIE_SECRET_ARN "$(secret_arn "${APP_NAME}/kratos-cookie-secret" "$KRATOS_COOKIE_SECRET")"
 set_env GOOGLE_CLIENT_ID_SECRET_ARN "$(secret_arn "${APP_NAME}/google-client-id" "${GOOGLE_CLIENT_ID:-${AUTH_GOOGLE_ID:-dev-google-client-id}}")"
 set_env GOOGLE_CLIENT_SECRET_SECRET_ARN "$(secret_arn "${APP_NAME}/google-client-secret" "${GOOGLE_CLIENT_SECRET:-${AUTH_GOOGLE_SECRET:-dev-google-client-secret}}")"
 

@@ -169,13 +169,13 @@ if [ "$ALB_SG" = "None" ] || [ -z "$ALB_SG" ]; then
     --protocol tcp --port 443 --cidr 0.0.0.0/0 --region $REGION 2>/dev/null || true
 fi
 
-# Allow ALB → Fargate split services (web, api, Kratos public)
-for PORT in 3000 3015 3016 4433; do
+# Allow ALB → Fargate split services (web, api)
+for PORT in 3000 7015 7016; do
   aws ec2 authorize-security-group-ingress --group-id $APP_SG \
     --protocol tcp --port $PORT --source-group $ALB_SG --region $REGION 2>/dev/null || true
 done
 # Allow Fargate services to call each other on private service ports.
-for PORT in 3016 4433; do
+for PORT in 7016; do
   aws ec2 authorize-security-group-ingress --group-id $APP_SG \
     --protocol tcp --port $PORT --source-group $APP_SG --region $REGION 2>/dev/null || true
 done
@@ -285,7 +285,7 @@ grep -q '^AWS_REGION=' .env || echo "AWS_REGION=$REGION" >> .env
 # 6. ECR Repositories
 echo ""
 echo "--- ECR Repositories ---"
-for REPO in "${APP_NAME}-api" "${APP_NAME}-web" "${APP_NAME}-kratos" "${APP_NAME}-schema"; do
+for REPO in "${APP_NAME}-api" "${APP_NAME}-web" "${APP_NAME}-schema"; do
   aws ecr describe-repositories --repository-names $REPO --region $REGION 2>/dev/null || \
     aws ecr create-repository --repository-name $REPO --region $REGION
   echo "ECR repo ready: $REPO"
@@ -349,10 +349,9 @@ create_target_group() {
 }
 
 WEB_TG_ARN=$(create_target_group "${APP_NAME}-web-tg" 3000 "/" "200-399")
-API_TG_ARN=$(create_target_group "${APP_NAME}-api-tg" 3016 "/healthz" "200")
-KRATOS_TG_ARN=$(create_target_group "${APP_NAME}-kratos-tg" 4433 "/health/ready" "200")
+API_TG_ARN=$(create_target_group "${APP_NAME}-api-tg" 7016 "/healthz" "200")
 
-# HTTP listener: default web, /api/* to Go API, /auth/* to Kratos.
+# HTTP listener: default web, /api/* to Go API.
 LISTENER_ARN=$(aws elbv2 describe-listeners --load-balancer-arn $ALB_ARN --region $REGION \
   --query 'Listeners[?Port==`80`].ListenerArn | [0]' --output text 2>/dev/null || true)
 if [ "$LISTENER_ARN" = "None" ] || [ -z "$LISTENER_ARN" ]; then
@@ -389,7 +388,6 @@ ensure_listener_rule() {
 }
 
 ensure_listener_rule 10 "$API_TG_ARN" 'Field=path-pattern,Values=/api/*'
-ensure_listener_rule 20 "$KRATOS_TG_ARN" 'Field=path-pattern,Values=/auth/*'
 
 set_env_file() {
   local key="$1"
@@ -419,7 +417,6 @@ set_env_file ALB_ARN "$ALB_ARN"
 set_env_file ALB_LISTENER_ARN "$LISTENER_ARN"
 set_env_file WEB_TG_ARN "$WEB_TG_ARN"
 set_env_file API_TG_ARN "$API_TG_ARN"
-set_env_file KRATOS_TG_ARN "$KRATOS_TG_ARN"
 
 PRIVATE_DNS_ZONE="${PRIVATE_DNS_ZONE:-${APP_NAME}.internal}"
 PRIVATE_DNS_ZONE_ID=$(aws route53 list-hosted-zones-by-name --dns-name "${PRIVATE_DNS_ZONE}." \
@@ -440,7 +437,6 @@ fi
 PRIVATE_DNS_ZONE_ID="${PRIVATE_DNS_ZONE_ID##*/}"
 set_env_file PRIVATE_DNS_ZONE "$PRIVATE_DNS_ZONE"
 set_env_file PRIVATE_DNS_ZONE_ID "$PRIVATE_DNS_ZONE_ID"
-set_env_file KRATOS_INTERNAL_URL "http://kratos.${PRIVATE_DNS_ZONE}:4433"
 
 # 9. SES (email - magic links, notifications)
 echo ""
@@ -463,7 +459,7 @@ echo "=== Pre-flight Complete (team tier) ==="
 echo "VPC: $VPC_ID | App SG: $APP_SG | DB SG: $DB_SG | Redis SG: $REDIS_SG | ALB SG: $ALB_SG"
 echo "Private subnets: $PRIV_SUBNET_A, $PRIV_SUBNET_B"
 echo "ALB DNS: $ALB_DNS"
-echo "Deploy target: ECS Fargate split services + ALB (/api/* → api, /auth/* → Kratos, default → web)"
+echo "Deploy target: ECS Fargate split services + ALB (/api/* → api, default → web)"
 
 # Store infrastructure IDs in .env
 set_env_file PRIV_SUBNET_A "$PRIV_SUBNET_A"
