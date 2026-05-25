@@ -155,7 +155,6 @@ services:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/exponential?sslmode=disable
       REDIS_URL: redis://redis:6379
       NEXT_PUBLIC_APP_URL: http://localhost:3015
-      BETTER_AUTH_URL: http://localhost:3015
       EXPONENTIAL_API_URL: http://api:3016/v1
       EXPONENTIAL_HEADLESS_DIRECT_API_REWRITE: "true"
       EXPONENTIAL_KRATOS_PUBLIC_URL: http://kratos:4433
@@ -185,7 +184,6 @@ services:
       EXPONENTIAL_HEADLESS_TEAMS: "true"
       EXPONENTIAL_HEADLESS_WORKSPACES: "true"
       EXPONENTIAL_HEADLESS_COMMENTS: "true"
-      EXPONENTIAL_HEADLESS_AUTH_PROVIDERS: "true"
       EXPONENTIAL_HEADLESS_PROJECTS: "true"
       EXPONENTIAL_HEADLESS_INBOUND: "true"
       EXPONENTIAL_HEADLESS_INITIATIVES: "true"
