@@ -9,6 +9,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 type AuthMode = "login" | "signup";
+type SignupRouteStep = "identity" | "workspace" | "invite" | "finish";
+type HostingMode = "hosted" | "self-hosted";
 type LoginStep =
   | "choose"
   | "email-input"
@@ -56,6 +58,48 @@ type SamlDiscoveryResponse = {
 };
 
 const emptyEmailLoginError = "Please enter an email address for login.";
+const signupStorageKey = "exponential.signupWizard";
+
+type SignupWizardState = {
+  email: string;
+  name: string;
+  slug: string;
+  hostingMode: HostingMode;
+  workspaceId: string;
+  verified: boolean;
+};
+
+function getSignupStep(): SignupRouteStep {
+  if (typeof window === "undefined") return "identity";
+  if (window.location.pathname.endsWith("/workspace")) return "workspace";
+  if (window.location.pathname.endsWith("/invite")) return "invite";
+  if (window.location.pathname.endsWith("/finish")) return "finish";
+  return "identity";
+}
+
+function loadSignupState(): SignupWizardState {
+  const fallback: SignupWizardState = {
+    email: "",
+    name: "",
+    slug: "",
+    hostingMode: "hosted",
+    workspaceId: "",
+    verified: false,
+  };
+  if (typeof window === "undefined") return fallback;
+  try {
+    return {
+      ...fallback,
+      ...JSON.parse(window.localStorage.getItem(signupStorageKey) ?? "{}"),
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function saveSignupState(state: SignupWizardState) {
+  window.localStorage.setItem(signupStorageKey, JSON.stringify(state));
+}
 
 function shouldUseNativeEmailValidation(
   form: HTMLFormElement,
@@ -247,6 +291,297 @@ function FooterLinks({ mode }: { mode: AuthMode }) {
   );
 }
 
+function SignupWizard() {
+  const [routeStep] = useState<SignupRouteStep>(getSignupStep);
+  const [state, setState] = useState<SignupWizardState>(loadSignupState);
+  const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
+  const [code, setCode] = useState("");
+  const [inviteEmails, setInviteEmails] = useState("");
+  const [status, setStatus] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  function update(next: Partial<SignupWizardState>) {
+    const merged = { ...state, ...next };
+    setState(merged);
+    saveSignupState(merged);
+  }
+
+  useEffect(() => {
+    if (routeStep !== "workspace" || state.slug.trim().length < 2) {
+      setSlugAvailable(null);
+      return;
+    }
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `/api/workspaces/slug-available?slug=${encodeURIComponent(state.slug)}`,
+          { signal: controller.signal },
+        );
+        const data = (await response.json()) as { available?: boolean };
+        setSlugAvailable(response.ok && data.available === true);
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError"))
+          setSlugAvailable(false);
+      }
+    }, 350);
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [routeStep, state.slug]);
+
+  async function submitIdentity(event: React.FormEvent) {
+    event.preventDefault();
+    if (!state.email.includes("@")) {
+      setStatus("Enter a valid email address.");
+      return;
+    }
+    update({
+      slug:
+        state.slug ||
+        state.email
+          .split("@")[0]
+          .toLowerCase()
+          .replace(/[^a-z0-9-]/g, "-"),
+    });
+    window.location.assign("/signup/workspace");
+  }
+
+  async function submitWorkspace(event: React.FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setStatus("");
+    try {
+      const response = await fetch("/api/workspaces", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug: state.slug,
+          name: state.slug,
+          hostingMode: state.hostingMode,
+          ownerIdentity: { email: state.email, name: state.name },
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error ?? "Failed to create workspace");
+      const next = { ...state, workspaceId: data.workspace.id };
+      setState(next);
+      saveSignupState(next);
+      const verify = await fetch(
+        `/api/workspaces/${data.workspace.id}/verify-email`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: state.email }),
+        },
+      );
+      const verifyData = await verify.json();
+      if (verifyData.devCode)
+        setStatus(`Development code: ${verifyData.devCode}`);
+      window.location.assign("/signup/invite");
+    } catch (error) {
+      setStatus(
+        error instanceof Error ? error.message : "Failed to create workspace",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function verifyAndInvite(event: React.FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setStatus("");
+    try {
+      if (!state.verified) {
+        const response = await fetch(
+          `/api/workspaces/${state.workspaceId}/verify-email`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: state.email, code }),
+          },
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error ?? "Verification failed");
+        update({ verified: true });
+      }
+      const emails = inviteEmails
+        .split(/[\n,]/)
+        .map((email) => email.trim())
+        .filter(Boolean);
+      if (emails.length > 0) {
+        const inviteResponse = await fetch(
+          `/api/workspaces/${state.workspaceId}/invites`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              invites: emails.map((email) => ({ email, role: "member" })),
+            }),
+          },
+        );
+        const inviteData = await inviteResponse.json();
+        if (!inviteResponse.ok)
+          throw new Error(inviteData.error ?? "Failed to send invites");
+      }
+      window.location.assign("/signup/finish");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Failed to continue");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const steps: SignupRouteStep[] = [
+    "identity",
+    "workspace",
+    "invite",
+    "finish",
+  ];
+  return (
+    <div className="w-full max-w-[360px] px-6 py-8 sm:px-0">
+      <div className="flex flex-col items-center">
+        <LinearLogo />
+        <div className="mb-5 flex gap-2 text-[12px] text-[var(--auth-muted)]">
+          {steps.map((step) => (
+            <span
+              key={step}
+              className={step === routeStep ? "text-[var(--auth-text)]" : ""}
+            >
+              {step}
+            </span>
+          ))}
+        </div>
+        <h1 className="text-center text-[32px] font-[510] tracking-[-0.035em] text-[var(--auth-text)]">
+          Create your workspace
+        </h1>
+      </div>
+      {routeStep === "identity" && (
+        <form onSubmit={submitIdentity} className="mt-8 space-y-3">
+          <input
+            type="text"
+            value={state.name}
+            onChange={(e) => update({ name: e.target.value })}
+            placeholder="Your name"
+            className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none"
+          />
+          <input
+            type="email"
+            required
+            value={state.email}
+            onChange={(e) => update({ email: e.target.value })}
+            placeholder="Work email"
+            className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none"
+          />
+          <button
+            type="submit"
+            className="auth-primary-button h-11 w-full rounded-full"
+          >
+            Continue
+          </button>
+        </form>
+      )}
+      {routeStep === "workspace" && (
+        <form onSubmit={submitWorkspace} className="mt-8 space-y-3">
+          <input
+            required
+            value={state.slug}
+            onChange={(e) => update({ slug: e.target.value.toLowerCase() })}
+            placeholder="workspace-slug"
+            className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none"
+          />
+          {slugAvailable !== null && (
+            <p
+              className={`text-center text-sm ${slugAvailable ? "text-emerald-400" : "text-[var(--auth-error)]"}`}
+            >
+              {slugAvailable ? "Slug is available" : "Slug is unavailable"}
+            </p>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => update({ hostingMode: "hosted" })}
+              className="auth-secondary-button rounded-full border p-3"
+            >
+              Hosted
+            </button>
+            <button
+              type="button"
+              onClick={() => update({ hostingMode: "self-hosted" })}
+              className="auth-secondary-button rounded-full border p-3"
+            >
+              Self-host
+            </button>
+          </div>
+          <button
+            type="submit"
+            disabled={loading || slugAvailable === false}
+            className="auth-primary-button h-11 w-full rounded-full"
+          >
+            {loading ? "Creating…" : "Create workspace"}
+          </button>
+        </form>
+      )}
+      {routeStep === "invite" && (
+        <form onSubmit={verifyAndInvite} className="mt-8 space-y-3">
+          <p className="text-center text-[14px] text-[var(--auth-muted)]">
+            Enter the 6-digit code sent to {state.email} before inviting
+            teammates.
+          </p>
+          <input
+            inputMode="numeric"
+            value={code}
+            onChange={(e) =>
+              setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+            }
+            placeholder="6-digit code"
+            className="auth-input h-11 w-full rounded-full border px-4 text-center tracking-[0.35em] outline-none"
+          />
+          <textarea
+            value={inviteEmails}
+            onChange={(e) => setInviteEmails(e.target.value)}
+            placeholder="teammate@company.com, another@company.com"
+            className="auth-input min-h-24 w-full rounded-2xl border px-4 py-3 text-[14px] outline-none"
+          />
+          <button
+            type="submit"
+            disabled={loading || code.length !== 6}
+            className="auth-primary-button h-11 w-full rounded-full"
+          >
+            Verify and send invites
+          </button>
+        </form>
+      )}
+      {routeStep === "finish" && (
+        <div className="mt-8 space-y-3 text-center">
+          <p className="text-[14px] text-[var(--auth-muted)]">
+            Your workspace is ready.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              window.localStorage.removeItem(signupStorageKey);
+              window.location.assign(`/${state.slug || ""}`);
+            }}
+            className="auth-primary-button h-11 w-full rounded-full"
+          >
+            Go to dashboard
+          </button>
+        </div>
+      )}
+      {status && (
+        <p className="mt-4 text-center text-sm text-[var(--auth-error)]">
+          {status}
+        </p>
+      )}
+      <FooterLinks mode="signup" />
+    </div>
+  );
+}
+
 export function AuthPage({
   mode,
   initialGoogleConfigured = false,
@@ -254,6 +589,14 @@ export function AuthPage({
   mode: AuthMode;
   initialGoogleConfigured?: boolean;
 }) {
+  if (
+    mode === "signup" &&
+    typeof window !== "undefined" &&
+    window.location.pathname.startsWith("/signup/")
+  ) {
+    return <SignupWizard />;
+  }
+
   const [step, setStep] = useState<LoginStep>("choose");
   const [email, setEmail] = useState("");
   const [ssoIdentifier, setSsoIdentifier] = useState("");
