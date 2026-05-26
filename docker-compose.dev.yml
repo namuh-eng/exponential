@@ -1,40 +1,169 @@
-# docker-compose.dev.yml — Local development overrides
-# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
-#
-# Differences from production:
-#   - app: built from local Dockerfile instead of pulling from GHCR
-#   - app: source code mounted for hot reload
-#   - postgres: exposed to host (default 5432, override with PG_PORT)
-#   - redis: exposed to host (default 6379, override with REDIS_PORT)
+# docker-compose.dev.yml — Phase 0 local split stack.
+# Usage: docker compose -f docker-compose.dev.yml up --build
 
 services:
-  # ---------------------------------------------------------------------------
-  # App — build locally and mount source for hot reload
-  # ---------------------------------------------------------------------------
-  app:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: exponential
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    ports:
+      - "${PG_PORT:-15532}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d exponential"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-16379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    restart: unless-stopped
+    ports:
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"
+      - "${MAILHOG_UI_PORT:-8025}:8025"
+
+  web-schema:
+    image: node:20-alpine
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm install --frozen-lockfile=false && pnpm --filter @exponential/web exec drizzle-kit push --config drizzle.config.ts --force"
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/exponential?sslmode=disable
+    volumes:
+      - .:/workspace
+      - pnpm_store:/root/.local/share/pnpm/store
+      - web_node_modules:/workspace/node_modules
+      - web_app_node_modules:/workspace/apps/web/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api-migrate:
     build:
       context: .
-      dockerfile: Dockerfile
-    image: exponential:dev
+      dockerfile: infra/docker/api.Dockerfile
+    entrypoint: ["exponential-migrate"]
+    environment:
+      EXPONENTIAL_API_DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/exponential?sslmode=disable
+      MIGRATIONS_DIR: /migrations
+    depends_on:
+      web-schema:
+        condition: service_completed_successfully
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    environment:
+      EXPONENTIAL_API_ADDR: ":7016"
+      EXPONENTIAL_API_DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/exponential?sslmode=disable
+      EXPONENTIAL_API_REDIS_URL: redis://redis:6379
+      EXPONENTIAL_API_ENVIRONMENT: development
+      EXPONENTIAL_API_SERVICE_NAME: exponential-api
+      EXPONENTIAL_API_OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      PUBLIC_BASE_URL: http://localhost:7015
+      AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:-}
+      AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET:-}
+      PLAYWRIGHT_TEST: "true"
+    ports:
+      - "${API_PORT:-7016}:7016"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web-schema:
+        condition: service_completed_successfully
+      api-migrate:
+        condition: service_completed_successfully
+
+  web:
+    image: node:20-alpine
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    command: sh -c "corepack enable && pnpm install --frozen-lockfile=false && cd apps/web && node scripts/check-dev-db.mjs && pnpm exec next dev --webpack --hostname 0.0.0.0"
     environment:
       NODE_ENV: development
+      NODE_OPTIONS: "--max-old-space-size=4096"
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      PLAYWRIGHT_TEST: "true"
+      PORT: 7015
+      SKIP_DB_PREFLIGHT: "true"
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/exponential?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      NEXT_PUBLIC_APP_URL: http://localhost:7015
+      EXPONENTIAL_API_URL: http://api:7016/v1
+      EXPONENTIAL_HEADLESS_DIRECT_API_REWRITE: "true"
+      EXPONENTIAL_HEADLESS_ISSUES: "true"
+      EXPONENTIAL_HEADLESS_ISSUE_BULK: "true"
+      EXPONENTIAL_HEADLESS_ACCOUNT_NOTIFICATIONS: "true"
+      EXPONENTIAL_HEADLESS_ACCOUNT_PREFERENCES: "true"
+      EXPONENTIAL_HEADLESS_ACCOUNT_PROFILE: "true"
+      EXPONENTIAL_HEADLESS_ACCOUNT_SECURITY: "true"
+      EXPONENTIAL_HEADLESS_ACCOUNT_WORKSPACE_LEAVE: "true"
+      EXPONENTIAL_HEADLESS_VIEWS: "true"
+      EXPONENTIAL_HEADLESS_MY_ISSUES: "true"
+      EXPONENTIAL_HEADLESS_PROJECT_UPDATE_CONFIGURATIONS: "true"
+      EXPONENTIAL_HEADLESS_PROJECT_UPDATES: "true"
+      EXPONENTIAL_HEADLESS_AGENT_RUNS: "true"
+      EXPONENTIAL_HEADLESS_PROJECT_LABELS: "true"
+      EXPONENTIAL_HEADLESS_PROJECT_STATUSES: "true"
+      EXPONENTIAL_HEADLESS_CUSTOM_EMOJIS: "true"
+      EXPONENTIAL_HEADLESS_PROJECT_TEMPLATES: "true"
+      EXPONENTIAL_HEADLESS_NOTIFICATIONS: "true"
+      EXPONENTIAL_HEADLESS_LABELS: "true"
+      EXPONENTIAL_HEADLESS_ISSUE_TEMPLATES: "true"
+      EXPONENTIAL_HEADLESS_DOCUMENTS: "true"
+      EXPONENTIAL_HEADLESS_SIDEBAR_FAVORITES: "true"
+      EXPONENTIAL_HEADLESS_INTEGRATIONS: "true"
+      EXPONENTIAL_HEADLESS_ANALYTICS: "true"
+      EXPONENTIAL_HEADLESS_TEAMS: "true"
+      EXPONENTIAL_HEADLESS_WORKSPACES: "true"
+      EXPONENTIAL_HEADLESS_COMMENTS: "true"
+      EXPONENTIAL_HEADLESS_PROJECTS: "true"
+      EXPONENTIAL_HEADLESS_INBOUND: "true"
+      EXPONENTIAL_HEADLESS_INITIATIVES: "true"
+    ports:
+      - "${WEB_PORT:-7015}:7015"
     volumes:
-      # Mount source code for hot reload
-      - .:/app
-      # Prevent host node_modules from overwriting container's
-      - /app/node_modules
-      - /app/.next
+      - .:/workspace
+      - pnpm_store:/root/.local/share/pnpm/store
+      - web_node_modules:/workspace/node_modules
+      - web_app_node_modules:/workspace/apps/web/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web-schema:
+        condition: service_completed_successfully
+      api:
+        condition: service_started
 
-  # ---------------------------------------------------------------------------
-  # Postgres — expose to host (PG_PORT, default 5432)
-  # ---------------------------------------------------------------------------
-  postgres:
-    ports:
-      - "${PG_PORT:-5432}:5432"
-
-  # ---------------------------------------------------------------------------
-  # Redis — expose to host (REDIS_PORT, default 6379)
-  # ---------------------------------------------------------------------------
-  redis:
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+volumes:
+  postgres_data:
+  redis_data:
+  pnpm_store:
+  web_node_modules:
+  web_app_node_modules:

@@ -1,10 +1,16 @@
 node_modules
+**/node_modules
 .next
+**/.next
 .git
 .env
+.env.local
 *.log
 screenshots
 target-docs
-tests
+test-results
+playwright-report
 drizzle
+apps/web/drizzle
 .omc
+.omx

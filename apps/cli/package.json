@@ -1,0 +1,23 @@
+{
+  "name": "@exponential/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "exponential": "bin/exponential"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "cli": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@exponential/sdk": "workspace:*",
+    "tsx": "^4.22.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.4"
+  }
+}
