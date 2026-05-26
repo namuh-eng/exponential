@@ -4,9 +4,12 @@ import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
 
 const region = process.env.AWS_REGION ?? "us-east-1";
 const senderEmail = process.env.SENDER_EMAIL ?? "noreply@foreverbrowsing.com";
-const emailPreviewPath =
-  process.env.EMAIL_PREVIEW_PATH ??
-  path.join(process.cwd(), ".omx", "email-previews", "latest.json");
+function getEmailPreviewPath() {
+  return (
+    process.env.EMAIL_PREVIEW_PATH ??
+    path.join(process.cwd(), ".omx", "email-previews", "latest.json")
+  );
+}
 
 export const ses = new SESv2Client({ region });
 
@@ -25,6 +28,7 @@ async function writeEmailPreview(
   options: EmailOptions,
   error: unknown,
 ): Promise<void> {
+  const emailPreviewPath = getEmailPreviewPath();
   await mkdir(path.dirname(emailPreviewPath), { recursive: true });
   await writeFile(
     emailPreviewPath,
@@ -181,4 +185,23 @@ export async function sendNotificationEmail(
   `;
 
   await sendEmail({ to, subject, html, text: body });
+}
+
+export async function sendNewDeviceLoginEmail(
+  to: string,
+  details: { device: string; ipFamily: string },
+): Promise<void> {
+  const subject = "New device signed in to exponential";
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+      <h2 style="color: #ffffff; font-size: 20px; margin-bottom: 24px;">New device signed in</h2>
+      <p style="color: #d1d5db; font-size: 14px; margin-bottom: 16px;">A new device just signed in to your exponential account.</p>
+      <p style="color: #9ca3af; font-size: 14px; margin-bottom: 8px;">Device: ${details.device}</p>
+      <p style="color: #9ca3af; font-size: 14px; margin-bottom: 24px;">Network: ${details.ipFamily}</p>
+      <p style="color: #6b7280; font-size: 12px; margin-top: 32px;">If this was you, no action is needed. If you do not recognize this sign-in, reset your password and review active sessions.</p>
+    </div>
+  `;
+  const text = `A new device just signed in to your exponential account.\n\nDevice: ${details.device}\nNetwork: ${details.ipFamily}\n\nIf this was you, no action is needed. If you do not recognize this sign-in, reset your password and review active sessions.`;
+
+  await sendEmail({ to, subject, html, text }, { allowPreviewFallback: true });
 }

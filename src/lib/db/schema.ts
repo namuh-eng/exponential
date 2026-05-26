@@ -319,6 +319,32 @@ export const workspaceInvitation = pgTable(
   ],
 );
 
+export const authLoginEvent = pgTable(
+  "auth_login_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    sessionId: text("session_id"),
+    ipFamily: text("ip_family"),
+    fingerprintHash: text("fingerprint_hash"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("auth_login_event_workspace_created_idx").on(
+      t.workspaceId,
+      t.createdAt,
+    ),
+    index("auth_login_event_ip_family_idx").on(t.ipFamily),
+    index("auth_login_event_fingerprint_hash_idx").on(t.fingerprintHash),
+  ],
+);
+
 // ─── Team ────────────────────────────────────────────────────────────
 
 export const team = pgTable(

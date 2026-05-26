@@ -6,6 +6,7 @@ import {
   getGoogleOAuthConfig,
   getSlackOAuthConfig,
 } from "@/lib/auth-providers";
+import { recordSuccessfulLogin } from "@/lib/auth-recent-sessions";
 import { db } from "@/lib/db";
 import { sendMagicLinkEmail } from "@/lib/email";
 import {
@@ -88,6 +89,20 @@ export const auth = betterAuth({
         ]
       : []),
   ],
+  databaseHooks: {
+    session: {
+      create: {
+        async after(session, context) {
+          if (!context?.request) return;
+          await recordSuccessfulLogin({
+            userId: session.userId,
+            sessionId: session.id,
+            headers: context.request.headers,
+          });
+        },
+      },
+    },
+  },
   session: {
     cookieCache: {
       enabled: true,

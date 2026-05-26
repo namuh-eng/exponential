@@ -54,8 +54,46 @@ type SamlDiscoveryResponse = {
   url?: string;
   error?: string;
 };
+type RecentSessionEntry = {
+  id: string;
+  workspaceName: string;
+  actor: string;
+  device: string;
+  ipFamily: string;
+  loggedInAt: string;
+  currentOrigin: boolean;
+};
+type RecentSessionsResponse = {
+  entries: RecentSessionEntry[];
+  recognizedOrigin: boolean;
+};
 
 const emptyEmailLoginError = "Please enter an email address for login.";
+const recentSessionFingerprintCookie = "exp_recent_session_fp";
+
+function ensureRecentSessionFingerprint() {
+  const existing = document.cookie
+    .split("; ")
+    .find((cookie) => cookie.startsWith(`${recentSessionFingerprintCookie}=`));
+  if (existing) return;
+  const bytes = new Uint8Array(16);
+  window.crypto.getRandomValues(bytes);
+  const value = Array.from(bytes, (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  document.cookie = `${recentSessionFingerprintCookie}=${value}; path=/; max-age=31536000; samesite=lax`;
+}
+
+function formatRecentSessionTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Recently";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
 
 function shouldUseNativeEmailValidation(
   form: HTMLFormElement,
@@ -193,6 +231,60 @@ function getTurnstileResponse(form: HTMLFormElement): string | undefined {
     : undefined;
 }
 
+function RecentSessionsRail({
+  sessions,
+  recognizedOrigin,
+}: {
+  sessions: RecentSessionEntry[];
+  recognizedOrigin: boolean;
+}) {
+  if (sessions.length === 0) return null;
+
+  return (
+    <aside className="hidden w-[360px] rounded-3xl border border-[var(--auth-secondary-border)] bg-[var(--auth-secondary-bg)] p-5 text-[var(--auth-text)] shadow-2xl lg:block">
+      <div className="mb-4">
+        <p className="text-[12px] font-medium uppercase tracking-[0.16em] text-[var(--auth-muted)]">
+          Recent sessions on this host
+        </p>
+        <h2 className="mt-2 text-[18px] font-medium tracking-[-0.02em]">
+          Recognized workspace activity
+        </h2>
+      </div>
+      {!recognizedOrigin ? (
+        <output className="mb-4 block rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3 text-[13px] leading-5 text-amber-100">
+          Unrecognized origin. We have not seen this network in the recent
+          session list.
+        </output>
+      ) : null}
+      <div className="space-y-3">
+        {sessions.map((session) => (
+          <div
+            key={session.id}
+            className="rounded-2xl border border-[var(--auth-secondary-border)] bg-black/10 p-3"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <p className="truncate text-[14px] font-medium">
+                {session.workspaceName}
+              </p>
+              {session.currentOrigin ? (
+                <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[11px] text-emerald-200">
+                  This origin
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-1 text-[12px] text-[var(--auth-muted)]">
+              {session.actor} · {session.device}
+            </p>
+            <p className="mt-2 text-[12px] text-[var(--auth-muted)]">
+              {formatRecentSessionTime(session.loggedInAt)}
+            </p>
+          </div>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
 function FooterLinks({ mode }: { mode: AuthMode }) {
   if (mode === "signup") {
     return (
@@ -272,11 +364,48 @@ export function AuthPage({
   const [googleDisabledByWorkspace, setGoogleDisabledByWorkspace] =
     useState(false);
   const [error, setError] = useState("");
+  const [recentSessions, setRecentSessions] = useState<RecentSessionEntry[]>(
+    [],
+  );
+  const [recognizedOrigin, setRecognizedOrigin] = useState(true);
   const emailSubmitAttemptRef = useRef(0);
 
   useEffect(() => {
     setPasskeySupported(browserSupportsPasskeys());
+    ensureRecentSessionFingerprint();
   }, []);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "test" || mode !== "login") return;
+    const controller = new AbortController();
+    async function loadRecentSessions() {
+      try {
+        const url = new URL(
+          "/api/auth/sessions/recent",
+          window.location.origin,
+        );
+        url.searchParams.set("host", window.location.hostname);
+        url.searchParams.set("callbackUrl", getSafeCallbackPath());
+        const response = await fetch(`${url.pathname}${url.search}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok || response.status === 401) {
+          setRecentSessions([]);
+          return;
+        }
+        const data = (await response.json()) as RecentSessionsResponse;
+        setRecentSessions(Array.isArray(data.entries) ? data.entries : []);
+        setRecognizedOrigin(data.recognizedOrigin !== false);
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setRecentSessions([]);
+        }
+      }
+    }
+    loadRecentSessions();
+    return () => controller.abort();
+  }, [mode]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -562,59 +691,89 @@ export function AuthPage({
   const backLabel = mode === "signup" ? "Back to signup" : "Back to login";
 
   return (
-    <div className="w-full max-w-[320px] px-6 py-8 sm:px-0">
-      <div className="flex flex-col items-center">
-        <LinearLogo />
-        <h1 className="text-center text-[32px] font-[510] tracking-[-0.035em] text-[var(--auth-text)]">
-          {title}
-        </h1>
-      </div>
+    <div className="flex w-full items-start justify-center gap-10 px-6 py-8">
+      <div className="w-full max-w-[320px] sm:px-0">
+        <div className="flex flex-col items-center">
+          <LinearLogo />
+          <h1 className="text-center text-[32px] font-[510] tracking-[-0.035em] text-[var(--auth-text)]">
+            {title}
+          </h1>
+        </div>
 
-      <div className="mt-8 space-y-4">
-        {step === "choose" && (
-          <div className="space-y-3">
-            {googleAllowed && (
-              <button
-                type="button"
-                onClick={handleGoogleLogin}
-                disabled={loading}
-                className="auth-primary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 18 18"
-                  role="img"
-                  aria-label="Google"
+        <div className="mt-8 space-y-4">
+          {step === "choose" && (
+            <div className="space-y-3">
+              {googleAllowed && (
+                <button
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  disabled={loading}
+                  className="auth-primary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <path
-                    d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
-                    fill="#4285F4"
-                  />
-                  <path
-                    d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"
-                    fill="#34A853"
-                  />
-                  <path
-                    d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
-                    fill="#FBBC05"
-                  />
-                  <path
-                    d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
-                    fill="#EA4335"
-                  />
-                </svg>
-                {googleConfigured === null
-                  ? "Checking Google sign-in"
-                  : "Continue with Google"}
-              </button>
-            )}
-            {passkeyConfigured !== false && (
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 18 18"
+                    role="img"
+                    aria-label="Google"
+                  >
+                    <path
+                      d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
+                      fill="#4285F4"
+                    />
+                    <path
+                      d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"
+                      fill="#34A853"
+                    />
+                    <path
+                      d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
+                      fill="#FBBC05"
+                    />
+                    <path
+                      d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
+                      fill="#EA4335"
+                    />
+                  </svg>
+                  {googleConfigured === null
+                    ? "Checking Google sign-in"
+                    : "Continue with Google"}
+                </button>
+              )}
+              {passkeyConfigured !== false && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPasskeyPending(false);
+                    setStep("email-input");
+                  }}
+                  disabled={loading}
+                  className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    role="img"
+                    aria-label="Email"
+                  >
+                    <rect width="20" height="16" x="2" y="4" rx="2" />
+                    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                  </svg>
+                  Continue with email
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => {
+                  setStep("sso-input");
                   setPasskeyPending(false);
-                  setStep("email-input");
+                  setError("");
                 }}
                 disabled={loading}
                 className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
@@ -629,267 +788,100 @@ export function AuthPage({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   role="img"
-                  aria-label="Email"
+                  aria-label="SAML"
                 >
-                  <rect width="20" height="16" x="2" y="4" rx="2" />
-                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                  <path d="M4 7h16" />
+                  <path d="M7 11h10" />
+                  <path d="M9 15h6" />
+                  <path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" />
                 </svg>
-                Continue with email
+                Continue with SAML SSO
               </button>
-            )}
 
-            <button
-              type="button"
-              onClick={() => {
-                setStep("sso-input");
-                setPasskeyPending(false);
-                setError("");
-              }}
-              disabled={loading}
-              className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                role="img"
-                aria-label="SAML"
-              >
-                <path d="M4 7h16" />
-                <path d="M7 11h10" />
-                <path d="M9 15h6" />
-                <path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" />
-              </svg>
-              Continue with SAML SSO
-            </button>
-
-            {mode === "login" && passkeyConfigured !== false && (
-              <>
-                <button
-                  type="button"
-                  onClick={handlePasskeyLogin}
-                  disabled={loading || passkeyPending || !passkeySupported}
-                  className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    role="img"
-                    aria-label="Passkey"
+              {mode === "login" && passkeyConfigured !== false && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handlePasskeyLogin}
+                    disabled={loading || passkeyPending || !passkeySupported}
+                    className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <path d="M10 13a5 5 0 1 1 3.54 1.46L12 16h-2v2H8v2H5v-3l4.54-4.54A5 5 0 0 1 10 13Z" />
-                    <path d="M15 9h.01" />
-                  </svg>
-                  {passkeyPending
-                    ? "Waiting for passkey"
-                    : "Log in with passkey"}
-                </button>
-                {passkeyConfigured === true && !passkeySupported ? (
-                  <p className="pt-1 text-center text-sm text-[var(--auth-error)]">
-                    This browser doesn&apos;t support passkeys. Use email or
-                    Google instead.
-                  </p>
-                ) : null}
-              </>
-            )}
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      role="img"
+                      aria-label="Passkey"
+                    >
+                      <path d="M10 13a5 5 0 1 1 3.54 1.46L12 16h-2v2H8v2H5v-3l4.54-4.54A5 5 0 0 1 10 13Z" />
+                      <path d="M15 9h.01" />
+                    </svg>
+                    {passkeyPending
+                      ? "Waiting for passkey"
+                      : "Log in with passkey"}
+                  </button>
+                  {passkeyConfigured === true && !passkeySupported ? (
+                    <p className="pt-1 text-center text-sm text-[var(--auth-error)]">
+                      This browser doesn&apos;t support passkeys. Use email or
+                      Google instead.
+                    </p>
+                  ) : null}
+                </>
+              )}
 
-            {googleDisabledByWorkspace && emailConfigured === false ? (
-              <p className="pt-1 text-center text-sm text-[var(--auth-muted)]">
-                Google, email, and passkey login are disabled for this
-                workspace. Continue with SAML SSO.
-              </p>
-            ) : null}
+              {googleDisabledByWorkspace && emailConfigured === false ? (
+                <p className="pt-1 text-center text-sm text-[var(--auth-muted)]">
+                  Google, email, and passkey login are disabled for this
+                  workspace. Continue with SAML SSO.
+                </p>
+              ) : null}
 
-            {error && (
-              <p className="pt-1 text-center text-sm text-[var(--auth-error)]">
-                {error}
-              </p>
-            )}
-          </div>
-        )}
-
-        {step === "email-input" && (
-          <form onSubmit={handleEmailSubmit} noValidate className="space-y-3">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                setError("");
-              }}
-              placeholder="Enter your email address…"
-              required
-              className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none transition-colors"
-            />
-            <TurnstileField />
-            <button
-              type="submit"
-              disabled={loading}
-              className="auth-primary-button flex h-11 w-full items-center justify-center rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading ? "Sending…" : "Continue with email"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                emailSubmitAttemptRef.current += 1;
-                setLoading(false);
-                setStep("choose");
-                setError("");
-                setCode("");
-              }}
-              className="w-full pt-1 text-center text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
-            >
-              {backLabel}
-            </button>
-            {error && (
-              <p className="text-center text-sm text-[var(--auth-error)]">
-                {error}
-              </p>
-            )}
-          </form>
-        )}
-
-        {step === "email-verifying" && (
-          <div className="space-y-5 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-[var(--auth-secondary-border)] bg-[var(--auth-secondary-bg)]">
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="var(--auth-accent)"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                role="img"
-                aria-label="Verification in progress"
-              >
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
-                <path d="m9 12 2 2 4-4" />
-              </svg>
+              {error && (
+                <p className="pt-1 text-center text-sm text-[var(--auth-error)]">
+                  {error}
+                </p>
+              )}
             </div>
-            <div>
-              <p className="mt-2 text-[14px] leading-6 text-[var(--auth-muted)]">
-                This helps us confirm this sign-in request before sending your
-                email link and code.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                emailSubmitAttemptRef.current += 1;
-                setLoading(false);
-                setStep("choose");
-                setError("");
-                setCode("");
-              }}
-              className="w-full pt-1 text-center text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
-            >
-              {backLabel}
-            </button>
-          </div>
-        )}
+          )}
 
-        {step === "sso-input" && (
-          <form onSubmit={handleSsoSubmit} noValidate className="space-y-3">
-            <input
-              type="email"
-              value={ssoIdentifier}
-              onChange={(e) => {
-                setSsoIdentifier(e.target.value);
-                setError("");
-              }}
-              placeholder="Enter your email address…"
-              required
-              className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none transition-colors"
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="auth-primary-button flex h-11 w-full items-center justify-center rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading ? "Checking SAML…" : "Continue with SAML"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setStep("choose");
-                setSsoIdentifier("");
-                setError("");
-              }}
-              disabled={loading}
-              className="w-full pt-1 text-center text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
-            >
-              {backLabel}
-            </button>
-            {error && (
-              <p className="text-center text-sm text-[var(--auth-error)]">
-                {error}
-              </p>
-            )}
-          </form>
-        )}
-
-        {step === "email-code" && (
-          <div className="space-y-5 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-[var(--auth-secondary-border)] bg-[var(--auth-secondary-bg)]">
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="var(--auth-accent)"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                role="img"
-                aria-label="Email sent"
-              >
-                <rect width="20" height="16" x="2" y="4" rx="2" />
-                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-              </svg>
-            </div>
-            <div>
-              <h2 className="text-[20px] font-medium tracking-[-0.02em] text-[var(--auth-text)]">
-                Check your email
-              </h2>
-              <p className="mt-2 text-[14px] leading-6 text-[var(--auth-muted)]">
-                We sent a sign-in link and 6-digit code to{" "}
-                <span className="text-[var(--auth-text)]">{email}</span>
-              </p>
-            </div>
-            <form onSubmit={handleCodeSubmit} className="space-y-3 text-left">
+          {step === "email-input" && (
+            <form onSubmit={handleEmailSubmit} noValidate className="space-y-3">
               <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                value={code}
+                type="email"
+                value={email}
                 onChange={(e) => {
-                  setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                  setEmail(e.target.value);
                   setError("");
                 }}
-                placeholder="Enter 6-digit code"
-                maxLength={6}
-                className="auth-input h-11 w-full rounded-full border px-4 text-center text-[15px] tracking-[0.35em] outline-none transition-colors"
+                placeholder="Enter your email address…"
+                required
+                className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none transition-colors"
               />
+              <TurnstileField />
               <button
                 type="submit"
-                disabled={code.length !== 6}
+                disabled={loading}
                 className="auth-primary-button flex h-11 w-full items-center justify-center rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Continue with code
+                {loading ? "Sending…" : "Continue with email"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  emailSubmitAttemptRef.current += 1;
+                  setLoading(false);
+                  setStep("choose");
+                  setError("");
+                  setCode("");
+                }}
+                className="w-full pt-1 text-center text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
+              >
+                {backLabel}
               </button>
               {error && (
                 <p className="text-center text-sm text-[var(--auth-error)]">
@@ -897,23 +889,168 @@ export function AuthPage({
                 </p>
               )}
             </form>
-            <button
-              type="button"
-              onClick={() => {
-                setStep("choose");
-                setEmail("");
-                setCode("");
-                setError("");
-              }}
-              className="text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
-            >
-              Use a different method
-            </button>
-          </div>
-        )}
-      </div>
+          )}
 
-      {step === "choose" && <FooterLinks mode={mode} />}
+          {step === "email-verifying" && (
+            <div className="space-y-5 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-[var(--auth-secondary-border)] bg-[var(--auth-secondary-bg)]">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--auth-accent)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  role="img"
+                  aria-label="Verification in progress"
+                >
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
+              </div>
+              <div>
+                <p className="mt-2 text-[14px] leading-6 text-[var(--auth-muted)]">
+                  This helps us confirm this sign-in request before sending your
+                  email link and code.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  emailSubmitAttemptRef.current += 1;
+                  setLoading(false);
+                  setStep("choose");
+                  setError("");
+                  setCode("");
+                }}
+                className="w-full pt-1 text-center text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
+              >
+                {backLabel}
+              </button>
+            </div>
+          )}
+
+          {step === "sso-input" && (
+            <form onSubmit={handleSsoSubmit} noValidate className="space-y-3">
+              <input
+                type="email"
+                value={ssoIdentifier}
+                onChange={(e) => {
+                  setSsoIdentifier(e.target.value);
+                  setError("");
+                }}
+                placeholder="Enter your email address…"
+                required
+                className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none transition-colors"
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className="auth-primary-button flex h-11 w-full items-center justify-center rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading ? "Checking SAML…" : "Continue with SAML"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStep("choose");
+                  setSsoIdentifier("");
+                  setError("");
+                }}
+                disabled={loading}
+                className="w-full pt-1 text-center text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
+              >
+                {backLabel}
+              </button>
+              {error && (
+                <p className="text-center text-sm text-[var(--auth-error)]">
+                  {error}
+                </p>
+              )}
+            </form>
+          )}
+
+          {step === "email-code" && (
+            <div className="space-y-5 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-[var(--auth-secondary-border)] bg-[var(--auth-secondary-bg)]">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--auth-accent)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  role="img"
+                  aria-label="Email sent"
+                >
+                  <rect width="20" height="16" x="2" y="4" rx="2" />
+                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-[20px] font-medium tracking-[-0.02em] text-[var(--auth-text)]">
+                  Check your email
+                </h2>
+                <p className="mt-2 text-[14px] leading-6 text-[var(--auth-muted)]">
+                  We sent a sign-in link and 6-digit code to{" "}
+                  <span className="text-[var(--auth-text)]">{email}</span>
+                </p>
+              </div>
+              <form onSubmit={handleCodeSubmit} className="space-y-3 text-left">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={code}
+                  onChange={(e) => {
+                    setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                    setError("");
+                  }}
+                  placeholder="Enter 6-digit code"
+                  maxLength={6}
+                  className="auth-input h-11 w-full rounded-full border px-4 text-center text-[15px] tracking-[0.35em] outline-none transition-colors"
+                />
+                <button
+                  type="submit"
+                  disabled={code.length !== 6}
+                  className="auth-primary-button flex h-11 w-full items-center justify-center rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Continue with code
+                </button>
+                {error && (
+                  <p className="text-center text-sm text-[var(--auth-error)]">
+                    {error}
+                  </p>
+                )}
+              </form>
+              <button
+                type="button"
+                onClick={() => {
+                  setStep("choose");
+                  setEmail("");
+                  setCode("");
+                  setError("");
+                }}
+                className="text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
+              >
+                Use a different method
+              </button>
+            </div>
+          )}
+        </div>
+
+        {step === "choose" && <FooterLinks mode={mode} />}
+      </div>
+      {mode === "login" ? (
+        <RecentSessionsRail
+          sessions={recentSessions}
+          recognizedOrigin={recognizedOrigin}
+        />
+      ) : null}
     </div>
   );
 }
