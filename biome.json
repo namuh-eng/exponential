@@ -43,7 +43,9 @@
       "apps/web/tests/e2e/.auth",
       "pnpm-lock.yaml",
       ".pnpm-store",
-      "**/.pnpm-store"
+      "**/.pnpm-store",
+      ".turbo",
+      "**/.turbo"
     ]
   }
 }
