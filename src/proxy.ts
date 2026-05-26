@@ -22,6 +22,7 @@ const publicPaths = [
   "/signup",
   ...PUBLIC_ROUTES,
   "/api/auth",
+  "/api/health",
   "/api/workspaces",
   "/api/test",
   "/api/account",

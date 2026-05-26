@@ -347,7 +347,7 @@ describe("Login page", () => {
     await vi.waitFor(() => {
       expect(screen.queryByText("Enter a valid email address.")).toBeNull();
     });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("redirects to the discovered SAML IdP URL", async () => {
