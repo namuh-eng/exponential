@@ -12,10 +12,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@/lib/auth": path.resolve(__dirname, "./tests/legacy-auth.ts"),
-      "test-auth": path.resolve(__dirname, "./tests/test-auth.ts"),
       "@": path.resolve(__dirname, "./src"),
-      "legacy-api": path.resolve(__dirname, "./tests/legacy-api"),
     },
   },
 });

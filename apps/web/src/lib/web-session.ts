@@ -73,13 +73,5 @@ async function getBrowserSession(
 }
 
 export async function getWebSession(headerList: Headers) {
-  const browserSession = await getBrowserSession(headerList);
-  if (browserSession) return browserSession;
-
-  if (process.env.NODE_ENV === "test") {
-    const { auth } = await import("test-auth");
-    return auth.api.getSession({ headers: headerList });
-  }
-
-  return null;
+  return getBrowserSession(headerList);
 }

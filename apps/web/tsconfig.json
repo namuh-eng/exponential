@@ -19,10 +19,7 @@
       }
     ],
     "paths": {
-      "@/lib/auth": ["./tests/legacy-auth.ts"],
-      "test-auth": ["./tests/test-auth.ts"],
-      "@/*": ["./src/*"],
-      "legacy-api/*": ["./tests/legacy-api/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": [
