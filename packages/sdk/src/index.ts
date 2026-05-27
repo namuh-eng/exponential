@@ -6,12 +6,16 @@ export type ExponentialClient = ReturnType<typeof createExponentialClient>;
 export function createExponentialClient(options: {
   baseUrl?: string;
   token?: string;
+  cookie?: string;
   fetch?: typeof fetch;
 }) {
   const auth: Middleware = {
     async onRequest({ request }) {
       if (options.token) {
         request.headers.set("Authorization", `Bearer ${options.token}`);
+      }
+      if (options.cookie) {
+        request.headers.set("Cookie", options.cookie);
       }
       return request;
     },

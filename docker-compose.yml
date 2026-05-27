@@ -1,50 +1,49 @@
-# docker-compose.yml — Production stack for exponential
+# docker-compose.yml — self-hosted split stack for exponential.
 # Usage:
-#   Production:   docker compose up -d
-#   Dev services: docker compose up postgres redis -d
-#   Override:     docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#   cp .env.example .env
+#   docker compose up --build
+#   open http://localhost:7015
+#
+# The stack mirrors production boundaries: Next.js web, Go API, schema task,
+# API migrations, Postgres, and Redis. Use docker-compose.dev.yml for hot-reload
+# development instead.
 
-# ---------------------------------------------------------------------------
-# Shared environment variables — referenced by the app service via YAML anchor
-# ---------------------------------------------------------------------------
-x-environment: &environment
-  NODE_ENV: production
-  DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/exponential}
-  REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
-  BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
-  NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
-  AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID}
-  AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET}
-  AWS_REGION: ${AWS_REGION:-us-east-1}
-  S3_BUCKET: ${S3_BUCKET}
-  SENDER_EMAIL: ${SENDER_EMAIL}
-  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+x-database-url: &database-url postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/exponential?sslmode=disable
+x-redis-url: &redis-url redis://redis:6379
+x-web-headless-flags: &web-headless-flags
+  EXPONENTIAL_HEADLESS_DIRECT_API_REWRITE: "true"
+  EXPONENTIAL_HEADLESS_ISSUES: "true"
+  EXPONENTIAL_HEADLESS_ISSUE_BULK: "true"
+  EXPONENTIAL_HEADLESS_ACCOUNT_NOTIFICATIONS: "true"
+  EXPONENTIAL_HEADLESS_ACCOUNT_PREFERENCES: "true"
+  EXPONENTIAL_HEADLESS_ACCOUNT_PROFILE: "true"
+  EXPONENTIAL_HEADLESS_ACCOUNT_SECURITY: "true"
+  EXPONENTIAL_HEADLESS_ACCOUNT_WORKSPACE_LEAVE: "true"
+  EXPONENTIAL_HEADLESS_VIEWS: "true"
+  EXPONENTIAL_HEADLESS_MY_ISSUES: "true"
+  EXPONENTIAL_HEADLESS_PROJECT_UPDATE_CONFIGURATIONS: "true"
+  EXPONENTIAL_HEADLESS_PROJECT_UPDATES: "true"
+  EXPONENTIAL_HEADLESS_AGENT_RUNS: "true"
+  EXPONENTIAL_HEADLESS_PROJECT_LABELS: "true"
+  EXPONENTIAL_HEADLESS_PROJECT_STATUSES: "true"
+  EXPONENTIAL_HEADLESS_CUSTOM_EMOJIS: "true"
+  EXPONENTIAL_HEADLESS_PROJECT_TEMPLATES: "true"
+  EXPONENTIAL_HEADLESS_NOTIFICATIONS: "true"
+  EXPONENTIAL_HEADLESS_LABELS: "true"
+  EXPONENTIAL_HEADLESS_ISSUE_TEMPLATES: "true"
+  EXPONENTIAL_HEADLESS_DOCUMENTS: "true"
+  EXPONENTIAL_HEADLESS_SIDEBAR_FAVORITES: "true"
+  EXPONENTIAL_HEADLESS_INTEGRATIONS: "true"
+  EXPONENTIAL_HEADLESS_ANALYTICS: "true"
+  EXPONENTIAL_HEADLESS_TEAMS: "true"
+  EXPONENTIAL_HEADLESS_WORKSPACES: "true"
+  EXPONENTIAL_HEADLESS_COMMENTS: "true"
+  EXPONENTIAL_HEADLESS_PROJECTS: "true"
+  EXPONENTIAL_HEADLESS_INBOUND: "true"
+  EXPONENTIAL_HEADLESS_INITIATIVES: "true"
+  EXPONENTIAL_HEADLESS_AUTH_PROVIDERS: "true"
 
 services:
-  # ---------------------------------------------------------------------------
-  # Application — Next.js 16 App Router
-  # ---------------------------------------------------------------------------
-  app:
-    image: ghcr.io/namuh-eng/exponential:latest
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      <<: *environment
-    env_file:
-      - .env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - namuh
-
-  # ---------------------------------------------------------------------------
-  # Postgres 15 — primary database
-  # ---------------------------------------------------------------------------
   postgres:
     image: postgres:15-alpine
     restart: unless-stopped
@@ -53,7 +52,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
     ports:
-      - "5432:5432"
+      - "${PG_BIND:-127.0.0.1}:${PG_PORT:-15532}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -62,18 +61,13 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    networks:
-      - namuh
 
-  # ---------------------------------------------------------------------------
-  # Redis 7 — session cache and background job queue
-  # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     restart: unless-stopped
     command: redis-server --appendonly yes
     ports:
-      - "6379:6379"
+      - "${REDIS_BIND:-127.0.0.1}:${REDIS_PORT:-16379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -82,19 +76,107 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
-    networks:
-      - namuh
 
-# ---------------------------------------------------------------------------
-# Named volumes — persist data across container restarts
-# ---------------------------------------------------------------------------
+  web-schema:
+    build:
+      context: .
+      dockerfile: infra/docker/web-schema.Dockerfile
+    environment:
+      DATABASE_URL: *database-url
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api-migrate:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    entrypoint: ["exponential-migrate"]
+    environment:
+      EXPONENTIAL_API_DATABASE_URL: *database-url
+      MIGRATIONS_DIR: /migrations
+    depends_on:
+      web-schema:
+        condition: service_completed_successfully
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      EXPONENTIAL_API_ADDR: ":7016"
+      EXPONENTIAL_API_DATABASE_URL: *database-url
+      EXPONENTIAL_API_REDIS_URL: *redis-url
+      EXPONENTIAL_API_ENVIRONMENT: production
+      EXPONENTIAL_API_SERVICE_NAME: exponential-api
+      EXPONENTIAL_API_OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-${NEXT_PUBLIC_APP_URL:-http://localhost:7015}}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:7015}
+      EXPONENTIAL_APP_URL: ${EXPONENTIAL_APP_URL:-${NEXT_PUBLIC_APP_URL:-http://localhost:7015}}
+      EXPONENTIAL_SESSION_SECRET: ${EXPONENTIAL_SESSION_SECRET:?Set EXPONENTIAL_SESSION_SECRET in .env}
+      EXPONENTIAL_INVITE_TOKEN_SECRET: ${EXPONENTIAL_INVITE_TOKEN_SECRET:?Set EXPONENTIAL_INVITE_TOKEN_SECRET in .env}
+      EXPONENTIAL_TRUSTED_PROXIES: ${EXPONENTIAL_TRUSTED_PROXIES:-}
+      AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:-}
+      AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET:-}
+      AUTH_SLACK_ID: ${AUTH_SLACK_ID:-}
+      AUTH_SLACK_SECRET: ${AUTH_SLACK_SECRET:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-}
+      INBOUND_EMAIL_WEBHOOK_SECRET: ${INBOUND_EMAIL_WEBHOOK_SECRET:-}
+      EXPONENTIAL_INBOUND_DOMAIN: ${EXPONENTIAL_INBOUND_DOMAIN:-}
+    ports:
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-7016}:7016"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api-migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *web-headless-flags
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      DATABASE_URL: *database-url
+      REDIS_URL: *redis-url
+      DB_SSL: "false"
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:7015}
+      EXPONENTIAL_APP_URL: ${EXPONENTIAL_APP_URL:-${NEXT_PUBLIC_APP_URL:-http://localhost:7015}}
+      EXPONENTIAL_API_URL: http://api:7016/v1
+      EXPONENTIAL_SESSION_SECRET: ${EXPONENTIAL_SESSION_SECRET:?Set EXPONENTIAL_SESSION_SECRET in .env}
+      EXPONENTIAL_INVITE_TOKEN_SECRET: ${EXPONENTIAL_INVITE_TOKEN_SECRET:?Set EXPONENTIAL_INVITE_TOKEN_SECRET in .env}
+      AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:-}
+      AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-}
+      SENDER_EMAIL: ${SENDER_EMAIL:-}
+      EMAIL_PREVIEW_PATH: ${EMAIL_PREVIEW_PATH:-/tmp/exponential-email-preview}
+      INBOUND_EMAIL_WEBHOOK_SECRET: ${INBOUND_EMAIL_WEBHOOK_SECRET:-}
+      EXPONENTIAL_INBOUND_DOMAIN: ${EXPONENTIAL_INBOUND_DOMAIN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DISCUSSION_SUMMARY_PROVIDER: ${DISCUSSION_SUMMARY_PROVIDER:-}
+      DISCUSSION_SUMMARY_OPENAI_MODEL: ${DISCUSSION_SUMMARY_OPENAI_MODEL:-}
+    ports:
+      - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-7015}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web-schema:
+        condition: service_completed_successfully
+      api:
+        condition: service_started
+
 volumes:
   postgres_data:
   redis_data:
-
-# ---------------------------------------------------------------------------
-# Internal network — services communicate without exposing ports to host
-# ---------------------------------------------------------------------------
-networks:
-  namuh:
-    driver: bridge

@@ -2,7 +2,6 @@
 
 [![GitHub stars](https://img.shields.io/github/stars/namuh-eng/exponential?style=flat-square)](https://github.com/namuh-eng/exponential)
 [![License: ELv2](https://img.shields.io/badge/License-Elastic%202.0-blue.svg?style=flat-square)](LICENSE)
-[![Docker pulls](https://img.shields.io/docker/pulls/namuh-eng/exponential?style=flat-square)](https://hub.docker.com/r/namuh-eng/exponential)
 
 **Open source Linear alternative — keyboard-first issue tracking for software teams.**
 
@@ -14,7 +13,7 @@ A fully functional clone of [Linear](https://linear.app) built with Next.js 16, 
 
 exponential is a production-grade issue tracking and project management tool built to match Linear's speed and keyboard-first UX. Whether you're a startup building in public or an enterprise needing self-hosted infrastructure, exponential is a fully open source alternative that you can deploy, customize, and extend.
 
-exponential covers 41 features across issues, projects, cycles, initiatives, and real-time notifications — all tested and deployed from day one.
+exponential covers core issue, project, cycle, initiative, and notification workflows with automated validation across the monorepo.
 
 ---
 
@@ -39,7 +38,26 @@ Core capabilities:
 
 ## Quick Start
 
-### Option 1: Local Development
+### Option 1: Self-host with Docker Compose
+
+```bash
+git clone https://github.com/namuh-eng/exponential.git
+cd exponential
+cp .env.example .env
+
+# Replace the sample secrets in .env.
+openssl rand -hex 32 # copy into EXPONENTIAL_SESSION_SECRET
+openssl rand -hex 32 # copy into EXPONENTIAL_INVITE_TOKEN_SECRET
+$EDITOR .env
+
+docker compose up --build
+```
+
+The app will be available at `http://localhost:7015`. See
+[docs/self-hosting.md](docs/self-hosting.md) for reverse proxy, backup, upgrade,
+optional S3/SES, and AWS ECS deployment notes.
+
+### Option 2: Local Development
 
 ```bash
 # Clone the repository
@@ -47,40 +65,28 @@ git clone https://github.com/namuh-eng/exponential.git
 cd exponential
 
 # Install dependencies
-npm install
-
-# Start infrastructure services (PostgreSQL + Redis)
-make dev-services
-# If Docker/socket access is unavailable, start a host Postgres instead,
-# set DATABASE_URL in .env.local, and continue with npm run db:push.
+pnpm install
 
 # Configure environment
 cp .env.example .env
-# Edit .env with your AWS credentials and auth settings
 
-# Run database migrations
-npm run db:push
-
-# Start the dev server (runs on http://localhost:3000)
-# This preflights Postgres first and prints setup steps instead of letting
-# protected routes crash later with a generic 500.
-npm run dev
+# Start Postgres, Redis, the Go API, and the Next.js dev server
+docker compose -f docker-compose.dev.yml up --build
 ```
 
-### Option 2: Docker Compose (Coming Soon)
+The development stack runs on `http://localhost:7015` and includes Mailhog.
+
+### Option 3: AWS ECS Deployment
 
 ```bash
-git clone https://github.com/namuh-eng/exponential.git
-cd exponential
-
-docker compose up
+cp .env.example .env
+bash scripts/prepare-ecs-deploy-env.sh
+DB_PASSWORD=<generated-or-existing-password> bash scripts/preflight.sh
+bash scripts/prepare-ecs-deploy-env.sh
+RUN_PROD_SMOKE=true scripts/deploy-ecs.sh
 ```
 
-The app will be available at `http://localhost:3000`.
-
-### Option 3: Cloud Deployment (Coming Soon)
-
-One-click deployment to Vercel or Railway coming soon.
+The ECS path provisions and deploys split web/API services behind an ALB.
 
 ---
 
@@ -90,11 +96,11 @@ One-click deployment to Vercel or Railway coming soon.
 |-------|-----------|
 | **Frontend** | Next.js 16, React 19, TypeScript |
 | **Styling** | Tailwind CSS, Radix UI |
-| **Database** | PostgreSQL (AWS RDS), Drizzle ORM |
+| **Database** | PostgreSQL, pgx/sqlc, Drizzle schema tasks |
 | **Cache & Realtime** | Redis (AWS ElastiCache), ioredis |
-| **Authentication** | Better Auth, Google OAuth, Magic Links |
-| **Storage** | AWS S3 (files, avatars) |
-| **Email** | AWS SES (magic links, notifications) |
+| **Authentication** | First-party Go auth, Google OAuth, magic links |
+| **Storage** | Optional AWS S3-compatible attachment storage |
+| **Email** | Optional AWS SES email delivery |
 | **Testing** | Vitest (unit), Playwright (E2E) |
 | **Linting** | Biome |
 | **Deployment** | Docker, AWS ECS Fargate |
@@ -131,7 +137,7 @@ npm run db:push
 ### Quality Standards
 
 - **TypeScript strict mode** — no `any` types
-- **100% tested** — every feature has unit tests (Vitest) and E2E tests (Playwright)
+- **Tested changes** — Go tests, Vitest/unit tests, and Playwright E2E cover critical flows
 - **Consistent formatting** — Biome handles linting and formatting
 - **Small commits** — one feature per commit with clear messages
 
@@ -139,16 +145,13 @@ npm run db:push
 
 ```
 exponential/
-├── src/
-│   ├── app/              # Next.js App Router pages and API routes
-│   ├── components/       # Reusable React components
-│   ├── lib/              # Utilities, helpers, API clients
-│   │   └── db/           # Drizzle ORM schema
-│   └── types/            # TypeScript types
-├── tests/                # Vitest unit tests
-│   └── e2e/              # Playwright E2E tests
-├── packages/sdk/         # TypeScript SDK
-└── scripts/              # Infrastructure and deployment
+├── apps/api/             # Go headless API and migration binary
+├── apps/web/             # Next.js UI-only app
+├── packages/proto/       # OpenAPI contract and SQL migrations
+├── packages/sdk/         # Generated TypeScript SDK
+├── infra/                # Dockerfiles and ECS task definitions
+├── scripts/              # Validation and deployment scripts
+└── tests/                # Cross-app tests
 ```
 
 ---
@@ -167,43 +170,30 @@ exponential/
 Copy `.env.example` to `.env` and configure:
 
 ```bash
-# Database
-DATABASE_URL=postgresql://user:password@localhost/exponential
+# Database and Redis
+DATABASE_URL=postgresql://postgres:password@localhost:15532/exponential?sslmode=disable
+REDIS_URL=redis://localhost:16379
 
-# Redis
-REDIS_URL=redis://localhost:6379
+# Public URLs and first-party auth
+EXPONENTIAL_SESSION_SECRET=<openssl-rand-hex-32>
+EXPONENTIAL_INVITE_TOKEN_SECRET=<openssl-rand-hex-32>
+EXPONENTIAL_APP_URL=http://localhost:7015
+NEXT_PUBLIC_APP_URL=http://localhost:7015
 
-# AWS (optional, required for production)
-AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=your-access-key
-AWS_SECRET_ACCESS_KEY=your-secret-key
-
-# S3 (for file uploads)
-AWS_S3_BUCKET=exponential-uploads
-
-# SES (for email)
-AWS_SES_SENDER_EMAIL=noreply@exponential.com
-
-# Authentication
+# Optional OAuth / storage / email
 AUTH_GOOGLE_ID=your-google-oauth-id
 AUTH_GOOGLE_SECRET=your-google-oauth-secret
-BETTER_AUTH_SECRET=your-random-secret
+AWS_REGION=us-east-1
+S3_BUCKET=exponential-uploads
+SENDER_EMAIL=noreply@example.com
 ```
 
-### Infrastructure Provisioning (Production)
+### Self-hosting and infrastructure
 
-To provision AWS infrastructure (RDS, ElastiCache, S3, ECR, SES):
-
-```bash
-bash scripts/preflight.sh
-```
-
-This script will:
-- Create RDS PostgreSQL instance
-- Create ElastiCache Redis cluster
-- Create S3 bucket for uploads
-- Configure SES for email delivery
-- Create ECR registry for Docker images
+For a single-host install, use `docker compose up --build`; it builds the split
+Go API and Next.js web images and runs both schema/migration jobs. For AWS ECS,
+use `scripts/prepare-ecs-deploy-env.sh`, `scripts/preflight.sh`, and
+`scripts/deploy-ecs.sh`. Full details: [docs/self-hosting.md](docs/self-hosting.md).
 
 ---
 
@@ -225,7 +215,7 @@ We welcome contributions! Whether it's bug fixes, new features, or improvements 
 
 - **Issues** — Report bugs or request features on [GitHub Issues](https://github.com/namuh-eng/exponential/issues)
 - **Discussions** — Ask questions on [GitHub Discussions](https://github.com/namuh-eng/exponential/discussions)
-- **Documentation** — [Full docs coming soon]
+- **Documentation** — Start with [self-hosting](docs/self-hosting.md) and [contributing](CONTRIBUTING.md)
 
 ---
 
