@@ -43,3 +43,5 @@ cpd-checklist.md
 apps/web/.turbo/
 apps/web/tests/e2e/.auth/
 .turbo/
+.DS_Store
+/.agents/
