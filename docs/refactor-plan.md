@@ -17,7 +17,7 @@ Performance, scalability, and a clean public contract are non-negotiable. Produc
 
 ## Current state (as of this branch)
 
-- **Stack:** Next.js 16 App Router (frontend + API routes in one process), TypeScript strict, Drizzle ORM + Postgres (AWS RDS), Redis (ElastiCache), Better Auth (Google OAuth + magic links), AWS S3/SES.
+- **Stack:** Next.js 16 App Router (frontend + API routes in one process), TypeScript strict, Postgres (AWS RDS), Redis (ElastiCache), Better Auth (Google OAuth + magic links), AWS S3/SES.
 - **API surface:** ~30+ route folders under `src/app/api/` (account, agent, analytics, auth, comments, custom-emojis, document-folders, document-settings, document-templates, inbound, …).
 - **Deploy target:** AWS ECS Fargate + ALB — provisioning script at `scripts/preflight.sh`, **not yet executed**.
 - **Tests:** Vitest unit tests + Playwright E2E (`tests/`).
@@ -53,7 +53,7 @@ These were validated via independent review (Codex consult). Do not relitigate w
 | **WebSocket sync inside Go API** as module | Polyglot ops cost is real on day 1. Go WS libs are fast enough. Extract to Rust only if metrics demand. | Separate Rust sync service from day 1 (cargo-culted) |
 | **OpenAPI 3.1** as contract | CLI-first consumption demands stable curlable REST. SDK generated from spec. | gRPC / Connect-RPC (heavier CLI ergonomics); tRPC (TS-locked, kills CLI portability) |
 | **First-party Go auth** for auth | Owner override after implementation review: avoid a separate auth server. Use standard Go libraries (`golang.org/x/oauth2`, `go-oidc`), opaque HttpOnly sessions backed by the existing `session` table, magic-link tokens in `verification`, and PATs for CLI. | separate auth server (too much operational/product weight for current scope); custom password auth as first slice; Casdoor/Hydra |
-| **sqlc + SQL-first migrations** | Cross-language schema ownership creates drift. SQL is the single truth; Go types and TS types both generated from it. | Keeping Drizzle as schema authority (drift); ent/bun (worse fit for schema-driven flow) |
+| **sqlc + SQL-first migrations** | Cross-language schema ownership creates drift. SQL is the single truth; Go types and TS types both generated from it. | Keeping a web-owned schema authority (drift); ent/bun (worse fit for schema-driven flow) |
 | **Op log + monotonic versions** for sync | Linear-style delta sync needs ordered, idempotent, replayable deltas. CRDTs add complexity for conflicts a tracker doesn't need. | CRDTs (overkill); naive event broadcast + refetch (poor UX) |
 
 ---

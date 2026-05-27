@@ -45,3 +45,6 @@ apps/web/tests/e2e/.auth/
 .turbo/
 .DS_Store
 /.agents/
+
+# Session handoff scratch — local only
+.handoffs/

@@ -64,8 +64,8 @@ export function shouldRenderDatabaseBootstrapError(error: unknown) {
 
 export const DATABASE_BOOTSTRAP_TITLE = "Local database needs bootstrapping";
 export const DATABASE_BOOTSTRAP_MESSAGE =
-  "Whetline could not use the local Postgres schema required by authenticated app routes. Start the local services, apply the Drizzle schema, then reload.";
+  "Whetline could not use the local Postgres schema required by authenticated app routes. Start the local services, apply the Go SQL migrations, then reload.";
 export const DATABASE_BOOTSTRAP_SETUP_COMMANDS = [
   "make dev-services",
-  "npm run db:push",
+  "EXPONENTIAL_API_DATABASE_URL=$DATABASE_URL go run ./apps/api/cmd/migrate",
 ] as const;

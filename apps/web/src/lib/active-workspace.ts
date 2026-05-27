@@ -1,6 +1,5 @@
-import { db } from "@/lib/db";
-import { member, workspace } from "@/lib/db/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { requireApiData } from "@/lib/api-response";
+import { createServerApiClient } from "@/lib/server-api-client";
 import { cookies } from "next/headers";
 import { CANONICAL_WORKSPACE_SLUG } from "./canonical-routes";
 import { getWorkspaceSlugFromPath } from "./workspace-paths";
@@ -74,42 +73,7 @@ export async function resolveActiveWorkspaceId(userId: string) {
   const cookieStore = await cookies();
   const preferredWorkspaceId = cookieStore.get("activeWorkspaceId")?.value;
   const preferredWorkspaceSlug = cookieStore.get("activeWorkspaceSlug")?.value;
-
-  const memberships = await db
-    .select({
-      workspaceId: member.workspaceId,
-      workspaceSlug: workspace.urlSlug,
-    })
-    .from(member)
-    .innerJoin(workspace, eq(member.workspaceId, workspace.id))
-    .where(eq(member.userId, userId))
-    .orderBy(desc(member.createdAt))
-    .limit(50);
-
-  if (
-    !memberships.some(
-      (membership) => membership.workspaceSlug === CANONICAL_WORKSPACE_SLUG,
-    )
-  ) {
-    const [canonicalMembership] = await db
-      .select({
-        workspaceId: member.workspaceId,
-        workspaceSlug: workspace.urlSlug,
-      })
-      .from(member)
-      .innerJoin(workspace, eq(member.workspaceId, workspace.id))
-      .where(
-        and(
-          eq(member.userId, userId),
-          eq(workspace.urlSlug, CANONICAL_WORKSPACE_SLUG),
-        ),
-      )
-      .limit(1);
-
-    if (canonicalMembership) {
-      memberships.push(canonicalMembership);
-    }
-  }
+  const memberships = await listWorkspaceMembershipChoices();
 
   if (memberships.length === 0) {
     return null;
@@ -122,13 +86,9 @@ export async function resolveActiveWorkspaceId(userId: string) {
 }
 
 export async function resolveWorkspaceIdBySlug(userId: string, slug: string) {
-  const [membership] = await db
-    .select({ workspaceId: member.workspaceId })
-    .from(member)
-    .innerJoin(workspace, eq(member.workspaceId, workspace.id))
-    .where(and(eq(member.userId, userId), eq(workspace.urlSlug, slug)))
-    .limit(1);
-
+  const membership = (await listWorkspaceMembershipChoices()).find(
+    (entry) => entry.workspaceSlug === slug,
+  );
   return membership?.workspaceId ?? null;
 }
 
@@ -164,4 +124,16 @@ export async function resolveRequestWorkspaceId(
   }
 
   return resolveActiveWorkspaceId(userId);
+}
+
+async function listWorkspaceMembershipChoices() {
+  const client = await createServerApiClient();
+  const memberships = requireApiData(
+    await client.GET("/workspaces"),
+    "List workspaces",
+  );
+  return memberships.map((membership) => ({
+    workspaceId: membership.workspaceId,
+    workspaceSlug: membership.workspaceSlug,
+  }));
 }

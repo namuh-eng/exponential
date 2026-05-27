@@ -8,13 +8,6 @@ vi.mock("@/lib/auth", () => {
   throw new Error("public auth pages must not import server auth/session code");
 });
 
-vi.mock("@/lib/db", () => {
-  throw Object.assign(
-    new Error("connect ECONNREFUSED 127.0.0.1:5432 from public auth page"),
-    { code: "ECONNREFUSED" },
-  );
-});
-
 vi.mock("@/lib/auth-client", () => ({
   signIn: {
     social: vi.fn(),

@@ -62,7 +62,9 @@ function redact(url) {
 
 function printSetup() {
   console.error("  make dev-services");
-  console.error("  pnpm db:push");
+  console.error(
+    "  EXPONENTIAL_API_DATABASE_URL=$DATABASE_URL go run ./apps/api/cmd/migrate",
+  );
 }
 
 if (process.env.SKIP_DB_PREFLIGHT === "true") {
@@ -104,11 +106,11 @@ try {
       `Missing required table${missingTables.length === 1 ? "" : "s"}: ${missingTables.join(", ")}`,
     );
     console.error(
-      "Apply the Drizzle schema before pnpm dev so authenticated routes and Playwright test sessions can work:",
+      "Apply the Go SQL migrations before pnpm dev so authenticated routes and Playwright test sessions can work:",
     );
     printSetup();
     console.error(
-      "\nIf Docker is unavailable, start/use a host Postgres instead, set DATABASE_URL in .env.local, then run npm run db:push (or pnpm db:push from the repo root).",
+      "\nIf Docker is unavailable, start/use a host Postgres instead, set DATABASE_URL in .env.local, then run EXPONENTIAL_API_DATABASE_URL=$DATABASE_URL go run ./apps/api/cmd/migrate from the repo root.",
     );
     process.exitCode = 1;
   }
@@ -117,10 +119,12 @@ try {
 } catch (error) {
   await pool.end().catch(() => undefined);
   console.error(`\nLocal database is unavailable: ${redact(connectionString)}`);
-  console.error("Start the dev database and apply the schema before pnpm dev:");
+  console.error(
+    "Start the dev database and apply the Go SQL migrations before pnpm dev:",
+  );
   printSetup();
   console.error(
-    "\nIf Docker is unavailable, start/use a host Postgres instead, set DATABASE_URL in .env.local, then run npm run db:push (or pnpm db:push from the repo root).",
+    "\nIf Docker is unavailable, start/use a host Postgres instead, set DATABASE_URL in .env.local, then run EXPONENTIAL_API_DATABASE_URL=$DATABASE_URL go run ./apps/api/cmd/migrate from the repo root.",
   );
   console.error(
     "Only set SKIP_DB_PREFLIGHT=true when intentionally debugging non-database routes; it can leave the authenticated app half-working.",

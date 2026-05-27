@@ -733,6 +733,19 @@ const (
 	Code AuthorizeOAuthApplicationParamsResponseType = "code"
 )
 
+// AcceptWorkspaceInviteRequest defines model for AcceptWorkspaceInviteRequest.
+type AcceptWorkspaceInviteRequest struct {
+	Token string `json:"token"`
+}
+
+// AcceptWorkspaceInviteResponse defines model for AcceptWorkspaceInviteResponse.
+type AcceptWorkspaceInviteResponse struct {
+	Success       bool               `json:"success"`
+	TeamKey       string             `json:"teamKey"`
+	WorkspaceId   openapi_types.UUID `json:"workspaceId"`
+	WorkspaceSlug string             `json:"workspaceSlug"`
+}
+
 // AccountNotificationsResponse defines model for AccountNotificationsResponse.
 type AccountNotificationsResponse struct {
 	AccountNotifications map[string]interface{} `json:"accountNotifications"`
@@ -921,6 +934,25 @@ type AuthProviderCapabilitiesResponse struct {
 type AuthProviderWorkspace struct {
 	Authentication WorkspaceAuthenticationSettings `json:"authentication"`
 	Slug           string                          `json:"slug"`
+}
+
+// AuthSessionResponse defines model for AuthSessionResponse.
+type AuthSessionResponse struct {
+	User AuthSessionUser `json:"user"`
+}
+
+// AuthSessionUser defines model for AuthSessionUser.
+type AuthSessionUser struct {
+	Email string  `json:"email"`
+	Id    string  `json:"id"`
+	Image *string `json:"image"`
+	Name  string  `json:"name"`
+}
+
+// AutoJoinApprovedDomainWorkspaceResponse defines model for AutoJoinApprovedDomainWorkspaceResponse.
+type AutoJoinApprovedDomainWorkspaceResponse struct {
+	WorkspaceId   *openapi_types.UUID `json:"workspaceId"`
+	WorkspaceSlug *string             `json:"workspaceSlug"`
 }
 
 // BillingPlan defines model for BillingPlan.
@@ -3117,14 +3149,15 @@ type ViewTeam struct {
 
 // Workspace defines model for Workspace.
 type Workspace struct {
-	FiscalMonth    string             `json:"fiscalMonth"`
-	Id             openapi_types.UUID `json:"id"`
-	Logo           *string            `json:"logo"`
-	Name           string             `json:"name"`
-	Plan           string             `json:"plan"`
-	Region         string             `json:"region"`
-	UrlSlug        string             `json:"urlSlug"`
-	WelcomeMessage string             `json:"welcomeMessage"`
+	FiscalMonth    string                 `json:"fiscalMonth"`
+	Id             openapi_types.UUID     `json:"id"`
+	Logo           *string                `json:"logo"`
+	Name           string                 `json:"name"`
+	Plan           string                 `json:"plan"`
+	Region         string                 `json:"region"`
+	Settings       map[string]interface{} `json:"settings"`
+	UrlSlug        string                 `json:"urlSlug"`
+	WelcomeMessage string                 `json:"welcomeMessage"`
 }
 
 // WorkspaceAccess defines model for WorkspaceAccess.
@@ -3392,6 +3425,12 @@ type WorkspaceInitiativeSettingsResponse struct {
 	ViewerRole          string                      `json:"viewerRole"`
 }
 
+// WorkspaceInvitePreviewResponse defines model for WorkspaceInvitePreviewResponse.
+type WorkspaceInvitePreviewResponse struct {
+	Valid       bool                `json:"valid"`
+	WorkspaceId *openapi_types.UUID `json:"workspaceId"`
+}
+
 // WorkspaceMember defines model for WorkspaceMember.
 type WorkspaceMember struct {
 	Email         string                `json:"email"`
@@ -3406,7 +3445,7 @@ type WorkspaceMember struct {
 	Role          WorkspaceRole         `json:"role"`
 	ShowLocalTime *bool                 `json:"showLocalTime,omitempty"`
 	Status        WorkspaceMemberStatus `json:"status"`
-	Teams         []string              `json:"teams"`
+	Teams         []WorkspaceMemberTeam `json:"teams"`
 	Timezone      *string               `json:"timezone,omitempty"`
 	Title         *string               `json:"title,omitempty"`
 	UserId        *string               `json:"userId"`
@@ -3417,6 +3456,13 @@ type WorkspaceMemberKind string
 
 // WorkspaceMemberStatus defines model for WorkspaceMember.Status.
 type WorkspaceMemberStatus string
+
+// WorkspaceMemberTeam defines model for WorkspaceMemberTeam.
+type WorkspaceMemberTeam struct {
+	Id   openapi_types.UUID `json:"id"`
+	Key  string             `json:"key"`
+	Name string             `json:"name"`
+}
 
 // WorkspaceMembersResponse defines model for WorkspaceMembersResponse.
 type WorkspaceMembersResponse struct {
@@ -3592,6 +3638,11 @@ type CreateCurrentWorkspaceScimTokenJSONBody struct {
 type ListWorkspaceExportsParams struct {
 	Id       *string `form:"id,omitempty" json:"id,omitempty"`
 	Download *string `form:"download,omitempty" json:"download,omitempty"`
+}
+
+// PreviewWorkspaceInviteParams defines parameters for PreviewWorkspaceInvite.
+type PreviewWorkspaceInviteParams struct {
+	Token string `form:"token" json:"token"`
 }
 
 // UpdateAccountNotificationsJSONRequestBody defines body for UpdateAccountNotifications for application/json ContentType.
@@ -3806,6 +3857,9 @@ type UpdateViewJSONRequestBody = ViewRequest
 
 // CreateWorkspaceJSONRequestBody defines body for CreateWorkspace for application/json ContentType.
 type CreateWorkspaceJSONRequestBody = CreateWorkspaceRequest
+
+// AcceptWorkspaceInviteJSONRequestBody defines body for AcceptWorkspaceInvite for application/json ContentType.
+type AcceptWorkspaceInviteJSONRequestBody = AcceptWorkspaceInviteRequest
 
 // UpdateCurrentWorkspaceJSONRequestBody defines body for UpdateCurrentWorkspace for application/json ContentType.
 type UpdateCurrentWorkspaceJSONRequestBody = UpdateWorkspaceRequest
@@ -6472,6 +6526,9 @@ type ServerInterface interface {
 
 	// (POST /auth/saml/discovery)
 	DiscoverSamlUrl(w http.ResponseWriter, r *http.Request)
+	// Get the authenticated browser session
+	// (GET /auth/session)
+	GetAuthSession(w http.ResponseWriter, r *http.Request)
 
 	// (DELETE /comments/{id})
 	DeleteComment(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
@@ -6892,6 +6949,12 @@ type ServerInterface interface {
 	// Create a workspace with a default team and workflow states
 	// (POST /workspaces)
 	CreateWorkspace(w http.ResponseWriter, r *http.Request)
+	// Accept a workspace invitation token as the authenticated user
+	// (POST /workspaces/accept-invite)
+	AcceptWorkspaceInvite(w http.ResponseWriter, r *http.Request)
+	// Join the authenticated user to a workspace matching their approved email domain
+	// (POST /workspaces/approved-domain-auto-join)
+	AutoJoinApprovedDomainWorkspace(w http.ResponseWriter, r *http.Request)
 
 	// (DELETE /workspaces/current)
 	DeleteCurrentWorkspace(w http.ResponseWriter, r *http.Request)
@@ -7006,6 +7069,9 @@ type ServerInterface interface {
 
 	// (POST /workspaces/invite)
 	InviteWorkspaceMembers(w http.ResponseWriter, r *http.Request)
+	// Preview a workspace invitation token
+	// (GET /workspaces/invite-preview)
+	PreviewWorkspaceInvite(w http.ResponseWriter, r *http.Request, params PreviewWorkspaceInviteParams)
 
 	// (DELETE /workspaces/members)
 	RemoveWorkspaceMemberOrInvitation(w http.ResponseWriter, r *http.Request)
@@ -7134,6 +7200,12 @@ func (_ Unimplemented) GetAuthProviderCapabilities(w http.ResponseWriter, r *htt
 
 // (POST /auth/saml/discovery)
 func (_ Unimplemented) DiscoverSamlUrl(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get the authenticated browser session
+// (GET /auth/session)
+func (_ Unimplemented) GetAuthSession(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7865,6 +7937,18 @@ func (_ Unimplemented) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Accept a workspace invitation token as the authenticated user
+// (POST /workspaces/accept-invite)
+func (_ Unimplemented) AcceptWorkspaceInvite(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Join the authenticated user to a workspace matching their approved email domain
+// (POST /workspaces/approved-domain-auto-join)
+func (_ Unimplemented) AutoJoinApprovedDomainWorkspace(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // (DELETE /workspaces/current)
 func (_ Unimplemented) DeleteCurrentWorkspace(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -8052,6 +8136,12 @@ func (_ Unimplemented) PreviewWorkspaceImport(w http.ResponseWriter, r *http.Req
 
 // (POST /workspaces/invite)
 func (_ Unimplemented) InviteWorkspaceMembers(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Preview a workspace invitation token
+// (GET /workspaces/invite-preview)
+func (_ Unimplemented) PreviewWorkspaceInvite(w http.ResponseWriter, r *http.Request, params PreviewWorkspaceInviteParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8530,6 +8620,26 @@ func (siw *ServerInterfaceWrapper) DiscoverSamlUrl(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DiscoverSamlUrl(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAuthSession operation middleware
+func (siw *ServerInterfaceWrapper) GetAuthSession(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAuthSession(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12670,6 +12780,46 @@ func (siw *ServerInterfaceWrapper) CreateWorkspace(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// AcceptWorkspaceInvite operation middleware
+func (siw *ServerInterfaceWrapper) AcceptWorkspaceInvite(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AcceptWorkspaceInvite(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AutoJoinApprovedDomainWorkspace operation middleware
+func (siw *ServerInterfaceWrapper) AutoJoinApprovedDomainWorkspace(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AutoJoinApprovedDomainWorkspace(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteCurrentWorkspace operation middleware
 func (siw *ServerInterfaceWrapper) DeleteCurrentWorkspace(w http.ResponseWriter, r *http.Request) {
 
@@ -13506,6 +13656,40 @@ func (siw *ServerInterfaceWrapper) InviteWorkspaceMembers(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// PreviewWorkspaceInvite operation middleware
+func (siw *ServerInterfaceWrapper) PreviewWorkspaceInvite(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PreviewWorkspaceInviteParams
+
+	// ------------- Required query parameter "token" -------------
+
+	if paramValue := r.URL.Query().Get("token"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "token"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "token", r.URL.Query(), &params.Token)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewWorkspaceInvite(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RemoveWorkspaceMemberOrInvitation operation middleware
 func (siw *ServerInterfaceWrapper) RemoveWorkspaceMemberOrInvitation(w http.ResponseWriter, r *http.Request) {
 
@@ -13761,6 +13945,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/saml/discovery", wrapper.DiscoverSamlUrl)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/auth/session", wrapper.GetAuthSession)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/comments/{id}", wrapper.DeleteComment)
@@ -14183,6 +14370,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/workspaces", wrapper.CreateWorkspace)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workspaces/accept-invite", wrapper.AcceptWorkspaceInvite)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workspaces/approved-domain-auto-join", wrapper.AutoJoinApprovedDomainWorkspace)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/workspaces/current", wrapper.DeleteCurrentWorkspace)
 	})
 	r.Group(func(r chi.Router) {
@@ -14295,6 +14488,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/workspaces/invite", wrapper.InviteWorkspaceMembers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/workspaces/invite-preview", wrapper.PreviewWorkspaceInvite)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/workspaces/members", wrapper.RemoveWorkspaceMemberOrInvitation)
@@ -14879,6 +15075,34 @@ type DiscoverSamlUrldefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response DiscoverSamlUrldefaultApplicationProblemPlusJSONResponse) VisitDiscoverSamlUrlResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAuthSessionRequestObject struct {
+}
+
+type GetAuthSessionResponseObject interface {
+	VisitGetAuthSessionResponse(w http.ResponseWriter) error
+}
+
+type GetAuthSession200JSONResponse AuthSessionResponse
+
+func (response GetAuthSession200JSONResponse) VisitGetAuthSessionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAuthSessiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetAuthSessiondefaultApplicationProblemPlusJSONResponse) VisitGetAuthSessionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(response.StatusCode)
 
@@ -19011,6 +19235,63 @@ func (response CreateWorkspacedefaultApplicationProblemPlusJSONResponse) VisitCr
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type AcceptWorkspaceInviteRequestObject struct {
+	Body *AcceptWorkspaceInviteJSONRequestBody
+}
+
+type AcceptWorkspaceInviteResponseObject interface {
+	VisitAcceptWorkspaceInviteResponse(w http.ResponseWriter) error
+}
+
+type AcceptWorkspaceInvite200JSONResponse AcceptWorkspaceInviteResponse
+
+func (response AcceptWorkspaceInvite200JSONResponse) VisitAcceptWorkspaceInviteResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AcceptWorkspaceInvitedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AcceptWorkspaceInvitedefaultApplicationProblemPlusJSONResponse) VisitAcceptWorkspaceInviteResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type AutoJoinApprovedDomainWorkspaceRequestObject struct {
+}
+
+type AutoJoinApprovedDomainWorkspaceResponseObject interface {
+	VisitAutoJoinApprovedDomainWorkspaceResponse(w http.ResponseWriter) error
+}
+
+type AutoJoinApprovedDomainWorkspace200JSONResponse AutoJoinApprovedDomainWorkspaceResponse
+
+func (response AutoJoinApprovedDomainWorkspace200JSONResponse) VisitAutoJoinApprovedDomainWorkspaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type AutoJoinApprovedDomainWorkspacedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AutoJoinApprovedDomainWorkspacedefaultApplicationProblemPlusJSONResponse) VisitAutoJoinApprovedDomainWorkspaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type DeleteCurrentWorkspaceRequestObject struct {
 }
 
@@ -20116,6 +20397,35 @@ func (response InviteWorkspaceMembersdefaultApplicationProblemPlusJSONResponse) 
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type PreviewWorkspaceInviteRequestObject struct {
+	Params PreviewWorkspaceInviteParams
+}
+
+type PreviewWorkspaceInviteResponseObject interface {
+	VisitPreviewWorkspaceInviteResponse(w http.ResponseWriter) error
+}
+
+type PreviewWorkspaceInvite200JSONResponse WorkspaceInvitePreviewResponse
+
+func (response PreviewWorkspaceInvite200JSONResponse) VisitPreviewWorkspaceInviteResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PreviewWorkspaceInvitedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PreviewWorkspaceInvitedefaultApplicationProblemPlusJSONResponse) VisitPreviewWorkspaceInviteResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type RemoveWorkspaceMemberOrInvitationRequestObject struct {
 	Body *RemoveWorkspaceMemberOrInvitationJSONRequestBody
 }
@@ -20296,6 +20606,9 @@ type StrictServerInterface interface {
 
 	// (POST /auth/saml/discovery)
 	DiscoverSamlUrl(ctx context.Context, request DiscoverSamlUrlRequestObject) (DiscoverSamlUrlResponseObject, error)
+	// Get the authenticated browser session
+	// (GET /auth/session)
+	GetAuthSession(ctx context.Context, request GetAuthSessionRequestObject) (GetAuthSessionResponseObject, error)
 
 	// (DELETE /comments/{id})
 	DeleteComment(ctx context.Context, request DeleteCommentRequestObject) (DeleteCommentResponseObject, error)
@@ -20716,6 +21029,12 @@ type StrictServerInterface interface {
 	// Create a workspace with a default team and workflow states
 	// (POST /workspaces)
 	CreateWorkspace(ctx context.Context, request CreateWorkspaceRequestObject) (CreateWorkspaceResponseObject, error)
+	// Accept a workspace invitation token as the authenticated user
+	// (POST /workspaces/accept-invite)
+	AcceptWorkspaceInvite(ctx context.Context, request AcceptWorkspaceInviteRequestObject) (AcceptWorkspaceInviteResponseObject, error)
+	// Join the authenticated user to a workspace matching their approved email domain
+	// (POST /workspaces/approved-domain-auto-join)
+	AutoJoinApprovedDomainWorkspace(ctx context.Context, request AutoJoinApprovedDomainWorkspaceRequestObject) (AutoJoinApprovedDomainWorkspaceResponseObject, error)
 
 	// (DELETE /workspaces/current)
 	DeleteCurrentWorkspace(ctx context.Context, request DeleteCurrentWorkspaceRequestObject) (DeleteCurrentWorkspaceResponseObject, error)
@@ -20830,6 +21149,9 @@ type StrictServerInterface interface {
 
 	// (POST /workspaces/invite)
 	InviteWorkspaceMembers(ctx context.Context, request InviteWorkspaceMembersRequestObject) (InviteWorkspaceMembersResponseObject, error)
+	// Preview a workspace invitation token
+	// (GET /workspaces/invite-preview)
+	PreviewWorkspaceInvite(ctx context.Context, request PreviewWorkspaceInviteRequestObject) (PreviewWorkspaceInviteResponseObject, error)
 
 	// (DELETE /workspaces/members)
 	RemoveWorkspaceMemberOrInvitation(ctx context.Context, request RemoveWorkspaceMemberOrInvitationRequestObject) (RemoveWorkspaceMemberOrInvitationResponseObject, error)
@@ -21432,6 +21754,30 @@ func (sh *strictHandler) DiscoverSamlUrl(w http.ResponseWriter, r *http.Request)
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DiscoverSamlUrlResponseObject); ok {
 		if err := validResponse.VisitDiscoverSamlUrlResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAuthSession operation middleware
+func (sh *strictHandler) GetAuthSession(w http.ResponseWriter, r *http.Request) {
+	var request GetAuthSessionRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAuthSession(ctx, request.(GetAuthSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAuthSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAuthSessionResponseObject); ok {
+		if err := validResponse.VisitGetAuthSessionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -25441,6 +25787,61 @@ func (sh *strictHandler) CreateWorkspace(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+// AcceptWorkspaceInvite operation middleware
+func (sh *strictHandler) AcceptWorkspaceInvite(w http.ResponseWriter, r *http.Request) {
+	var request AcceptWorkspaceInviteRequestObject
+
+	var body AcceptWorkspaceInviteJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AcceptWorkspaceInvite(ctx, request.(AcceptWorkspaceInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AcceptWorkspaceInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AcceptWorkspaceInviteResponseObject); ok {
+		if err := validResponse.VisitAcceptWorkspaceInviteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AutoJoinApprovedDomainWorkspace operation middleware
+func (sh *strictHandler) AutoJoinApprovedDomainWorkspace(w http.ResponseWriter, r *http.Request) {
+	var request AutoJoinApprovedDomainWorkspaceRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AutoJoinApprovedDomainWorkspace(ctx, request.(AutoJoinApprovedDomainWorkspaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AutoJoinApprovedDomainWorkspace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AutoJoinApprovedDomainWorkspaceResponseObject); ok {
+		if err := validResponse.VisitAutoJoinApprovedDomainWorkspaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // DeleteCurrentWorkspace operation middleware
 func (sh *strictHandler) DeleteCurrentWorkspace(w http.ResponseWriter, r *http.Request) {
 	var request DeleteCurrentWorkspaceRequestObject
@@ -26491,6 +26892,32 @@ func (sh *strictHandler) InviteWorkspaceMembers(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(InviteWorkspaceMembersResponseObject); ok {
 		if err := validResponse.VisitInviteWorkspaceMembersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewWorkspaceInvite operation middleware
+func (sh *strictHandler) PreviewWorkspaceInvite(w http.ResponseWriter, r *http.Request, params PreviewWorkspaceInviteParams) {
+	var request PreviewWorkspaceInviteRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewWorkspaceInvite(ctx, request.(PreviewWorkspaceInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewWorkspaceInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewWorkspaceInviteResponseObject); ok {
+		if err := validResponse.VisitPreviewWorkspaceInviteResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -4,8 +4,8 @@
 #   docker compose up --build
 #   open http://localhost:7015
 #
-# The stack mirrors production boundaries: Next.js web, Go API, schema task,
-# API migrations, Postgres, and Redis. Use docker-compose.dev.yml for hot-reload
+# The stack mirrors production boundaries: Next.js web, Go API,
+# SQL migrations, Postgres, and Redis. Use docker-compose.dev.yml for hot-reload
 # development instead.
 
 x-database-url: &database-url postgresql://postgres:${DB_PASSWORD:-password}@postgres:5432/exponential?sslmode=disable
@@ -77,16 +77,6 @@ services:
       retries: 5
       start_period: 5s
 
-  web-schema:
-    build:
-      context: .
-      dockerfile: infra/docker/web-schema.Dockerfile
-    environment:
-      DATABASE_URL: *database-url
-    depends_on:
-      postgres:
-        condition: service_healthy
-
   api-migrate:
     build:
       context: .
@@ -96,8 +86,8 @@ services:
       EXPONENTIAL_API_DATABASE_URL: *database-url
       MIGRATIONS_DIR: /migrations
     depends_on:
-      web-schema:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
 
   api:
     build:
@@ -116,7 +106,6 @@ services:
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:7015}
       EXPONENTIAL_APP_URL: ${EXPONENTIAL_APP_URL:-${NEXT_PUBLIC_APP_URL:-http://localhost:7015}}
       EXPONENTIAL_SESSION_SECRET: ${EXPONENTIAL_SESSION_SECRET:?Set EXPONENTIAL_SESSION_SECRET in .env}
-      EXPONENTIAL_INVITE_TOKEN_SECRET: ${EXPONENTIAL_INVITE_TOKEN_SECRET:?Set EXPONENTIAL_INVITE_TOKEN_SECRET in .env}
       EXPONENTIAL_TRUSTED_PROXIES: ${EXPONENTIAL_TRUSTED_PROXIES:-}
       AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:-}
       AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET:-}
@@ -146,14 +135,11 @@ services:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
-      DATABASE_URL: *database-url
       REDIS_URL: *redis-url
-      DB_SSL: "false"
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:7015}
       EXPONENTIAL_APP_URL: ${EXPONENTIAL_APP_URL:-${NEXT_PUBLIC_APP_URL:-http://localhost:7015}}
       EXPONENTIAL_API_URL: http://api:7016/v1
       EXPONENTIAL_SESSION_SECRET: ${EXPONENTIAL_SESSION_SECRET:?Set EXPONENTIAL_SESSION_SECRET in .env}
-      EXPONENTIAL_INVITE_TOKEN_SECRET: ${EXPONENTIAL_INVITE_TOKEN_SECRET:?Set EXPONENTIAL_INVITE_TOKEN_SECRET in .env}
       AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:-}
       AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET:-}
       AWS_REGION: ${AWS_REGION:-us-east-1}
@@ -168,12 +154,8 @@ services:
     ports:
       - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-7015}:3000"
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
-      web-schema:
-        condition: service_completed_successfully
       api:
         condition: service_started
 

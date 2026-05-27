@@ -19,7 +19,7 @@ interface MemberData {
   image: string | null;
   role: WorkspaceRole;
   status: "active" | "pending";
-  teams: string[];
+  teams: { id: string; name: string; key: string }[];
   joinedAt: string;
   lastSeenAt: string | null;
 }
@@ -321,7 +321,7 @@ export default function MembersPage() {
         member.email,
         roleLabel(member.role),
         member.status === "active" ? "Active" : "Pending",
-        member.teams.join(", "),
+        member.teams.map((team) => team.name).join(", "),
         formatDate(member.joinedAt),
         formatDate(member.lastSeenAt),
       ]),
@@ -503,7 +503,7 @@ export default function MembersPage() {
                   </span>
                 </div>
                 <div className="w-[120px] shrink-0 truncate text-[12px] text-[var(--color-text-tertiary)]">
-                  {memberEntry.teams.join(", ") || "—"}
+                  {memberEntry.teams.map((team) => team.name).join(", ") || "—"}
                 </div>
                 <div className="w-[100px] shrink-0 text-[12px] text-[var(--color-text-tertiary)]">
                   {formatDate(memberEntry.joinedAt)}

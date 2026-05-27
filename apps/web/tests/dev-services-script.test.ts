@@ -24,7 +24,7 @@ describe("dev services bootstrap script", () => {
       expect(result.status).toBe(1);
       expect(result.stderr).toContain("Docker is unavailable");
       expect(result.stderr).toContain("DATABASE_URL/REDIS_URL");
-      expect(result.stderr).toContain("npm run db:push");
+      expect(result.stderr).toContain("go run ./apps/api/cmd/migrate");
       expect(result.stderr).toContain("must fail before binding a listener");
     } finally {
       rmSync(binDir, { recursive: true, force: true });

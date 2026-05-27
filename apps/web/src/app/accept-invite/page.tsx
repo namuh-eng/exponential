@@ -1,14 +1,6 @@
-import { db } from "@/lib/db";
-import {
-  member,
-  team,
-  teamMember,
-  workspace,
-  workspaceInvitation,
-} from "@/lib/db/schema";
-import { verifyInviteToken } from "@/lib/invite-tokens";
+import { requireApiData } from "@/lib/api-response";
+import { createServerApiClient } from "@/lib/server-api-client";
 import { getWebSession } from "@/lib/web-session";
-import { and, asc, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -48,60 +40,15 @@ export default async function AcceptInvitePage({
     );
   }
 
-  const signedInvite = verifyInviteToken(token);
-  const [storedInvite] = await db
-    .select({
-      id: workspaceInvitation.id,
-      workspaceId: workspaceInvitation.workspaceId,
-      email: workspaceInvitation.email,
-      role: workspaceInvitation.role,
-      status: workspaceInvitation.status,
-      token: workspaceInvitation.token,
-    })
-    .from(workspaceInvitation)
-    .where(eq(workspaceInvitation.token, token))
-    .limit(1);
-  const [workspaceInviteLink] = await db
-    .select({
-      workspaceId: workspace.id,
-      inviteLinkEnabled: workspace.inviteLinkEnabled,
-    })
-    .from(workspace)
-    .where(eq(workspace.inviteLinkToken, token))
-    .limit(1);
+  const client = await createServerApiClient();
+  const invitePreview = requireApiData(
+    await client.GET("/workspaces/invite-preview", {
+      params: { query: { token } },
+    }),
+    "Preview invite",
+  );
 
-  const storedInvitePayload = storedInvite
-    ? verifyInviteToken(storedInvite.token)
-    : null;
-  const invite = storedInvite
-    ? storedInvite.status === "pending"
-      ? {
-          id: storedInvite.id,
-          workspaceId: storedInvite.workspaceId,
-          email: storedInvite.email,
-          role: storedInvite.role,
-          teamKey: storedInvitePayload?.teamKey ?? null,
-        }
-      : null
-    : signedInvite
-      ? {
-          id: null,
-          workspaceId: signedInvite.workspaceId,
-          email: signedInvite.email,
-          role: signedInvite.role,
-          teamKey: signedInvite.teamKey ?? null,
-        }
-      : workspaceInviteLink?.inviteLinkEnabled
-        ? {
-            id: null,
-            workspaceId: workspaceInviteLink.workspaceId,
-            email: null,
-            role: "member" as const,
-            teamKey: null,
-          }
-        : null;
-
-  if (!invite) {
+  if (!invitePreview.valid) {
     return (
       <InviteError
         title="Invitation expired"
@@ -117,90 +64,27 @@ export default async function AcceptInvitePage({
     );
   }
 
-  if (
-    invite.email &&
-    session.user.email.trim().toLowerCase() !== invite.email
-  ) {
-    return (
-      <InviteError
-        title="Wrong account"
-        description={`This invitation is for ${invite.email}. Sign in with that email address to join the workspace.`}
-      />
-    );
-  }
-
-  const [workspaceRecord] = await db
-    .select({ id: workspace.id })
-    .from(workspace)
-    .where(eq(workspace.id, invite.workspaceId))
-    .limit(1);
-
-  if (!workspaceRecord) {
-    return (
-      <InviteError
-        title="Workspace not found"
-        description="This workspace no longer exists."
-      />
-    );
-  }
-
-  const [defaultTeam] = await db
-    .select({ id: team.id, key: team.key })
-    .from(team)
-    .where(
-      invite.teamKey
-        ? and(
-            eq(team.workspaceId, invite.workspaceId),
-            eq(team.key, invite.teamKey),
-          )
-        : eq(team.workspaceId, invite.workspaceId),
-    )
-    .orderBy(asc(team.createdAt))
-    .limit(1);
-
-  if (!defaultTeam) {
-    return (
-      <InviteError
-        title="Workspace unavailable"
-        description="The workspace does not have a team to join yet."
-      />
-    );
-  }
-
-  const existingMembership = await db
-    .select({ id: member.id })
-    .from(member)
-    .where(
-      and(
-        eq(member.userId, session.user.id),
-        eq(member.workspaceId, invite.workspaceId),
-      ),
-    )
-    .limit(1);
-
-  if (existingMembership.length === 0) {
-    await db.insert(member).values({
-      userId: session.user.id,
-      workspaceId: invite.workspaceId,
-      role: invite.role,
-    });
-  }
-
-  await db
-    .insert(teamMember)
-    .values({ teamId: defaultTeam.id, userId: session.user.id })
-    .onConflictDoNothing();
-
-  if (invite.id) {
-    await db
-      .update(workspaceInvitation)
-      .set({
-        status: "accepted",
-        acceptedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(workspaceInvitation.id, invite.id));
-  }
-
-  redirect(`/team/${defaultTeam.key}/all`);
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
+      <form
+        action="/accept-invite/complete"
+        method="post"
+        className="flex w-full max-w-sm flex-col gap-4 border border-border bg-card p-6"
+      >
+        <input type="hidden" name="token" value={token} />
+        <div className="space-y-2">
+          <h1 className="font-semibold text-xl">Join workspace</h1>
+          <p className="text-muted-foreground text-sm">
+            Continue with {session.user.email}.
+          </p>
+        </div>
+        <button
+          type="submit"
+          className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 font-medium text-primary-foreground text-sm"
+        >
+          Accept invitation
+        </button>
+      </form>
+    </div>
+  );
 }

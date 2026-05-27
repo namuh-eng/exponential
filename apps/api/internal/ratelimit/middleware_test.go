@@ -49,3 +49,37 @@ func TestMiddlewareSetsRateLimitHeadersAndLimitsPerToken(t *testing.T) {
 		t.Fatalf("other token status/headers = %d %#v", otherToken.Code, otherToken.Header())
 	}
 }
+
+func TestPublicMiddlewareLimitsByClientIP(t *testing.T) {
+	t.Setenv("NODE_ENV", "production")
+	t.Setenv("PLAYWRIGHT_TEST", "false")
+	now := time.Date(2026, 5, 25, 12, 34, 10, 0, time.UTC)
+	limiter := New(1, func() time.Time { return now })
+	handler := limiter.PublicHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	firstReq := httptest.NewRequest(http.MethodGet, "/v1/workspaces/invite-preview?token=inv_test", nil)
+	firstReq.RemoteAddr = "198.51.100.20:4321"
+	first := httptest.NewRecorder()
+	handler.ServeHTTP(first, firstReq)
+	if first.Code != http.StatusNoContent {
+		t.Fatalf("first status = %d", first.Code)
+	}
+
+	secondReq := httptest.NewRequest(http.MethodGet, "/v1/workspaces/invite-preview?token=inv_test", nil)
+	secondReq.RemoteAddr = "198.51.100.20:4322"
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(second, secondReq)
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second status = %d", second.Code)
+	}
+
+	otherReq := httptest.NewRequest(http.MethodGet, "/v1/workspaces/invite-preview?token=inv_test", nil)
+	otherReq.RemoteAddr = "198.51.100.21:4321"
+	other := httptest.NewRecorder()
+	handler.ServeHTTP(other, otherReq)
+	if other.Code != http.StatusNoContent {
+		t.Fatalf("other status = %d", other.Code)
+	}
+}

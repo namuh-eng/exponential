@@ -1,6 +1,5 @@
--- Replace raw session.token with token_hash (sha256 hex). Drizzle previously
--- owned this column, but the rename forces drizzle-kit push into an
--- interactive prompt under ECS, so the Go SQL migrator applies it explicitly.
+-- Replace raw session.token with token_hash (sha256 hex). The Go SQL migrator
+-- applies this explicitly so deploys never depend on interactive schema prompts.
 -- Existing rows are dropped: raw tokens cannot be recovered from the old
 -- column, and users have to sign in again.
 

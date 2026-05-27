@@ -687,6 +687,19 @@ paths:
                 $ref: '#/components/schemas/AuthProviderCapabilitiesResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /auth/session:
+    get:
+      operationId: getAuthSession
+      summary: Get the authenticated browser session
+      responses:
+        '200':
+          description: Browser session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSessionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /comments/{id}:
     parameters:
       - name: id
@@ -2585,6 +2598,44 @@ paths:
                 $ref: '#/components/schemas/CreateWorkspaceResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /workspaces/invite-preview:
+    get:
+      operationId: previewWorkspaceInvite
+      summary: Preview a workspace invitation token
+      security: []
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Invite preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceInvitePreviewResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /workspaces/accept-invite:
+    post:
+      operationId: acceptWorkspaceInvite
+      summary: Accept a workspace invitation token as the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptWorkspaceInviteRequest'
+      responses:
+        '200':
+          description: Invite accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcceptWorkspaceInviteResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /workspaces/current/api:
     get:
       operationId: getCurrentWorkspaceApi
@@ -3163,6 +3214,19 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /workspaces/approved-domain-auto-join:
+    post:
+      operationId: autoJoinApprovedDomainWorkspace
+      summary: Join the authenticated user to a workspace matching their approved email domain
+      responses:
+        '200':
+          description: Auto-join result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutoJoinApprovedDomainWorkspaceResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /workspaces/current/import-export:
     get:
       operationId: getCurrentWorkspaceImportExport
@@ -3513,6 +3577,19 @@ components:
       required: [url]
       properties:
         url: { type: string, format: uri }
+    AuthSessionUser:
+      type: object
+      required: [id, name, email]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        image: { type: [string, 'null'] }
+    AuthSessionResponse:
+      type: object
+      required: [user]
+      properties:
+        user: { $ref: '#/components/schemas/AuthSessionUser' }
     AccountProviderCapability:
       type: object
       required: [supported, configured, devLinking, unavailableReason]
@@ -5850,12 +5927,15 @@ components:
         filterState: { $ref: '#/components/schemas/ViewFilterState' }
     Workspace:
       type: object
-      required: [id, name, urlSlug, region, fiscalMonth, welcomeMessage, plan]
+      required: [id, name, urlSlug, settings, region, fiscalMonth, welcomeMessage, plan]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
         urlSlug: { type: string }
         logo: { type: [string, 'null'] }
+        settings:
+          type: object
+          additionalProperties: true
         region: { type: string }
         fiscalMonth: { type: string }
         welcomeMessage: { type: string }
@@ -5889,6 +5969,25 @@ components:
       properties:
         workspace: { $ref: '#/components/schemas/WorkspaceSummary' }
         team: { $ref: '#/components/schemas/TeamSummary' }
+    WorkspaceInvitePreviewResponse:
+      type: object
+      required: [valid]
+      properties:
+        valid: { type: boolean }
+        workspaceId: { type: [string, 'null'], format: uuid }
+    AcceptWorkspaceInviteRequest:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string, minLength: 1 }
+    AcceptWorkspaceInviteResponse:
+      type: object
+      required: [success, workspaceId, workspaceSlug, teamKey]
+      properties:
+        success: { type: boolean }
+        workspaceId: { type: string, format: uuid }
+        workspaceSlug: { type: string }
+        teamKey: { type: string }
     CurrentWorkspaceResponse:
       type: object
       required: [workspace]
@@ -5916,7 +6015,7 @@ components:
         status: { type: string, enum: [active, pending] }
         teams:
           type: array
-          items: { type: string }
+          items: { $ref: '#/components/schemas/WorkspaceMemberTeam' }
         joinedAt: { type: string, format: date-time }
         lastSeenAt: { type: [string, 'null'], format: date-time }
         pronouns: { type: string }
@@ -5924,6 +6023,13 @@ components:
         location: { type: string }
         timezone: { type: string }
         showLocalTime: { type: boolean }
+    WorkspaceMemberTeam:
+      type: object
+      required: [id, name, key]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        key: { type: string }
     WorkspaceMembersResponse:
       type: object
       required: [workspaceId, currentUserId, viewerRole, canInviteMembers, members]
@@ -5935,6 +6041,12 @@ components:
         members:
           type: array
           items: { $ref: '#/components/schemas/WorkspaceMember' }
+    AutoJoinApprovedDomainWorkspaceResponse:
+      type: object
+      required: [workspaceId, workspaceSlug]
+      properties:
+        workspaceId: { type: [string, 'null'], format: uuid }
+        workspaceSlug: { type: [string, 'null'] }
     MutateWorkspaceMemberRequest:
       type: object
       required: [kind, id]

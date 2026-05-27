@@ -46,17 +46,9 @@
         {
           "name": "EXPONENTIAL_HEADLESS_DIRECT_API_REWRITE",
           "value": "true"
-        },
-        {
-          "name": "DB_SSL",
-          "value": "true"
         }
       ],
       "secrets": [
-        {
-          "name": "DATABASE_URL",
-          "valueFrom": "${DATABASE_URL_SECRET_ARN}"
-        },
         {
           "name": "REDIS_URL",
           "valueFrom": "${REDIS_URL_SECRET_ARN}"

@@ -82,11 +82,17 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool) {
 	commentsHandler := comments.Handler{DB: db}
 	documentsHandler := documents.Handler{DB: db}
 	labelsHandler := labels.Handler{DB: db}
+	workspacesHandler := workspaces.Handler{DB: db}
 	r.Route(prefix, func(v1 chi.Router) {
+		v1.Get("/auth/session", authMiddleware.Session)
 		v1.Mount("/auth", authProvidersHandler.Routes())
 		v1.Mount("/inbound", inbound.Handler{DB: db}.Routes())
 		v1.Post("/oauth/token", authProvidersHandler.ExchangeOAuthToken)
 		v1.Post("/test/create-session", testhelpers.Handler{DB: db}.CreateSession)
+		v1.Group(func(public chi.Router) {
+			public.Use(ratelimit.PublicMiddleware())
+			public.Get("/workspaces/invite-preview", workspacesHandler.PreviewInvite)
+		})
 		v1.Group(func(protected chi.Router) {
 			protected.Use(authMiddleware.Require)
 			protected.Use(ratelimit.Middleware())
@@ -123,7 +129,8 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool) {
 			protected.Mount("/teams", teams.Handler{DB: db}.Routes())
 			protected.Mount("/test", testhelpers.Handler{DB: db}.Routes())
 			protected.Mount("/views", views.Handler{DB: db}.Routes())
-			protected.Mount("/workspaces", workspaces.Handler{DB: db}.Routes())
+			protected.Post("/workspaces/accept-invite", workspacesHandler.AcceptInvite)
+			protected.Mount("/workspaces", workspacesHandler.Routes())
 			protected.Get("/sync/ws", syncapi.Handler{DB: db}.WebSocket)
 		})
 	})

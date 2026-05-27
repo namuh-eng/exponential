@@ -124,16 +124,6 @@ dev:
 build:
 	pnpm build
 
-# Database migrations
-db-generate:
-	pnpm db:generate
-
-db-migrate:
-	pnpm db:migrate
-
-db-push:
-	pnpm db:push
-
 # Clean build artifacts
 clean:
 	rm -rf apps/web/.next apps/web/dist node_modules/.cache apps/web/node_modules/.cache

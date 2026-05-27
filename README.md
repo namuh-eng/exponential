@@ -47,7 +47,6 @@ cp .env.example .env
 
 # Replace the sample secrets in .env.
 openssl rand -hex 32 # copy into EXPONENTIAL_SESSION_SECRET
-openssl rand -hex 32 # copy into EXPONENTIAL_INVITE_TOKEN_SECRET
 $EDITOR .env
 
 docker compose up --build
@@ -96,7 +95,7 @@ The ECS path provisions and deploys split web/API services behind an ALB.
 |-------|-----------|
 | **Frontend** | Next.js 16, React 19, TypeScript |
 | **Styling** | Tailwind CSS, Radix UI |
-| **Database** | PostgreSQL, pgx/sqlc, Drizzle schema tasks |
+| **Database** | PostgreSQL, pgx/sqlc, SQL migrations |
 | **Cache & Realtime** | Redis (AWS ElastiCache), ioredis |
 | **Authentication** | First-party Go auth, Google OAuth, magic links |
 | **Storage** | Optional AWS S3-compatible attachment storage |
@@ -130,8 +129,8 @@ npm run dev
 # Build for production
 npm run build
 
-# Push database schema changes
-npm run db:push
+# Apply database migrations for a host Postgres
+EXPONENTIAL_API_DATABASE_URL=$DATABASE_URL go run ./apps/api/cmd/migrate
 ```
 
 ### Quality Standards
@@ -176,7 +175,6 @@ REDIS_URL=redis://localhost:16379
 
 # Public URLs and first-party auth
 EXPONENTIAL_SESSION_SECRET=<openssl-rand-hex-32>
-EXPONENTIAL_INVITE_TOKEN_SECRET=<openssl-rand-hex-32>
 EXPONENTIAL_APP_URL=http://localhost:7015
 NEXT_PUBLIC_APP_URL=http://localhost:7015
 

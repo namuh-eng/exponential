@@ -145,7 +145,7 @@ export default function TeamMembersSettingsPage() {
       setMembers(data.members ?? []);
       setMessage(
         isInvitation
-          ? `Invitation for ${member.email} was canceled.`
+          ? "Invitation was canceled."
           : `${member.name} was removed from the team.`,
       );
     } catch (err) {

@@ -1,7 +1,4 @@
-import { db } from "@/lib/db";
-import { member } from "@/lib/db/schema";
 import { expect, test } from "@playwright/test";
-import { eq } from "drizzle-orm";
 
 test.describe("Workspace AI settings", () => {
   test("edits workspace AI settings, persists reloads, and enforces permissions", async ({
@@ -43,10 +40,24 @@ test.describe("Workspace AI settings", () => {
     await expect(page.getByLabel("Who can use agents")).toHaveValue("admins");
     await expect(page.getByLabel("Auto-triage suggestions")).toBeChecked();
 
-    await db
-      .update(member)
-      .set({ role: "member", updatedAt: new Date() })
-      .where(eq(member.workspaceId, workspaceData.workspace.id));
+    const membersResponse = await page.request.get("/api/workspaces/members", {
+      headers: { "x-workspace-id": workspaceData.workspace.id },
+    });
+    expect(membersResponse.status()).toBe(200);
+    const membersData = (await membersResponse.json()) as {
+      currentUserId: string;
+      members: Array<{ id: string; userId: string | null; kind: string }>;
+    };
+    const currentMember = membersData.members.find(
+      (entry) =>
+        entry.kind === "member" && entry.userId === membersData.currentUserId,
+    );
+    expect(currentMember).toBeDefined();
+    const demoteResponse = await page.request.patch("/api/workspaces/members", {
+      headers: { "x-workspace-id": workspaceData.workspace.id },
+      data: { kind: "member", id: currentMember?.id, role: "member" },
+    });
+    expect(demoteResponse.status()).toBe(200);
 
     const blockedResponse = await page.request.patch(
       "/api/workspaces/current/ai-settings",

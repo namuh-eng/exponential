@@ -1,7 +1,4 @@
-import { db } from "@/lib/db";
-import { member, user } from "@/lib/db/schema";
 import { expect, test } from "@playwright/test";
-import { eq } from "drizzle-orm";
 
 test.describe("Team member settings", () => {
   test("adds and removes existing workspace members with persistence", async ({
@@ -21,22 +18,7 @@ test.describe("Team member settings", () => {
       team: { key: string };
     };
 
-    const targetUserId = `issue-239-${suffix}`;
-    const targetName = `Addable Member ${suffix}`;
     const targetEmail = `issue-239-${suffix}@example.com`;
-
-    await db.delete(user).where(eq(user.id, targetUserId));
-    await db.insert(user).values({
-      id: targetUserId,
-      name: targetName,
-      email: targetEmail,
-      emailVerified: true,
-    });
-    await db.insert(member).values({
-      userId: targetUserId,
-      workspaceId: workspaceData.workspace.id,
-      role: "member",
-    });
 
     await page.goto(
       `/${workspaceSlug}/settings/teams/${workspaceData.team.key}/members`,
@@ -48,8 +30,7 @@ test.describe("Team member settings", () => {
     await expect(
       page.getByRole("dialog", { name: "Add members" }),
     ).toBeVisible();
-    await page.getByPlaceholder("Search by name or email").fill(targetEmail);
-    await page.getByText(targetEmail).click();
+    await page.getByPlaceholder("name@company.com").fill(targetEmail);
     await page.getByRole("button", { name: "Add or invite" }).click();
     await expect(page.getByRole("dialog", { name: "Add members" })).toHaveCount(
       0,
@@ -60,7 +41,9 @@ test.describe("Team member settings", () => {
     await expect(page.getByText(targetEmail)).toBeVisible();
 
     page.on("dialog", (dialog) => dialog.accept());
-    await page.getByRole("button", { name: `Remove ${targetName}` }).click();
+    await page
+      .getByRole("button", { name: `Cancel invitation to ${targetEmail}` })
+      .click();
     await expect(page.getByText(targetEmail)).toHaveCount(0);
 
     await page.reload();
@@ -71,10 +54,10 @@ test.describe("Team member settings", () => {
     );
     expect(membersResponse.status()).toBe(200);
     const membersData = (await membersResponse.json()) as {
-      members: Array<{ userId: string }>;
+      members: Array<{ email: string }>;
     };
-    expect(membersData.members.map((entry) => entry.userId)).not.toContain(
-      targetUserId,
+    expect(membersData.members.map((entry) => entry.email)).not.toContain(
+      targetEmail,
     );
   });
 });

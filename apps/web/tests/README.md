@@ -10,10 +10,10 @@ rule below traces back to a real failure class we cleaned up.
 - `tests/_helpers/` — shared fixtures. Keep these tiny and dependency-light.
 - `tests/vitest.setup.ts` — global Vitest setup, auto-loaded via `vitest.config.ts`.
 
-## The two cross-cutting helpers
+## The cross-cutting helper
 
-Both exist because we hit the same failure modes ~20 times before centralizing.
-Reach for them before reinventing.
+This exists because we hit the same failure modes ~20 times before centralizing.
+Reach for it before reinventing.
 
 ### `tests/vitest.setup.ts`
 
@@ -28,26 +28,6 @@ Auto-loaded for every test file. Provides:
    which crashes any component that touches storage on mount.
 
 If your test uses storage, just use it. The polyfill is transparent.
-
-### `tests/_helpers/db-integration.ts`
-
-`describeDb(name, fn)` is a `describe` variant that **skips by default** and
-only runs when `RUN_DB_TESTS=1`. Use it for any suite whose `beforeAll`,
-`afterAll`, or `beforeEach` hooks talk to a real Postgres (drizzle
-`db.insert` / `db.delete` etc.).
-
-```ts
-import { describeDb } from "./_helpers/db-integration";
-
-describeDb("workspace invitations (DB)", () => {
-  // beforeAll, afterAll, tests …
-});
-```
-
-Why not auto-detect? An async probe at module load forces every test file to
-await it. An env-var flip is faster, deterministic, and matches how CI tiers
-gate integration suites. Run integration suites locally with
-`RUN_DB_TESTS=1 make test` after `make dev-services`.
 
 ## Conventions
 
@@ -104,7 +84,8 @@ name and update both source and tests in the same commit.
 
 1. Pick the layer: unit (a function), component (a React tree), route
    handler (an API route), or E2E (full app via Playwright).
-2. If it needs a real DB or Redis: wrap with `describeDb`.
+2. If it needs real persistence: prefer an API-level or Playwright scenario
+   against the Go API instead of importing database clients from web tests.
 3. If it renders a component that uses storage / portals / jest-dom matchers:
    you get the setup for free — no extra imports.
 4. Mock from the outside in: mock the *modules* the unit-under-test imports,
@@ -116,7 +97,6 @@ name and update both source and tests in the same commit.
 
 ```sh
 make test                  # Vitest, fast — skips DB suites
-RUN_DB_TESTS=1 make test   # Includes Postgres-backed suites
 make test-e2e              # Playwright; needs `npm run dev` running
 make check                 # Biome (lint + format) + tsc
 make all                   # check + test

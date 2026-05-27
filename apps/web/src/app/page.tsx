@@ -1,11 +1,9 @@
 import { LandingPage } from "@/components/landing-page";
 import { readAccountPreferencesFromUserSettings } from "@/lib/account-preferences";
+import { requireApiData } from "@/lib/api-response";
 import { autoJoinWorkspaceForApprovedDomain } from "@/lib/approved-domain-auto-join";
-import { db } from "@/lib/db";
-import { member, team, user, workspace } from "@/lib/db/schema";
-import { activeTeamFilter } from "@/lib/team-lifecycle";
+import { createServerApiClient } from "@/lib/server-api-client";
 import { getWebSession } from "@/lib/web-session";
-import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -16,17 +14,9 @@ export default async function Home() {
     return <LandingPage />;
   }
 
-  // Check if user has any workspaces
-  const loadMemberships = () =>
-    db
-      .select({
-        workspaceId: member.workspaceId,
-        workspaceSlug: workspace.urlSlug,
-      })
-      .from(member)
-      .innerJoin(workspace, eq(member.workspaceId, workspace.id))
-      .where(eq(member.userId, session.user.id))
-      .limit(1);
+  const client = await createServerApiClient();
+  const loadMemberships = async () =>
+    requireApiData(await client.GET("/workspaces"), "List workspaces");
 
   let memberships = await loadMemberships();
 
@@ -42,25 +32,25 @@ export default async function Home() {
     }
   }
 
-  // Get the first team in the workspace to redirect to
-  const teams = await db
-    .select({ key: team.key })
-    .from(team)
-    .where(
-      and(eq(team.workspaceId, memberships[0].workspaceId), activeTeamFilter),
-    )
-    .limit(1);
-
-  const [currentUser] = await db
-    .select({ settings: user.settings })
-    .from(user)
-    .where(eq(user.id, session.user.id))
-    .limit(1);
-  const accountPreferences = readAccountPreferencesFromUserSettings(
-    currentUser?.settings,
+  const activeWorkspace = memberships[0];
+  const [teamsResponse, preferencesResponse] = await Promise.all([
+    client.GET("/teams", {
+      headers: { "x-workspace-id": activeWorkspace.workspaceId },
+    }),
+    client.GET("/account/preferences", {
+      headers: { "x-workspace-id": activeWorkspace.workspaceId },
+    }),
+  ]);
+  const teams = requireApiData(teamsResponse, "List teams").teams;
+  const preferences = requireApiData(
+    preferencesResponse,
+    "Get account preferences",
   );
+  const accountPreferences = readAccountPreferencesFromUserSettings({
+    accountPreferences: preferences.accountPreferences,
+  });
 
-  const workspaceBase = `/${memberships[0].workspaceSlug}`;
+  const workspaceBase = `/${activeWorkspace.workspaceSlug}`;
 
   if (accountPreferences.defaultHomeView === "inbox") {
     redirect(`${workspaceBase}/inbox`);

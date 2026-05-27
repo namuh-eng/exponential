@@ -502,6 +502,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/auth/session": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get the authenticated browser session */
+    get: operations["getAuthSession"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/comments/{id}": {
     parameters: {
       query?: never;
@@ -1662,6 +1679,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/workspaces/invite-preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Preview a workspace invitation token */
+    get: operations["previewWorkspaceInvite"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/workspaces/accept-invite": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Accept a workspace invitation token as the authenticated user */
+    post: operations["acceptWorkspaceInvite"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/workspaces/current/api": {
     parameters: {
       query?: never;
@@ -1958,6 +2009,23 @@ export interface paths {
     patch: operations["updateWorkspaceMemberOrInvitation"];
     trace?: never;
   };
+  "/workspaces/approved-domain-auto-join": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Join the authenticated user to a workspace matching their approved email domain */
+    post: operations["autoJoinApprovedDomainWorkspace"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/workspaces/current/import-export": {
     parameters: {
       query?: never;
@@ -2200,6 +2268,15 @@ export interface components {
     SamlDiscoveryResponse: {
       /** Format: uri */
       url: string;
+    };
+    AuthSessionUser: {
+      id: string;
+      name: string;
+      email: string;
+      image?: string | null;
+    };
+    AuthSessionResponse: {
+      user: components["schemas"]["AuthSessionUser"];
     };
     AccountProviderCapability: {
       supported: boolean;
@@ -4145,6 +4222,9 @@ export interface components {
       name: string;
       urlSlug: string;
       logo?: string | null;
+      settings: {
+        [key: string]: unknown;
+      };
       region: string;
       fiscalMonth: string;
       welcomeMessage: string;
@@ -4176,6 +4256,21 @@ export interface components {
       workspace: components["schemas"]["WorkspaceSummary"];
       team: components["schemas"]["TeamSummary"];
     };
+    WorkspaceInvitePreviewResponse: {
+      valid: boolean;
+      /** Format: uuid */
+      workspaceId?: string | null;
+    };
+    AcceptWorkspaceInviteRequest: {
+      token: string;
+    };
+    AcceptWorkspaceInviteResponse: {
+      success: boolean;
+      /** Format: uuid */
+      workspaceId: string;
+      workspaceSlug: string;
+      teamKey: string;
+    };
     CurrentWorkspaceResponse: {
       workspace: components["schemas"]["Workspace"];
     };
@@ -4197,7 +4292,7 @@ export interface components {
       role: components["schemas"]["WorkspaceRole"];
       /** @enum {string} */
       status: "active" | "pending";
-      teams: string[];
+      teams: components["schemas"]["WorkspaceMemberTeam"][];
       /** Format: date-time */
       joinedAt: string;
       /** Format: date-time */
@@ -4208,6 +4303,12 @@ export interface components {
       timezone?: string;
       showLocalTime?: boolean;
     };
+    WorkspaceMemberTeam: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      key: string;
+    };
     WorkspaceMembersResponse: {
       /** Format: uuid */
       workspaceId: string;
@@ -4215,6 +4316,11 @@ export interface components {
       viewerRole: components["schemas"]["WorkspaceRole"];
       canInviteMembers: boolean;
       members: components["schemas"]["WorkspaceMember"][];
+    };
+    AutoJoinApprovedDomainWorkspaceResponse: {
+      /** Format: uuid */
+      workspaceId: string | null;
+      workspaceSlug: string | null;
     };
     MutateWorkspaceMemberRequest: {
       /** @enum {string} */
@@ -5485,6 +5591,27 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["AuthProviderCapabilitiesResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getAuthSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Browser session */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthSessionResponse"];
         };
       };
       default: components["responses"]["Problem"];
@@ -8251,6 +8378,54 @@ export interface operations {
       default: components["responses"]["Problem"];
     };
   };
+  previewWorkspaceInvite: {
+    parameters: {
+      query: {
+        token: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Invite preview */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceInvitePreviewResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  acceptWorkspaceInvite: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AcceptWorkspaceInviteRequest"];
+      };
+    };
+    responses: {
+      /** @description Invite accepted */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AcceptWorkspaceInviteResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   getCurrentWorkspaceApi: {
     parameters: {
       query?: never;
@@ -9149,6 +9324,27 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  autoJoinApprovedDomainWorkspace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Auto-join result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AutoJoinApprovedDomainWorkspaceResponse"];
         };
       };
       default: components["responses"]["Problem"];

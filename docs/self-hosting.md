@@ -5,7 +5,6 @@ single Next.js container:
 
 - `web` — Next.js UI-only app; same-origin `/api/*` requests are rewritten to the Go API.
 - `api` — Go headless API on port `7016`.
-- `web-schema` — one-shot Drizzle schema bootstrap for the current web schema.
 - `api-migrate` — one-shot Go SQL migrations from `packages/proto/migrations`.
 - `postgres` — PostgreSQL 15 data store.
 - `redis` — Redis 7 cache/realtime store.
@@ -30,7 +29,6 @@ cp .env.example .env
 
 # Required: replace the sample values with random secrets.
 openssl rand -hex 32 # use for EXPONENTIAL_SESSION_SECRET
-openssl rand -hex 32 # use for EXPONENTIAL_INVITE_TOKEN_SECRET
 $EDITOR .env
 
 docker compose up --build
@@ -50,7 +48,6 @@ For the Compose stack, `.env` must include:
 | --- | --- | --- |
 | `DB_PASSWORD` | Password for the bundled Postgres service. | `password` for local-only trials; change for shared hosts. |
 | `EXPONENTIAL_SESSION_SECRET` | HMAC secret for browser session cookies. | Generate with `openssl rand -hex 32`. |
-| `EXPONENTIAL_INVITE_TOKEN_SECRET` | HMAC secret for workspace invite tokens. | Generate with `openssl rand -hex 32`. |
 | `NEXT_PUBLIC_APP_URL` | Public URL users open in the browser. | `http://localhost:7015`. |
 | `EXPONENTIAL_APP_URL` | Server-side canonical app URL. | Usually the same as `NEXT_PUBLIC_APP_URL`. |
 
@@ -130,8 +127,8 @@ docker compose build --pull
 docker compose up -d
 ```
 
-The `web-schema` and `api-migrate` jobs run on startup and are safe to rerun.
-Always keep a database backup before major version jumps.
+The `api-migrate` job runs on startup and is safe to rerun. Always keep a
+database backup before major version jumps.
 
 ## Reverse proxy notes
 
@@ -160,7 +157,7 @@ RUN_PROD_SMOKE=true scripts/deploy-ecs.sh
 
 `preflight.sh` provisions VPC networking, RDS, ElastiCache, S3, ECR, SES setup
 when configured, target groups, and ALB routing. `deploy-ecs.sh` builds and
-pushes the API, web, and schema images, runs migrations, updates ECS services,
+pushes the API and web images, runs migrations, updates ECS services,
 waits for stability, and can run `scripts/smoke-prod.sh`.
 
 ## Development stack

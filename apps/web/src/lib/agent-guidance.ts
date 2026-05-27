@@ -1,9 +1,6 @@
 import { readAccountPreferencesFromUserSettings } from "@/lib/account-preferences";
-import { db } from "@/lib/db";
-import { member, team, user, workspace } from "@/lib/db/schema";
 import { readTeamSettings } from "@/lib/team-settings";
 import { readWorkspaceAiSettings } from "@/lib/workspace-ai-settings";
-import { and, eq } from "drizzle-orm";
 
 export type AgentGuidanceSource = "workspace" | "account" | "team";
 
@@ -76,56 +73,24 @@ export function buildEffectiveAgentGuidance(input: {
   };
 }
 
-export async function resolveEffectiveAgentGuidance(input: {
-  workspaceId: string;
-  userId: string;
+export function resolveEffectiveAgentGuidanceFromSettings(input: {
+  workspaceSettings?: unknown;
+  accountSettings?: unknown;
+  teamSettings?: unknown;
   teamKey?: string | null;
-}): Promise<EffectiveAgentGuidance> {
-  const normalizedTeamKey = input.teamKey?.trim().toUpperCase() || null;
-  const [workspaceRow, userRow, teamRow] = await Promise.all([
-    db
-      .select({ settings: workspace.settings })
-      .from(workspace)
-      .where(eq(workspace.id, input.workspaceId))
-      .limit(1),
-    db
-      .select({ settings: user.settings })
-      .from(user)
-      .where(eq(user.id, input.userId))
-      .limit(1),
-    normalizedTeamKey
-      ? db
-          .select({ key: team.key, settings: team.settings })
-          .from(team)
-          .innerJoin(
-            member,
-            and(
-              eq(member.workspaceId, team.workspaceId),
-              eq(member.userId, input.userId),
-            ),
-          )
-          .where(
-            and(
-              eq(team.workspaceId, input.workspaceId),
-              eq(team.key, normalizedTeamKey),
-            ),
-          )
-          .limit(1)
-      : Promise.resolve([]),
-  ]);
-
+}): EffectiveAgentGuidance {
   const accountPreferences = readAccountPreferencesFromUserSettings(
-    userRow[0]?.settings,
+    input.accountSettings,
   );
-  const teamSettings = teamRow[0]
-    ? readTeamSettings(teamRow[0].settings)
+  const teamSettings = input.teamSettings
+    ? readTeamSettings(input.teamSettings)
     : null;
 
   return buildEffectiveAgentGuidance({
-    workspaceGuidance: readWorkspaceAgentGuidance(workspaceRow[0]?.settings),
+    workspaceGuidance: readWorkspaceAgentGuidance(input.workspaceSettings),
     accountGuidance: accountPreferences.agentPersonalization.instructions,
     teamGuidance: teamSettings?.agentGuidance,
     autoFixEnabled: accountPreferences.agentPersonalization.autoFix,
-    teamKey: teamRow[0]?.key ?? normalizedTeamKey,
+    teamKey: input.teamKey,
   });
 }

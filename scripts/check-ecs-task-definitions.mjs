@@ -52,4 +52,27 @@ for (const item of required) {
   if (container.logConfiguration.options?.["awslogs-create-group"] !== "true") {
     throw new Error(`${item.file}: awslogs must create missing log groups`);
   }
+  const environmentNames = new Set(
+    (container.environment ?? []).map((entry) => entry.name),
+  );
+  const secretNames = new Set(
+    (container.secrets ?? []).map((entry) => entry.name),
+  );
+  if (item.container === "web") {
+    for (const forbidden of ["DATABASE_URL", "EXPONENTIAL_API_DATABASE_URL"]) {
+      if (environmentNames.has(forbidden) || secretNames.has(forbidden)) {
+        throw new Error(`${item.file}: web task must not receive ${forbidden}`);
+      }
+    }
+    if (environmentNames.has("DB_SSL")) {
+      throw new Error(`${item.file}: web task must not receive DB_SSL`);
+    }
+  }
+  if (item.container === "api" || item.container === "api-migrate") {
+    if (!secretNames.has("EXPONENTIAL_API_DATABASE_URL")) {
+      throw new Error(
+        `${item.file}: ${item.container} must receive EXPONENTIAL_API_DATABASE_URL`,
+      );
+    }
+  }
 }

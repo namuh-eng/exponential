@@ -47,8 +47,8 @@ func (h Handler) UpdateSecurity(w http.ResponseWriter, r *http.Request) {
 		}
 		_, _ = h.DB.Exec(r.Context(), `delete from session where id=$1 and user_id=$2`, body.SessionID, p.UserID)
 	case "revokeAllOtherSessions":
-		if token := currentBrowserSessionToken(r); token != "" {
-			_, _ = h.DB.Exec(r.Context(), `delete from session where user_id=$1 and token<>$2`, p.UserID, token)
+		if tokenHash := currentBrowserSessionTokenHash(r); tokenHash != "" {
+			_, _ = h.DB.Exec(r.Context(), `delete from session where user_id=$1 and token_hash<>$2`, p.UserID, tokenHash)
 		} else {
 			_, _ = h.DB.Exec(r.Context(), `delete from session where user_id=$1`, p.UserID)
 		}
@@ -108,20 +108,20 @@ func (h Handler) UpdateSecurity(w http.ResponseWriter, r *http.Request) {
 
 func (h Handler) securityPayload(r *http.Request, userID, workspaceID, createdSecret string) (map[string]any, error) {
 	sessions := []map[string]any{}
-	currentToken := currentBrowserSessionToken(r)
-	rows, err := h.DB.Query(r.Context(), `select id,token,user_agent,ip_address,created_at,updated_at,expires_at from session where user_id=$1 and expires_at>now() order by updated_at desc limit 10`, userID)
+	currentTokenHash := currentBrowserSessionTokenHash(r)
+	rows, err := h.DB.Query(r.Context(), `select id,token_hash,user_agent,ip_address,created_at,updated_at,expires_at from session where user_id=$1 and expires_at>now() order by updated_at desc limit 10`, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var id, token string
+		var id, tokenHash string
 		var ua, ip *string
 		var c, u, e time.Time
-		if err := rows.Scan(&id, &token, &ua, &ip, &c, &u, &e); err != nil {
+		if err := rows.Scan(&id, &tokenHash, &ua, &ip, &c, &u, &e); err != nil {
 			return nil, err
 		}
-		sessions = append(sessions, map[string]any{"id": id, "isCurrent": currentToken != "" && token == currentToken, "userAgent": ua, "ipAddress": ip, "source": "Browser", "location": "Unknown location", "createdAt": c.UTC().Format(time.RFC3339Nano), "updatedAt": u.UTC().Format(time.RFC3339Nano), "expiresAt": e.UTC().Format(time.RFC3339Nano)})
+		sessions = append(sessions, map[string]any{"id": id, "isCurrent": currentTokenHash != "" && tokenHash == currentTokenHash, "userAgent": ua, "ipAddress": ip, "source": "Browser", "location": "Unknown location", "createdAt": c.UTC().Format(time.RFC3339Nano), "updatedAt": u.UTC().Format(time.RFC3339Nano), "expiresAt": e.UTC().Format(time.RFC3339Nano)})
 	}
 	passkeys := []map[string]any{}
 	pk, _ := h.DB.Query(r.Context(), `select id,coalesce(name,'Unnamed passkey'),credential_id,coalesce(device_type,''),backed_up,coalesce(transports,''),created_at from passkey where user_id=$1 order by created_at desc`, userID)
@@ -177,14 +177,15 @@ func (h Handler) securityPayload(r *http.Request, userID, workspaceID, createdSe
 	return out, nil
 }
 
-func currentBrowserSessionToken(r *http.Request) string {
+func currentBrowserSessionTokenHash(r *http.Request) string {
 	for _, name := range []string{auth.BrowserSessionCookieName, "session_token"} {
 		cookie, err := r.Cookie(name)
 		if err != nil || strings.TrimSpace(cookie.Value) == "" {
 			continue
 		}
 		if token, ok := auth.VerifySignedSessionToken(cookie.Value); ok {
-			return token
+			sum := sha256.Sum256([]byte(token))
+			return hex.EncodeToString(sum[:])
 		}
 	}
 	return ""

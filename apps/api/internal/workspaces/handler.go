@@ -36,14 +36,15 @@ type Membership struct {
 }
 
 type Workspace struct {
-	ID             string  `json:"id"`
-	Name           string  `json:"name"`
-	URLSlug        string  `json:"urlSlug"`
-	Logo           *string `json:"logo"`
-	Region         string  `json:"region"`
-	FiscalMonth    string  `json:"fiscalMonth"`
-	WelcomeMessage string  `json:"welcomeMessage"`
-	Plan           string  `json:"plan"`
+	ID             string         `json:"id"`
+	Name           string         `json:"name"`
+	URLSlug        string         `json:"urlSlug"`
+	Logo           *string        `json:"logo"`
+	Settings       map[string]any `json:"settings"`
+	Region         string         `json:"region"`
+	FiscalMonth    string         `json:"fiscalMonth"`
+	WelcomeMessage string         `json:"welcomeMessage"`
+	Plan           string         `json:"plan"`
 }
 
 type CurrentWorkspaceResponse struct {
@@ -92,7 +93,7 @@ type memberEntry struct {
 	Image         *string  `json:"image"`
 	Role          string   `json:"role"`
 	Status        string   `json:"status"`
-	Teams         []string `json:"teams"`
+	Teams         []memberTeam `json:"teams"`
 	JoinedAt      string   `json:"joinedAt"`
 	LastSeenAt    *string  `json:"lastSeenAt"`
 	Pronouns      string   `json:"pronouns,omitempty"`
@@ -108,6 +109,12 @@ type membersResponse struct {
 	ViewerRole       string        `json:"viewerRole"`
 	CanInviteMembers bool          `json:"canInviteMembers"`
 	Members          []memberEntry `json:"members"`
+}
+
+type memberTeam struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Key  string `json:"key"`
 }
 
 type mutateMemberRequest struct {
@@ -131,6 +138,35 @@ type inviteResult struct {
 	Error  string `json:"error,omitempty"`
 }
 
+type autoJoinApprovedDomainResponse struct {
+	WorkspaceID   *string `json:"workspaceId"`
+	WorkspaceSlug *string `json:"workspaceSlug"`
+}
+
+type invitePreviewResponse struct {
+	Valid       bool    `json:"valid"`
+	WorkspaceID *string `json:"workspaceId"`
+}
+
+type acceptInviteRequest struct {
+	Token string `json:"token"`
+}
+
+type acceptInviteResponse struct {
+	Success       bool   `json:"success"`
+	WorkspaceID   string `json:"workspaceId"`
+	WorkspaceSlug string `json:"workspaceSlug"`
+	TeamKey       string `json:"teamKey"`
+}
+
+type resolvedInvite struct {
+	ID          *string
+	WorkspaceID string
+	Email       *string
+	Role        string
+	TeamKey     *string
+}
+
 func (h Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.List)
@@ -149,6 +185,7 @@ func (h Handler) Routes() chi.Router {
 	r.Patch("/members", h.UpdateMemberOrInvitation)
 	r.Post("/members", h.ResendInvitation)
 	r.Delete("/members", h.RemoveMemberOrInvitation)
+	r.Post("/approved-domain-auto-join", h.AutoJoinApprovedDomain)
 	r.Post("/invite", h.Invite)
 	r.Get("/current/import-export", h.GetCurrentImportExport)
 	r.Post("/current/import-export", h.MutateCurrentImportExport)
@@ -178,6 +215,209 @@ func (h Handler) Routes() chi.Router {
 	r.Patch("/current/documents", h.UpdateDocumentsSettings)
 	r.Post("/current/documents", h.CreateDocumentTemplate)
 	return r
+}
+
+func (h Handler) PreviewInvite(w http.ResponseWriter, r *http.Request) {
+	invite, err := h.resolveInviteToken(r.Context(), strings.TrimSpace(r.URL.Query().Get("token")))
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.JSON(w, 200, invitePreviewResponse{Valid: false})
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Preview invite failed", err.Error())
+		return
+	}
+	problem.JSON(w, 200, invitePreviewResponse{Valid: true, WorkspaceID: &invite.WorkspaceID})
+}
+
+func (h Handler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	var input acceptInviteRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		problem.Write(w, 400, "Invalid JSON", err.Error())
+		return
+	}
+	invite, err := h.resolveInviteToken(r.Context(), strings.TrimSpace(input.Token))
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "Invitation expired", "This invite link is invalid or has expired.")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Accept invite failed", err.Error())
+		return
+	}
+
+	var userEmail string
+	if err := h.DB.QueryRow(r.Context(), `select email from "user" where id=$1`, p.UserID).Scan(&userEmail); err != nil {
+		problem.Write(w, 500, "Accept invite failed", err.Error())
+		return
+	}
+	if invite.Email != nil && strings.ToLower(strings.TrimSpace(userEmail)) != strings.ToLower(strings.TrimSpace(*invite.Email)) {
+		problem.Write(w, 403, "Wrong account", "Sign in with the invited email address to join this workspace.")
+		return
+	}
+
+	tx, err := h.DB.Begin(r.Context())
+	if err != nil {
+		problem.Write(w, 500, "Accept invite failed", err.Error())
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+
+	var workspaceSlug string
+	err = tx.QueryRow(r.Context(), `select url_slug from workspace where id=$1::uuid limit 1`, invite.WorkspaceID).Scan(&workspaceSlug)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "Workspace not found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Accept invite failed", err.Error())
+		return
+	}
+
+	var teamID string
+	var teamKey string
+	if invite.TeamKey != nil && strings.TrimSpace(*invite.TeamKey) != "" {
+		err = tx.QueryRow(r.Context(), `
+			select id::text, key
+			from team
+			where workspace_id=$1::uuid and key=$2 and deleted_at is null
+			order by created_at asc
+			limit 1`, invite.WorkspaceID, strings.ToUpper(strings.TrimSpace(*invite.TeamKey))).Scan(&teamID, &teamKey)
+	} else {
+		err = tx.QueryRow(r.Context(), `
+			select id::text, key
+			from team
+			where workspace_id=$1::uuid and deleted_at is null
+			order by created_at asc
+			limit 1`, invite.WorkspaceID).Scan(&teamID, &teamKey)
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "Workspace unavailable", "The workspace does not have a team to join yet.")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Accept invite failed", err.Error())
+		return
+	}
+
+	role := invite.Role
+	if !validInviteRole(role) {
+		role = "member"
+	}
+	if _, err := tx.Exec(r.Context(), `
+		insert into member (user_id, workspace_id, role)
+		values ($1, $2::uuid, $3)
+		on conflict do nothing`, p.UserID, invite.WorkspaceID, role); err != nil {
+		problem.Write(w, 500, "Accept invite failed", err.Error())
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `
+		insert into team_member (team_id, user_id)
+		values ($1::uuid, $2)
+		on conflict do nothing`, teamID, p.UserID); err != nil {
+		problem.Write(w, 500, "Accept invite failed", err.Error())
+		return
+	}
+	if invite.ID != nil {
+		if _, err := tx.Exec(r.Context(), `
+			update workspace_invitation
+			set status='accepted', accepted_at=now(), updated_at=now()
+			where id=$1::uuid`, *invite.ID); err != nil {
+			problem.Write(w, 500, "Accept invite failed", err.Error())
+			return
+		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		problem.Write(w, 500, "Accept invite failed", err.Error())
+		return
+	}
+	problem.JSON(w, 200, acceptInviteResponse{Success: true, WorkspaceID: invite.WorkspaceID, WorkspaceSlug: workspaceSlug, TeamKey: teamKey})
+}
+
+func (h Handler) AutoJoinApprovedDomain(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	var email string
+	if err := h.DB.QueryRow(r.Context(), `select email from "user" where id=$1`, p.UserID).Scan(&email); err != nil {
+		problem.Write(w, 500, "Auto-join failed", err.Error())
+		return
+	}
+	domain := emailDomain(email)
+	if domain == "" {
+		problem.JSON(w, 200, autoJoinApprovedDomainResponse{})
+		return
+	}
+
+	tx, err := h.DB.Begin(r.Context())
+	if err != nil {
+		problem.Write(w, 500, "Auto-join failed", err.Error())
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+
+	var workspaceID string
+	var workspaceSlug string
+	err = tx.QueryRow(r.Context(), `
+		select id::text, url_slug
+		from workspace
+		where approved_email_domains @> $1::jsonb
+		order by created_at asc
+		limit 1`, `["`+domain+`"]`).Scan(&workspaceID, &workspaceSlug)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.JSON(w, 200, autoJoinApprovedDomainResponse{})
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Auto-join failed", err.Error())
+		return
+	}
+
+	if _, err := tx.Exec(r.Context(), `
+		insert into member (user_id, workspace_id, role)
+		values ($1, $2::uuid, 'member')
+		on conflict do nothing`, p.UserID, workspaceID); err != nil {
+		problem.Write(w, 500, "Auto-join failed", err.Error())
+		return
+	}
+
+	var defaultTeamID string
+	err = tx.QueryRow(r.Context(), `
+		select id::text
+		from team
+		where workspace_id=$1::uuid and deleted_at is null
+		order by created_at asc
+		limit 1`, workspaceID).Scan(&defaultTeamID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 500, "Auto-join failed", err.Error())
+		return
+	}
+	if defaultTeamID != "" {
+		if _, err := tx.Exec(r.Context(), `
+			insert into team_member (team_id, user_id)
+			values ($1::uuid, $2)
+			on conflict do nothing`, defaultTeamID, p.UserID); err != nil {
+			problem.Write(w, 500, "Auto-join failed", err.Error())
+			return
+		}
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		problem.Write(w, 500, "Auto-join failed", err.Error())
+		return
+	}
+	problem.JSON(w, 200, autoJoinApprovedDomainResponse{WorkspaceID: &workspaceID, WorkspaceSlug: &workspaceSlug})
+}
+
+func emailDomain(email string) string {
+	parts := strings.Split(strings.ToLower(strings.TrimSpace(email)), "@")
+	if len(parts) != 2 {
+		return ""
+	}
+	domain := strings.TrimSpace(parts[1])
+	if !regexp.MustCompile(`^[a-z0-9.-]+\.[a-z]{2,}$`).MatchString(domain) {
+		return ""
+	}
+	return domain
 }
 
 type importPreviewRequest struct {
@@ -1545,7 +1785,7 @@ func (h Handler) ensureMembership(ctx context.Context, userID, workspaceID strin
 func (h Handler) activeMembers(ctx context.Context, workspaceID string) ([]memberEntry, error) {
 	rows, err := h.DB.Query(ctx, `
 		select m.id::text, u.id, coalesce(u.name,''), coalesce(u.email,''), u.image, m.role::text, m.created_at,
-		       coalesce(array_remove(array_agg(distinct t.name), null), '{}') as teams,
+		       coalesce(jsonb_agg(distinct jsonb_build_object('id', t.id::text, 'name', t.name, 'key', t.key)) filter (where t.id is not null), '[]'::jsonb) as teams,
 		       max(s.updated_at) as last_seen_at,
 		       coalesce(u.settings, '{}'::jsonb)
 		from member m
@@ -1565,7 +1805,7 @@ func (h Handler) activeMembers(ctx context.Context, workspaceID string) ([]membe
 		var entry memberEntry
 		var userID string
 		var joined time.Time
-		var teams []string
+		var teams []byte
 		var lastSeen pgtype.Timestamptz
 		var settings []byte
 		if err := rows.Scan(&entry.ID, &userID, &entry.Name, &entry.Email, &entry.Image, &entry.Role, &joined, &teams, &lastSeen, &settings); err != nil {
@@ -1574,7 +1814,9 @@ func (h Handler) activeMembers(ctx context.Context, workspaceID string) ([]membe
 		entry.Kind = "member"
 		entry.UserID = &userID
 		entry.Status = "active"
-		entry.Teams = teams
+		if err := json.Unmarshal(teams, &entry.Teams); err != nil {
+			return nil, err
+		}
 		entry.JoinedAt = joined.UTC().Format(time.RFC3339Nano)
 		if lastSeen.Valid {
 			v := lastSeen.Time.UTC().Format(time.RFC3339Nano)
@@ -1602,7 +1844,7 @@ func (h Handler) pendingInvitations(ctx context.Context, workspaceID string) ([]
 		entry.Kind = "invitation"
 		entry.Name = "Pending invite"
 		entry.Status = "pending"
-		entry.Teams = []string{}
+		entry.Teams = []memberTeam{}
 		entry.JoinedAt = created.UTC().Format(time.RFC3339Nano)
 		out = append(out, entry)
 	}
@@ -1809,6 +2051,7 @@ func insertDefaultWorkflowStates(ctx context.Context, tx pgx.Tx, teamID string) 
 func applyWorkspaceSettings(ws *Workspace, raw []byte) {
 	settings := map[string]any{}
 	_ = json.Unmarshal(raw, &settings)
+	ws.Settings = settings
 	ws.Region = stringSetting(settings, "region", "United States")
 	ws.FiscalMonth = stringSetting(settings, "fiscalMonth", "january")
 	if !supportedFiscalMonth(ws.FiscalMonth) {
@@ -1844,6 +2087,38 @@ func createInviteToken(workspaceID, email, role string) string {
 		return fmt.Sprintf("%s:%s:%s:%d", workspaceID, email, role, time.Now().UnixNano())
 	}
 	return "inv_" + hex.EncodeToString(buf)
+}
+
+func (h Handler) resolveInviteToken(ctx context.Context, token string) (resolvedInvite, error) {
+	if token == "" {
+		return resolvedInvite{}, pgx.ErrNoRows
+	}
+
+	var stored resolvedInvite
+	var email string
+	err := h.DB.QueryRow(ctx, `
+		select id::text, workspace_id::text, email, role::text
+		from workspace_invitation
+		where token=$1 and status='pending'
+		limit 1`, token).Scan(&stored.ID, &stored.WorkspaceID, &email, &stored.Role)
+	if err == nil {
+		stored.Email = &email
+		return stored, nil
+	}
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return resolvedInvite{}, err
+	}
+
+	var workspaceID string
+	err = h.DB.QueryRow(ctx, `
+		select id::text
+		from workspace
+		where invite_link_token=$1 and coalesce(invite_link_enabled,true)
+		limit 1`, token).Scan(&workspaceID)
+	if err != nil {
+		return resolvedInvite{}, err
+	}
+	return resolvedInvite{WorkspaceID: workspaceID, Role: "member"}, nil
 }
 
 var slugRe = regexp.MustCompile(`[^a-z0-9-]+`)

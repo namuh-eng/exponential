@@ -1,6 +1,7 @@
 package workspaces
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -42,6 +43,39 @@ func TestRoles(t *testing.T) {
 	}
 	if !validRole("guest") || validInviteRole("owner") {
 		t.Fatal("role validation drifted")
+	}
+}
+
+func TestInvitePreviewResponseDoesNotDiscloseEmail(t *testing.T) {
+	workspaceID := "workspace-1"
+	payload, err := json.Marshal(invitePreviewResponse{Valid: true, WorkspaceID: &workspaceID})
+	if err != nil {
+		t.Fatalf("marshal preview response: %v", err)
+	}
+	if strings.Contains(string(payload), "email") {
+		t.Fatalf("invite preview disclosed email field: %s", payload)
+	}
+}
+
+func TestMemberEntryTeamsCarryStableKeys(t *testing.T) {
+	teamsJSON := []byte(`[{"id":"team-1","name":"Engineering Platform","key":"ENG"}]`)
+	var teams []memberTeam
+	if err := json.Unmarshal(teamsJSON, &teams); err != nil {
+		t.Fatalf("unmarshal teams: %v", err)
+	}
+	if len(teams) != 1 || teams[0].Name == teams[0].Key {
+		t.Fatalf("teams should preserve distinct names and route keys: %#v", teams)
+	}
+}
+
+func TestEmailDomain(t *testing.T) {
+	if got := emailDomain(" Person@Example.COM "); got != "example.com" {
+		t.Fatalf("domain = %q", got)
+	}
+	for _, input := range []string{"", "missing-at", "a@localhost", "a@bad_domain.test"} {
+		if got := emailDomain(input); got != "" {
+			t.Fatalf("emailDomain(%q) = %q", input, got)
+		}
 	}
 }
 

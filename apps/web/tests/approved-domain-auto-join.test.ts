@@ -1,93 +1,36 @@
 import { autoJoinWorkspaceForApprovedDomain } from "@/lib/approved-domain-auto-join";
-import { db } from "@/lib/db";
-import { member, team, teamMember, user, workspace } from "@/lib/db/schema";
-import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { describeDb } from "./_helpers/db-integration";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const TEST_USER_ID = "10000000-0000-0000-0000-000000000001";
-const TEST_WS_ID = "10000000-0000-0000-0000-000000000002";
-const TEST_TEAM_ID = "10000000-0000-0000-0000-000000000003";
+const post = vi.fn();
 
-describeDb("Approved domain auto-join logic", () => {
-  beforeAll(async () => {
-    // Cleanup
-    await db.delete(teamMember).where(eq(teamMember.userId, TEST_USER_ID));
-    await db.delete(member).where(eq(member.userId, TEST_USER_ID));
-    await db.delete(team).where(eq(team.id, TEST_TEAM_ID));
-    await db.delete(workspace).where(eq(workspace.id, TEST_WS_ID));
-    await db.delete(user).where(eq(user.id, TEST_USER_ID));
+vi.mock("@/lib/server-api-client", () => ({
+  createServerApiClient: vi.fn(async () => ({ POST: post })),
+}));
 
-    // Seed
-    await db.insert(user).values({
-      id: TEST_USER_ID,
-      name: "Auto-Join User",
-      email: "user@acme.com",
-    });
-
-    await db.insert(workspace).values({
-      id: TEST_WS_ID,
-      name: "Acme Corp",
-      urlSlug: "acme",
-      approvedEmailDomains: ["acme.com"],
-    });
-
-    await db.insert(team).values({
-      id: TEST_TEAM_ID,
-      workspaceId: TEST_WS_ID,
-      name: "Default Team",
-      key: "DFT",
-    });
+describe("approved-domain auto-join", () => {
+  beforeEach(() => {
+    post.mockReset();
   });
 
-  afterAll(async () => {
-    await db.delete(teamMember).where(eq(teamMember.userId, TEST_USER_ID));
-    await db.delete(member).where(eq(member.userId, TEST_USER_ID));
-    await db.delete(team).where(eq(team.id, TEST_TEAM_ID));
-    await db.delete(workspace).where(eq(workspace.id, TEST_WS_ID));
-    await db.delete(user).where(eq(user.id, TEST_USER_ID));
-  });
-
-  it("automatically joins workspace when domain matches", async () => {
-    const joinedWorkspaceId = await autoJoinWorkspaceForApprovedDomain({
-      userId: TEST_USER_ID,
-      email: "user@acme.com",
+  it("delegates approved-domain joining to the headless API", async () => {
+    post.mockResolvedValue({
+      data: { workspaceId: "10000000-0000-0000-0000-000000000002" },
+      response: new Response(null, { status: 200 }),
     });
 
-    expect(joinedWorkspaceId).toBe(TEST_WS_ID);
-
-    // Verify workspace membership
-    const [membership] = await db
-      .select()
-      .from(member)
-      .where(
-        and(
-          eq(member.userId, TEST_USER_ID),
-          eq(member.workspaceId, TEST_WS_ID),
-        ),
-      );
-    expect(membership).toBeDefined();
-    expect(membership.role).toBe("member");
-
-    // Verify team membership
-    const [teamMembership] = await db
-      .select()
-      .from(teamMember)
-      .where(
-        and(
-          eq(teamMember.userId, TEST_USER_ID),
-          eq(teamMember.teamId, TEST_TEAM_ID),
-        ),
-      );
-    expect(teamMembership).toBeDefined();
+    await expect(
+      autoJoinWorkspaceForApprovedDomain({
+        userId: "10000000-0000-0000-0000-000000000001",
+        email: "user@acme.com",
+      }),
+    ).resolves.toBe("10000000-0000-0000-0000-000000000002");
+    expect(post).toHaveBeenCalledWith("/workspaces/approved-domain-auto-join");
   });
 
-  it("does not join when domain does not match", async () => {
-    const joinedWorkspaceId = await autoJoinWorkspaceForApprovedDomain({
-      userId: TEST_USER_ID,
-      email: "user@other.com",
-    });
-
-    expect(joinedWorkspaceId).toBeNull();
+  it("skips the API when the caller has no usable session identity", async () => {
+    await expect(
+      autoJoinWorkspaceForApprovedDomain({ userId: "", email: null }),
+    ).resolves.toBeNull();
+    expect(post).not.toHaveBeenCalled();
   });
 });

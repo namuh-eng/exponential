@@ -29,6 +29,10 @@ func Middleware() func(http.Handler) http.Handler {
 	return New(limitFromEnv(), time.Now).Handler
 }
 
+func PublicMiddleware() func(http.Handler) http.Handler {
+	return New(limitFromEnv(), time.Now).PublicHandler
+}
+
 func New(limit int, now func() time.Time) *limiter {
 	if limit <= 0 {
 		limit = defaultLimitPerMinute
@@ -53,6 +57,10 @@ func limitFromEnv() int {
 
 func (l *limiter) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if auth.TestMode() {
+			next.ServeHTTP(w, r)
+			return
+		}
 		principal, ok := auth.FromContext(r.Context())
 		if !ok {
 			next.ServeHTTP(w, r)
@@ -64,6 +72,29 @@ func (l *limiter) Handler(next http.Handler) http.Handler {
 		if !allowed {
 			w.Header().Set("Retry-After", strconv.FormatInt(max(1, int64(time.Until(reset).Seconds())), 10))
 			problem.Write(w, http.StatusTooManyRequests, "Rate limit exceeded", "Too many requests for this token. Try again after the reset time.")
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (l *limiter) PublicHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if auth.TestMode() {
+			next.ServeHTTP(w, r)
+			return
+		}
+		clientIP := auth.ClientIP(r)
+		if clientIP == "" {
+			clientIP = "anonymous"
+		}
+
+		remaining, reset, allowed := l.take("ip:" + clientIP)
+		setHeaders(w, l.limit, remaining, reset)
+		if !allowed {
+			w.Header().Set("Retry-After", strconv.FormatInt(max(1, int64(time.Until(reset).Seconds())), 10))
+			problem.Write(w, http.StatusTooManyRequests, "Rate limit exceeded", "Too many requests from this network. Try again after the reset time.")
 			return
 		}
 

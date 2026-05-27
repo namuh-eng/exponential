@@ -44,7 +44,7 @@ function printDockerUnavailable(result) {
     "  2. Use an existing host Postgres/Redis and set DATABASE_URL/REDIS_URL in .env.local",
   );
   console.error(
-    "     Then run: npm run db:push (or pnpm db:push from the repo root)",
+    "     Then run: EXPONENTIAL_API_DATABASE_URL=$DATABASE_URL go run ./apps/api/cmd/migrate",
   );
   console.error(
     "  3. If parity QA is only verifying the missing-DB path, leave DB stopped and run pnpm dev; it must fail before binding a listener.",
@@ -63,7 +63,16 @@ async function main() {
 
   const compose = spawn(
     "docker",
-    ["compose", "-f", "docker-compose.yml", "up", "postgres", "redis", "-d"],
+    [
+      "compose",
+      "-f",
+      "docker-compose.yml",
+      "up",
+      "postgres",
+      "redis",
+      "api-migrate",
+      "-d",
+    ],
     { stdio: "inherit" },
   );
 
@@ -74,7 +83,7 @@ async function main() {
   compose.on("close", (status) => {
     if (status && status !== 0) {
       console.error(
-        "\nDocker Compose could not start the local services. If Docker is blocked or ports are already in use, use an existing host Postgres/Redis by setting DATABASE_URL/REDIS_URL in .env.local, then run npm run db:push (or pnpm db:push from the repo root).",
+        "\nDocker Compose could not start the local services. If Docker is blocked or ports are already in use, use an existing host Postgres/Redis by setting DATABASE_URL/REDIS_URL in .env.local, then run EXPONENTIAL_API_DATABASE_URL=$DATABASE_URL go run ./apps/api/cmd/migrate.",
       );
     }
     process.exit(status ?? 1);

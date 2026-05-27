@@ -1,19 +1,16 @@
 import { chooseActiveWorkspace } from "@/lib/active-workspace";
+import { requireApiData } from "@/lib/api-response";
 import { autoJoinWorkspaceForApprovedDomain } from "@/lib/approved-domain-auto-join";
-import { CANONICAL_WORKSPACE_SLUG } from "@/lib/canonical-routes";
-import { db } from "@/lib/db";
-import { member, team, workspace } from "@/lib/db/schema";
 import {
   DATABASE_BOOTSTRAP_MESSAGE,
   DATABASE_BOOTSTRAP_SETUP_COMMANDS,
   DATABASE_BOOTSTRAP_TITLE,
   shouldRenderDatabaseBootstrapError,
 } from "@/lib/dev-database-error";
-import { activeTeamFilter } from "@/lib/team-lifecycle";
+import { createServerApiClient } from "@/lib/server-api-client";
 import { getWebSession } from "@/lib/web-session";
 import { evaluateWorkspaceIpAccess } from "@/lib/workspace-ip-restrictions";
 import { isAppRoutePrefix, normalizeAppPath } from "@/lib/workspace-paths";
-import { and, desc, eq } from "drizzle-orm";
 import { cookies, headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { AppShell } from "./app-shell";
@@ -92,7 +89,6 @@ export default async function AppLayout({
           workspaceId: string;
           workspaceName: string;
           workspaceSlug: string;
-          settings: unknown;
         };
         teams: {
           id: string;
@@ -112,21 +108,19 @@ export default async function AppLayout({
     const requestedWorkspaceSlug = requestHeaders.get("x-workspace-slug");
     const sourcePath = requestHeaders.get("x-workspace-source-path");
 
-    const loadMemberships = () =>
-      db
-        .select({
-          workspaceId: member.workspaceId,
-          workspaceName: workspace.name,
-          workspaceSlug: workspace.urlSlug,
-          settings: workspace.settings,
-        })
-        .from(member)
-        .innerJoin(workspace, eq(member.workspaceId, workspace.id))
-        .where(eq(member.userId, session.user.id))
-        .orderBy(desc(member.createdAt))
-        .limit(50);
+    const client = await createServerApiClient();
+    const loadMemberships = async () => {
+      const result = await client.GET("/workspaces");
+      if (result.response.status === 403) {
+        return "ip-denied" as const;
+      }
+      return requireApiData(result, "List workspaces");
+    };
 
     let memberships = await loadMemberships();
+    if (memberships === "ip-denied") {
+      return <WorkspaceIpAccessDenied />;
+    }
 
     if (memberships.length === 0) {
       await autoJoinWorkspaceForApprovedDomain({
@@ -134,43 +128,19 @@ export default async function AppLayout({
         email: session.user.email,
       });
       memberships = await loadMemberships();
+      if (memberships === "ip-denied") {
+        return <WorkspaceIpAccessDenied />;
+      }
 
       if (memberships.length === 0) {
         redirect("/create-workspace");
       }
     }
 
-    if (
-      !memberships.some(
-        (membership) => membership.workspaceSlug === CANONICAL_WORKSPACE_SLUG,
-      )
-    ) {
-      const [canonicalMembership] = await db
-        .select({
-          workspaceId: member.workspaceId,
-          workspaceName: workspace.name,
-          workspaceSlug: workspace.urlSlug,
-          settings: workspace.settings,
-        })
-        .from(member)
-        .innerJoin(workspace, eq(member.workspaceId, workspace.id))
-        .where(
-          and(
-            eq(member.userId, session.user.id),
-            eq(workspace.urlSlug, CANONICAL_WORKSPACE_SLUG),
-          ),
-        )
-        .limit(1);
-
-      if (canonicalMembership) {
-        memberships.push(canonicalMembership);
-      }
-    }
-
     const normalizedSourcePath = sourcePath
       ? normalizeAppPath(sourcePath)
       : null;
-    let ws = chooseActiveWorkspace(memberships, {
+    const ws = chooseActiveWorkspace(memberships, {
       requestedWorkspaceSlug,
       preferredWorkspaceSlug,
       preferredWorkspaceId,
@@ -178,30 +148,25 @@ export default async function AppLayout({
         normalizedSourcePath?.startsWith("/my-issues") ?? false,
     });
 
-    if (!ws && requestedWorkspaceSlug) {
-      [ws] = await db
-        .select({
-          workspaceId: member.workspaceId,
-          workspaceName: workspace.name,
-          workspaceSlug: workspace.urlSlug,
-          settings: workspace.settings,
-        })
-        .from(member)
-        .innerJoin(workspace, eq(member.workspaceId, workspace.id))
-        .where(
-          and(
-            eq(member.userId, session.user.id),
-            eq(workspace.urlSlug, requestedWorkspaceSlug),
-          ),
-        )
-        .limit(1);
-    }
-
     if (!ws) {
       notFound();
     }
 
-    const ipAccess = evaluateWorkspaceIpAccess(requestHeaders, ws.settings);
+    const currentWorkspaceResult = await client.GET("/workspaces/current", {
+      headers: { "x-workspace-id": ws.workspaceId },
+    });
+    if (currentWorkspaceResult.response.status === 403) {
+      return <WorkspaceIpAccessDenied />;
+    }
+    const currentWorkspace = requireApiData(
+      currentWorkspaceResult,
+      "Get current workspace",
+    ).workspace;
+
+    const ipAccess = evaluateWorkspaceIpAccess(
+      requestHeaders,
+      currentWorkspace.settings,
+    );
     if (!ipAccess.allowed) {
       return <WorkspaceIpAccessDenied />;
     }
@@ -214,19 +179,17 @@ export default async function AppLayout({
       }
     }
 
-    // Get first team
-    const teams = await db
-      .select({
-        id: team.id,
-        name: team.name,
-        key: team.key,
-        parentTeamId: team.parentTeamId,
-        retiredAt: team.retiredAt,
-      })
-      .from(team)
-      .where(and(eq(team.workspaceId, ws.workspaceId), activeTeamFilter))
-      .orderBy(desc(team.createdAt))
-      .limit(50);
+    const teams = requireApiData(
+      await client.GET("/teams", {
+        headers: { "x-workspace-id": ws.workspaceId },
+      }),
+      "List teams",
+    ).teams.map((team) => ({
+      id: team.id,
+      name: team.name,
+      key: team.key,
+      parentTeamId: null,
+    }));
 
     shellData = { ws, teams };
   } catch (error) {

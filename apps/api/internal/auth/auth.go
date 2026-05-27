@@ -43,6 +43,34 @@ type BrowserSessionUser struct {
 	Image *string `json:"image"`
 }
 
+func (m Middleware) Session(w http.ResponseWriter, r *http.Request) {
+	if session, _, err := m.BrowserSession(r.Context(), r); err == nil {
+		problem.JSON(w, http.StatusOK, session)
+		return
+	}
+	p, ok := FromContext(r.Context())
+	if !ok {
+		problem.Write(w, http.StatusUnauthorized, "Unauthorized", "browser session not found")
+		return
+	}
+	var session BrowserSession
+	err := m.DB.QueryRow(r.Context(), `
+		select id, name, email, image
+		from "user"
+		where id = $1
+		limit 1`, p.UserID).Scan(
+		&session.User.ID,
+		&session.User.Name,
+		&session.User.Email,
+		&session.User.Image,
+	)
+	if err != nil {
+		problem.Write(w, http.StatusUnauthorized, "Unauthorized", "browser session not found")
+		return
+	}
+	problem.JSON(w, http.StatusOK, session)
+}
+
 func FromContext(ctx context.Context) (Principal, bool) {
 	principal, ok := ctx.Value(principalKey).(Principal)
 	return principal, ok
@@ -206,7 +234,7 @@ func record(value any) map[string]any {
 // trustedProxyState holds the parsed EXPONENTIAL_TRUSTED_PROXIES CIDRs and
 // a once-guard so the one-time warning is emitted exactly once at startup.
 var (
-	trustedProxyOnce    sync.Once
+	trustedProxyOnce     sync.Once
 	trustedProxyNetworks []*net.IPNet
 )
 
@@ -238,8 +266,10 @@ func loadTrustedProxies() []*net.IPNet {
 
 func clientIP(r *http.Request) string {
 	// X-Test-Client-IP is only used in tests.
-	if testIP := strings.TrimSpace(strings.Split(r.Header.Get("X-Test-Client-IP"), ",")[0]); testIP != "" {
-		return testIP
+	if TestMode() {
+		if testIP := strings.TrimSpace(strings.Split(r.Header.Get("X-Test-Client-IP"), ",")[0]); testIP != "" {
+			return testIP
+		}
 	}
 
 	// Resolve the direct peer IP from RemoteAddr.
@@ -270,6 +300,10 @@ func clientIP(r *http.Request) string {
 	}
 
 	return peerHost
+}
+
+func ClientIP(r *http.Request) string {
+	return clientIP(r)
 }
 
 func ipInRange(ip net.IP, value string) bool {

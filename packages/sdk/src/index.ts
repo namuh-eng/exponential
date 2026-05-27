@@ -7,10 +7,14 @@ export function createExponentialClient(options: {
   baseUrl?: string;
   token?: string;
   cookie?: string;
+  headers?: HeadersInit;
   fetch?: typeof fetch;
 }) {
   const auth: Middleware = {
     async onRequest({ request }) {
+      for (const [key, value] of new Headers(options.headers)) {
+        request.headers.set(key, value);
+      }
       if (options.token) {
         request.headers.set("Authorization", `Bearer ${options.token}`);
       }
