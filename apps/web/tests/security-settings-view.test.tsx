@@ -85,7 +85,9 @@ describe("SecurityPage component", () => {
     expect(screen.getByText("Loading security settings...")).toBeDefined();
 
     await waitFor(() => {
-      expect(screen.getByText("https://exponential.app/i/abc-123")).toBeDefined();
+      expect(
+        screen.getByText("https://exponential.app/i/abc-123"),
+      ).toBeDefined();
     });
 
     expect(screen.getByText("example.com")).toBeDefined();

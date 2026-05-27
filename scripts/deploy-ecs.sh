@@ -59,11 +59,9 @@ aws ecr get-login-password --region "$REGION" | docker login --username AWS --pa
 
 docker build --platform linux/amd64 -f infra/docker/api.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-api:$IMAGE_TAG" .
 docker build --platform linux/amd64 -f infra/docker/web.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-web:$IMAGE_TAG" .
-docker build --platform linux/amd64 -f infra/docker/web-schema.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-schema:$IMAGE_TAG" .
 
 docker push "$ECR_REGISTRY/${APP_NAME}-api:$IMAGE_TAG"
 docker push "$ECR_REGISTRY/${APP_NAME}-web:$IMAGE_TAG"
-docker push "$ECR_REGISTRY/${APP_NAME}-schema:$IMAGE_TAG"
 
 ensure_log_group() {
   local group="$1"
@@ -79,14 +77,12 @@ ensure_log_group() {
 ensure_log_group "/ecs/${APP_NAME}-api"
 ensure_log_group "/ecs/${APP_NAME}-api-migrate"
 ensure_log_group "/ecs/${APP_NAME}-web"
-ensure_log_group "/ecs/${APP_NAME}-schema"
 
 node scripts/render-ecs-task-definitions.mjs --out-dir "$TASK_OUT_DIR"
 
 API_TASK_ARN=$(aws ecs register-task-definition --cli-input-json "file://${TASK_OUT_DIR}/api-task-definition.json" --region "$REGION" --query 'taskDefinition.taskDefinitionArn' --output text)
 API_MIGRATE_TASK_ARN=$(aws ecs register-task-definition --cli-input-json "file://${TASK_OUT_DIR}/api-migrate-task-definition.json" --region "$REGION" --query 'taskDefinition.taskDefinitionArn' --output text)
 WEB_TASK_ARN=$(aws ecs register-task-definition --cli-input-json "file://${TASK_OUT_DIR}/web-task-definition.json" --region "$REGION" --query 'taskDefinition.taskDefinitionArn' --output text)
-SCHEMA_TASK_ARN=$(aws ecs register-task-definition --cli-input-json "file://${TASK_OUT_DIR}/schema-task-definition.json" --region "$REGION" --query 'taskDefinition.taskDefinitionArn' --output text)
 
 run_migration_task() {
   local label="$1"
@@ -126,7 +122,6 @@ run_migration_task() {
   fi
 }
 
-run_migration_task "drizzle schema push" "$SCHEMA_TASK_ARN" schema
 run_migration_task "Go SQL migrations" "$API_MIGRATE_TASK_ARN" api-migrate
 
 ensure_service() {

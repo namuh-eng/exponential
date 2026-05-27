@@ -20,13 +20,6 @@ const required = [
     container: "web",
     port: 3000,
   },
-  {
-    file: "infra/ecs/schema-task-definition.json",
-    family: "exponential-schema",
-    container: "schema",
-    imageIncludes: "exponential-schema",
-    noPort: true,
-  },
 ];
 
 for (const item of required) {

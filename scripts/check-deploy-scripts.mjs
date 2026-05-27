@@ -4,7 +4,6 @@ const deploy = readFileSync("scripts/deploy-ecs.sh", "utf8");
 for (const expected of [
   "${APP_NAME}-api",
   "${APP_NAME}-web",
-  "${APP_NAME}-schema",
   "run_migration_task",
   "api-migrate-task-definition.json",
   "Go SQL migrations",

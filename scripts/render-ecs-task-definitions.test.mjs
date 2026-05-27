@@ -37,7 +37,6 @@ for (const file of [
   "infra/ecs/api-task-definition.json",
   "infra/ecs/api-migrate-task-definition.json",
   "infra/ecs/web-task-definition.json",
-  "infra/ecs/schema-task-definition.json",
 ]) {
   const rendered = renderTaskDefinitionFile(file, env);
   assert.doesNotMatch(rendered, /\$\{/);

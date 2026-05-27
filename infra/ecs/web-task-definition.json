@@ -46,6 +46,10 @@
         {
           "name": "EXPONENTIAL_HEADLESS_DIRECT_API_REWRITE",
           "value": "true"
+        },
+        {
+          "name": "DB_SSL",
+          "value": "true"
         }
       ],
       "secrets": [
