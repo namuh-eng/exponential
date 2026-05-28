@@ -1,0 +1,113 @@
+# ABOUTME: Deploys exponential (web + api + migrator) to AWS ECS Fargate via the
+# ABOUTME: Mac mini self-hosted runner. Push-to-main + manual workflow_dispatch.
+# Note: this workflow does not consume any untrusted github.event.* inputs in run: commands.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'infra/**'
+      - 'scripts/deploy-ecs.sh'
+      - 'scripts/render-ecs-task-definitions.mjs'
+      - 'scripts/configure-ecs-autoscaling.sh'
+      - 'scripts/smoke-prod.sh'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+    inputs:
+      skip_smoke:
+        description: 'Skip the post-deploy production smoke test (dangerous)'
+        type: boolean
+        default: false
+      skip_autoscaling:
+        description: 'Skip autoscaling reconfiguration'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, exponential-deploy]
+    timeout-minutes: 30
+    env:
+      # AWS account + cluster identifiers (resource IDs, not secrets — fine as repo variables)
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      APP_NAME: ${{ vars.APP_NAME || 'exponential' }}
+
+      # ECS task IAM roles
+      ECS_EXECUTION_ROLE_ARN: ${{ vars.ECS_EXECUTION_ROLE_ARN }}
+      ECS_TASK_ROLE_ARN: ${{ vars.ECS_TASK_ROLE_ARN }}
+
+      # Secrets Manager ARNs (only the ARN is config; the secret value stays in AWS)
+      DATABASE_URL_SECRET_ARN: ${{ vars.DATABASE_URL_SECRET_ARN }}
+      REDIS_URL_SECRET_ARN: ${{ vars.REDIS_URL_SECRET_ARN }}
+      GOOGLE_CLIENT_ID_SECRET_ARN: ${{ vars.GOOGLE_CLIENT_ID_SECRET_ARN }}
+      GOOGLE_CLIENT_SECRET_SECRET_ARN: ${{ vars.GOOGLE_CLIENT_SECRET_SECRET_ARN }}
+
+      # Networking
+      PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
+      PRIV_SUBNET_A: ${{ vars.PRIV_SUBNET_A }}
+      PRIV_SUBNET_B: ${{ vars.PRIV_SUBNET_B }}
+      APP_SG: ${{ vars.APP_SG }}
+      ALB_SG: ${{ vars.ALB_SG }}
+      API_TG_ARN: ${{ vars.API_TG_ARN }}
+      WEB_TG_ARN: ${{ vars.WEB_TG_ARN }}
+
+      # Optional
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
+      EXPONENTIAL_TRUSTED_PROXIES: ${{ vars.EXPONENTIAL_TRUSTED_PROXIES }}
+
+      # Deploy-time toggles. Default to "safest path": smoke on, autoscaling on.
+      # workflow_dispatch can flip these off via inputs.
+      RUN_PROD_SMOKE: ${{ (inputs.skip_smoke || false) && 'false' || 'true' }}
+      CONFIGURE_AUTOSCALING: ${{ (inputs.skip_autoscaling || false) && 'false' || 'true' }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show deploy identity
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_REF: ${{ github.ref }}
+          GH_SHA: ${{ github.sha }}
+          GH_ACTOR: ${{ github.actor }}
+          GH_EVENT: ${{ github.event_name }}
+        run: |
+          echo "::group::Deploy identity"
+          printf 'Repo:    %s\n' "$GH_REPO"
+          printf 'Ref:     %s\n' "$GH_REF"
+          printf 'SHA:     %s\n' "$GH_SHA"
+          printf 'Actor:   %s\n' "$GH_ACTOR"
+          printf 'Trigger: %s\n' "$GH_EVENT"
+          aws sts get-caller-identity
+          echo "::endgroup::"
+
+      - name: Deploy to ECS
+        run: |
+          # Isolate from Docker Desktop's user config so the launchd-spawned
+          # runner does not hit the keychain-bound credsStore helper.
+          # The runner host owns ~/.docker-actions/config.json.
+          export DOCKER_CONFIG="${HOME}/.docker-actions"
+          # Re-expose cli-plugins (buildx) since DOCKER_CONFIG overrides the
+          # plugin search path away from ~/.docker/cli-plugins.
+          mkdir -p "${DOCKER_CONFIG}/cli-plugins"
+          for src in "${HOME}/.docker/cli-plugins" "/Applications/Docker.app/Contents/Resources/cli-plugins"; do
+            [ -d "${src}" ] || continue
+            for plugin in "${src}"/*; do
+              [ -e "${plugin}" ] || continue
+              ln -sfn "${plugin}" "${DOCKER_CONFIG}/cli-plugins/$(basename "${plugin}")"
+            done
+          done
+          docker buildx version
+
+          # IMAGE_TAG defaults to short SHA inside deploy-ecs.sh, which matches
+          # the checked-out ref on a self-hosted runner.
+          bash scripts/deploy-ecs.sh
