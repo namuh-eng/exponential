@@ -12,10 +12,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
+	"github.com/namuh-eng/exponential/apps/api/internal/email"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
 )
 
-type Handler struct{ DB *pgxpool.Pool }
+type Handler struct {
+	DB    *pgxpool.Pool
+	Email email.Sender
+}
 
 type providerCapability struct {
 	Supported         bool    `json:"supported"`

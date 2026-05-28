@@ -17,6 +17,7 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
+	"github.com/namuh-eng/exponential/apps/api/internal/email"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -146,8 +147,8 @@ func (h Handler) StartMagicLink(w http.ResponseWriter, r *http.Request) {
 		CallbackURL string `json:"callbackURL"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&input)
-	email := strings.ToLower(strings.TrimSpace(input.Email))
-	if email == "" || !strings.Contains(email, "@") {
+	address := strings.ToLower(strings.TrimSpace(input.Email))
+	if address == "" || !strings.Contains(address, "@") {
 		problem.JSON(w, http.StatusBadRequest, map[string]string{"error": "Enter a valid email address."})
 		return
 	}
@@ -155,19 +156,45 @@ func (h Handler) StartMagicLink(w http.ResponseWriter, r *http.Request) {
 	rawToken := randomBase64URLAuth(32)
 	hash := sha256.Sum256([]byte(rawToken))
 	verificationID := "magic_" + randomBase64URLAuth(12)
-	_, err := h.DB.Exec(r.Context(), `insert into verification (id,identifier,value,expires_at,created_at,updated_at) values ($1,$2,$3,$4,now(),now())`, verificationID, "magic-link:"+email+":"+callbackURL, hex.EncodeToString(hash[:]), time.Now().UTC().Add(15*time.Minute))
+	_, err := h.DB.Exec(r.Context(), `insert into verification (id,identifier,value,expires_at,created_at,updated_at) values ($1,$2,$3,$4,now(),now())`, verificationID, "magic-link:"+address+":"+callbackURL, hex.EncodeToString(hash[:]), time.Now().UTC().Add(15*time.Minute))
 	if err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Create magic link failed", err.Error())
 		return
 	}
 	link := appURL(r) + "/api/auth/magic-link/callback?token=" + url.QueryEscape(rawToken) + "&id=" + url.QueryEscape(verificationID)
-	// TODO: deliver via SES in production. The response exposes the link only in
-	// non-production so local/dev/e2e can verify the flow without an email inbox.
-	response := map[string]any{"ok": true}
-	if os.Getenv("NODE_ENV") != "production" {
-		response["url"] = link
+	production := os.Getenv("NODE_ENV") == "production"
+
+	// Non-production exposes the link in the response so local/dev/e2e can
+	// exercise the flow without an inbox. Production never leaks the link
+	// and instead relies on the configured email sender.
+	if !production {
+		problem.JSON(w, http.StatusAccepted, map[string]any{"ok": true, "url": link})
+		return
 	}
-	problem.JSON(w, http.StatusAccepted, response)
+
+	if h.Email == nil || !h.Email.Enabled() {
+		problem.JSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": "Magic link sign-in is not configured on this server.",
+		})
+		return
+	}
+
+	if err := h.Email.Send(r.Context(), magicLinkMessage(address, link)); err != nil {
+		problem.Write(w, http.StatusBadGateway, "Send magic link failed", err.Error())
+		return
+	}
+	problem.JSON(w, http.StatusAccepted, map[string]any{"ok": true})
+}
+
+func magicLinkMessage(to, link string) email.Message {
+	html := `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:480px;margin:0 auto;padding:40px 20px">` +
+		`<h2 style="color:#ffffff;font-size:20px;margin-bottom:24px">Sign in to exponential</h2>` +
+		`<p style="color:#9ca3af;font-size:14px;margin-bottom:24px">Click the link below to sign in. This link expires in 15 minutes.</p>` +
+		`<a href="` + link + `" style="display:inline-block;background:#7180ff;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-size:14px;font-weight:500">Sign in</a>` +
+		`<p style="color:#6b7280;font-size:12px;margin-top:32px">If you didn't request this email you can safely ignore it.</p>` +
+		`</div>`
+	text := "Sign in to exponential: " + link + "\n\nThis link expires in 15 minutes."
+	return email.Message{To: to, Subject: "Sign in to exponential", HTML: html, Text: text}
 }
 
 func (h Handler) MagicLinkCallback(w http.ResponseWriter, r *http.Request) {

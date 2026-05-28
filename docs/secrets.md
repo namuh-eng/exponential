@@ -23,9 +23,37 @@ contains no secret values and is committed.
 | `google-oauth`  | `secret`       | `AUTH_GOOGLE_SECRET`             |
 | `aws`           | `s3-bucket`    | `S3_BUCKET`                      |
 | `aws`           | `sender-email` | `SENDER_EMAIL`                   |
+| `opensend-exponential` | `credential` | `OPENSEND_API_KEY`         |
 
 Non-secret config (`AWS_REGION`, `*_APP_URL`, etc.) is kept as literal values
 in `.env.1password` directly — there's no point putting them in 1Password.
+
+## Email provider
+
+Transactional email is delivered by the Go API (`apps/api/internal/email`).
+The web app does not import any SMTP/SES/Opensend SDK; it asks the API to
+send (e.g. via `POST /v1/auth/magic-link`), and the API picks a provider from
+env:
+
+| Provider | Required env                          | Notes                                  |
+|----------|---------------------------------------|----------------------------------------|
+| AWS SES  | `SENDER_EMAIL` (verified From:)       | Auto-selected when only `SENDER_EMAIL` set |
+| Opensend | `SENDER_EMAIL`, `OPENSEND_API_KEY`    | Auto-selected when API key set; force with `EMAIL_PROVIDER=opensend` |
+
+`EMAIL_PROVIDER` (optional) takes `ses` or `opensend` and overrides
+auto-detection. `OPENSEND_BASE_URL` is only needed for a self-hosted Opensend
+deployment; otherwise the API defaults to `https://opensend.namuh.co`.
+
+**There is no fallback sender.** If neither provider is configured, the
+`email.Disabled` sender is wired in. In production, `POST /v1/auth/magic-link`
+returns `503` with `"Magic link sign-in is not configured on this server."`
+instead of silently sending from a stand-in address. In non-production the
+endpoint returns the magic-link URL directly in its JSON response so local
+dev / E2E tests can complete the flow without an inbox — production never
+exposes the link in the response, configured or not.
+
+The hosted deployment uses Opensend; `OPENSEND_API_KEY` lives at
+`op://Exponential/opensend-exponential/credential`.
 
 ## Local development
 

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	stdhttp "net/http"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/authproviders"
 	"github.com/namuh-eng/exponential/apps/api/internal/comments"
 	"github.com/namuh-eng/exponential/apps/api/internal/documents"
+	"github.com/namuh-eng/exponential/apps/api/internal/email"
 	"github.com/namuh-eng/exponential/apps/api/internal/emojis"
 	"github.com/namuh-eng/exponential/apps/api/internal/inbound"
 	"github.com/namuh-eng/exponential/apps/api/internal/initiatives"
@@ -47,6 +49,12 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 	r.Use(observability.TraceMiddleware("exponential-api"))
 	r.Use(observability.RequestLogger(logger, metrics))
 
+	emailSender, err := email.New(context.Background())
+	if err != nil {
+		logger.Warn("email sender unavailable; magic-link sign-in will be disabled", zap.Error(err))
+		emailSender = email.Disabled{}
+	}
+
 	healthHandler := func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(stdhttp.StatusOK)
@@ -71,14 +79,14 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 		}
 	})
 
-	mountAPIRoutes(r, "/v1", db)
-	mountAPIRoutes(r, "/api", db)
+	mountAPIRoutes(r, "/v1", db, emailSender)
+	mountAPIRoutes(r, "/api", db, emailSender)
 	return r
 }
 
-func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool) {
+func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender email.Sender) {
 	authMiddleware := auth.Middleware{DB: db}
-	authProvidersHandler := authproviders.Handler{DB: db}
+	authProvidersHandler := authproviders.Handler{DB: db, Email: emailSender}
 	commentsHandler := comments.Handler{DB: db}
 	documentsHandler := documents.Handler{DB: db}
 	labelsHandler := labels.Handler{DB: db}
