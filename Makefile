@@ -1,6 +1,7 @@
 .PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd api-build api-test api-dockerfile ecs-task-definitions ecs-render deploy-scripts smoke-script openapi-coverage openapi-strict sqlc-generated web-api-empty web-sdk-usage
 .PHONY: check-header test-header check-verbose test-verbose
 .PHONY: dev-services dev-services-down deploy deploy-oauth-secrets
+.PHONY: dev-op build-op start-op op-bootstrap op-doctor
 
 # Full validation: check + test
 all: check test
@@ -145,3 +146,29 @@ deploy:
 # force-redeploy the API service so new tasks pick up the values.
 deploy-oauth-secrets:
 	bash scripts/sync-google-oauth-secrets.sh
+
+# -----------------------------------------------------------------------------
+# 1Password env workflow
+# Secrets live in vault "Exponential" on namuhinc.1password.com.
+# .env.1password holds op:// references (safe to commit).
+# Locally: `op signin --account namuhinc.1password.com` once.
+# CI: set OP_SERVICE_ACCOUNT_TOKEN.
+# -----------------------------------------------------------------------------
+OP_RUN = op run --env-file=.env.1password --
+
+dev-op:
+	$(OP_RUN) pnpm dev
+
+build-op:
+	$(OP_RUN) pnpm build
+
+start-op:
+	$(OP_RUN) pnpm start
+
+# Sync local .env values up to the 1Password vault (one-shot).
+op-bootstrap:
+	bash scripts/op-bootstrap.sh
+
+# Verify the 1Password workflow is healthy.
+op-doctor:
+	bash scripts/op-doctor.sh

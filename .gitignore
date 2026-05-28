@@ -3,6 +3,7 @@ node_modules/
 dist/
 .env*
 !.env.example
+!.env.1password
 *.log
 .omc/
 .omx/
