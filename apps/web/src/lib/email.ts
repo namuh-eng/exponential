@@ -2,13 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
 
-const region = process.env.AWS_REGION ?? "us-east-1";
-const senderEmail = process.env.SENDER_EMAIL ?? "noreply@foreverbrowsing.com";
-const emailPreviewPath =
-  process.env.EMAIL_PREVIEW_PATH ??
-  path.join(process.cwd(), ".omx", "email-previews", "latest.json");
-
-export const ses = new SESv2Client({ region });
+export type SendEmailResult = "sent" | "preview" | "disabled";
+export type EmailProviderName = "ses" | "opensend";
 
 interface EmailOptions {
   to: string;
@@ -21,19 +16,141 @@ interface SendEmailConfig {
   allowPreviewFallback?: boolean;
 }
 
+interface EmailProvider {
+  name: EmailProviderName;
+  from: string;
+  send(options: EmailOptions): Promise<void>;
+}
+
+function envOrUndefined(key: string): string | undefined {
+  const raw = process.env[key];
+  return raw && raw.trim() !== "" ? raw.trim() : undefined;
+}
+
+function resolveProviderChoice(): EmailProviderName | null {
+  const explicit = envOrUndefined("EMAIL_PROVIDER")?.toLowerCase();
+  if (explicit === "ses" || explicit === "opensend") return explicit;
+
+  if (envOrUndefined("OPENSEND_API_KEY")) return "opensend";
+  if (envOrUndefined("SENDER_EMAIL")) return "ses";
+  return null;
+}
+
+function getEmailPreviewPath(): string {
+  return (
+    envOrUndefined("EMAIL_PREVIEW_PATH") ??
+    path.join(process.cwd(), ".omx", "email-previews", "latest.json")
+  );
+}
+
+function buildSesProvider(): EmailProvider | null {
+  const from = envOrUndefined("SENDER_EMAIL");
+  if (!from) return null;
+  const region = envOrUndefined("AWS_REGION") ?? "us-east-1";
+  const client = new SESv2Client({ region });
+
+  return {
+    name: "ses",
+    from,
+    async send(options) {
+      const command = new SendEmailCommand({
+        FromEmailAddress: from,
+        Destination: { ToAddresses: [options.to] },
+        Content: {
+          Simple: {
+            Subject: { Data: options.subject },
+            Body: {
+              Html: { Data: options.html },
+              ...(options.text ? { Text: { Data: options.text } } : {}),
+            },
+          },
+        },
+      });
+      await client.send(command);
+    },
+  };
+}
+
+async function buildOpensendProvider(): Promise<EmailProvider | null> {
+  const apiKey = envOrUndefined("OPENSEND_API_KEY");
+  const from = envOrUndefined("SENDER_EMAIL");
+  if (!apiKey || !from) return null;
+
+  const baseUrl = envOrUndefined("OPENSEND_BASE_URL");
+  // `opensend` is an optional peer; load it via a non-literal specifier so
+  // TypeScript doesn't try to resolve it at compile time and bundlers don't
+  // pull it in for self-hosters who picked SES.
+  const moduleId = "opensend";
+  const mod = (await import(/* @vite-ignore */ moduleId)) as {
+    Opensend: new (
+      apiKey: string,
+      options?: { baseUrl?: string },
+    ) => {
+      emails: {
+        send(payload: {
+          from: string;
+          to: string | string[];
+          subject: string;
+          html?: string;
+          text?: string;
+        }): Promise<{
+          data: unknown;
+          error: { message: string; statusCode: number } | null;
+        }>;
+      };
+    };
+  };
+  const client = new mod.Opensend(apiKey, baseUrl ? { baseUrl } : {});
+
+  return {
+    name: "opensend",
+    from,
+    async send(options) {
+      const result = await client.emails.send({
+        from,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        ...(options.text ? { text: options.text } : {}),
+      });
+      if (result.error) {
+        throw new Error(
+          `opensend send failed (${result.error.statusCode}): ${result.error.message}`,
+        );
+      }
+    },
+  };
+}
+
+async function resolveProvider(): Promise<EmailProvider | null> {
+  const choice = resolveProviderChoice();
+  if (choice === "opensend") return buildOpensendProvider();
+  if (choice === "ses") return buildSesProvider();
+  return null;
+}
+
+/**
+ * True when an email provider is configured. Callers should branch on this
+ * before invoking any email-dependent flow (magic links, invitations, etc.).
+ */
+export function isEmailEnabled(): boolean {
+  return resolveProviderChoice() !== null;
+}
+
 async function writeEmailPreview(
+  provider: EmailProvider,
   options: EmailOptions,
   error: unknown,
 ): Promise<void> {
-  await mkdir(path.dirname(emailPreviewPath), { recursive: true });
+  const previewPath = getEmailPreviewPath();
+  await mkdir(path.dirname(previewPath), { recursive: true });
   await writeFile(
-    emailPreviewPath,
+    previewPath,
     JSON.stringify(
       {
-        provider: "ses-preview",
-        from: senderEmail,
+        provider: `${provider.name}-preview`,
+        from: provider.from,
         ...options,
-        region,
         createdAt: new Date().toISOString(),
         error: error instanceof Error ? error.message : String(error),
       },
@@ -44,38 +161,29 @@ async function writeEmailPreview(
 }
 
 /**
- * Send an email via SES.
+ * Send an email via the configured provider (SES or Opensend).
+ *
+ * Returns:
+ * - "sent"     — delivered successfully
+ * - "preview"  — non-production fallback wrote a local JSON file
+ * - "disabled" — no provider is configured; caller should skip the flow
  */
 export async function sendEmail(
   options: EmailOptions,
   config: SendEmailConfig = {},
-): Promise<"ses" | "preview"> {
+): Promise<SendEmailResult> {
   const { allowPreviewFallback = true } = config;
-  const command = new SendEmailCommand({
-    FromEmailAddress: senderEmail,
-    Destination: {
-      ToAddresses: [options.to],
-    },
-    Content: {
-      Simple: {
-        Subject: { Data: options.subject },
-        Body: {
-          Html: { Data: options.html },
-          ...(options.text ? { Text: { Data: options.text } } : {}),
-        },
-      },
-    },
-  });
+  const provider = await resolveProvider();
+  if (!provider) return "disabled";
 
   try {
-    await ses.send(command);
-    return "ses";
+    await provider.send(options);
+    return "sent";
   } catch (error) {
     if (process.env.NODE_ENV === "production" || !allowPreviewFallback) {
       throw error;
     }
-
-    await writeEmailPreview(options, error);
+    await writeEmailPreview(provider, options, error);
     return "preview";
   }
 }
@@ -87,7 +195,7 @@ export async function sendMagicLinkEmail(
   to: string,
   code: string,
   magicLinkUrl: string,
-): Promise<void> {
+): Promise<SendEmailResult> {
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
       <h2 style="color: #ffffff; font-size: 20px; margin-bottom: 24px;">Sign in to exponential</h2>
@@ -111,7 +219,7 @@ export async function sendMagicLinkEmail(
 
   const text = `Your sign-in code is: ${code}\n\nOr use this link: ${magicLinkUrl}\n\nThis code expires in 10 minutes.`;
 
-  await sendEmail(
+  return sendEmail(
     {
       to,
       subject: `Your sign-in code: ${code}`,
@@ -130,7 +238,7 @@ export async function sendInvitationEmail(
   workspaceName: string,
   inviterName: string,
   inviteUrl: string,
-): Promise<void> {
+): Promise<SendEmailResult> {
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
       <h2 style="color: #ffffff; font-size: 20px; margin-bottom: 24px;">You've been invited to ${workspaceName}</h2>
@@ -148,7 +256,7 @@ export async function sendInvitationEmail(
 
   const text = `${inviterName} has invited you to join ${workspaceName} on exponential.\n\nAccept: ${inviteUrl}`;
 
-  await sendEmail(
+  return sendEmail(
     {
       to,
       subject: `${inviterName} invited you to ${workspaceName}`,
@@ -167,7 +275,7 @@ export async function sendNotificationEmail(
   subject: string,
   body: string,
   actionUrl: string,
-): Promise<void> {
+): Promise<SendEmailResult> {
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
       <p style="color: #d1d5db; font-size: 14px; margin-bottom: 24px;">${body}</p>
@@ -180,5 +288,5 @@ export async function sendNotificationEmail(
     </div>
   `;
 
-  await sendEmail({ to, subject, html, text: body });
+  return sendEmail({ to, subject, html, text: body });
 }

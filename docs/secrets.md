@@ -27,6 +27,27 @@ contains no secret values and is committed.
 Non-secret config (`AWS_REGION`, `*_APP_URL`, etc.) is kept as literal values
 in `.env.1password` directly — there's no point putting them in 1Password.
 
+## Email provider
+
+The web app supports two email providers; pick one (or neither) by
+configuring env vars:
+
+| Provider   | Required env                                | Notes                              |
+|------------|---------------------------------------------|------------------------------------|
+| AWS SES    | `SENDER_EMAIL` (verified From: address)     | Default when only `SENDER_EMAIL` set |
+| Opensend   | `SENDER_EMAIL`, `OPENSEND_API_KEY`          | Set `EMAIL_PROVIDER=opensend` to force |
+
+`EMAIL_PROVIDER` (optional) takes the value `ses` or `opensend` and overrides
+auto-detection. `OPENSEND_BASE_URL` is only needed when pointing at a
+self-hosted Opensend deployment; the SDK defaults to `https://opensend.namuh.co`.
+
+**There is no fallback sender.** If neither provider is configured, every
+email helper returns `"disabled"` and the calling feature is expected to
+short-circuit. Callers can guard with `isEmailEnabled()` from
+`@/lib/email`. The previous default of `noreply@foreverbrowsing.com` has
+been removed — unconfigured deployments will not send mail from a wrong
+address, they simply will not send mail.
+
 ## Local development
 
 One-time setup:

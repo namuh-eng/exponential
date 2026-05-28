@@ -3,19 +3,43 @@ import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { sendMock, SESv2ClientMock, SendEmailCommandMock } = vi.hoisted(() => {
-  const sendMock = vi.fn<(cmd: unknown) => Promise<unknown>>(() =>
+const {
+  sesSendMock,
+  SESv2ClientMock,
+  SendEmailCommandMock,
+  opensendSendMock,
+  OpensendMock,
+} = vi.hoisted(() => {
+  const sesSendMock = vi.fn<(cmd: unknown) => Promise<unknown>>(() =>
     Promise.resolve({ MessageId: "test-msg-id" }),
   );
   class SESv2ClientMock {
-    send = sendMock;
+    send = sesSendMock;
   }
   class SendEmailCommandMock {
     constructor(input: unknown) {
       Object.assign(this, input as Record<string, unknown>);
     }
   }
-  return { sendMock, SESv2ClientMock, SendEmailCommandMock };
+
+  const opensendSendMock = vi.fn<
+    (payload: Record<string, unknown>) => Promise<unknown>
+  >(() => Promise.resolve({ data: { id: "os-1" }, error: null }));
+  class OpensendMock {
+    public readonly emails = { send: opensendSendMock };
+    constructor(
+      public readonly apiKey: string,
+      public readonly options: { baseUrl?: string } = {},
+    ) {}
+  }
+
+  return {
+    sesSendMock,
+    SESv2ClientMock,
+    SendEmailCommandMock,
+    opensendSendMock,
+    OpensendMock,
+  };
 });
 
 vi.mock("@aws-sdk/client-sesv2", () => ({
@@ -23,11 +47,14 @@ vi.mock("@aws-sdk/client-sesv2", () => ({
   SendEmailCommand: SendEmailCommandMock,
 }));
 
-vi.stubEnv("AWS_REGION", "us-east-1");
-vi.stubEnv("SENDER_EMAIL", "test@example.com");
+vi.mock("opensend", () => ({ Opensend: OpensendMock }));
 
-function getLastSentCommand(): Record<string, unknown> {
-  return sendMock.mock.lastCall?.[0] as Record<string, unknown>;
+function getLastSesCommand(): Record<string, unknown> {
+  return sesSendMock.mock.lastCall?.[0] as Record<string, unknown>;
+}
+
+function getLastOpensendPayload(): Record<string, unknown> {
+  return opensendSendMock.mock.lastCall?.[0] as Record<string, unknown>;
 }
 
 describe("Email utilities", () => {
@@ -35,7 +62,9 @@ describe("Email utilities", () => {
   let previewDir: string;
 
   beforeEach(async () => {
-    sendMock.mockClear();
+    sesSendMock.mockClear();
+    opensendSendMock.mockClear();
+    vi.unstubAllEnvs();
     vi.resetModules();
     vi.stubEnv("AWS_REGION", "us-east-1");
     vi.stubEnv("SENDER_EMAIL", "test@example.com");
@@ -45,8 +74,15 @@ describe("Email utilities", () => {
     emailModule = await import("@/lib/email");
   });
 
-  it("exports ses client", () => {
-    expect(emailModule.ses).toBeDefined();
+  it("isEmailEnabled is true when SENDER_EMAIL is set", () => {
+    expect(emailModule.isEmailEnabled()).toBe(true);
+  });
+
+  it("isEmailEnabled is false when no provider env is set", async () => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+    emailModule = await import("@/lib/email");
+    expect(emailModule.isEmailEnabled()).toBe(false);
   });
 
   it("sendEmail sends via SES with correct structure", async () => {
@@ -57,10 +93,10 @@ describe("Email utilities", () => {
         html: "<p>Hello</p>",
         text: "Hello",
       }),
-    ).resolves.toBe("ses");
+    ).resolves.toBe("sent");
 
-    expect(sendMock).toHaveBeenCalledOnce();
-    expect(getLastSentCommand()).toMatchObject({
+    expect(sesSendMock).toHaveBeenCalledOnce();
+    expect(getLastSesCommand()).toMatchObject({
       FromEmailAddress: "test@example.com",
       Destination: { ToAddresses: ["user@example.com"] },
       Content: {
@@ -82,34 +118,93 @@ describe("Email utilities", () => {
         subject: "HTML Only",
         html: "<p>Hello</p>",
       }),
-    ).resolves.toBe("ses");
+    ).resolves.toBe("sent");
 
-    expect(sendMock).toHaveBeenCalledOnce();
-    const cmd = getLastSentCommand() as {
+    expect(sesSendMock).toHaveBeenCalledOnce();
+    const cmd = getLastSesCommand() as {
       Content: { Simple: { Body: { Html: { Data: string }; Text?: unknown } } };
     };
     expect(cmd.Content.Simple.Body.Html).toEqual({ Data: "<p>Hello</p>" });
     expect(cmd.Content.Simple.Body.Text).toBeUndefined();
   });
 
-  it("sendEmail falls back to the verified sender domain when env is unset", async () => {
+  it("sendEmail returns 'disabled' when no provider is configured", async () => {
     vi.unstubAllEnvs();
-    vi.stubEnv("AWS_REGION", "us-east-1");
     vi.resetModules();
     emailModule = await import("@/lib/email");
 
     await expect(
       emailModule.sendEmail({
         to: "user@example.com",
-        subject: "Fallback Sender",
+        subject: "Nope",
         html: "<p>Hello</p>",
       }),
-    ).resolves.toBe("ses");
+    ).resolves.toBe("disabled");
 
-    expect(sendMock).toHaveBeenCalledOnce();
-    expect(getLastSentCommand()).toMatchObject({
-      FromEmailAddress: "noreply@foreverbrowsing.com",
+    expect(sesSendMock).not.toHaveBeenCalled();
+    expect(opensendSendMock).not.toHaveBeenCalled();
+  });
+
+  it("sendEmail uses Opensend when OPENSEND_API_KEY is set", async () => {
+    vi.stubEnv("OPENSEND_API_KEY", "os_test_key");
+    vi.resetModules();
+    emailModule = await import("@/lib/email");
+
+    await expect(
+      emailModule.sendEmail({
+        to: "user@example.com",
+        subject: "Via Opensend",
+        html: "<p>Hi</p>",
+        text: "Hi",
+      }),
+    ).resolves.toBe("sent");
+
+    expect(opensendSendMock).toHaveBeenCalledOnce();
+    expect(sesSendMock).not.toHaveBeenCalled();
+    expect(getLastOpensendPayload()).toMatchObject({
+      from: "test@example.com",
+      to: "user@example.com",
+      subject: "Via Opensend",
+      html: "<p>Hi</p>",
+      text: "Hi",
     });
+  });
+
+  it("EMAIL_PROVIDER=opensend selects Opensend even when both envs are set", async () => {
+    vi.stubEnv("OPENSEND_API_KEY", "os_key");
+    vi.stubEnv("EMAIL_PROVIDER", "opensend");
+    vi.resetModules();
+    emailModule = await import("@/lib/email");
+
+    await emailModule.sendEmail({
+      to: "user@example.com",
+      subject: "Explicit",
+      html: "<p>Hi</p>",
+    });
+
+    expect(opensendSendMock).toHaveBeenCalledOnce();
+    expect(sesSendMock).not.toHaveBeenCalled();
+  });
+
+  it("Opensend provider surfaces API errors as thrown errors", async () => {
+    vi.stubEnv("OPENSEND_API_KEY", "os_key");
+    vi.resetModules();
+    emailModule = await import("@/lib/email");
+    opensendSendMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: "rate limited", statusCode: 429 },
+    });
+
+    await expect(
+      emailModule.sendEmail(
+        {
+          to: "user@example.com",
+          subject: "Errors propagate",
+          html: "<p>Hi</p>",
+        },
+        { allowPreviewFallback: false },
+      ),
+    ).rejects.toThrow(/rate limited/);
   });
 
   it("sendMagicLinkEmail includes code and link", async () => {
@@ -119,8 +214,8 @@ describe("Email utilities", () => {
       "https://app.example.com/verify?token=abc",
     );
 
-    expect(sendMock).toHaveBeenCalledOnce();
-    const cmd = getLastSentCommand() as {
+    expect(sesSendMock).toHaveBeenCalledOnce();
+    const cmd = getLastSesCommand() as {
       Content: {
         Simple: { Subject: { Data: string }; Body: { Html: { Data: string } } };
       };
@@ -132,8 +227,23 @@ describe("Email utilities", () => {
     );
   });
 
+  it("sendMagicLinkEmail returns 'disabled' when email is not configured", async () => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+    emailModule = await import("@/lib/email");
+
+    await expect(
+      emailModule.sendMagicLinkEmail(
+        "user@example.com",
+        "123456",
+        "https://app.example.com/verify",
+      ),
+    ).resolves.toBe("disabled");
+    expect(sesSendMock).not.toHaveBeenCalled();
+  });
+
   it("writes a local preview instead of failing in non-production when SES send errors", async () => {
-    sendMock.mockRejectedValueOnce(new Error("session expired"));
+    sesSendMock.mockRejectedValueOnce(new Error("session expired"));
 
     await expect(
       emailModule.sendEmail({
@@ -160,7 +270,7 @@ describe("Email utilities", () => {
   });
 
   it("supports disabling preview fallback in non-production", async () => {
-    sendMock.mockRejectedValueOnce(new Error("ses unavailable"));
+    sesSendMock.mockRejectedValueOnce(new Error("ses unavailable"));
 
     await expect(
       emailModule.sendEmail(
@@ -175,7 +285,7 @@ describe("Email utilities", () => {
   });
 
   it("still throws SES errors in production", async () => {
-    sendMock.mockRejectedValueOnce(new Error("production send failed"));
+    sesSendMock.mockRejectedValueOnce(new Error("production send failed"));
     vi.stubEnv("NODE_ENV", "production");
     vi.resetModules();
     emailModule = await import("@/lib/email");
@@ -197,8 +307,8 @@ describe("Email utilities", () => {
       "https://app.example.com/invite/xyz",
     );
 
-    expect(sendMock).toHaveBeenCalledOnce();
-    const cmd = getLastSentCommand() as {
+    expect(sesSendMock).toHaveBeenCalledOnce();
+    const cmd = getLastSesCommand() as {
       Content: {
         Simple: { Subject: { Data: string }; Body: { Html: { Data: string } } };
       };
@@ -212,7 +322,7 @@ describe("Email utilities", () => {
   });
 
   it("sendInvitationEmail fails when SES delivery fails", async () => {
-    sendMock.mockRejectedValueOnce(new Error("invite delivery failed"));
+    sesSendMock.mockRejectedValueOnce(new Error("invite delivery failed"));
 
     await expect(
       emailModule.sendInvitationEmail(
@@ -232,8 +342,8 @@ describe("Email utilities", () => {
       "https://app.example.com/issue/ENG-123",
     );
 
-    expect(sendMock).toHaveBeenCalledOnce();
-    const cmd = getLastSentCommand() as {
+    expect(sesSendMock).toHaveBeenCalledOnce();
+    const cmd = getLastSesCommand() as {
       Content: { Simple: { Body: { Html: { Data: string } } } };
     };
     expect(cmd.Content.Simple.Body.Html.Data).toContain(
