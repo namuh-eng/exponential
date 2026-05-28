@@ -55,7 +55,13 @@ ensure_app_ingress 3000 "$ALB_SG"
 ensure_app_ingress 7016 "$ALB_SG"
 ensure_app_ingress 7016 "$APP_SG"
 
-aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+if [ -z "${DEPLOY_SKIP_ECR_LOGIN:-}" ]; then
+  # Local break-glass path: laptop docker has a working keychain.
+  # CI path sets DEPLOY_SKIP_ECR_LOGIN=1 and configures a credHelper instead,
+  # because docker login under launchd can't unlock the macOS keychain to
+  # persist credentials (errSecInteractionNotAllowed).
+  aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+fi
 
 docker build --platform linux/amd64 -f infra/docker/api.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-api:$IMAGE_TAG" .
 docker build --platform linux/amd64 -f infra/docker/web.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-web:$IMAGE_TAG" .

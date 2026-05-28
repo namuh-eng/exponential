@@ -70,6 +70,13 @@ jobs:
       RUN_PROD_SMOKE: ${{ (inputs.skip_smoke || false) && 'false' || 'true' }}
       CONFIGURE_AUTOSCALING: ${{ (inputs.skip_autoscaling || false) && 'false' || 'true' }}
 
+      # The macOS launchd runner cannot unlock the user keychain, so
+      # `docker login` fails with errSecInteractionNotAllowed when it tries
+      # to persist credentials. Skip the login; the per-repo DOCKER_CONFIG
+      # written in the step below uses the ecr-login credHelper to fetch
+      # creds on demand for `docker push`.
+      DEPLOY_SKIP_ECR_LOGIN: '1'
+
     steps:
       - uses: actions/checkout@v5
 
@@ -94,8 +101,22 @@ jobs:
         run: |
           # Isolate from Docker Desktop's user config so the launchd-spawned
           # runner does not hit the keychain-bound credsStore helper.
-          # The runner host owns ~/.docker-actions/config.json.
-          export DOCKER_CONFIG="${HOME}/.docker-actions"
+          # Use a per-repo DOCKER_CONFIG: deploy-ecs.sh runs `docker login`,
+          # but the shared ~/.docker-actions/config.json declares an
+          # ecr-login credHelper (used by sibling repos that build with
+          # `buildx --push` and never call login). That helper is read-only
+          # and returns "not implemented" on Store, breaking login here.
+          export DOCKER_CONFIG="${HOME}/.docker-actions-exponential"
+          rm -f "${DOCKER_CONFIG}/config.json"
+          mkdir -p "${DOCKER_CONFIG}"
+          # ecr-login credHelper provides ECR creds on demand. With
+          # DEPLOY_SKIP_ECR_LOGIN=1, no `docker login` runs, so the helper's
+          # missing Store implementation never triggers.
+          AWS_ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          cat > "${DOCKER_CONFIG}/config.json" <<JSON
+          {"credHelpers": {"${ECR_REGISTRY}": "ecr-login"}}
+          JSON
           # Re-expose cli-plugins (buildx) since DOCKER_CONFIG overrides the
           # plugin search path away from ~/.docker/cli-plugins.
           mkdir -p "${DOCKER_CONFIG}/cli-plugins"
