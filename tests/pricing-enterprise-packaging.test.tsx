@@ -7,6 +7,33 @@ describe("Pricing enterprise packaging", () => {
   it("shows Enterprise Cloud and Enterprise Self-hosted contact flows without private contact details", () => {
     render(<PricingPage />);
 
+    for (const planName of [
+      "Community Self-hosted",
+      "Cloud Free",
+      "Cloud Team",
+      "Cloud Business",
+      "Enterprise Cloud",
+      "Enterprise Self-hosted",
+    ]) {
+      expect(screen.getByText(planName)).toBeInTheDocument();
+    }
+
+    expect(screen.getByText("$7")).toBeInTheDocument();
+    expect(screen.getAllByText("per user/mo, billed annually")).toHaveLength(2);
+    expect(screen.getByText("$9/user/mo monthly")).toBeInTheDocument();
+    expect(screen.getByText("$12")).toBeInTheDocument();
+    expect(screen.getByText("$15/user/mo monthly")).toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        /core self-host\/community issue tracking remains free/i,
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        /paid gates focus on managed cloud, scale, admin, security, compliance, and support/i,
+      ),
+    ).toBeInTheDocument();
+
     expect(screen.getByText("Enterprise Cloud")).toBeInTheDocument();
     expect(screen.getByText("Enterprise Self-hosted")).toBeInTheDocument();
     expect(screen.getByText("Self-host support boundary")).toBeInTheDocument();

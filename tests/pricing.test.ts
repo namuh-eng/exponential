@@ -18,6 +18,8 @@ describe("shared pricing and entitlement model", () => {
       "enterprise_self_hosted",
     ]);
     expect(getPricingPlan("cloud_team").displayName).toBe("Cloud Team");
+    expect(getPricingPlan("cloud_team").priceLabel).toBe("$7");
+    expect(getPricingPlan("cloud_business").priceLabel).toBe("$12");
   });
 
   it("normalizes legacy hosted plan ids to canonical cloud plan ids", () => {

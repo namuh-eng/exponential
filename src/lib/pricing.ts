@@ -17,7 +17,7 @@ export const PRICING_PLANS = [
       "community_support",
     ],
     description:
-      "Open-source issue tracking for teams that run their own infrastructure.",
+      "Free core self-host/community issue tracking for teams that run their own infrastructure.",
     upgradeCta: "Deploy community",
   },
   {
@@ -44,8 +44,9 @@ export const PRICING_PLANS = [
   {
     id: "cloud_team",
     displayName: "Cloud Team",
-    billingCadenceLabel: "Per user / month",
-    priceLabel: "$8",
+    billingCadenceLabel: "per user/mo, billed annually",
+    priceLabel: "$7",
+    billingNote: "$9/user/mo monthly",
     deployment: "cloud",
     limits: {
       seats: null,
@@ -60,14 +61,15 @@ export const PRICING_PLANS = [
       "team_views",
     ],
     description:
-      "Core issue tracking, projects, cycles, and collaboration for focused teams.",
+      "Managed cloud collaboration for focused teams, with paid gates for hosted scale rather than basic issue tracking.",
     upgradeCta: "Upgrade to Team",
   },
   {
     id: "cloud_business",
     displayName: "Cloud Business",
-    billingCadenceLabel: "Per user / month",
-    priceLabel: "$14",
+    billingCadenceLabel: "per user/mo, billed annually",
+    priceLabel: "$12",
+    billingNote: "$15/user/mo monthly",
     deployment: "cloud",
     limits: {
       seats: null,
@@ -85,7 +87,7 @@ export const PRICING_PLANS = [
       "priority_support",
     ],
     description:
-      "Advanced workflows, analytics, integrations, and admin controls.",
+      "Managed cloud scale with advanced admin controls, security workflows, analytics, integrations, and priority support.",
     upgradeCta: "Upgrade to Business",
   },
   {

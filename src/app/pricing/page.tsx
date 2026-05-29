@@ -25,8 +25,9 @@ export default function PricingPage() {
           Plans that scale from first issue to enterprise product operations
         </h1>
         <p className="mt-5 max-w-2xl text-lg leading-8 text-[var(--editorial-ink-3)]">
-          Choose a plan for your team and keep public pricing navigation inside
-          the clone.
+          Choose a plan for your team. Core self-host/community issue tracking
+          remains free; paid gates focus on managed cloud, scale, admin,
+          security, compliance, and support.
         </p>
         <div className="mt-12 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {PRICING_PLANS.map((plan) => (
@@ -38,6 +39,11 @@ export default function PricingPage() {
               <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-[var(--editorial-ink-3)]">
                 {plan.billingCadenceLabel}
               </p>
+              {"billingNote" in plan ? (
+                <p className="mt-2 text-sm font-medium text-[var(--editorial-ink-2)]">
+                  {plan.billingNote}
+                </p>
+              ) : null}
               <p className="mt-4 min-h-24 text-sm leading-6 text-[var(--editorial-ink-3)]">
                 {plan.description}
               </p>
@@ -54,10 +60,11 @@ export default function PricingPage() {
           <h2 className="text-2xl font-semibold">Self-host support boundary</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--editorial-ink-3)]">
             Community Self-hosted is source-available and self-supported under
-            the repository license. Enterprise Self-hosted adds commercial
-            license terms, deployment guidance, priority support, and enterprise
-            security review workflows without publishing private contact
-            details.
+            the repository license, and core self-host/community issue tracking
+            remains free. Enterprise Self-hosted adds commercial license terms,
+            deployment guidance, priority support, compliance support, and
+            enterprise security review workflows without publishing private
+            contact details.
           </p>
         </MarketingCard>
         <MarketingCard className="mt-8">
