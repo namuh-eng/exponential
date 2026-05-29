@@ -1,4 +1,4 @@
-import { createServerApiClientFromHeaders } from "@/lib/server-api-client";
+import { createNoStoreServerApiClientFromHeaders } from "@/lib/server-api-client";
 
 export type WebSession = {
   user: {
@@ -10,7 +10,7 @@ export type WebSession = {
 };
 
 export async function getWebSession(headerList: Headers) {
-  const client = createServerApiClientFromHeaders(headerList);
+  const client = createNoStoreServerApiClientFromHeaders(headerList);
   const result = await client.GET("/auth/session");
   if (result.response.status === 401) {
     return null;

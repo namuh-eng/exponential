@@ -62,8 +62,23 @@ describe("Login page", () => {
     ).toBeDefined();
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/api/auth/provider-capabilities",
+        "/api/auth/provider-capabilities?callbackUrl=%2Finbox",
         expect.objectContaining({ cache: "no-store" }),
+      );
+    });
+  });
+
+  it("starts Google OAuth through the first-party Go API with the default app callback", async () => {
+    fetchMock.mockResolvedValueOnce(providerCapabilities());
+
+    render(<LoginPage />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Continue with Google" }),
+    );
+
+    await waitFor(() => {
+      expect(assignMock).toHaveBeenCalledWith(
+        "/api/auth/google/start?callback_url=%2Finbox",
       );
     });
   });
@@ -126,7 +141,7 @@ describe("Login page", () => {
           method: "POST",
           body: JSON.stringify({
             email: "person@example.com",
-            callbackURL: "/",
+            callbackURL: "/inbox",
           }),
         }),
       );

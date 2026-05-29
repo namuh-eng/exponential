@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type AuthMode = "login" | "signup";
+
+const DEFAULT_POST_LOGIN_PATH = "/inbox";
 type ProviderCapabilities = {
   providers?: {
     google?: boolean | { configured?: boolean };
@@ -32,7 +34,9 @@ function isSafeLocalCallback(
 
 function getCurrentPathCallback(): string {
   const { pathname } = window.location;
-  if (pathname === "/login" || pathname === "/signup") return "/";
+  if (pathname === "/login" || pathname === "/signup") {
+    return DEFAULT_POST_LOGIN_PATH;
+  }
   const params = new URLSearchParams(window.location.search);
   params.delete("error");
   const query = params.toString();

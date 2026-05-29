@@ -40,6 +40,10 @@
           "value": "${PUBLIC_BASE_URL}"
         },
         {
+          "name": "PUBLIC_BASE_URL",
+          "value": "${PUBLIC_BASE_URL}"
+        },
+        {
           "name": "EXPONENTIAL_API_URL",
           "value": "${PUBLIC_BASE_URL}/api"
         },

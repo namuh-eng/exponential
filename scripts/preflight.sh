@@ -389,6 +389,27 @@ ensure_listener_rule() {
 
 ensure_listener_rule 10 "$API_TG_ARN" 'Field=path-pattern,Values=/api/*'
 
+remove_legacy_auth_rules() {
+  local listener
+  aws elbv2 describe-listeners --load-balancer-arn "$ALB_ARN" --region "$REGION" \
+    --query 'Listeners[].ListenerArn' --output text | tr '\t' '\n' | while read -r listener; do
+      [ -z "$listener" ] && continue
+      aws elbv2 describe-rules --listener-arn "$listener" --region "$REGION" \
+        --query 'Rules[?Conditions[?Field==`path-pattern` && contains(PathPatternConfig.Values, `/auth/*`)]].RuleArn' \
+        --output text | tr '\t' '\n' | while read -r rule; do
+          [ -z "$rule" ] && continue
+          echo "Deleting legacy /auth/* listener rule: $rule" >&2
+          aws elbv2 delete-rule --rule-arn "$rule" --region "$REGION" >/dev/null
+        done
+    done
+}
+
+# The Go auth refactor moved all provider endpoints under /api/auth/* and
+# left browser-owned auth completion routes, such as /auth/complete, on the
+# Next.js web service. Remove stale Kratos-era /auth/* ALB rules so future
+# preflight runs cannot keep routing those paths to a retired auth service.
+remove_legacy_auth_rules
+
 set_env_file() {
   local key="$1"
   local value="$2"

@@ -138,7 +138,7 @@ func (h Handler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	setSessionCookie(w, r, sessionToken, expires)
 	clearCookie(w, authStateCookieName)
-	http.Redirect(w, r, callbackURL, http.StatusFound)
+	http.Redirect(w, r, postAuthCompletionURL(r, callbackURL), http.StatusFound)
 }
 
 func (h Handler) StartMagicLink(w http.ResponseWriter, r *http.Request) {
@@ -228,7 +228,7 @@ func (h Handler) MagicLinkCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setSessionCookie(w, r, sessionToken, expires)
-	http.Redirect(w, r, callbackURL, http.StatusFound)
+	http.Redirect(w, r, postAuthCompletionURL(r, callbackURL), http.StatusFound)
 }
 
 func (h Handler) SignOut(w http.ResponseWriter, r *http.Request) {
@@ -306,6 +306,17 @@ func appURL(r *http.Request) string {
 		scheme = "https"
 	}
 	return scheme + "://" + r.Host
+}
+
+func postAuthCompletionURL(r *http.Request, callbackURL string) string {
+	completion, err := url.Parse(appURL(r) + "/auth/complete")
+	if err != nil {
+		return safeCallbackPath(callbackURL)
+	}
+	query := completion.Query()
+	query.Set("callbackUrl", safeCallbackPath(callbackURL))
+	completion.RawQuery = query.Encode()
+	return completion.String()
 }
 
 func safeCallbackPath(value string) string {
