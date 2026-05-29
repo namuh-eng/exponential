@@ -50,6 +50,7 @@ interface WorkspaceBillingData {
 export default function BillingSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [savingPlan, setSavingPlan] = useState<BillingPlanId | null>(null);
+  const [openingPortal, setOpeningPortal] = useState(false);
   const [billing, setBilling] = useState<WorkspaceBillingData | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -71,12 +72,22 @@ export default function BillingSettingsPage() {
   }, []);
 
   async function updatePlan(plan: BillingPlanId) {
+    if (plan === "enterprise") {
+      window.location.href =
+        "mailto:sales@exponential.dev?subject=Enterprise%20Cloud%20plan";
+      return;
+    }
+
     setSavingPlan(plan);
     setErrorMessage(null);
 
     try {
-      const response = await fetch("/api/workspaces/current/billing", {
-        method: "PATCH",
+      const endpoint =
+        plan === "basic" || plan === "business"
+          ? "/api/workspaces/current/billing/checkout"
+          : "/api/workspaces/current/billing";
+      const response = await fetch(endpoint, {
+        method: plan === "basic" || plan === "business" ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan }),
       });
@@ -88,6 +99,13 @@ export default function BillingSettingsPage() {
         throw new Error(data.error ?? "Unable to update plan");
       }
 
+      if (plan === "basic" || plan === "business") {
+        const data = (await response.json()) as { url?: string };
+        if (!data.url) throw new Error("Stripe checkout did not return a URL");
+        window.location.href = data.url;
+        return;
+      }
+
       setBilling((await response.json()) as WorkspaceBillingData);
     } catch (error) {
       setErrorMessage(
@@ -95,6 +113,32 @@ export default function BillingSettingsPage() {
       );
     } finally {
       setSavingPlan(null);
+    }
+  }
+
+  async function openBillingPortal() {
+    setOpeningPortal(true);
+    setErrorMessage(null);
+    try {
+      const response = await fetch("/api/workspaces/current/billing/portal", {
+        method: "POST",
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        url?: string;
+      };
+      if (!response.ok || !data.url) {
+        throw new Error(data.error ?? "Unable to open billing portal");
+      }
+      window.location.href = data.url;
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to open billing portal.",
+      );
+    } finally {
+      setOpeningPortal(false);
     }
   }
 
@@ -152,6 +196,18 @@ export default function BillingSettingsPage() {
                 <div>{billing.canManage ? "Billing manager" : "View only"}</div>
               </div>
             </div>
+            {billing.canManage && (
+              <button
+                className="mt-4 rounded-md border border-[var(--color-border)] px-3 py-2 text-[13px] font-medium text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={openingPortal}
+                onClick={openBillingPortal}
+                type="button"
+              >
+                {openingPortal
+                  ? "Opening portal..."
+                  : "Manage billing in Stripe"}
+              </button>
+            )}
           </section>
 
           <section className="mt-8">
@@ -198,7 +254,9 @@ export default function BillingSettingsPage() {
                         ? "Current plan"
                         : savingPlan === plan.id
                           ? "Saving..."
-                          : "Upgrade / manage"}
+                          : plan.id === "enterprise"
+                            ? "Contact sales"
+                            : "Upgrade / manage"}
                     </button>
                   </article>
                 );
