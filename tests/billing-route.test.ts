@@ -141,6 +141,9 @@ describeDb("Workspace billing API", () => {
     expect(data.plans.map((plan: { id: string }) => plan.id)).toContain(
       "business",
     );
+    expect(data.plans.map((plan: { id: string }) => plan.id)).toContain(
+      "enterprise_self_hosted",
+    );
     expect(data.paymentMethods[0].brand).toBe("Visa");
     expect(data.invoices[0].number).toBe("DEV-001");
   });
@@ -170,6 +173,34 @@ describeDb("Workspace billing API", () => {
       .limit(1);
     expect((saved.settings as { billing: { plan: string } }).billing.plan).toBe(
       "business",
+    );
+  });
+
+  it("does not persist custom enterprise plans through billing mutation", async () => {
+    (
+      auth.api.getSession as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      user: { id: ADMIN_USER_ID },
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/workspaces/current/billing", {
+        method: "PATCH",
+        body: JSON.stringify({ plan: "enterprise_self_hosted" }),
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    const data = await response.json();
+    expect(data.error).toContain("contacting sales");
+
+    const [saved] = await db
+      .select({ settings: workspace.settings })
+      .from(workspace)
+      .where(eq(workspace.id, WORKSPACE_ID))
+      .limit(1);
+    expect((saved.settings as { billing: { plan: string } }).billing.plan).toBe(
+      "free",
     );
   });
 

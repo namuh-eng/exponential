@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 
-type BillingPlanId = "free" | "basic" | "business" | "enterprise";
+type BillingPlanId =
+  | "free"
+  | "basic"
+  | "business"
+  | "enterprise_cloud"
+  | "enterprise_self_hosted";
 
 interface BillingPlan {
   id: BillingPlanId;
@@ -10,6 +15,9 @@ interface BillingPlan {
   price: string;
   description: string;
   features: string[];
+  ctaLabel: string;
+  ctaHref?: string;
+  isCustom?: boolean;
 }
 
 interface PaymentMethod {
@@ -184,22 +192,32 @@ export default function BillingSettingsPage() {
                         <li key={feature}>• {feature}</li>
                       ))}
                     </ul>
-                    <button
-                      className="mt-4 rounded-md border border-[var(--color-border)] px-3 py-2 text-[13px] font-medium text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={
-                        isCurrentPlan ||
-                        !billing.canManage ||
-                        savingPlan !== null
-                      }
-                      onClick={() => updatePlan(plan.id)}
-                      type="button"
-                    >
-                      {isCurrentPlan
-                        ? "Current plan"
-                        : savingPlan === plan.id
-                          ? "Saving..."
-                          : "Upgrade / manage"}
-                    </button>
+                    {plan.isCustom ? (
+                      <a
+                        aria-disabled={!billing.canManage || undefined}
+                        className="mt-4 inline-flex rounded-md border border-[var(--color-border)] px-3 py-2 text-[13px] font-medium text-[var(--color-text-primary)] aria-disabled:pointer-events-none aria-disabled:opacity-50"
+                        href={billing.canManage ? plan.ctaHref : undefined}
+                      >
+                        {plan.ctaLabel}
+                      </a>
+                    ) : (
+                      <button
+                        className="mt-4 rounded-md border border-[var(--color-border)] px-3 py-2 text-[13px] font-medium text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={
+                          isCurrentPlan ||
+                          !billing.canManage ||
+                          savingPlan !== null
+                        }
+                        onClick={() => updatePlan(plan.id)}
+                        type="button"
+                      >
+                        {isCurrentPlan
+                          ? "Current plan"
+                          : savingPlan === plan.id
+                            ? "Saving..."
+                            : plan.ctaLabel}
+                      </button>
+                    )}
                   </article>
                 );
               })}

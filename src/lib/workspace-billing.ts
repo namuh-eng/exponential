@@ -3,7 +3,12 @@ import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 
-export type BillingPlanId = "free" | "basic" | "business" | "enterprise";
+export type BillingPlanId =
+  | "free"
+  | "basic"
+  | "business"
+  | "enterprise_cloud"
+  | "enterprise_self_hosted";
 
 export const BILLING_PLANS: Array<{
   id: BillingPlanId;
@@ -11,6 +16,9 @@ export const BILLING_PLANS: Array<{
   price: string;
   description: string;
   features: string[];
+  ctaLabel: string;
+  ctaHref?: string;
+  isCustom?: boolean;
 }> = [
   {
     id: "free",
@@ -18,6 +26,7 @@ export const BILLING_PLANS: Array<{
     price: "$0",
     description: "For individuals and small trials.",
     features: ["3 members", "250 issues", "Basic workspace settings"],
+    ctaLabel: "Start free",
   },
   {
     id: "basic",
@@ -25,6 +34,7 @@ export const BILLING_PLANS: Array<{
     price: "$8/user/month",
     description: "Core issue tracking for focused teams.",
     features: ["Unlimited issues", "5 teams", "Basic automations"],
+    ctaLabel: "Upgrade / manage",
   },
   {
     id: "business",
@@ -32,13 +42,29 @@ export const BILLING_PLANS: Array<{
     price: "$14/user/month",
     description: "Advanced controls for growing organizations.",
     features: ["Unlimited teams", "Admin controls", "Priority support"],
+    ctaLabel: "Upgrade / manage",
   },
   {
-    id: "enterprise",
-    name: "Enterprise",
+    id: "enterprise_cloud",
+    name: "Enterprise Cloud",
     price: "Custom",
-    description: "Security, scale, and support for large companies.",
+    description:
+      "Hosted enterprise controls, security reviews, and scaled support.",
     features: ["SAML/SCIM", "Audit exports", "Dedicated support"],
+    ctaLabel: "Contact sales",
+    ctaHref: "/signup?intent=enterprise-cloud",
+    isCustom: true,
+  },
+  {
+    id: "enterprise_self_hosted",
+    name: "Enterprise Self-hosted",
+    price: "Custom",
+    description:
+      "Run in your environment with commercial support and license terms.",
+    features: ["Self-host license", "Deployment guidance", "Priority support"],
+    ctaLabel: "Contact sales",
+    ctaHref: "/signup?intent=enterprise-self-hosted",
+    isCustom: true,
   },
 ];
 
@@ -53,6 +79,10 @@ export function asRecord(value: unknown): JsonRecord {
 }
 
 export function normalizeBillingPlan(value: unknown): BillingPlanId {
+  if (value === "enterprise") {
+    return "enterprise_cloud";
+  }
+
   if (value === "standard" || value === "plus") {
     return "business";
   }
