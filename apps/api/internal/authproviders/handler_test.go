@@ -1,6 +1,7 @@
 package authproviders
 
 import (
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -75,5 +76,19 @@ func TestPKCES256ChallengeVariesWithVerifier(t *testing.T) {
 	c2 := pkceS256Challenge("verifier-two")
 	if c1 == c2 {
 		t.Fatal("different verifiers produced the same challenge")
+	}
+}
+
+func TestPostAuthCompletionURL(t *testing.T) {
+	t.Setenv("PUBLIC_BASE_URL", "https://app.example")
+	req := httptest.NewRequest("GET", "https://app.example/api/auth/google/callback", nil)
+	got := postAuthCompletionURL(req, "/foreverbrowsing/inbox?view=list")
+	want := "https://app.example/auth/complete?callbackUrl=%2Fforeverbrowsing%2Finbox%3Fview%3Dlist"
+	if got != want {
+		t.Fatalf("completion URL = %q, want %q", got, want)
+	}
+
+	if got := postAuthCompletionURL(req, "https://evil.example/inbox"); got != "https://app.example/auth/complete?callbackUrl=%2F" {
+		t.Fatalf("unsafe completion URL = %q", got)
 	}
 }

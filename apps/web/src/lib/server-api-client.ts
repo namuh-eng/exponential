@@ -26,6 +26,15 @@ export function createServerApiClientFromRequest(request: Request) {
   });
 }
 
+export function createNoStoreServerApiClientFromRequest(request: Request) {
+  return createExponentialClient({
+    baseUrl: apiBaseUrl(),
+    cookie: request.headers.get("cookie") ?? "",
+    headers: forwardedRequestHeaders(request.headers),
+    fetch: noStoreFetch,
+  });
+}
+
 export function createServerApiClientFromHeaders(headerList: Headers) {
   return createExponentialClient({
     baseUrl: apiBaseUrl(),

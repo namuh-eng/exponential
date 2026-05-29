@@ -56,6 +56,16 @@ describe("Auth proxy", () => {
     expect(mockNext).toHaveBeenCalled();
   });
 
+  it("allows /auth/complete path without proxy auth", async () => {
+    mockNext.mockClear();
+    mockRedirect.mockClear();
+    const { proxy } = await import("@/proxy");
+    const req = createMockRequest("/auth/complete?callbackUrl=%2Finbox");
+    await proxy(req as never);
+    expect(mockRedirect).not.toHaveBeenCalled();
+    expect(mockNext).toHaveBeenCalled();
+  });
+
   it.each(["/homepage", "/pricing", "/customers", "/changelog", "/now"])(
     "allows public marketing route %s without auth",
     async (path) => {
