@@ -26,7 +26,7 @@ describe("/auth/complete route", () => {
   });
 
   it("redirects missing sessions to the public app origin, not the container bind host", async () => {
-    process.env.NEXT_PUBLIC_APP_URL = "https://exponential.namuh.co";
+    process.env.PUBLIC_BASE_URL = "https://exponential.namuh.co";
     mockGet.mockResolvedValue({
       response: { status: 401 },
       data: undefined,
@@ -44,7 +44,7 @@ describe("/auth/complete route", () => {
   });
 
   it("redirects verified sessions to the safe local callback on the public app origin", async () => {
-    process.env.NEXT_PUBLIC_APP_URL = "https://exponential.namuh.co";
+    process.env.PUBLIC_BASE_URL = "https://exponential.namuh.co";
     mockGet.mockResolvedValue({
       response: { status: 200 },
       data: { user: { id: "user-1" } },
