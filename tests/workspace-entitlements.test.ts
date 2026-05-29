@@ -72,14 +72,14 @@ describe("workspace entitlements", () => {
 
     expect(checkWorkspaceEntitlement(team, "admin-analytics")).toMatchObject({
       allowed: false,
-      requiredPlan: "business",
+      requiredPlan: "cloud_business",
     });
     expect(checkWorkspaceEntitlement(business, "admin-analytics")).toEqual({
       allowed: true,
     });
     expect(checkWorkspaceEntitlement(business, "saml-sso")).toMatchObject({
       allowed: false,
-      requiredPlan: "enterprise",
+      requiredPlan: "enterprise_cloud",
     });
     expect(checkWorkspaceEntitlement(enterprise, "scim")).toEqual({
       allowed: true,

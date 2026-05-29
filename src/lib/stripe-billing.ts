@@ -9,7 +9,7 @@ import {
 import { eq } from "drizzle-orm";
 import Stripe from "stripe";
 
-export type StripeCheckoutPlan = "basic" | "business";
+export type StripeCheckoutPlan = "cloud_team" | "cloud_business";
 
 type StripeBillingConfig = {
   publishableKey: string;
@@ -18,7 +18,10 @@ type StripeBillingConfig = {
   prices: Record<StripeCheckoutPlan, string>;
 };
 
-const CHECKOUT_PLANS = new Set<StripeCheckoutPlan>(["basic", "business"]);
+const CHECKOUT_PLANS = new Set<StripeCheckoutPlan>([
+  "cloud_team",
+  "cloud_business",
+]);
 
 let stripeClient: Stripe | null = null;
 
@@ -36,8 +39,8 @@ export function readStripeBillingConfig(): StripeBillingConfig {
     secretKey: requiredEnv("STRIPE_SECRET_KEY"),
     webhookSecret: requiredEnv("STRIPE_WEBHOOK_SECRET"),
     prices: {
-      basic: requiredEnv("STRIPE_CLOUD_TEAM_PRICE_ID"),
-      business: requiredEnv("STRIPE_CLOUD_BUSINESS_PRICE_ID"),
+      cloud_team: requiredEnv("STRIPE_CLOUD_TEAM_PRICE_ID"),
+      cloud_business: requiredEnv("STRIPE_CLOUD_BUSINESS_PRICE_ID"),
     },
   };
 }
@@ -118,8 +121,8 @@ export function planFromPriceId(
   config = readStripeBillingConfig(),
 ): BillingPlanId | null {
   if (!priceId) return null;
-  if (priceId === config.prices.basic) return "basic";
-  if (priceId === config.prices.business) return "business";
+  if (priceId === config.prices.cloud_team) return "cloud_team";
+  if (priceId === config.prices.cloud_business) return "cloud_business";
   return null;
 }
 
@@ -151,7 +154,7 @@ export async function applyStripeSubscriptionEvent(event: Stripe.Event) {
   const priceId = item?.price?.id;
   const plan =
     event.type === "customer.subscription.deleted"
-      ? "free"
+      ? "cloud_free"
       : (planFromPriceId(priceId) ?? normalizeBillingPlan(billing.plan));
   const nextSettings = {
     ...current,

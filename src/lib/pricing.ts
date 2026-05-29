@@ -242,3 +242,17 @@ export type HostedPricingPlan = Extract<
 export const BILLING_PRICING_PLANS = PRICING_PLANS.filter(
   (plan): plan is HostedPricingPlan => isHostedPricingPlanId(plan.id),
 );
+
+export function getPlanCtaHref(planId: PricingPlanId): string {
+  if (planId === "enterprise_cloud") return "/signup?intent=enterprise-cloud";
+  if (planId === "enterprise_self_hosted") {
+    return "/signup?intent=enterprise-self-hosted";
+  }
+  if (planId === "cloud_team") return "/signup?plan=team";
+  if (planId === "cloud_business") return "/signup?plan=business";
+  return "/signup";
+}
+
+export function isCustomPricingPlan(planId: PricingPlanId): boolean {
+  return planId === "enterprise_cloud" || planId === "enterprise_self_hosted";
+}

@@ -1,6 +1,11 @@
 "use client";
 
-import type { HostedPricingPlan, HostedPricingPlanId } from "@/lib/pricing";
+import {
+  type HostedPricingPlan,
+  type HostedPricingPlanId,
+  getPlanCtaHref,
+  isCustomPricingPlan,
+} from "@/lib/pricing";
 import { useEffect, useState } from "react";
 
 type BillingPlanId = HostedPricingPlanId;
@@ -248,24 +253,36 @@ export default function BillingSettingsPage() {
                         </li>
                       ))}
                     </ul>
-                    <button
-                      className="mt-4 rounded-md border border-[var(--color-border)] px-3 py-2 text-[13px] font-medium text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={
-                        isCurrentPlan ||
-                        !billing.canManage ||
-                        savingPlan !== null
-                      }
-                      onClick={() => updatePlan(plan.id)}
-                      type="button"
-                    >
-                      {isCurrentPlan
-                        ? "Current plan"
-                        : savingPlan === plan.id
-                          ? "Saving..."
-                          : plan.id === "enterprise_cloud"
-                            ? "Contact sales"
-                            : "Upgrade / manage"}
-                    </button>
+                    {isCustomPricingPlan(plan.id) ? (
+                      <a
+                        aria-disabled={!billing.canManage || undefined}
+                        className="mt-4 inline-flex rounded-md border border-[var(--color-border)] px-3 py-2 text-[13px] font-medium text-[var(--color-text-primary)] aria-disabled:pointer-events-none aria-disabled:opacity-50"
+                        href={
+                          billing.canManage
+                            ? getPlanCtaHref(plan.id)
+                            : undefined
+                        }
+                      >
+                        {plan.upgradeCta}
+                      </a>
+                    ) : (
+                      <button
+                        className="mt-4 rounded-md border border-[var(--color-border)] px-3 py-2 text-[13px] font-medium text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={
+                          isCurrentPlan ||
+                          !billing.canManage ||
+                          savingPlan !== null
+                        }
+                        onClick={() => updatePlan(plan.id)}
+                        type="button"
+                      >
+                        {isCurrentPlan
+                          ? "Current plan"
+                          : savingPlan === plan.id
+                            ? "Saving..."
+                            : plan.upgradeCta}
+                      </button>
+                    )}
                   </article>
                 );
               })}

@@ -2,7 +2,7 @@ import {
   MarketingCard,
   MarketingShell,
 } from "@/components/marketing/public-marketing";
-import { PRICING_PLANS, shouldShowUpgradeCta } from "@/lib/pricing";
+import { PRICING_PLANS, getPlanCtaHref } from "@/lib/pricing";
 
 const comparisonCapabilities = [
   "unlimited_issues",
@@ -42,16 +42,24 @@ export default function PricingPage() {
                 {plan.description}
               </p>
               <a
-                href={plan.priceLabel === "Custom" ? "/contact" : "/signup"}
+                href={getPlanCtaHref(plan.id)}
                 className="mt-6 inline-flex rounded-full bg-[var(--editorial-ink-1)] px-4 py-2 text-sm font-medium text-[var(--editorial-bg)]"
               >
-                {shouldShowUpgradeCta("cloud_free", plan.id)
-                  ? plan.upgradeCta
-                  : "Get started"}
+                {plan.upgradeCta}
               </a>
             </MarketingCard>
           ))}
         </div>
+        <MarketingCard className="mt-8">
+          <h2 className="text-2xl font-semibold">Self-host support boundary</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--editorial-ink-3)]">
+            Community Self-hosted is source-available and self-supported under
+            the repository license. Enterprise Self-hosted adds commercial
+            license terms, deployment guidance, priority support, and enterprise
+            security review workflows without publishing private contact
+            details.
+          </p>
+        </MarketingCard>
         <MarketingCard className="mt-8">
           <h2 className="text-2xl font-semibold">Feature comparison</h2>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">

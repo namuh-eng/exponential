@@ -163,7 +163,9 @@ export function checkWorkspaceEntitlement(
       error: "Upgrade your workspace plan to use this feature.",
       currentPlan: entitlements.plan,
       requiredPlan:
-        capability === "admin-analytics" ? "cloud_business" : "enterprise_cloud",
+        capability === "admin-analytics"
+          ? "cloud_business"
+          : "enterprise_cloud",
     };
   }
 

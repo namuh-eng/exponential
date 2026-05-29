@@ -1,3 +1,4 @@
+import "@testing-library/jest-dom/vitest";
 import {
   cleanup,
   fireEvent,
@@ -33,14 +34,36 @@ describe("BillingSettingsPage component", () => {
         displayName: "Cloud Free",
         priceLabel: "$0",
         description: "For individuals and small trials.",
+        billingCadenceLabel: "Free forever",
         capabilities: ["core_issues"],
+        upgradeCta: "Start free",
       },
       {
         id: "cloud_business",
         displayName: "Cloud Business",
         priceLabel: "$14",
         description: "Advanced controls for growing organizations.",
+        billingCadenceLabel: "Per user / month",
         capabilities: ["admin_controls"],
+        upgradeCta: "Upgrade / manage",
+      },
+      {
+        id: "enterprise_cloud",
+        displayName: "Enterprise Cloud",
+        priceLabel: "Custom",
+        description: "Hosted enterprise controls and support.",
+        billingCadenceLabel: "Annual contract",
+        capabilities: ["saml_sso", "scim"],
+        upgradeCta: "Contact sales",
+      },
+      {
+        id: "enterprise_self_hosted",
+        displayName: "Enterprise Self-hosted",
+        priceLabel: "Custom",
+        description: "Commercial self-host license and support.",
+        billingCadenceLabel: "Annual contract",
+        capabilities: ["self_hosting"],
+        upgradeCta: "Contact sales",
       },
     ],
     paymentMethods: [
@@ -111,7 +134,7 @@ describe("BillingSettingsPage component", () => {
       expect(screen.getByText("Cloud Free")).toBeDefined();
     });
 
-    fireEvent.click(screen.getAllByText("Upgrade / manage")[0]);
+    fireEvent.click(screen.getByText("Start free"));
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith("/api/workspaces/current/billing", {
@@ -120,6 +143,30 @@ describe("BillingSettingsPage component", () => {
         body: JSON.stringify({ plan: "cloud_free" }),
       });
     });
+  });
+
+  it("renders accessible contact CTAs for custom enterprise plans without PATCH checkout", async () => {
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => mockBillingData,
+    });
+
+    render(<BillingSettingsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Enterprise Cloud")).toBeDefined();
+    });
+
+    const contactLinks = screen.getAllByRole("link", { name: "Contact sales" });
+    expect(contactLinks[0]).toHaveAttribute(
+      "href",
+      "/signup?intent=enterprise-cloud",
+    );
+    expect(contactLinks[1]).toHaveAttribute(
+      "href",
+      "/signup?intent=enterprise-self-hosted",
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("shows error message when fetch fails", async () => {

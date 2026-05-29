@@ -96,6 +96,18 @@ export async function PATCH(request: Request) {
   }
 
   const requestedPlan = normalizeBillingPlan(body?.plan);
+  const requestedPlanDetails = BILLING_PLANS.find(
+    (plan) => plan.id === requestedPlan,
+  );
+  if (requestedPlanDetails?.priceLabel === "Custom") {
+    return NextResponse.json(
+      {
+        error:
+          "Enterprise Cloud and Enterprise Self-hosted plans require contacting sales.",
+      },
+      { status: 409 },
+    );
+  }
 
   const settings = asRecord(currentWorkspace.settings);
   const existingBilling = asRecord(settings.billing);

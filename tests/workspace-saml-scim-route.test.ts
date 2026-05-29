@@ -173,7 +173,7 @@ describe("workspace SAML/SCIM routes", () => {
     expect(response.status).toBe(402);
     expect(await response.json()).toMatchObject({
       code: "upgrade_required",
-      requiredPlan: "enterprise",
+      requiredPlan: "enterprise_cloud",
     });
     expect(updateSetMock).not.toHaveBeenCalled();
   });
