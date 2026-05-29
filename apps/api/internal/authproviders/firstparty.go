@@ -375,6 +375,16 @@ func clearCookie(w http.ResponseWriter, name string) {
 }
 
 func secureCookie(r *http.Request) bool {
+	for _, key := range []string{"PUBLIC_BASE_URL", "NEXT_PUBLIC_APP_URL", "EXPONENTIAL_APP_URL"} {
+		value := strings.TrimSpace(os.Getenv(key))
+		if value == "" {
+			continue
+		}
+		parsed, err := url.Parse(value)
+		if err == nil && strings.EqualFold(parsed.Scheme, "https") {
+			return true
+		}
+	}
 	return r.TLS != nil || strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")), "https")
 }
 

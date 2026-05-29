@@ -92,3 +92,13 @@ func TestPostAuthCompletionURL(t *testing.T) {
 		t.Fatalf("unsafe completion URL = %q", got)
 	}
 }
+
+func TestSecureCookieUsesConfiguredHTTPSAppURL(t *testing.T) {
+	t.Setenv("PUBLIC_BASE_URL", "https://app.example")
+	req := httptest.NewRequest("GET", "http://internal-alb/api/auth/google/callback", nil)
+	req.Header.Set("X-Forwarded-Proto", "http")
+
+	if !secureCookie(req) {
+		t.Fatal("secureCookie() = false, want true for HTTPS public app URL")
+	}
+}
