@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -232,10 +233,12 @@ func (h Handler) MagicLinkCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h Handler) SignOut(w http.ResponseWriter, r *http.Request) {
-	if rawToken, ok := auth.VerifySignedSessionToken(auth.BrowserSessionCookie(r)); ok {
-		_, _ = h.DB.Exec(r.Context(), `delete from session where token_hash=$1`, sessionTokenHashAuth(rawToken))
+	for _, value := range auth.BrowserSessionCookieValues(r) {
+		if rawToken, ok := auth.VerifySignedSessionToken(value); ok {
+			_, _ = h.DB.Exec(r.Context(), `delete from session where token_hash=$1`, sessionTokenHashAuth(rawToken))
+		}
 	}
-	clearCookie(w, auth.BrowserSessionCookieName)
+	clearSessionCookie(w, r)
 	problem.JSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -367,11 +370,39 @@ func setTransientCookie(w http.ResponseWriter, r *http.Request, name, value stri
 }
 
 func setSessionCookie(w http.ResponseWriter, r *http.Request, value string, expires time.Time) {
+	clearSessionCookie(w, r)
 	http.SetCookie(w, &http.Cookie{Name: auth.BrowserSessionCookieName, Value: value, Path: "/", Expires: expires, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: secureCookie(r)})
 }
 
 func clearCookie(w http.ResponseWriter, name string) {
 	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+}
+
+func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
+	clearCookie(w, auth.BrowserSessionCookieName)
+	for _, domain := range cookieDomainCleanupCandidates(r) {
+		http.SetCookie(w, &http.Cookie{Name: auth.BrowserSessionCookieName, Value: "", Path: "/", Domain: domain, MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: secureCookie(r)})
+	}
+}
+
+func cookieDomainCleanupCandidates(r *http.Request) []string {
+	parsed, err := url.Parse(appURL(r))
+	if err != nil {
+		return nil
+	}
+	host := strings.ToLower(strings.Trim(parsed.Hostname(), "."))
+	if host == "" || host == "localhost" || net.ParseIP(host) != nil {
+		return nil
+	}
+	candidates := []string{host}
+	parts := strings.Split(host, ".")
+	if len(parts) > 2 {
+		parent := strings.Join(parts[len(parts)-2:], ".")
+		if parent != host {
+			candidates = append(candidates, parent)
+		}
+	}
+	return candidates
 }
 
 func secureCookie(r *http.Request) bool {

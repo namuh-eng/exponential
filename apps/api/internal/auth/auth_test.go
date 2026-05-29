@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -210,12 +211,37 @@ func TestVerifySignedSessionToken(t *testing.T) {
 	raw := "session-token"
 	mac := hmac.New(sha256.New, []byte("test-secret"))
 	mac.Write([]byte(raw))
-	signed := raw + "." + base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	signed := raw + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 	got, ok := VerifySignedSessionToken(signed)
 	if !ok || got != raw {
 		t.Fatalf("VerifySignedSessionToken() = %q, %v", got, ok)
 	}
+	if strings.ContainsAny(signed, "+/=") {
+		t.Fatalf("signed token contains cookie-fragile base64 characters: %q", signed)
+	}
+	legacySigned := raw + "." + base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	got, ok = VerifySignedSessionToken(legacySigned)
+	if !ok || got != raw {
+		t.Fatalf("legacy VerifySignedSessionToken() = %q, %v", got, ok)
+	}
 	if _, ok := VerifySignedSessionToken(raw + ".bad"); ok {
 		t.Fatal("invalid signature verified")
+	}
+}
+
+func TestBrowserSessionCookieValuesReturnsDuplicateCookieCandidates(t *testing.T) {
+	req := httptest.NewRequest("GET", "/v1/auth/session", nil)
+	req.Header.Set("Cookie", "exponential_session=stale; other=1; exponential_session=fresh; session_token=legacy; exponential_session=stale")
+	req.Header.Set("X-Session-Token", "header-token")
+
+	got := BrowserSessionCookieValues(req)
+	want := []string{"stale", "fresh", "legacy", "header-token"}
+	if len(got) != len(want) {
+		t.Fatalf("cookie candidates = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("cookie candidates = %#v, want %#v", got, want)
+		}
 	}
 }

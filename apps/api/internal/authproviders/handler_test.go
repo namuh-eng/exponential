@@ -4,6 +4,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestWorkspaceSlugFromCallbackURL(t *testing.T) {
@@ -100,5 +101,30 @@ func TestSecureCookieUsesConfiguredHTTPSAppURL(t *testing.T) {
 
 	if !secureCookie(req) {
 		t.Fatal("secureCookie() = false, want true for HTTPS public app URL")
+	}
+}
+
+func TestSetSessionCookieClearsParentDomainVariants(t *testing.T) {
+	t.Setenv("PUBLIC_BASE_URL", "https://exponential.namuh.co")
+	req := httptest.NewRequest("GET", "http://internal-alb/api/auth/google/callback", nil)
+	rec := httptest.NewRecorder()
+
+	setSessionCookie(rec, req, "signed-token", time.Now().Add(time.Hour))
+
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 4 {
+		t.Fatalf("Set-Cookie count = %d, want host clear, domain clears, and new session", len(cookies))
+	}
+	if cookies[0].Name != "exponential_session" || cookies[0].MaxAge != -1 || cookies[0].Domain != "" {
+		t.Fatalf("host-only clear cookie = %#v", cookies[0])
+	}
+	if cookies[1].Domain != "exponential.namuh.co" || cookies[1].MaxAge != -1 {
+		t.Fatalf("host domain clear cookie = %#v", cookies[1])
+	}
+	if cookies[2].Domain != "namuh.co" || cookies[2].MaxAge != -1 {
+		t.Fatalf("parent domain clear cookie = %#v", cookies[2])
+	}
+	if cookies[3].Value != "signed-token" || cookies[3].Domain != "" {
+		t.Fatalf("session cookie = %#v", cookies[3])
 	}
 }

@@ -368,19 +368,44 @@ func DevSessionSecret() string {
 }
 
 func BrowserSessionCookie(r *http.Request) string {
+	values := BrowserSessionCookieValues(r)
+	if len(values) > 0 {
+		return values[0]
+	}
+	return ""
+}
+
+func BrowserSessionCookieValues(r *http.Request) []string {
+	values := make([]string, 0, 2)
+	seen := map[string]struct{}{}
 	for _, name := range []string{BrowserSessionCookieName, "session_token"} {
-		cookie, err := r.Cookie(name)
-		if err == nil && strings.TrimSpace(cookie.Value) != "" {
-			return strings.TrimSpace(cookie.Value)
+		for _, cookie := range r.Cookies() {
+			if cookie.Name != name {
+				continue
+			}
+			value := strings.TrimSpace(cookie.Value)
+			if value == "" {
+				continue
+			}
+			if _, ok := seen[value]; ok {
+				continue
+			}
+			seen[value] = struct{}{}
+			values = append(values, value)
 		}
 	}
-	return strings.TrimSpace(r.Header.Get("X-Session-Token"))
+	if value := strings.TrimSpace(r.Header.Get("X-Session-Token")); value != "" {
+		if _, ok := seen[value]; !ok {
+			values = append(values, value)
+		}
+	}
+	return values
 }
 
 func SignSessionToken(raw string) string {
 	mac := hmac.New(sha256.New, []byte(DevSessionSecret()))
 	mac.Write([]byte(raw))
-	return raw + "." + base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	return raw + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
 func VerifySignedSessionToken(value string) (string, bool) {
@@ -400,19 +425,32 @@ func VerifySignedSessionToken(value string) (string, bool) {
 	}
 	mac := hmac.New(sha256.New, []byte(DevSessionSecret()))
 	mac.Write([]byte(raw))
-	expected := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-	if !hmac.Equal([]byte(sig), []byte(expected)) {
+	sum := mac.Sum(nil)
+	expectedURLSafe := base64.RawURLEncoding.EncodeToString(sum)
+	expectedLegacy := base64.StdEncoding.EncodeToString(sum)
+	if !hmac.Equal([]byte(sig), []byte(expectedURLSafe)) && !hmac.Equal([]byte(sig), []byte(expectedLegacy)) {
 		return "", false
 	}
 	return raw, true
 }
 
 func (m Middleware) BrowserSession(ctx context.Context, r *http.Request) (BrowserSession, Principal, error) {
-	rawToken, ok := VerifySignedSessionToken(BrowserSessionCookie(r))
-	if !ok {
-		return BrowserSession{}, Principal{}, errUnauthorized("missing bearer token")
+	var lastErr error
+	for _, value := range BrowserSessionCookieValues(r) {
+		rawToken, ok := VerifySignedSessionToken(value)
+		if !ok {
+			continue
+		}
+		session, principal, err := m.browserSessionByToken(ctx, r, rawToken)
+		if err == nil {
+			return session, principal, nil
+		}
+		lastErr = err
 	}
-	return m.browserSessionByToken(ctx, r, rawToken)
+	if lastErr != nil {
+		return BrowserSession{}, Principal{}, lastErr
+	}
+	return BrowserSession{}, Principal{}, errUnauthorized("missing bearer token")
 }
 
 func (m Middleware) TestBrowserSession(ctx context.Context, r *http.Request) (BrowserSession, Principal, error) {
