@@ -15,13 +15,23 @@ vi.mock("@/lib/active-workspace", () => ({
 
 vi.mock("@/lib/db", () => ({
   db: {
-    select: vi.fn(() => ({
-      from: vi.fn().mockReturnValue({
-        innerJoin: vi
-          .fn()
-          .mockReturnValue({ limit: currentWorkspaceLimitMock }),
-      }),
-    })),
+    select: vi.fn((selection: Record<string, unknown>) => {
+      if (selection && "value" in selection) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockResolvedValue([{ value: 1 }]),
+          }),
+        };
+      }
+
+      return {
+        from: vi.fn().mockReturnValue({
+          innerJoin: vi
+            .fn()
+            .mockReturnValue({ limit: currentWorkspaceLimitMock }),
+        }),
+      };
+    }),
     update: vi.fn(() => ({
       set: (...args: unknown[]) => {
         updateSetMock(...args);
@@ -56,6 +66,17 @@ function workspaceRecord(role = "admin") {
           tokens: [],
         },
       },
+      billing: { plan: "enterprise" },
+    },
+  };
+}
+
+function freeHostedWorkspaceRecord(role = "admin") {
+  return {
+    ...workspaceRecord(role),
+    settings: {
+      ...workspaceRecord(role).settings,
+      billing: { plan: "free" },
     },
   };
 }
@@ -128,6 +149,33 @@ describe("workspace SAML/SCIM routes", () => {
         }),
       }),
     );
+  });
+
+  it("fails closed with an upgrade error when SAML entitlement is missing", async () => {
+    currentWorkspaceLimitMock.mockResolvedValueOnce([
+      freeHostedWorkspaceRecord(),
+    ]);
+    const { PATCH } = await import(
+      "@/app/api/workspaces/current/security/saml/route"
+    );
+
+    const response = await PATCH(
+      new Request(
+        "http://localhost:3000/api/workspaces/current/security/saml",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: true }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(402);
+    expect(await response.json()).toMatchObject({
+      code: "upgrade_required",
+      requiredPlan: "enterprise",
+    });
+    expect(updateSetMock).not.toHaveBeenCalled();
   });
 
   it("generates hashed SCIM tokens and returns the secret once", async () => {

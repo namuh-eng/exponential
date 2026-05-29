@@ -2,6 +2,10 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
+import {
+  checkWorkspaceEntitlement,
+  getWorkspaceEntitlements,
+} from "@/lib/workspace-billing";
 import { asRecord, isWorkspaceAdminRole } from "@/lib/workspace-permissions";
 import {
   createScimToken,
@@ -54,6 +58,20 @@ async function loadAdminWorkspace(userId: string) {
         { error: "You do not have permission to manage SCIM settings" },
         { status: 403 },
       ),
+    };
+  }
+  const entitlementCheck = checkWorkspaceEntitlement(
+    await getWorkspaceEntitlements({
+      workspaceId: currentWorkspace.id,
+      settings: currentWorkspace.settings,
+    }),
+    "scim",
+  );
+  if (!entitlementCheck.allowed) {
+    return {
+      error: NextResponse.json(entitlementCheck, {
+        status: entitlementCheck.status,
+      }),
     };
   }
   return { currentWorkspace };

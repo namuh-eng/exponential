@@ -26,7 +26,7 @@ describe("BillingSettingsPage component", () => {
     },
     currentPlan: "business",
     canManage: true,
-    usage: { seatsUsed: 3, issuesUsed: 42, issueLimit: 250 },
+    usage: { seatsUsed: 3, seatLimit: 3, issuesUsed: 42, issueLimit: 250 },
     plans: [
       {
         id: "free",
@@ -85,6 +85,7 @@ describe("BillingSettingsPage component", () => {
         (content) => content.includes("42") && content.includes("250"),
       ),
     ).toBeDefined();
+    expect(screen.getByText(/reached its member limit/i)).toBeDefined();
     expect(
       screen.getByText(
         (content) => content.includes("Visa") && content.includes("4242"),

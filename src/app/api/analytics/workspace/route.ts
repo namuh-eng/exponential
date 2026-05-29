@@ -1,6 +1,10 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { issue, member, team, workflowState } from "@/lib/db/schema";
+import { issue, member, team, workflowState, workspace } from "@/lib/db/schema";
+import {
+  checkWorkspaceEntitlement,
+  getWorkspaceEntitlements,
+} from "@/lib/workspace-billing";
 import { and, count, desc, eq, gte, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
@@ -12,8 +16,9 @@ export async function GET() {
   }
 
   const [membership] = await db
-    .select({ workspaceId: member.workspaceId })
+    .select({ workspaceId: member.workspaceId, settings: workspace.settings })
     .from(member)
+    .innerJoin(workspace, eq(workspace.id, member.workspaceId))
     .where(eq(member.userId, session.user.id))
     .orderBy(desc(member.createdAt))
     .limit(1);
@@ -23,6 +28,19 @@ export async function GET() {
   }
 
   const workspaceId = membership.workspaceId;
+  const entitlements = await getWorkspaceEntitlements({
+    workspaceId,
+    settings: membership.settings,
+  });
+  const entitlementCheck = checkWorkspaceEntitlement(
+    entitlements,
+    "admin-analytics",
+  );
+  if (!entitlementCheck.allowed) {
+    return NextResponse.json(entitlementCheck, {
+      status: entitlementCheck.status,
+    });
+  }
 
   // 1. Issues completed across all teams in the last 30 days
   const thirtyDaysAgo = new Date();

@@ -2,6 +2,10 @@ import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { member, workspace } from "@/lib/db/schema";
+import {
+  checkWorkspaceEntitlement,
+  getWorkspaceEntitlements,
+} from "@/lib/workspace-billing";
 import { asRecord, isWorkspaceAdminRole } from "@/lib/workspace-permissions";
 import {
   normalizeSamlInput,
@@ -52,6 +56,19 @@ export async function PATCH(request: Request) {
       { error: "You do not have permission to manage SAML settings" },
       { status: 403 },
     );
+  }
+
+  const entitlementCheck = checkWorkspaceEntitlement(
+    await getWorkspaceEntitlements({
+      workspaceId: currentWorkspace.id,
+      settings: currentWorkspace.settings,
+    }),
+    "saml-sso",
+  );
+  if (!entitlementCheck.allowed) {
+    return NextResponse.json(entitlementCheck, {
+      status: entitlementCheck.status,
+    });
   }
 
   const body = (await request.json().catch(() => null)) as Record<

@@ -39,6 +39,7 @@ interface WorkspaceBillingData {
   canManage: boolean;
   usage: {
     seatsUsed: number;
+    seatLimit: number | null;
     issuesUsed: number;
     issueLimit: number;
   };
@@ -135,7 +136,10 @@ export default function BillingSettingsPage() {
                 <div className="font-medium text-[var(--color-text-primary)]">
                   Seats used
                 </div>
-                <div>{billing.usage.seatsUsed} active members</div>
+                <div>
+                  {billing.usage.seatsUsed} /{" "}
+                  {billing.usage.seatLimit ?? "Unlimited"} active members
+                </div>
               </div>
               <div>
                 <div className="font-medium text-[var(--color-text-primary)]">
@@ -152,6 +156,13 @@ export default function BillingSettingsPage() {
                 <div>{billing.canManage ? "Billing manager" : "View only"}</div>
               </div>
             </div>
+            {billing.usage.seatLimit !== null &&
+              billing.usage.seatsUsed >= billing.usage.seatLimit && (
+                <div className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-[13px] text-amber-200">
+                  Your workspace has reached its member limit. Upgrade your plan
+                  to invite more teammates.
+                </div>
+              )}
           </section>
 
           <section className="mt-8">

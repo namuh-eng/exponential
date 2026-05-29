@@ -5,6 +5,7 @@ const resolveActiveWorkspaceIdMock = vi.fn();
 const membershipLimitMock = vi.fn();
 const workspaceLimitMock = vi.fn();
 const existingMemberInnerJoinMock = vi.fn();
+const activeMemberCountMock = vi.fn();
 const sendInvitationEmailMock = vi.fn();
 const createInviteTokenMock = vi.fn();
 const insertValuesMock = vi.fn();
@@ -46,6 +47,15 @@ vi.mock("@/lib/db", () => ({
                 limit: vi.fn().mockResolvedValue(membershipLimitMock()),
               }),
             }),
+          }),
+        };
+      }
+
+      // active member count for entitlement enforcement
+      if (selection && "value" in selection) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockResolvedValue(activeMemberCountMock()),
           }),
         };
       }
@@ -98,6 +108,7 @@ describe("workspace invite route", () => {
     ]);
     workspaceLimitMock.mockReturnValue([{ name: "Namuh" }]);
     existingMemberInnerJoinMock.mockReturnValue([]);
+    activeMemberCountMock.mockReturnValue([{ value: 1 }]);
     createInviteTokenMock.mockReturnValue("token-123");
     sendInvitationEmailMock.mockResolvedValue({ success: true });
     insertValuesMock.mockResolvedValue([{ id: "invite-1" }]);
@@ -205,5 +216,34 @@ describe("workspace invite route", () => {
     );
 
     expect(response.status).toBe(403);
+  });
+
+  it("fails closed with an upgrade prompt when the free member limit is reached", async () => {
+    activeMemberCountMock.mockReturnValue([{ value: 3 }]);
+    membershipLimitMock.mockReturnValue([
+      {
+        role: "admin",
+        workspaceName: "Namuh",
+        settings: { billing: { plan: "free" } },
+      },
+    ]);
+    const { POST } = await import("@/app/api/workspaces/invite/route");
+
+    const response = await POST(
+      new Request("http://localhost", {
+        method: "POST",
+        body: JSON.stringify({
+          invites: [{ email: "new@test.com", role: "member" }],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(402);
+    expect(await response.json()).toMatchObject({
+      code: "member_limit_reached",
+      activeSeats: 3,
+      limit: 3,
+    });
+    expect(sendInvitationEmailMock).not.toHaveBeenCalled();
   });
 });

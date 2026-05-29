@@ -6,6 +6,10 @@ import { member, user, workspace, workspaceInvitation } from "@/lib/db/schema";
 import { sendInvitationEmail } from "@/lib/email";
 import { createInviteToken } from "@/lib/invite-tokens";
 import {
+  checkWorkspaceEntitlement,
+  getWorkspaceEntitlements,
+} from "@/lib/workspace-billing";
+import {
   canPerformWorkspacePermission,
   readWorkspacePermissionSettings,
 } from "@/lib/workspace-permissions";
@@ -70,6 +74,23 @@ export async function POST(request: Request) {
       { error: "You do not have permission to invite members" },
       { status: 403 },
     );
+  }
+
+  const entitlements = await getWorkspaceEntitlements({
+    workspaceId,
+    settings: membership[0].settings,
+  });
+  const memberLimitCheck = checkWorkspaceEntitlement(
+    {
+      ...entitlements,
+      activeSeats: entitlements.activeSeats + invites.length - 1,
+    },
+    "member-limit",
+  );
+  if (!memberLimitCheck.allowed) {
+    return NextResponse.json(memberLimitCheck, {
+      status: memberLimitCheck.status,
+    });
   }
 
   const baseUrl = getRequestAppUrl(request);

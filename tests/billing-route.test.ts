@@ -137,6 +137,8 @@ describeDb("Workspace billing API", () => {
 
     expect(data.currentPlan).toBe("free");
     expect(data.canManage).toBe(true);
+    expect(data.usage.seatsUsed).toBe(2);
+    expect(data.usage.seatLimit).toBe(3);
     expect(data.usage.issuesUsed).toBe(99);
     expect(data.plans.map((plan: { id: string }) => plan.id)).toContain(
       "business",
