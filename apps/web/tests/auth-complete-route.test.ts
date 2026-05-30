@@ -60,4 +60,24 @@ describe("/auth/complete route", () => {
       "https://exponential.namuh.co/roadmap",
     );
   });
+
+  it("continues when verification is a false negative but the browser sent a session cookie", async () => {
+    process.env.PUBLIC_BASE_URL = "https://exponential.namuh.co";
+    mockGet.mockResolvedValue({
+      response: { status: 401 },
+      data: undefined,
+    });
+
+    const { GET } = await import("@/app/auth/complete/route");
+    const response = await GET(
+      new Request("http://0.0.0.0:3000/auth/complete?callbackUrl=%2Finbox", {
+        headers: { cookie: "other=1; exponential_session=signed-token" },
+      }),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "https://exponential.namuh.co/inbox",
+    );
+  });
 });
