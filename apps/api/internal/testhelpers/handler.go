@@ -28,7 +28,12 @@ func (h Handler) Routes() chi.Router {
 	return r
 }
 
-func allowed() bool { return os.Getenv("NODE_ENV") == "test" || os.Getenv("PLAYWRIGHT_TEST") == "true" }
+func allowed() bool {
+	if strings.EqualFold(os.Getenv("EXPONENTIAL_API_ENVIRONMENT"), "production") {
+		return false
+	}
+	return os.Getenv("NODE_ENV") == "test" || os.Getenv("PLAYWRIGHT_TEST") == "true"
+}
 
 func (h Handler) CreateAuthorizedApplication(w http.ResponseWriter, r *http.Request) {
 	if !allowed() {

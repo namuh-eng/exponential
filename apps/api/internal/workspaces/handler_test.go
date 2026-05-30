@@ -170,6 +170,31 @@ func TestApplicationScopesAndPermissionGroups(t *testing.T) {
 	}
 }
 
+func TestValidatedOAuthRedirectsRejectsUnsafeURLs(t *testing.T) {
+	_, err := validatedOAuthRedirects(workspaceAPIAction{RedirectURLs: []any{"http://example.com/callback"}})
+	if err == nil || !strings.Contains(err.Error(), "HTTPS") {
+		t.Fatalf("expected HTTPS validation error, got %v", err)
+	}
+	_, err = validatedOAuthRedirects(workspaceAPIAction{RedirectURL: "https://localhost/callback"})
+	if err == nil || !strings.Contains(err.Error(), "localhost") {
+		t.Fatalf("expected localhost validation error, got %v", err)
+	}
+	got, err := validatedOAuthRedirects(workspaceAPIAction{RedirectURLs: []any{"https://example.com/callback", "https://example.com/callback"}})
+	if err != nil || len(got) != 1 || got[0] != "https://example.com/callback" {
+		t.Fatalf("redirects = %#v err=%v", got, err)
+	}
+}
+
+func TestValidatedOAuthScopes(t *testing.T) {
+	got, err := validatedOAuthScopes([]any{"read", "read", "issues:write"})
+	if err != nil || len(got) != 2 || got[0] != "read" || got[1] != "issues:write" {
+		t.Fatalf("scopes = %#v err=%v", got, err)
+	}
+	if _, err := validatedOAuthScopes([]any{"admin"}); err == nil {
+		t.Fatal("unsupported scope should fail")
+	}
+}
+
 func TestSAMLAndSCIMSettingsHelpers(t *testing.T) {
 	saml := normalizeSAMLInput(map[string]any{"enabled": true, "domains": []any{"Example.com"}, "idpSsoUrl": "https://idp.example.com/sso", "entityId": "entity", "certificate": "CERT", "test": true}, readSAMLSettings(map[string]any{}))
 	if validation := validateSAMLSettings(saml); validation != "" {

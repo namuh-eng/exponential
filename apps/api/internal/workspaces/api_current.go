@@ -364,18 +364,34 @@ func mutateOAuthSettings(settings map[string]any, userID string, body workspaceA
 		if name == "" {
 			return settings, nil, errString("Application name is required.")
 		}
+		redirects, err := validatedOAuthRedirects(body)
+		if err != nil {
+			return settings, nil, err
+		}
+		scopes, err := validatedOAuthScopes(body.Scopes)
+		if err != nil {
+			return settings, nil, err
+		}
 		secret := "linsec_" + randomHexString(24)
-		app := map[string]any{"id": "oauth_" + randomHexString(8), "name": name, "description": strings.TrimSpace(body.Description), "clientId": "lin_" + randomHexString(12), "clientSecretPreview": secret[:12] + "…", "clientSecretHash": hashString(secret), "redirectUrl": firstRedirect(body), "redirectUrls": redirectList(body), "scopes": scopeList(body.Scopes), "createdByUserId": userID, "createdAt": now, "updatedAt": now}
+		app := map[string]any{"id": "oauth_" + randomHexString(8), "name": name, "description": strings.TrimSpace(body.Description), "clientId": "lin_" + randomHexString(12), "clientSecretPreview": secret[:12] + "…", "clientSecretHash": hashString(secret), "redirectUrl": redirects[0], "redirectUrls": redirects, "scopes": scopes, "createdByUserId": userID, "createdAt": now, "updatedAt": now}
 		apps = append([]map[string]any{app}, apps...)
 		return writeOAuthApplications(settings, apps), map[string]any{"kind": "oauthApplication", "label": name + " client secret", "secret": secret}, nil
 	case "updateOAuthApplication":
+		redirects, err := validatedOAuthRedirects(body)
+		if err != nil {
+			return settings, nil, err
+		}
+		scopes, err := validatedOAuthScopes(body.Scopes)
+		if err != nil {
+			return settings, nil, err
+		}
 		for _, app := range apps {
 			if app["id"] == body.ID {
 				app["name"] = strings.TrimSpace(body.Name)
 				app["description"] = strings.TrimSpace(body.Description)
-				app["redirectUrl"] = firstRedirect(body)
-				app["redirectUrls"] = redirectList(body)
-				app["scopes"] = scopeList(body.Scopes)
+				app["redirectUrl"] = redirects[0]
+				app["redirectUrls"] = redirects
+				app["scopes"] = scopes
 				app["updatedAt"] = now
 				return writeOAuthApplications(settings, apps), nil, nil
 			}
@@ -440,6 +456,47 @@ func scopeList(v any) []string {
 		return []string{"read"}
 	}
 	return out
+}
+
+func validatedOAuthRedirects(body workspaceAPIAction) ([]string, error) {
+	redirects := redirectList(body)
+	if len(redirects) == 0 {
+		return nil, errString("At least one redirect URL is required.")
+	}
+	out := []string{}
+	seen := map[string]bool{}
+	for _, redirect := range redirects {
+		if err := validateWebhookURL(redirect); err != nil {
+			return nil, errString(strings.Replace(err.Error(), "Webhook URL", "Redirect URL", 1))
+		}
+		if !seen[redirect] {
+			seen[redirect] = true
+			out = append(out, redirect)
+		}
+	}
+	return out, nil
+}
+
+var allowedOAuthScopes = map[string]bool{"read": true, "write": true, "issues:read": true, "issues:write": true, "comments:write": true, "webhooks:write": true}
+
+func validatedOAuthScopes(v any) ([]string, error) {
+	scopes := scopeList(v)
+	out := []string{}
+	seen := map[string]bool{}
+	for _, scope := range scopes {
+		scope = strings.TrimSpace(scope)
+		if !allowedOAuthScopes[scope] {
+			return nil, errString("OAuth scope is not supported.")
+		}
+		if !seen[scope] {
+			seen[scope] = true
+			out = append(out, scope)
+		}
+	}
+	if len(out) == 0 {
+		return []string{"read"}, nil
+	}
+	return out, nil
 }
 
 type errString string

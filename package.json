@@ -20,5 +20,10 @@
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",
     "turbo": "^2.6.1"
+  },
+  "pnpm": {
+    "overrides": {
+      "postcss": "^8.5.15"
+    }
   }
 }

@@ -33,3 +33,19 @@ func TestSetBrowserSessionCookies(t *testing.T) {
 		t.Fatalf("session cookie = %q", got)
 	}
 }
+
+func TestAllowedDisabledInProduction(t *testing.T) {
+	t.Setenv("EXPONENTIAL_API_ENVIRONMENT", "production")
+	t.Setenv("PLAYWRIGHT_TEST", "true")
+	if allowed() {
+		t.Fatal("test helpers must be disabled in production even when PLAYWRIGHT_TEST is true")
+	}
+}
+
+func TestAllowedInPlaywrightOutsideProduction(t *testing.T) {
+	t.Setenv("EXPONENTIAL_API_ENVIRONMENT", "staging")
+	t.Setenv("PLAYWRIGHT_TEST", "true")
+	if !allowed() {
+		t.Fatal("test helpers should remain available for non-production playwright runs")
+	}
+}

@@ -19,4 +19,8 @@ func TestNormalizeDescription(t *testing.T) {
 	if got := normalizeDescription("<p>hello</p>"); got != "<p>hello</p>" {
 		t.Fatalf("html description = %q", got)
 	}
+	got := normalizeDescription(`<p onclick="alert(1)">hi<script>alert(1)</script><a href="javascript:alert(1)">bad</a></p>`)
+	if got != `<p>hibad</p>` {
+		t.Fatalf("sanitized description = %q", got)
+	}
 }

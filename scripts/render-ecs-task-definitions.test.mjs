@@ -36,10 +36,11 @@ assert.throws(
   /Missing required environment variables/,
 );
 assert.throws(
-  () => renderTemplate("${DATABASE_URL_SECRET_ARN}", {
-    ...env,
-    DATABASE_URL_SECRET_ARN: "None",
-  }),
+  () =>
+    renderTemplate("${DATABASE_URL_SECRET_ARN}", {
+      ...env,
+      DATABASE_URL_SECRET_ARN: "None",
+    }),
   /Missing required environment variables: DATABASE_URL_SECRET_ARN/,
 );
 

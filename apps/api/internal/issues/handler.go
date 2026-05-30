@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
+	"github.com/namuh-eng/exponential/apps/api/internal/sanitizehtml"
 	dbsqlc "github.com/namuh-eng/exponential/apps/api/internal/sqlc/generated"
 	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
 )
@@ -647,6 +648,10 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusBadRequest, "Invalid issue", "title and team_id are required")
 		return
 	}
+	if input.Description != nil {
+		description := sanitizehtml.RichText(*input.Description)
+		input.Description = &description
+	}
 	priority := "none"
 	if input.Priority != nil && *input.Priority != "" {
 		priority = *input.Priority
@@ -747,7 +752,7 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		add("title = $%d", title)
 	}
 	if input.Description != nil {
-		add("description = $%d", input.Description)
+		add("description = $%d", sanitizehtml.RichText(*input.Description))
 	}
 	if input.StateID != nil {
 		if err := assertStateForTeam(r.Context(), h.DB, *input.StateID, existing.TeamID); err != nil {

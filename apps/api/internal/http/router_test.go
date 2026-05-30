@@ -44,3 +44,33 @@ func TestRouterServesPublicAPICollectionAlias(t *testing.T) {
 		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
 	}
 }
+
+func TestMetricsAccessAllowedOutsideProduction(t *testing.T) {
+	t.Setenv("EXPONENTIAL_API_ENVIRONMENT", "development")
+	if !metricsAccessAllowed(httptest.NewRequest(http.MethodGet, "/metrics/red", nil)) {
+		t.Fatal("metrics should remain available outside production")
+	}
+}
+
+func TestMetricsAccessRequiresTokenInProduction(t *testing.T) {
+	t.Setenv("EXPONENTIAL_API_ENVIRONMENT", "production")
+	t.Setenv("EXPONENTIAL_METRICS_TOKEN", "secret")
+	if metricsAccessAllowed(httptest.NewRequest(http.MethodGet, "/metrics/red", nil)) {
+		t.Fatal("production metrics should reject requests without the token")
+	}
+	req := httptest.NewRequest(http.MethodGet, "/metrics/red", nil)
+	req.Header.Set("X-Metrics-Token", "secret")
+	if !metricsAccessAllowed(req) {
+		t.Fatal("production metrics should allow matching token")
+	}
+}
+
+func TestMetricsAccessDisabledInProductionWhenUnconfigured(t *testing.T) {
+	t.Setenv("EXPONENTIAL_API_ENVIRONMENT", "production")
+	t.Setenv("EXPONENTIAL_METRICS_TOKEN", "")
+	req := httptest.NewRequest(http.MethodGet, "/metrics/red", nil)
+	req.Header.Set("X-Metrics-Token", "secret")
+	if metricsAccessAllowed(req) {
+		t.Fatal("production metrics must stay disabled when no token is configured")
+	}
+}

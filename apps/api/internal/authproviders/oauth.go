@@ -32,16 +32,8 @@ func (h Handler) AuthorizeOAuth(w http.ResponseWriter, r *http.Request) {
 	redirectURI := q.Get("redirect_uri")
 	state := q.Get("state")
 	scopeParam := q.Get("scope")
-	if responseType != "code" {
-		oauthError(w, redirectURI, "unsupported_response_type", state)
-		return
-	}
 	if clientID == "" || redirectURI == "" {
 		problem.JSON(w, 400, map[string]string{"error": "invalid_request"})
-		return
-	}
-	if hasUnsupportedOAuthScopesGo(scopeParam) {
-		oauthError(w, redirectURI, "invalid_scope", state)
 		return
 	}
 	found, err := h.findOAuthApplication(r, clientID)
@@ -55,7 +47,15 @@ func (h Handler) AuthorizeOAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	allowedRedirects := stringArray(firstNonNilOAuth(found.App["redirectUrls"], []any{found.App["redirectUrl"]}))
 	if !containsOAuthString(allowedRedirects, redirectURI) {
-		oauthError(w, redirectURI, "invalid_redirect_uri", state)
+		problem.JSON(w, 400, map[string]string{"error": "invalid_redirect_uri"})
+		return
+	}
+	if responseType != "code" {
+		oauthError(w, redirectURI, "unsupported_response_type", state)
+		return
+	}
+	if hasUnsupportedOAuthScopesGo(scopeParam) {
+		oauthError(w, redirectURI, "invalid_scope", state)
 		return
 	}
 	allowedScopes := stringArray(firstNonNilOAuth(found.App["scopes"], []any{"read"}))

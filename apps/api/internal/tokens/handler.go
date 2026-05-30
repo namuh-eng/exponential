@@ -82,6 +82,10 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	scopes := normalizeScopes(input.Scopes)
+	if len(input.Scopes) > 0 && len(scopes) == 0 {
+		problem.Write(w, 400, "Unsupported token scope", "Personal access token scopes must be read and/or write.")
+		return
+	}
 	value, err := newPATSecret()
 	if err != nil {
 		problem.Write(w, 500, "Create personal access token failed", err.Error())
@@ -150,7 +154,7 @@ func normalizeScopes(scopes []string) []string {
 	out := []string{}
 	for _, scope := range scopes {
 		scope = strings.TrimSpace(strings.ToLower(scope))
-		if scope != "" && !seen[scope] {
+		if (scope == "read" || scope == "write") && !seen[scope] {
 			seen[scope] = true
 			out = append(out, scope)
 		}
