@@ -22,6 +22,8 @@ const env = {
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:google-id",
   GOOGLE_CLIENT_SECRET_SECRET_ARN:
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:google-secret",
+  METRICS_TOKEN_SECRET_ARN:
+    "arn:aws:secretsmanager:us-east-1:123456789012:secret:metrics",
   OTEL_EXPORTER_OTLP_ENDPOINT: "collector.example:4318",
   PUBLIC_BASE_URL: "https://app.example",
   WEB_INTERNAL_API_URL: "http://app-alb.example/api",

@@ -47,8 +47,10 @@ running `scripts/prepare-ecs-deploy-env.sh`.
 | `ECS_TASK_ROLE_ARN`               | Created by `prepare-ecs-deploy-env.sh`                               |
 | `DATABASE_URL_SECRET_ARN`         | Secrets Manager ARN                                                  |
 | `REDIS_URL_SECRET_ARN`            | Secrets Manager ARN                                                  |
+| `SESSION_SECRET_SECRET_ARN`       | Secrets Manager ARN                                                  |
 | `GOOGLE_CLIENT_ID_SECRET_ARN`     | Secrets Manager ARN                                                  |
 | `GOOGLE_CLIENT_SECRET_SECRET_ARN` | Secrets Manager ARN                                                  |
+| `METRICS_TOKEN_SECRET_ARN`        | Secrets Manager ARN for the RED metrics token                        |
 | `PUBLIC_BASE_URL`                 | `https://<your-domain>` (or `http://<alb-dns>`)                      |
 | `PRIV_SUBNET_A`, `PRIV_SUBNET_B`  | Private subnet IDs                                                   |
 | `APP_SG`                          | App security group ID                                                |
@@ -64,6 +66,7 @@ out of `.env` for paste-in (run on your laptop):
 ```sh
 for k in AWS_REGION APP_NAME ECS_EXECUTION_ROLE_ARN ECS_TASK_ROLE_ARN \
          DATABASE_URL_SECRET_ARN REDIS_URL_SECRET_ARN \
+         SESSION_SECRET_SECRET_ARN METRICS_TOKEN_SECRET_ARN \
          GOOGLE_CLIENT_ID_SECRET_ARN GOOGLE_CLIENT_SECRET_SECRET_ARN \
          PUBLIC_BASE_URL PRIV_SUBNET_A PRIV_SUBNET_B APP_SG ALB_SG \
          API_TG_ARN WEB_TG_ARN OTEL_EXPORTER_OTLP_ENDPOINT \

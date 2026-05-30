@@ -64,6 +64,10 @@
         {
           "name": "AUTH_GOOGLE_SECRET",
           "valueFrom": "${GOOGLE_CLIENT_SECRET_SECRET_ARN}"
+        },
+        {
+          "name": "EXPONENTIAL_METRICS_TOKEN",
+          "valueFrom": "${METRICS_TOKEN_SECRET_ARN}"
         }
       ],
       "logConfiguration": {
