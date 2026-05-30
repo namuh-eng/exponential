@@ -297,6 +297,28 @@ function getWorkspacePrefixedSearchRedirect(
   return null;
 }
 
+function cookieHeaderValue(cookieHeader: string | null, name: string) {
+  if (!cookieHeader) {
+    return undefined;
+  }
+
+  for (const part of cookieHeader.split(";")) {
+    const [rawName, ...rawValue] = part.trim().split("=");
+    if (rawName === name) {
+      return rawValue.join("=");
+    }
+  }
+
+  return undefined;
+}
+
+function requestCookieValue(request: NextRequest, name: string) {
+  return (
+    request.cookies.get(name)?.value ??
+    cookieHeaderValue(request.headers.get("cookie"), name)
+  );
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
@@ -318,8 +340,8 @@ export async function proxy(request: NextRequest) {
   }
 
   const sessionToken =
-    request.cookies.get("exponential_session")?.value ??
-    request.cookies.get("exponential_session_continuity")?.value;
+    requestCookieValue(request, "exponential_session") ??
+    requestCookieValue(request, "exponential_session_continuity");
 
   if (!sessionToken) {
     const callbackUrl = `${pathname}${search}`;
@@ -366,7 +388,7 @@ export async function proxy(request: NextRequest) {
 
   const workspacePrefixedSearchRedirect = getWorkspacePrefixedSearchRedirect(
     pathname,
-    request.cookies.get("activeWorkspaceSlug")?.value,
+    requestCookieValue(request, "activeWorkspaceSlug"),
   );
   if (workspacePrefixedSearchRedirect) {
     const workspacePrefixedSearchUrl = request.nextUrl.clone();

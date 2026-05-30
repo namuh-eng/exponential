@@ -2,8 +2,11 @@ package http
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	stdhttp "net/http"
+	"os"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -46,6 +49,7 @@ import (
 func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 	metrics := &observability.Metrics{}
 	r := chi.NewRouter()
+	r.Use(limitRequestBody(10 << 20))
 	r.Use(observability.TraceMiddleware("exponential-api"))
 	r.Use(observability.RequestLogger(logger, metrics))
 
@@ -64,20 +68,19 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 	}
 	r.Get("/healthz", healthHandler)
 	r.Get("/api/healthz", healthHandler)
-	r.Get("/metrics/red", func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	metricsHandler := func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		if !metricsAccessAllowed(r) {
+			stdhttp.NotFound(w, r)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(stdhttp.StatusOK)
 		if err := json.NewEncoder(w).Encode(observability.Snapshot(metrics)); err != nil {
 			logger.Error("write metrics response", zap.Error(err))
 		}
-	})
-	r.Get("/api/metrics/red", func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(stdhttp.StatusOK)
-		if err := json.NewEncoder(w).Encode(observability.Snapshot(metrics)); err != nil {
-			logger.Error("write metrics response", zap.Error(err))
-		}
-	})
+	}
+	r.Get("/metrics/red", metricsHandler)
+	r.Get("/api/metrics/red", metricsHandler)
 
 	mountAPIRoutes(r, "/v1", db, emailSender)
 	mountAPIRoutes(r, "/api", db, emailSender)
@@ -93,7 +96,10 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 	workspacesHandler := workspaces.Handler{DB: db}
 	r.Route(prefix, func(v1 chi.Router) {
 		v1.Get("/auth/session", authMiddleware.Session)
-		v1.Mount("/auth", authProvidersHandler.Routes())
+		v1.Group(func(publicAuth chi.Router) {
+			publicAuth.Use(ratelimit.PublicMiddleware())
+			publicAuth.Mount("/auth", authProvidersHandler.Routes())
+		})
 		v1.Mount("/inbound", inbound.Handler{DB: db}.Routes())
 		v1.Post("/oauth/token", authProvidersHandler.ExchangeOAuthToken)
 		v1.Post("/test/create-session", testhelpers.Handler{DB: db}.CreateSession)
@@ -142,4 +148,34 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 			protected.Get("/sync/ws", syncapi.Handler{DB: db}.WebSocket)
 		})
 	})
+}
+
+func metricsAccessAllowed(r *stdhttp.Request) bool {
+	if !strings.EqualFold(os.Getenv("EXPONENTIAL_API_ENVIRONMENT"), "production") &&
+		!strings.EqualFold(os.Getenv("NODE_ENV"), "production") {
+		return true
+	}
+	token := strings.TrimSpace(os.Getenv("EXPONENTIAL_METRICS_TOKEN"))
+	if token == "" {
+		return false
+	}
+	supplied := strings.TrimSpace(r.Header.Get("X-Metrics-Token"))
+	if supplied == "" {
+		auth := strings.Fields(r.Header.Get("Authorization"))
+		if len(auth) == 2 && strings.EqualFold(auth[0], "Bearer") {
+			supplied = auth[1]
+		}
+	}
+	return subtle.ConstantTimeCompare([]byte(supplied), []byte(token)) == 1
+}
+
+func limitRequestBody(maxBytes int64) func(stdhttp.Handler) stdhttp.Handler {
+	return func(next stdhttp.Handler) stdhttp.Handler {
+		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+			if r.Body != nil && maxBytes > 0 {
+				r.Body = stdhttp.MaxBytesReader(w, r.Body, maxBytes)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }

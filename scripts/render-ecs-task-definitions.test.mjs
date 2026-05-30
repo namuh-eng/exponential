@@ -16,12 +16,17 @@ const env = {
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:database",
   REDIS_URL_SECRET_ARN:
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:redis",
+  SESSION_SECRET_SECRET_ARN:
+    "arn:aws:secretsmanager:us-east-1:123456789012:secret:session",
   GOOGLE_CLIENT_ID_SECRET_ARN:
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:google-id",
   GOOGLE_CLIENT_SECRET_SECRET_ARN:
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:google-secret",
+  METRICS_TOKEN_SECRET_ARN:
+    "arn:aws:secretsmanager:us-east-1:123456789012:secret:metrics",
   OTEL_EXPORTER_OTLP_ENDPOINT: "collector.example:4318",
   PUBLIC_BASE_URL: "https://app.example",
+  WEB_INTERNAL_API_URL: "http://app-alb.example/api",
 };
 
 assert.equal(
@@ -31,6 +36,14 @@ assert.equal(
 assert.throws(
   () => renderTemplate("${MISSING}", env),
   /Missing required environment variables/,
+);
+assert.throws(
+  () =>
+    renderTemplate("${DATABASE_URL_SECRET_ARN}", {
+      ...env,
+      DATABASE_URL_SECRET_ARN: "None",
+    }),
+  /Missing required environment variables: DATABASE_URL_SECRET_ARN/,
 );
 
 for (const file of [

@@ -6,6 +6,14 @@ vi.mock("@/lib/server-api-client", () => ({
   createNoStoreServerApiClientFromRequest: vi.fn(() => ({ GET: mockGet })),
 }));
 
+vi.mock("next/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/server")>();
+  return {
+    ...actual,
+    connection: vi.fn(async () => undefined),
+  };
+});
+
 describe("/auth/complete route", () => {
   const originalNextPublicAppUrl = process.env.NEXT_PUBLIC_APP_URL;
   const originalPublicBaseUrl = process.env.PUBLIC_BASE_URL;
@@ -41,6 +49,9 @@ describe("/auth/complete route", () => {
     expect(response.headers.get("location")).toBe(
       "https://exponential.namuh.co/login?callbackUrl=%2Finbox&error=session_not_created",
     );
+    expect(response.headers.get("cache-control")).toBe(
+      "private, no-cache, no-store, max-age=0, must-revalidate",
+    );
   });
 
   it("redirects verified sessions to the safe local callback on the public app origin", async () => {
@@ -61,7 +72,7 @@ describe("/auth/complete route", () => {
     );
   });
 
-  it("continues when verification is a false negative but the browser sent a session cookie", async () => {
+  it("redirects to login when verification fails even if a session cookie is present", async () => {
     process.env.PUBLIC_BASE_URL = "https://exponential.namuh.co";
     mockGet.mockResolvedValue({
       response: { status: 401 },
@@ -77,7 +88,7 @@ describe("/auth/complete route", () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
-      "https://exponential.namuh.co/inbox",
+      "https://exponential.namuh.co/login?callbackUrl=%2Finbox&error=session_not_created",
     );
   });
 });

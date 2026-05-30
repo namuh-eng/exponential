@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
+	"github.com/namuh-eng/exponential/apps/api/internal/sanitizehtml"
 )
 
 type Handler struct{ DB *pgxpool.Pool }
@@ -208,9 +209,9 @@ func normalizeDescription(value string) string {
 		return ""
 	}
 	if strings.Contains(value, "<") {
-		return value
+		return sanitizehtml.RichText(value)
 	}
-	return "<p>" + htmlEscaper.Replace(value) + "</p>"
+	return sanitizehtml.RichText("<p>" + htmlEscaper.Replace(value) + "</p>")
 }
 
 var htmlEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")

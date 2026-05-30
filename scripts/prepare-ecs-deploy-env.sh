@@ -165,12 +165,23 @@ fi
 if [ -n "${ALB_DNS:-}" ] && [ -z "${PUBLIC_BASE_URL:-}" ]; then
   set_env PUBLIC_BASE_URL "http://${ALB_DNS}"
 fi
+if [ -n "${ALB_DNS:-}" ] && [ -z "${WEB_INTERNAL_API_URL:-}" ]; then
+  set_env WEB_INTERNAL_API_URL "http://${ALB_DNS}/api"
+fi
 if [ -n "${DATABASE_URL:-}" ]; then
   set_env DATABASE_URL_SECRET_ARN "$(secret_arn "${APP_NAME}/database-url" "$DATABASE_URL")"
 fi
 if [ -n "${REDIS_URL:-}" ]; then
   set_env REDIS_URL_SECRET_ARN "$(secret_arn "${APP_NAME}/redis-url" "$REDIS_URL")"
 fi
+if [ -z "${EXPONENTIAL_SESSION_SECRET:-}" ]; then
+  set_env EXPONENTIAL_SESSION_SECRET "$(random_hex 32)"
+fi
+if [ -z "${EXPONENTIAL_METRICS_TOKEN:-}" ]; then
+  set_env EXPONENTIAL_METRICS_TOKEN "$(random_hex 32)"
+fi
+set_env SESSION_SECRET_SECRET_ARN "$(secret_arn "${APP_NAME}/session-secret" "$EXPONENTIAL_SESSION_SECRET")"
+set_env METRICS_TOKEN_SECRET_ARN "$(secret_arn "${APP_NAME}/metrics-token" "$EXPONENTIAL_METRICS_TOKEN")"
 set_env GOOGLE_CLIENT_ID_SECRET_ARN "$(secret_arn "${APP_NAME}/google-client-id" "${GOOGLE_CLIENT_ID:-${AUTH_GOOGLE_ID:-dev-google-client-id}}")"
 set_env GOOGLE_CLIENT_SECRET_SECRET_ARN "$(secret_arn "${APP_NAME}/google-client-secret" "${GOOGLE_CLIENT_SECRET:-${AUTH_GOOGLE_SECRET:-dev-google-client-secret}}")"
 
@@ -179,6 +190,6 @@ Prepared ECS deploy environment in ${ENV_FILE}.
 
 Next steps:
 1. If this is the first AWS run, run: DB_PASSWORD=\$DB_PASSWORD scripts/preflight.sh
-2. Re-run this script after preflight so DATABASE_URL/REDIS_URL/ALB_DNS are converted into secret ARNs and PUBLIC_BASE_URL.
+2. Re-run this script after preflight so DATABASE_URL/REDIS_URL/ALB_DNS are converted into secret ARNs and public/internal URLs.
 3. Deploy with: set -a; . ${ENV_FILE}; set +a; RUN_PROD_SMOKE=true scripts/deploy-ecs.sh
 MSG

@@ -30,6 +30,7 @@ type Principal struct {
 	WorkspaceID string
 	Role        string
 	APIKeyID    string
+	Scopes      []string
 }
 
 type BrowserSession struct {
@@ -93,6 +94,10 @@ func (m Middleware) Require(next http.Handler) http.Handler {
 			problem.Write(w, http.StatusUnauthorized, "Unauthorized", err.Error())
 			return
 		}
+		if !scopesAllowRequest(principal.Scopes, r) {
+			problem.Write(w, http.StatusForbidden, "Insufficient token scope", "This personal access token is not allowed to perform this request.")
+			return
+		}
 		// CSRF: for browser-session (cookie) auth on state-mutating methods,
 		// verify the Origin or Referer header against the app's known origin.
 		if isCookieAuth && isUnsafeMethod(r.Method) {
@@ -130,11 +135,32 @@ func isUnsafeMethod(method string) bool {
 	return false
 }
 
+func scopesAllowRequest(scopes []string, r *http.Request) bool {
+	if len(scopes) == 0 {
+		// Browser sessions and legacy workspace API keys are not scoped here.
+		return true
+	}
+	required := "read"
+	if isUnsafeMethod(r.Method) {
+		required = "write"
+	}
+	for _, scope := range scopes {
+		scope = strings.TrimSpace(strings.ToLower(scope))
+		if scope == required {
+			return true
+		}
+	}
+	return false
+}
+
 // csrfDenied checks the Origin/Referer header against the configured app URL(s).
 // Returns (true, reason) when the request should be rejected.
 func csrfDenied(r *http.Request) (bool, string) {
 	allowed := csrfAllowedOrigins()
 	if len(allowed) == 0 {
+		if isProductionEnvironment() {
+			return true, "csrf_unconfigured"
+		}
 		// No app URL configured — allow (fail-open in unconfigured envs).
 		return false, ""
 	}
@@ -158,6 +184,11 @@ func csrfDenied(r *http.Request) (bool, string) {
 		}
 	}
 	return true, "origin_not_allowed"
+}
+
+func isProductionEnvironment() bool {
+	return strings.EqualFold(os.Getenv("EXPONENTIAL_API_ENVIRONMENT"), "production") ||
+		strings.EqualFold(os.Getenv("NODE_ENV"), "production")
 }
 
 // csrfAllowedOrigins returns the set of origins that are permitted to make
@@ -638,14 +669,19 @@ func (m Middleware) authenticateLegacyAPIKey(ctx context.Context, keyHash string
 
 func (m Middleware) authenticatePAT(ctx context.Context, keyHash string) (Principal, error) {
 	var p Principal
+	var scopesRaw []byte
 	err := m.DB.QueryRow(ctx, `
-		select pat.id::text, pat.user_id, pat.workspace_id::text, m.role::text
+		select pat.id::text, pat.user_id, pat.workspace_id::text, m.role::text, coalesce(pat.scopes,'[]'::jsonb)
 		from personal_access_token pat
 		join member m on m.user_id = pat.user_id and m.workspace_id = pat.workspace_id
 		where pat.token_hash = $1 and pat.revoked_at is null
-		limit 1`, keyHash).Scan(&p.APIKeyID, &p.UserID, &p.WorkspaceID, &p.Role)
+		limit 1`, keyHash).Scan(&p.APIKeyID, &p.UserID, &p.WorkspaceID, &p.Role, &scopesRaw)
 	if err != nil {
 		return Principal{}, errUnauthorized("invalid token")
+	}
+	_ = json.Unmarshal(scopesRaw, &p.Scopes)
+	if len(p.Scopes) == 0 {
+		p.Scopes = []string{"read"}
 	}
 	_, _ = m.DB.Exec(ctx, `update personal_access_token set last_used_at = now() where id = $1::uuid`, p.APIKeyID)
 	_, _ = m.DB.Exec(ctx, `insert into personal_access_token_audit_log (token_id, user_id, workspace_id, action) values ($1::uuid, $2, $3::uuid, 'used')`, p.APIKeyID, p.UserID, p.WorkspaceID)

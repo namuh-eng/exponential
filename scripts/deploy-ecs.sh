@@ -28,13 +28,32 @@ require_env() {
 
 for name in \
   ECS_EXECUTION_ROLE_ARN ECS_TASK_ROLE_ARN DATABASE_URL_SECRET_ARN REDIS_URL_SECRET_ARN \
-  GOOGLE_CLIENT_ID_SECRET_ARN GOOGLE_CLIENT_SECRET_SECRET_ARN PUBLIC_BASE_URL \
-  PRIV_SUBNET_A PRIV_SUBNET_B APP_SG ALB_SG API_TG_ARN WEB_TG_ARN; do
+  SESSION_SECRET_SECRET_ARN GOOGLE_CLIENT_ID_SECRET_ARN GOOGLE_CLIENT_SECRET_SECRET_ARN PUBLIC_BASE_URL \
+  METRICS_TOKEN_SECRET_ARN PRIV_SUBNET_A PRIV_SUBNET_B APP_SG ALB_SG API_TG_ARN WEB_TG_ARN; do
   require_env "$name"
 done
 
 export AWS_ACCOUNT_ID REGION AWS_REGION="$REGION" IMAGE_TAG
 export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+
+if [ -z "${WEB_INTERNAL_API_URL:-}" ]; then
+  if [ -n "${ALB_DNS:-}" ]; then
+    WEB_INTERNAL_API_URL="http://${ALB_DNS}/api"
+  else
+    RESOLVED_ALB_DNS=$(aws elbv2 describe-load-balancers \
+      --names "${APP_NAME}-alb" \
+      --region "$REGION" \
+      --query 'LoadBalancers[0].DNSName' \
+      --output text 2>/dev/null || true)
+    if [ -n "$RESOLVED_ALB_DNS" ] && [ "$RESOLVED_ALB_DNS" != "None" ]; then
+      WEB_INTERNAL_API_URL="http://${RESOLVED_ALB_DNS}/api"
+    else
+      WEB_INTERNAL_API_URL="${PUBLIC_BASE_URL%/}/api"
+    fi
+  fi
+fi
+export WEB_INTERNAL_API_URL
+echo "Web server API URL: ${WEB_INTERNAL_API_URL}"
 
 ensure_app_ingress() {
   local port="$1"

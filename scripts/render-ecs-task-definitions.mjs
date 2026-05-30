@@ -24,7 +24,11 @@ export function renderTemplate(input, env = process.env) {
   const missing = new Set();
   const rendered = input.replace(/\$\{([A-Z0-9_]+)\}/g, (_match, key) => {
     const value = env[key];
-    if (value === undefined || (value === "" && !optionalEmpty.has(key))) {
+    if (
+      value === undefined ||
+      value === "None" ||
+      (value === "" && !optionalEmpty.has(key))
+    ) {
       missing.add(key);
       return "";
     }

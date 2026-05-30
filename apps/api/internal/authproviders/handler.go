@@ -3,6 +3,7 @@ package authproviders
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/email"
@@ -144,13 +146,29 @@ func authMethodAllowed(policy *workspaceInfo, method string) bool {
 
 func (h Handler) resolvePolicy(r *http.Request) (*workspaceInfo, error) {
 	slug := workspaceSlugFromCallbackURL(r.URL.Query().Get("callbackUrl"), requestBaseURL(r))
+	return h.resolvePolicyForSlug(r, slug)
+}
+
+func (h Handler) authMethodAllowedForCallback(r *http.Request, callbackURL string, method string) bool {
+	slug := workspaceSlugFromCallbackURL(callbackURL, requestBaseURL(r))
+	policy, err := h.resolvePolicyForSlug(r, slug)
+	if err != nil {
+		return false
+	}
+	return authMethodAllowed(policy, method)
+}
+
+func (h Handler) resolvePolicyForSlug(r *http.Request, slug string) (*workspaceInfo, error) {
 	if slug == "" {
 		return nil, nil
 	}
 	var settings []byte
 	err := h.DB.QueryRow(r.Context(), `select coalesce(settings,'{}'::jsonb) from workspace where url_slug=$1 limit 1`, slug).Scan(&settings)
 	if err != nil {
-		return nil, nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
 	}
 	return &workspaceInfo{Slug: slug, Authentication: readAuthSettings(settings)}, nil
 }

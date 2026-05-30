@@ -54,12 +54,20 @@
           "valueFrom": "${REDIS_URL_SECRET_ARN}"
         },
         {
+          "name": "EXPONENTIAL_SESSION_SECRET",
+          "valueFrom": "${SESSION_SECRET_SECRET_ARN}"
+        },
+        {
           "name": "AUTH_GOOGLE_ID",
           "valueFrom": "${GOOGLE_CLIENT_ID_SECRET_ARN}"
         },
         {
           "name": "AUTH_GOOGLE_SECRET",
           "valueFrom": "${GOOGLE_CLIENT_SECRET_SECRET_ARN}"
+        },
+        {
+          "name": "EXPONENTIAL_METRICS_TOKEN",
+          "valueFrom": "${METRICS_TOKEN_SECRET_ARN}"
         }
       ],
       "logConfiguration": {

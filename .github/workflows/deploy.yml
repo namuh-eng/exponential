@@ -49,8 +49,10 @@ jobs:
       # Secrets Manager ARNs (only the ARN is config; the secret value stays in AWS)
       DATABASE_URL_SECRET_ARN: ${{ vars.DATABASE_URL_SECRET_ARN }}
       REDIS_URL_SECRET_ARN: ${{ vars.REDIS_URL_SECRET_ARN }}
+      SESSION_SECRET_SECRET_ARN: ${{ vars.SESSION_SECRET_SECRET_ARN }}
       GOOGLE_CLIENT_ID_SECRET_ARN: ${{ vars.GOOGLE_CLIENT_ID_SECRET_ARN }}
       GOOGLE_CLIENT_SECRET_SECRET_ARN: ${{ vars.GOOGLE_CLIENT_SECRET_SECRET_ARN }}
+      METRICS_TOKEN_SECRET_ARN: ${{ vars.METRICS_TOKEN_SECRET_ARN }}
 
       # Networking
       PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}

@@ -55,6 +55,10 @@ func (h Handler) StartGoogle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	callbackURL := safeCallbackPath(r.URL.Query().Get("callback_url"))
+	if !h.authMethodAllowedForCallback(r, callbackURL, "google") {
+		problem.JSON(w, http.StatusForbidden, map[string]string{"error": "Google sign-in is disabled for this workspace."})
+		return
+	}
 	// Generate PKCE code_verifier (RFC 7636 §4.1: 43-128 unreserved chars).
 	// 32 random bytes → 43-char base64url string, well within the allowed range.
 	codeVerifier := randomBase64URLAuth(32)
@@ -154,6 +158,10 @@ func (h Handler) StartMagicLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	callbackURL := safeCallbackPath(input.CallbackURL)
+	if !h.authMethodAllowedForCallback(r, callbackURL, "emailPasskey") {
+		problem.JSON(w, http.StatusForbidden, map[string]string{"error": "Email sign-in is disabled for this workspace."})
+		return
+	}
 	rawToken := randomBase64URLAuth(32)
 	hash := sha256.Sum256([]byte(rawToken))
 	verificationID := "magic_" + randomBase64URLAuth(12)

@@ -106,6 +106,32 @@ func TestCSRFNoAppURLConfigured(t *testing.T) {
 	}
 }
 
+func TestCSRFFailsClosedInProductionWithoutConfiguredOrigin(t *testing.T) {
+	t.Setenv("EXPONENTIAL_APP_URL", "")
+	t.Setenv("PUBLIC_BASE_URL", "")
+	t.Setenv("EXPONENTIAL_API_ENVIRONMENT", "production")
+	req := httptest.NewRequest("POST", "/v1/issues", nil)
+	denied, reason := csrfDenied(req)
+	if !denied || reason != "csrf_unconfigured" {
+		t.Fatalf("csrfDenied = %v, %q; want csrf_unconfigured denial", denied, reason)
+	}
+}
+
+func TestScopesAllowRequest(t *testing.T) {
+	if !scopesAllowRequest(nil, httptest.NewRequest("POST", "/v1/issues", nil)) {
+		t.Fatal("unscoped browser/legacy auth should be allowed")
+	}
+	if !scopesAllowRequest([]string{"read"}, httptest.NewRequest("GET", "/v1/issues", nil)) {
+		t.Fatal("read scope should allow safe requests")
+	}
+	if scopesAllowRequest([]string{"read"}, httptest.NewRequest("POST", "/v1/issues", nil)) {
+		t.Fatal("read scope must not allow state-changing requests")
+	}
+	if !scopesAllowRequest([]string{"write"}, httptest.NewRequest("PATCH", "/v1/issues/1", nil)) {
+		t.Fatal("write scope should allow state-changing requests")
+	}
+}
+
 func TestRequestedWorkspaceID(t *testing.T) {
 	req := httptest.NewRequest("GET", "/v1/issues?workspace_id=query-workspace", nil)
 	req.Header.Set("X-Workspace-Id", "header-workspace")
