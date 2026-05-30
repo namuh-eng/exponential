@@ -24,6 +24,7 @@ const env = {
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:google-secret",
   OTEL_EXPORTER_OTLP_ENDPOINT: "collector.example:4318",
   PUBLIC_BASE_URL: "https://app.example",
+  WEB_INTERNAL_API_URL: "http://app-alb.example/api",
 };
 
 assert.equal(

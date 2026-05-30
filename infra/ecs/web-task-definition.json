@@ -45,7 +45,7 @@
         },
         {
           "name": "EXPONENTIAL_API_URL",
-          "value": "${PUBLIC_BASE_URL}/api"
+          "value": "${WEB_INTERNAL_API_URL}"
         },
         {
           "name": "EXPONENTIAL_HEADLESS_DIRECT_API_REWRITE",

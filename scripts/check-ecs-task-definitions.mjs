@@ -67,6 +67,14 @@ for (const item of required) {
     if (environmentNames.has("DB_SSL")) {
       throw new Error(`${item.file}: web task must not receive DB_SSL`);
     }
+    const apiUrl = container.environment?.find(
+      (entry) => entry.name === "EXPONENTIAL_API_URL",
+    )?.value;
+    if (apiUrl !== "${WEB_INTERNAL_API_URL}") {
+      throw new Error(
+        `${item.file}: web EXPONENTIAL_API_URL must use WEB_INTERNAL_API_URL`,
+      );
+    }
   }
   if (item.container === "api" || item.container === "api-migrate") {
     if (!secretNames.has("EXPONENTIAL_API_DATABASE_URL")) {

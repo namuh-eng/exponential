@@ -36,6 +36,25 @@ done
 export AWS_ACCOUNT_ID REGION AWS_REGION="$REGION" IMAGE_TAG
 export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
 
+if [ -z "${WEB_INTERNAL_API_URL:-}" ]; then
+  if [ -n "${ALB_DNS:-}" ]; then
+    WEB_INTERNAL_API_URL="http://${ALB_DNS}/api"
+  else
+    RESOLVED_ALB_DNS=$(aws elbv2 describe-load-balancers \
+      --names "${APP_NAME}-alb" \
+      --region "$REGION" \
+      --query 'LoadBalancers[0].DNSName' \
+      --output text 2>/dev/null || true)
+    if [ -n "$RESOLVED_ALB_DNS" ] && [ "$RESOLVED_ALB_DNS" != "None" ]; then
+      WEB_INTERNAL_API_URL="http://${RESOLVED_ALB_DNS}/api"
+    else
+      WEB_INTERNAL_API_URL="${PUBLIC_BASE_URL%/}/api"
+    fi
+  fi
+fi
+export WEB_INTERNAL_API_URL
+echo "Web server API URL: ${WEB_INTERNAL_API_URL}"
+
 ensure_app_ingress() {
   local port="$1"
   local source_group="$2"
