@@ -23,7 +23,11 @@ vi.mock("next/server", () => ({
   },
 }));
 
-function createMockRequest(path: string, cookies: Record<string, string> = {}) {
+function createMockRequest(
+  path: string,
+  cookies: Record<string, string> = {},
+  cookieHeader?: string,
+) {
   const url = new URL(`http://localhost:3000${path}`);
   const nextUrl = {
     pathname: url.pathname,
@@ -37,6 +41,7 @@ function createMockRequest(path: string, cookies: Record<string, string> = {}) {
       get: (name: string) =>
         cookies[name] ? { value: cookies[name] } : undefined,
     },
+    headers: new Headers(cookieHeader ? { cookie: cookieHeader } : undefined),
   };
 }
 
@@ -151,6 +156,20 @@ describe("Auth proxy", () => {
     const redirectUrl = mockRedirect.mock.calls[0][0] as URL;
     expect(redirectUrl.pathname).toBe("/login");
     expect(redirectUrl.searchParams.get("callbackUrl")).toBe("/inbox");
+  });
+
+  it("accepts first-party sessions from the raw Cookie header", async () => {
+    mockRedirect.mockClear();
+    mockNext.mockClear();
+    const { proxy } = await import("@/proxy");
+    const req = createMockRequest(
+      "/inbox",
+      {},
+      "other=1; exponential_session=valid-session-token",
+    );
+    await proxy(req as never);
+    expect(mockRedirect).not.toHaveBeenCalled();
+    expect(mockNext).toHaveBeenCalled();
   });
 
   it("allows unauthenticated account API requests to return JSON 401 from the route", async () => {

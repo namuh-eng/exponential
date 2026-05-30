@@ -1,7 +1,8 @@
 import { createNoStoreServerApiClientFromRequest } from "@/lib/server-api-client";
-import { NextResponse } from "next/server";
+import { NextResponse, connection } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const DEFAULT_POST_LOGIN_PATH = "/inbox";
 
@@ -26,6 +27,8 @@ function publicOrigin(requestUrl: URL) {
 }
 
 export async function GET(request: Request) {
+  await connection();
+
   const requestUrl = new URL(request.url);
   const callbackUrl = safeLocalCallback(
     requestUrl.searchParams.get("callbackUrl"),
@@ -36,11 +39,20 @@ export async function GET(request: Request) {
   const session = await client.GET("/auth/session");
 
   if (session.response.status !== 401 && session.data) {
-    return NextResponse.redirect(redirectUrl);
+    return noStoreRedirect(redirectUrl);
   }
 
   const loginUrl = new URL("/login", origin);
   loginUrl.searchParams.set("callbackUrl", callbackUrl);
   loginUrl.searchParams.set("error", "session_not_created");
-  return NextResponse.redirect(loginUrl);
+  return noStoreRedirect(loginUrl);
+}
+
+function noStoreRedirect(url: URL) {
+  const response = NextResponse.redirect(url);
+  response.headers.set(
+    "Cache-Control",
+    "private, no-cache, no-store, max-age=0, must-revalidate",
+  );
+  return response;
 }
