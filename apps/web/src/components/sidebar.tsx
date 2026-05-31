@@ -707,7 +707,7 @@ export function Sidebar({
               }}
               className="flex items-center gap-2 rounded-[6px] border border-transparent px-1.5 py-1 text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
             >
-              <div className="flex h-5 w-5 items-center justify-center rounded-[6px] bg-[var(--color-accent)] text-[10px] font-bold text-white shadow-[var(--shadow-editorial-sm)]">
+              <div className="flex h-5 w-5 items-center justify-center rounded-[6px] bg-[var(--color-accent)] text-[10px] font-bold text-[var(--editorial-accent-ink)] shadow-[var(--shadow-editorial-sm)]">
                 {workspaceInitials}
               </div>
               <span className="max-w-[124px] truncate text-[13px] font-semibold tracking-[-0.01em]">
@@ -740,7 +740,7 @@ export function Sidebar({
                   disabled
                   className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)]"
                 >
-                  <span className="flex h-5 w-5 items-center justify-center rounded-[6px] bg-[var(--color-accent)] text-[10px] font-bold text-white shadow-[var(--shadow-editorial-sm)]">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-[6px] bg-[var(--color-accent)] text-[10px] font-bold text-[var(--editorial-accent-ink)] shadow-[var(--shadow-editorial-sm)]">
                     {workspaceInitials}
                   </span>
                   <span className="truncate">{workspaceName}</span>
@@ -1144,7 +1144,7 @@ export function Sidebar({
                     {team.depth > 0 ? (
                       <span className="h-px w-3 shrink-0 bg-[var(--color-surface-subtle)]" />
                     ) : null}
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-[var(--color-accent)] text-[8px] font-bold text-white">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-[var(--color-accent)] text-[8px] font-bold text-[var(--editorial-accent-ink)]">
                       {team.key.charAt(0)}
                     </span>
                     <span className="truncate">{team.name}</span>
@@ -1407,6 +1407,31 @@ export function Sidebar({
               <path d="M12 17h.01" />
             </svg>
           </button>
+        </div>
+
+        <div
+          data-testid="sidebar-status-strip"
+          aria-label="Self-host status"
+          className="mt-2 shrink-0 border-t border-[var(--color-border)] pt-2 font-mono text-[10px] leading-[1.6] text-[var(--color-text-tertiary)]"
+        >
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1 text-[var(--color-accent)]">
+              <span aria-hidden="true">●</span>
+              <span>live</span>
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>self-hosted</span>
+            <span aria-hidden="true">·</span>
+            <span>ELv2</span>
+          </div>
+          <div className="mt-0.5 flex items-center gap-2 text-[var(--color-text-tertiary)]">
+            <span>
+              <span className="text-[var(--color-text-secondary)]">git:</span>
+              main@a3f10c2
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>v0.4.2</span>
+          </div>
         </div>
 
         {shortcutsOpen && (
