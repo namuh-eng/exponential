@@ -1,74 +1,84 @@
 /**
- * Canonical Editorial theme tokens ported from the OpenGitHub prototype.
- * CSS variables are emitted in src/app/editorial-theme.css and legacy
- * --color-* aliases intentionally resolve through these semantic tokens.
+ * Canonical theme tokens for the TTY (terminal-native) redesign.
+ *
+ * The aesthetic is a vim/tmux-style terminal: warm graphite background, bone
+ * off-white type, a single phosphor-green accent for live state, monospace
+ * everywhere, 1px hairline borders and square corners. Dark is the primary
+ * theme; light is a "paper terminal" variant.
+ *
+ * CSS variables are emitted in src/app/editorial-theme.css and the legacy
+ * --color-* aliases intentionally resolve through these semantic tokens, so the
+ * whole product reskins from this single source.
  */
 export const editorialThemeTokens = {
+  // Paper-terminal: cream background, deep ink, darkened phosphor accent.
   light: {
     paper: {
-      bg: "#faf7f2",
-      surface: "#ffffff",
-      surface2: "#f3eee5",
-      surface3: "#ebe5d9",
-      hover: "rgba(20, 18, 14, 0.04)",
-      pressed: "rgba(20, 18, 14, 0.08)",
+      bg: "#f0eee9",
+      surface: "#faf9f5",
+      surface2: "#e8e5dd",
+      surface3: "#ddd9cf",
+      hover: "rgba(20, 30, 20, 0.05)",
+      pressed: "rgba(20, 30, 20, 0.09)",
     },
     ink: {
-      primary: "#14120e",
-      secondary: "#2d2a23",
-      muted: "#5b564a",
-      faded: "#8a8478",
-      subtle: "#b6b0a3",
+      primary: "#1a1c19",
+      secondary: "#33372f",
+      muted: "#5a5e52",
+      faded: "#85897b",
+      subtle: "#b3b6a7",
     },
     line: {
-      default: "#e2dccd",
-      strong: "#cdc5b3",
-      soft: "#ede7d8",
+      default: "#cdcabd",
+      strong: "#b3afa0",
+      soft: "#e0ddd2",
     },
     accent: {
-      default: "oklch(0.56 0.16 32)",
-      hover: "oklch(0.5 0.17 32)",
-      soft: "oklch(0.92 0.06 35)",
+      default: "#1f7a37",
+      hover: "#196530",
+      soft: "#d9ecd9",
       ink: "#ffffff",
     },
   },
+  // Phosphor-on-graphite: the canonical terminal look.
   dark: {
     paper: {
-      bg: "#15130f",
-      surface: "#1c1a16",
-      surface2: "#232019",
-      surface3: "#2c2820",
-      hover: "rgba(255, 250, 240, 0.04)",
-      pressed: "rgba(255, 250, 240, 0.08)",
+      bg: "#0c0d0c",
+      surface: "#111312",
+      surface2: "#16191a",
+      surface3: "#1d2120",
+      hover: "rgba(126, 231, 135, 0.06)",
+      pressed: "rgba(126, 231, 135, 0.12)",
     },
     ink: {
-      primary: "#f3ede0",
-      secondary: "#ddd6c5",
-      muted: "#9c9583",
-      faded: "#6e6857",
-      subtle: "#443f33",
+      primary: "#d8d4c8",
+      secondary: "#b8b3a6",
+      muted: "#8a8579",
+      faded: "#5e5b53",
+      subtle: "#42403a",
     },
     line: {
-      default: "#2e2a22",
-      strong: "#423d31",
-      soft: "#25221b",
+      default: "#2a2e2c",
+      strong: "#3a3f3c",
+      soft: "#1e2120",
     },
     accent: {
-      default: "oklch(0.68 0.15 32)",
-      hover: "oklch(0.74 0.16 32)",
-      soft: "oklch(0.3 0.08 32)",
-      ink: "#ffffff",
+      default: "#7ee787",
+      hover: "#9af0a0",
+      soft: "#1a2a1c",
+      ink: "#0c0d0c",
     },
   },
   type: {
-    display: "var(--font-fraunces), Georgia, serif",
-    sans: "var(--font-inter-tight), var(--font-inter), system-ui, sans-serif",
+    display:
+      "var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace",
+    sans: "var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace",
     mono: "var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace",
   },
   shape: {
-    radius: "6px",
-    radiusLg: "10px",
-    radiusPill: "999px",
+    radius: "0px",
+    radiusLg: "2px",
+    radiusPill: "2px",
   },
   shadow: {
     sm: "var(--editorial-shadow-sm)",

@@ -3,51 +3,52 @@
    a layer at-rule here makes Tailwind see a layer before its matching Tailwind rule.
    Intentionally not wrapped in @layer: Tailwind layer directives here would break dev compilation. */
 :root {
-  /* Editorial theme: warm paper, serious ink, rust accent. Canonical source: src/lib/editorial-theme-tokens.ts */
-  --editorial-bg: #faf7f2;
-  --editorial-surface: #ffffff;
-  --editorial-surface-2: #f3eee5;
-  --editorial-surface-3: #ebe5d9;
-  --editorial-hover: rgba(20, 18, 14, 0.04);
+  /* TTY theme: warm graphite, bone ink, phosphor-green accent, monospace.
+     Light is the "paper terminal" variant. Canonical source: src/lib/editorial-theme-tokens.ts */
+  --editorial-bg: #f0eee9;
+  --editorial-surface: #faf9f5;
+  --editorial-surface-2: #e8e5dd;
+  --editorial-surface-3: #ddd9cf;
+  --editorial-hover: rgba(20, 30, 20, 0.05);
   --editorial-pressed: color-mix(
     in oklab,
-    var(--editorial-accent) 10%,
+    var(--editorial-accent) 14%,
     transparent
   );
-  --editorial-ink-1: #14120e;
-  --editorial-ink-2: #2d2a23;
-  --editorial-ink-3: #5b564a;
-  --editorial-ink-4: #8a8478;
-  --editorial-ink-5: #b6b0a3;
-  --editorial-line: #e2dccd;
-  --editorial-line-strong: #cdc5b3;
-  --editorial-line-soft: #ede7d8;
-  --editorial-accent: oklch(0.56 0.16 32);
-  --editorial-accent-hover: oklch(0.5 0.17 32);
-  --editorial-accent-soft: oklch(0.92 0.06 35);
+  --editorial-ink-1: #1a1c19;
+  --editorial-ink-2: #33372f;
+  --editorial-ink-3: #5a5e52;
+  --editorial-ink-4: #85897b;
+  --editorial-ink-5: #b3b6a7;
+  --editorial-line: #cdcabd;
+  --editorial-line-strong: #b3afa0;
+  --editorial-line-soft: #e0ddd2;
+  --editorial-accent: #1f7a37;
+  --editorial-accent-hover: #196530;
+  --editorial-accent-soft: #d9ecd9;
   --editorial-accent-ink: #ffffff;
-  --editorial-ok: oklch(0.58 0.13 145);
-  --editorial-ok-soft: oklch(0.92 0.07 145);
-  --editorial-warn: oklch(0.72 0.14 75);
-  --editorial-warn-soft: oklch(0.94 0.08 80);
-  --editorial-err: oklch(0.55 0.18 25);
-  --editorial-err-soft: oklch(0.93 0.06 25);
-  --editorial-info: oklch(0.55 0.1 250);
-  --editorial-info-soft: oklch(0.93 0.04 250);
-  --editorial-display: var(--font-fraunces), Georgia, serif;
-  --editorial-sans: var(--font-inter-tight), var(--font-inter), -apple-system,
-    BlinkMacSystemFont, system-ui, sans-serif;
+  --editorial-ok: #1f7a37;
+  --editorial-ok-soft: #d9ecd9;
+  --editorial-warn: #8a5a16;
+  --editorial-warn-soft: #f0e3c8;
+  --editorial-err: #b3402f;
+  --editorial-err-soft: #f3d8d2;
+  --editorial-info: #1f5f8a;
+  --editorial-info-soft: #d4e4f0;
+  --editorial-display: var(--font-jetbrains-mono), ui-monospace, "SF Mono",
+    Menlo, monospace;
+  --editorial-sans: var(--font-jetbrains-mono), ui-monospace, "SF Mono", Menlo,
+    monospace;
   --editorial-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", Menlo,
     monospace;
-  --editorial-radius: 6px;
-  --editorial-radius-lg: 10px;
-  --editorial-radius-pill: 999px;
-  --editorial-shadow-sm: 0 1px 2px rgba(20, 18, 14, 0.04), 0 0 0 1px
-    rgba(20, 18, 14, 0.04);
-  --editorial-shadow-md: 0 2px 4px rgba(20, 18, 14, 0.05), 0 8px 24px
-    rgba(20, 18, 14, 0.06);
-  --editorial-shadow-lg: 0 8px 16px rgba(20, 18, 14, 0.08), 0 24px 60px
-    rgba(20, 18, 14, 0.12);
+  --editorial-radius: 0px;
+  --editorial-radius-lg: 2px;
+  --editorial-radius-pill: 2px;
+  --editorial-shadow-sm: 0 0 0 1px rgba(12, 13, 12, 0.06);
+  --editorial-shadow-md: 0 2px 6px rgba(12, 13, 12, 0.1), 0 0 0 1px
+    rgba(12, 13, 12, 0.06);
+  --editorial-shadow-lg: 0 12px 40px rgba(12, 13, 12, 0.28), 0 0 0 1px
+    rgba(12, 13, 12, 0.08);
   --shadow-editorial-sm: var(--editorial-shadow-sm);
   --shadow-editorial-md: var(--editorial-shadow-md);
   --shadow-editorial-lg: var(--editorial-shadow-lg);
@@ -76,27 +77,36 @@
 }
 
 .dark {
-  --editorial-bg: #15130f;
-  --editorial-surface: #1c1a16;
-  --editorial-surface-2: #232019;
-  --editorial-surface-3: #2c2820;
-  --editorial-hover: rgba(255, 250, 240, 0.04);
+  --editorial-bg: #0c0d0c;
+  --editorial-surface: #111312;
+  --editorial-surface-2: #16191a;
+  --editorial-surface-3: #1d2120;
+  --editorial-hover: rgba(126, 231, 135, 0.06);
   --editorial-pressed: color-mix(
     in oklab,
-    var(--editorial-accent) 18%,
+    var(--editorial-accent) 20%,
     transparent
   );
-  --editorial-ink-1: #f3ede0;
-  --editorial-ink-2: #ddd6c5;
-  --editorial-ink-3: #9c9583;
-  --editorial-ink-4: #6e6857;
-  --editorial-ink-5: #443f33;
-  --editorial-line: #2e2a22;
-  --editorial-line-strong: #423d31;
-  --editorial-line-soft: #25221b;
-  --editorial-accent: oklch(0.68 0.15 32);
-  --editorial-accent-hover: oklch(0.74 0.16 32);
-  --editorial-accent-soft: oklch(0.3 0.08 32);
+  --editorial-ink-1: #d8d4c8;
+  --editorial-ink-2: #b8b3a6;
+  --editorial-ink-3: #8a8579;
+  --editorial-ink-4: #5e5b53;
+  --editorial-ink-5: #42403a;
+  --editorial-line: #2a2e2c;
+  --editorial-line-strong: #3a3f3c;
+  --editorial-line-soft: #1e2120;
+  --editorial-accent: #7ee787;
+  --editorial-accent-hover: #9af0a0;
+  --editorial-accent-soft: #1a2a1c;
+  --editorial-accent-ink: #0c0d0c;
+  --editorial-ok: #7ee787;
+  --editorial-ok-soft: #16241a;
+  --editorial-warn: #ffb86c;
+  --editorial-warn-soft: #2a2113;
+  --editorial-err: #ff7b72;
+  --editorial-err-soft: #2a1614;
+  --editorial-info: #79c0ff;
+  --editorial-info-soft: #11202e;
 }
 
 .ui-button {

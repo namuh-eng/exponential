@@ -61,8 +61,8 @@
   body {
     background-color: var(--color-sidebar-bg);
     color: var(--color-text-primary);
-    font-feature-settings: "cv11", "ss01", "ss03";
-    letter-spacing: -0.005em;
+    font-feature-settings: "cv01", "ss01";
+    letter-spacing: 0;
   }
 
   :where(
@@ -79,34 +79,34 @@
   }
 
   .auth-shell {
-    --auth-background: #07080a;
-    --auth-text: #e8ebf0;
-    --auth-muted: #6b6f76;
-    --auth-faint: #3a3e46;
-    --auth-link: #e8ebf0;
-    --auth-logo: #e8ebf0;
-    --auth-accent: #7180ff;
-    --auth-prompt: #7180ff;
-    --auth-ok: #6ee7a4;
-    --auth-warn: #e0a04a;
-    --auth-err: #f76a6a;
+    --auth-background: #0c0d0c;
+    --auth-text: #d8d4c8;
+    --auth-muted: #8a8579;
+    --auth-faint: #3a3f3c;
+    --auth-link: #d8d4c8;
+    --auth-logo: #d8d4c8;
+    --auth-accent: #7ee787;
+    --auth-prompt: #7ee787;
+    --auth-ok: #7ee787;
+    --auth-warn: #ffb86c;
+    --auth-err: #ff7b72;
     --auth-primary-bg: transparent;
-    --auth-primary-bg-hover: rgba(113, 128, 255, 0.08);
-    --auth-primary-text: #7180ff;
-    --auth-primary-border: rgba(113, 128, 255, 0.45);
+    --auth-primary-bg-hover: rgba(126, 231, 135, 0.08);
+    --auth-primary-text: #7ee787;
+    --auth-primary-border: rgba(126, 231, 135, 0.45);
     --auth-secondary-bg: transparent;
     --auth-secondary-bg-hover: rgba(255, 255, 255, 0.03);
     --auth-secondary-border: rgba(255, 255, 255, 0.08);
-    --auth-secondary-text: #d6d9e0;
+    --auth-secondary-text: #d8d4c8;
     --auth-input-bg: rgba(255, 255, 255, 0.015);
-    --auth-input-border: rgba(255, 255, 255, 0.08);
-    --auth-input-placeholder: #4a4e57;
-    --auth-grid: rgba(255, 255, 255, 0.025);
-    --auth-error: #f76a6a;
+    --auth-input-border: rgba(255, 255, 255, 0.1);
+    --auth-input-placeholder: #5e5b53;
+    --auth-grid: rgba(126, 231, 135, 0.04);
+    --auth-error: #ff7b72;
     background: linear-gradient(var(--auth-grid) 1px, transparent 1px) 0 0 /
       100% 24px, linear-gradient(90deg, var(--auth-grid) 1px, transparent 1px) 0
       0 / 24px 100%,
-      radial-gradient(circle at top, rgba(94, 106, 210, 0.08), transparent 38%),
+      radial-gradient(circle at top, rgba(126, 231, 135, 0.07), transparent 38%),
       var(--auth-background);
     color: var(--auth-text);
     font-family: var(--editorial-mono), ui-monospace, "SF Mono", Menlo,
@@ -115,24 +115,29 @@
 
   @media (prefers-color-scheme: light) {
     .auth-shell {
-      --auth-background: #fafafb;
-      --auth-text: #1f2125;
-      --auth-muted: #6d727c;
-      --auth-faint: #b7bcc4;
-      --auth-link: #1f2125;
-      --auth-logo: #1f2125;
+      --auth-background: #f0eee9;
+      --auth-text: #1a1c19;
+      --auth-muted: #5a5e52;
+      --auth-faint: #b3afa0;
+      --auth-link: #1a1c19;
+      --auth-logo: #1a1c19;
+      --auth-accent: #1f7a37;
+      --auth-prompt: #1f7a37;
+      --auth-primary-bg-hover: rgba(31, 122, 55, 0.08);
+      --auth-primary-text: #1f7a37;
+      --auth-primary-border: rgba(31, 122, 55, 0.4);
       --auth-secondary-bg: transparent;
       --auth-secondary-bg-hover: rgba(0, 0, 0, 0.03);
       --auth-secondary-border: rgba(0, 0, 0, 0.08);
-      --auth-secondary-text: #2a2c31;
+      --auth-secondary-text: #33372f;
       --auth-input-bg: rgba(0, 0, 0, 0.015);
       --auth-input-border: rgba(0, 0, 0, 0.08);
-      --auth-input-placeholder: #9aa0a8;
-      --auth-grid: rgba(0, 0, 0, 0.03);
+      --auth-input-placeholder: #85897b;
+      --auth-grid: rgba(20, 40, 20, 0.05);
       background: linear-gradient(var(--auth-grid) 1px, transparent 1px) 0 0 /
         100% 24px, linear-gradient(90deg, var(--auth-grid) 1px, transparent 1px)
         0 0 / 24px 100%,
-        radial-gradient(circle at top, rgba(94, 106, 210, 0.1), transparent 38%),
+        radial-gradient(circle at top, rgba(31, 122, 55, 0.08), transparent 38%),
         var(--auth-background);
     }
   }
@@ -178,14 +183,14 @@
     background: var(--editorial-bg);
     color: var(--color-text-primary);
     font-family: var(--editorial-sans);
-    font-feature-settings: "cv11", "ss01", "ss03";
-    letter-spacing: -0.005em;
+    font-feature-settings: "cv01", "ss01";
+    letter-spacing: 0;
   }
 
   h1,
   h2 {
     font-family: var(--editorial-display);
-    letter-spacing: -0.025em;
+    letter-spacing: -0.01em;
   }
 
   input,

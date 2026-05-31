@@ -261,8 +261,8 @@ describe("Design tokens", () => {
     const globalsCss = readFileSync("src/app/globals.css", "utf8");
     const editorialCss = readFileSync("src/app/editorial-theme.css", "utf8");
 
-    expect(editorialCss).toContain("--editorial-accent: oklch(0.56 0.16 32);");
+    expect(editorialCss).toContain("--editorial-accent: #1f7a37;");
     expect(editorialCss).toContain("--color-accent: var(--editorial-accent);");
-    expect(globalsCss).toContain("--auth-prompt: #7180ff;");
+    expect(globalsCss).toContain("--auth-prompt: #7ee787;");
   });
 });

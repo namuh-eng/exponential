@@ -17,14 +17,13 @@ const globalsCss = readFileSync(
 
 describe("Editorial theme tokens", () => {
   it("keeps a canonical typed token source aligned with global CSS variables", () => {
-    expect(editorialThemeTokens.light.paper.bg).toBe("#faf7f2");
-    expect(editorialThemeTokens.light.accent.default).toBe(
-      "oklch(0.56 0.16 32)",
-    );
-    expect(editorialThemeTokens.dark.paper.bg).toBe("#15130f");
-    expect(css).toContain("--editorial-bg: #faf7f2");
-    expect(css).toContain("--editorial-accent: oklch(0.56 0.16 32)");
-    expect(css).toContain("--editorial-sans: var(--font-inter-tight)");
+    expect(editorialThemeTokens.light.paper.bg).toBe("#f0eee9");
+    expect(editorialThemeTokens.light.accent.default).toBe("#1f7a37");
+    expect(editorialThemeTokens.dark.paper.bg).toBe("#0c0d0c");
+    expect(editorialThemeTokens.dark.accent.default).toBe("#7ee787");
+    expect(css).toContain("--editorial-bg: #f0eee9");
+    expect(css).toContain("--editorial-accent: #1f7a37");
+    expect(css).toContain("--editorial-sans: var(--font-jetbrains-mono)");
     expect(css).toContain("--shadow-editorial-sm: var(--editorial-shadow-sm)");
     expect(editorialThemeTokens.shadow.md).toBe("var(--editorial-shadow-md)");
     expect(globalsCss).toContain('@import "./editorial-theme.css"');
