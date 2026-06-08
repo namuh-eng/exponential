@@ -470,12 +470,12 @@ export default function TeamIssuesPage() {
   return (
     <div className="flex h-full min-w-0 flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex min-w-0 flex-wrap items-center gap-1 border-b border-[var(--color-border)] px-4 py-2">
-        <h1 className="mr-4 text-[18px] font-semibold text-[var(--color-text-primary)]">
+      <div className="tty-status-bar min-w-0 flex-wrap gap-2 border-b px-3 py-1.5 max-sm:items-start">
+        <h1 className="mr-3 text-[15px] font-semibold text-[var(--color-text-primary)]">
           {data.team.name}
         </h1>
         {/* Tabs */}
-        <div className="flex items-center gap-0.5">
+        <div className="flex shrink-0 flex-wrap items-center gap-0.5">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -485,9 +485,9 @@ export default function TeamIssuesPage() {
                 router.push(`${teamPath(tab.id)}${query ? `?${query}` : ""}`);
               }}
               data-editorial-control="true"
-              className={`rounded-md px-2.5 py-1 text-[13px] font-medium transition-colors ${
+              className={`tty-row px-2.5 py-1 text-[12px] font-medium transition-colors ${
                 routeTab === tab.id
-                  ? "bg-[var(--color-surface-active)] text-[var(--color-text-primary)] shadow-[inset_0_-1px_0_var(--color-surface-active-line)]"
+                  ? "tty-row-selected text-[var(--color-text-primary)]"
                   : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
               }`}
             >
@@ -495,7 +495,7 @@ export default function TeamIssuesPage() {
             </button>
           ))}
         </div>
-        <div className="ml-2">
+        <div className="ml-2 min-w-0 max-sm:order-last max-sm:ml-0 max-sm:w-full">
           <FilterBar
             filters={filters}
             onFiltersChange={updateFilters}
@@ -519,72 +519,71 @@ export default function TeamIssuesPage() {
             }
           />
         </div>
-        <div className="flex-1" />
-        <span className="mr-2 text-[12px] text-[var(--color-text-secondary)]">
-          {visibleIssueCount} issues
-        </span>
-        <ContextualInsights
-          teamKey={data.team.key}
-          scopedIssueIds={visibleIssueIds}
-          contextLabel={insightsContextLabel}
-        />
-        {/* Display options trigger */}
-        <div className="relative">
-          <button
-            type="button"
-            aria-label="Display options"
-            onClick={() => setShowDisplayOptions(!showDisplayOptions)}
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-            Display
-          </button>
-          <DisplayOptionsPanel
-            open={showDisplayOptions}
-            onClose={() => setShowDisplayOptions(false)}
-            layout={options.layout}
-            onLayoutChange={handleLayoutChange}
-            groupBy={options.groupBy}
-            onGroupByChange={(g) => updateOptions({ groupBy: g })}
-            subGroupBy={options.subGroupBy}
-            onSubGroupByChange={(s) => updateOptions({ subGroupBy: s })}
-            orderBy={options.orderBy}
-            onOrderByChange={(o) => updateOptions({ orderBy: o })}
-            displayProperties={options.displayProperties}
-            onDisplayPropertyToggle={handlePropertyToggle}
-            showSubIssues={options.showSubIssues}
-            onShowSubIssuesToggle={() =>
-              updateOptions({ showSubIssues: !options.showSubIssues })
-            }
-            showTriageIssues={options.showTriageIssues}
-            onShowTriageIssuesToggle={() =>
-              updateOptions({ showTriageIssues: !options.showTriageIssues })
-            }
-            showEmptyColumns={options.showEmptyColumns}
-            onShowEmptyColumnsToggle={() =>
-              updateOptions({ showEmptyColumns: !options.showEmptyColumns })
-            }
-            onReset={reset}
-            onSaveAsDefault={saveAsDefault}
+        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 max-sm:ml-0 max-sm:w-full max-sm:justify-start">
+          <span className="tty-chip">{visibleIssueCount} issues</span>
+          <ContextualInsights
+            teamKey={data.team.key}
+            scopedIssueIds={visibleIssueIds}
+            contextLabel={insightsContextLabel}
           />
+          {/* Display options trigger */}
+          <div className="relative">
+            <button
+              type="button"
+              aria-label="Display options"
+              onClick={() => setShowDisplayOptions(!showDisplayOptions)}
+              className="tty-row flex items-center gap-1 px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              Display
+            </button>
+            <DisplayOptionsPanel
+              open={showDisplayOptions}
+              onClose={() => setShowDisplayOptions(false)}
+              layout={options.layout}
+              onLayoutChange={handleLayoutChange}
+              groupBy={options.groupBy}
+              onGroupByChange={(g) => updateOptions({ groupBy: g })}
+              subGroupBy={options.subGroupBy}
+              onSubGroupByChange={(s) => updateOptions({ subGroupBy: s })}
+              orderBy={options.orderBy}
+              onOrderByChange={(o) => updateOptions({ orderBy: o })}
+              displayProperties={options.displayProperties}
+              onDisplayPropertyToggle={handlePropertyToggle}
+              showSubIssues={options.showSubIssues}
+              onShowSubIssuesToggle={() =>
+                updateOptions({ showSubIssues: !options.showSubIssues })
+              }
+              showTriageIssues={options.showTriageIssues}
+              onShowTriageIssuesToggle={() =>
+                updateOptions({ showTriageIssues: !options.showTriageIssues })
+              }
+              showEmptyColumns={options.showEmptyColumns}
+              onShowEmptyColumnsToggle={() =>
+                updateOptions({ showEmptyColumns: !options.showEmptyColumns })
+              }
+              onReset={reset}
+              onSaveAsDefault={saveAsDefault}
+            />
+          </div>
         </div>
       </div>
 
       {/* Issues list */}
-      <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+      <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden py-1">
         {filteredGroups.map((group) => (
           <div key={group.state.id} className="group">
             <IssuesGroupHeader
@@ -634,7 +633,7 @@ export default function TeamIssuesPage() {
       {selectedCount > 0 && (
         <div
           data-testid="bulk-action-bar"
-          className="fixed bottom-5 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-[12px] text-[var(--color-text-primary)] shadow-lg"
+          className="tty-panel fixed bottom-12 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 px-3 py-2 text-[12px] text-[var(--color-text-primary)] shadow-lg"
         >
           <strong>{selectedCount} selected</strong>
           <button

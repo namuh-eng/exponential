@@ -24,7 +24,7 @@ export function MilestoneRow({
   onMoveDown,
 }: MilestoneRowProps) {
   return (
-    <div className="rounded-md px-3 py-2 transition-colors hover:bg-[var(--color-surface-hover)]">
+    <div className="tty-row px-3 py-2 transition-colors hover:bg-[var(--color-surface-hover)]">
       <div className="flex items-center gap-3">
         <span
           className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${

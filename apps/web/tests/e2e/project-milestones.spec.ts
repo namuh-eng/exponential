@@ -33,14 +33,16 @@ test("creates, edits, deletes, and assigns project milestones", async ({
   await page.getByLabel("Milestone name").fill("Build");
   await page.getByLabel("Milestone description").fill("Build the thing");
   await page.getByRole("button", { name: "Create milestone" }).click();
-  await expect(page.getByText("Build")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Rename Build" }),
+  ).toBeVisible();
   await expect(page.getByText("Build the thing")).toBeVisible();
 
   await page.getByRole("button", { name: "Rename Build" }).click();
   await page.getByLabel("Milestone name").fill("Ship");
   await page.getByLabel("Milestone description").fill("Ready to release");
   await page.getByRole("button", { name: "Save milestone" }).click();
-  await expect(page.getByText("Ship")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Rename Ship" })).toBeVisible();
   await expect(page.getByText("Ready to release")).toBeVisible();
 
   const issueResponse = await page.request.post("/api/issues", {

@@ -96,11 +96,13 @@ describe("IssueDetailView UI", () => {
       json: async () => mockIssueDetail,
     } as Response);
 
-    render(<IssueDetailView issueId="iss-1" />);
+    const { container } = render(<IssueDetailView issueId="iss-1" />);
 
     expect(screen.getByText("Loading...")).toBeInTheDocument();
 
     expect(await screen.findByText("A bug to fix")).toBeInTheDocument();
+    expect(screen.getByTestId("issue-detail-tty-shell")).toBeInTheDocument();
+    expect(container.querySelectorAll(".tty-panel").length).toBeGreaterThan(3);
     expect(await screen.findByText("The description")).toBeInTheDocument();
 
     // Identifier check

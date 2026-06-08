@@ -144,14 +144,14 @@ function SectionCard({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-[12px] font-medium text-[var(--color-text-primary)]">
+    <div className="tty-panel overflow-hidden">
+      <div className="tty-status-bar justify-between border-b px-3 py-2">
+        <h3 className="editorial-section-title text-[12px] text-[var(--color-text-primary)]">
           {title}
         </h3>
         {action}
       </div>
-      {children}
+      <div className="p-4">{children}</div>
     </div>
   );
 }
@@ -488,7 +488,7 @@ export function ProjectDetailPage() {
   }
 
   const sidebar = (
-    <div className="w-full shrink-0 space-y-4 xl:w-[320px]">
+    <div className="w-full shrink-0 space-y-3 xl:w-[320px]">
       <ProjectProperties
         status={project.status}
         priority={project.priority}
@@ -518,7 +518,7 @@ export function ProjectDetailPage() {
                 setMilestoneName("");
                 setMilestoneDescription("");
               }}
-              className="rounded-md px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+              className="tty-row px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
             >
               Add milestone
             </button>
@@ -526,13 +526,13 @@ export function ProjectDetailPage() {
         }
       >
         {showMilestoneForm ? (
-          <div className="mb-3 space-y-2 rounded-lg border border-[var(--color-border)] p-3">
+          <div className="tty-panel mb-3 space-y-2 p-3">
             <input
               aria-label="Milestone name"
               value={milestoneName}
               onChange={(event) => setMilestoneName(event.target.value)}
               placeholder="Milestone name"
-              className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+              className="editorial-input w-full px-3 py-1.5 text-[13px]"
             />
             <textarea
               aria-label="Milestone description"
@@ -540,13 +540,13 @@ export function ProjectDetailPage() {
               onChange={(event) => setMilestoneDescription(event.target.value)}
               placeholder="Description (optional)"
               rows={2}
-              className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+              className="editorial-input w-full px-3 py-1.5 text-[13px]"
             />
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={resetMilestoneForm}
-                className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+                className="tty-row border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
               >
                 Cancel
               </button>
@@ -554,7 +554,7 @@ export function ProjectDetailPage() {
                 type="button"
                 disabled={saving || !milestoneName.trim()}
                 onClick={handleSaveMilestone}
-                className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                className="tty-row border border-[var(--color-accent)] bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-[var(--editorial-accent-ink)] transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 {saving
                   ? "Saving..."
@@ -624,7 +624,7 @@ export function ProjectDetailPage() {
                 {data.progress.assignees.map((assignee) => (
                   <div
                     key={assignee.name}
-                    className="flex items-center justify-between text-[var(--color-text-primary)]"
+                    className="tty-row flex items-center justify-between px-2 py-1 text-[var(--color-text-primary)]"
                   >
                     <span>{assignee.name}</span>
                     <span className="text-[var(--color-text-secondary)]">
@@ -649,7 +649,7 @@ export function ProjectDetailPage() {
                 {data.progress.labels.map((label) => (
                   <span
                     key={label.id}
-                    className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-primary)]"
+                    className="tty-chip inline-flex items-center gap-1 text-[12px] text-[var(--color-text-primary)]"
                   >
                     <span
                       className="h-2 w-2 rounded-full"
@@ -671,8 +671,8 @@ export function ProjectDetailPage() {
   );
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-[var(--color-border)] px-6 py-4">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden">
+      <div className="tty-status-bar flex-col items-stretch border-b px-4 py-3">
         <div className="mb-3 flex items-center gap-3">
           <span className="text-[24px]">{project.icon ?? "📋"}</span>
           <div className="min-w-0 flex-1">
@@ -690,8 +690,9 @@ export function ProjectDetailPage() {
               {summaryItems.map((item) => (
                 <span
                   key={item.label}
-                  className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)]"
+                  className="tty-chip inline-flex items-center gap-1 text-[12px] text-[var(--color-text-secondary)]"
                 >
+                  <span>{item.label.toLowerCase()}:</span>
                   <span className="text-[var(--color-text-primary)]">
                     {item.value}
                   </span>
@@ -707,9 +708,9 @@ export function ProjectDetailPage() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`rounded-full px-3 py-1.5 text-[13px] transition-colors ${
+              className={`tty-row border border-transparent px-3 py-1.5 text-[13px] transition-colors ${
                 activeTab === tab.id
-                  ? "bg-[var(--color-surface-active)] text-[var(--color-text-primary)]"
+                  ? "tty-row-selected border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text-primary)]"
                   : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
               }`}
             >
@@ -720,14 +721,14 @@ export function ProjectDetailPage() {
       </div>
 
       {errorMessage ? (
-        <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-hover)] px-6 py-3 text-[13px] text-red-400">
+        <div className="tty-status-bar border-b px-4 py-3 text-[13px] text-red-400">
           {errorMessage}
         </div>
       ) : null}
 
       <div className="flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-6 p-6 xl:flex-row">
-          <div className="min-w-0 flex-1 space-y-6">
+        <div className="flex flex-col gap-4 p-4 xl:flex-row">
+          <div className="min-w-0 flex-1 space-y-4">
             {activeTab === "overview" ? (
               <>
                 <SectionCard
@@ -737,7 +738,7 @@ export function ProjectDetailPage() {
                       <button
                         type="button"
                         onClick={() => setShowDescriptionEditor(true)}
-                        className="rounded-md px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                        className="tty-row px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
                       >
                         {project.description ? "Edit" : "Add"}
                       </button>
@@ -752,7 +753,7 @@ export function ProjectDetailPage() {
                           setDescriptionDraft(event.target.value)
                         }
                         rows={5}
-                        className="w-full rounded-lg border border-[var(--color-border)] bg-transparent px-3 py-2 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+                        className="editorial-input w-full px-3 py-2 text-[14px]"
                         placeholder="Describe the goal, scope, and current state of this project."
                       />
                       <div className="flex justify-end gap-2">
@@ -762,7 +763,7 @@ export function ProjectDetailPage() {
                             setDescriptionDraft(project.description ?? "");
                             setShowDescriptionEditor(false);
                           }}
-                          className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+                          className="tty-row border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
                         >
                           Cancel
                         </button>
@@ -770,7 +771,7 @@ export function ProjectDetailPage() {
                           type="button"
                           disabled={saving}
                           onClick={handleSaveDescription}
-                          className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                          className="tty-row border border-[var(--color-accent)] bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-[var(--editorial-accent-ink)] transition-opacity hover:opacity-90 disabled:opacity-50"
                         >
                           {saving ? "Saving..." : "Save description"}
                         </button>
@@ -794,7 +795,7 @@ export function ProjectDetailPage() {
                       <button
                         type="button"
                         onClick={() => setShowResourceForm(true)}
-                        className="rounded-md px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                        className="tty-row px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
                       >
                         + Add document or link
                       </button>
@@ -802,7 +803,7 @@ export function ProjectDetailPage() {
                   }
                 >
                   {showResourceForm ? (
-                    <div className="mb-4 grid gap-3 rounded-lg border border-[var(--color-border)] p-4 md:grid-cols-[120px_1fr_1fr]">
+                    <div className="tty-panel mb-4 grid gap-3 p-4 md:grid-cols-[120px_1fr_1fr]">
                       <select
                         value={resourceType}
                         onChange={(event) =>
@@ -810,7 +811,7 @@ export function ProjectDetailPage() {
                             event.target.value as "document" | "link",
                           )
                         }
-                        className="rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+                        className="editorial-input px-3 py-2 text-[13px]"
                       >
                         <option value="link">Link</option>
                         <option value="document">Document</option>
@@ -821,7 +822,7 @@ export function ProjectDetailPage() {
                           setResourceTitle(event.target.value)
                         }
                         placeholder="Resource title"
-                        className="rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+                        className="editorial-input px-3 py-2 text-[13px]"
                       />
                       <input
                         value={resourceUrl}
@@ -832,7 +833,7 @@ export function ProjectDetailPage() {
                             : "Optional URL"
                         }
                         disabled={resourceType === "document"}
-                        className="rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
+                        className="editorial-input px-3 py-2 text-[13px] disabled:opacity-50"
                       />
                       <div className="md:col-span-3 flex justify-end gap-2">
                         <button
@@ -843,7 +844,7 @@ export function ProjectDetailPage() {
                             setResourceUrl("");
                             setResourceType("link");
                           }}
-                          className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+                          className="tty-row border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
                         >
                           Cancel
                         </button>
@@ -855,7 +856,7 @@ export function ProjectDetailPage() {
                             (resourceType === "link" && !resourceUrl.trim())
                           }
                           onClick={handleAddResource}
-                          className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                          className="tty-row border border-[var(--color-accent)] bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-[var(--editorial-accent-ink)] transition-opacity hover:opacity-90 disabled:opacity-50"
                         >
                           {saving ? "Saving..." : "Add resource"}
                         </button>
@@ -868,7 +869,7 @@ export function ProjectDetailPage() {
                       {data.resources.map((resource) => (
                         <div
                           key={resource.id}
-                          className="flex items-center justify-between rounded-lg border border-[var(--color-border)] px-3 py-2 text-[13px]"
+                          className="tty-row flex items-center justify-between border border-[var(--color-border)] px-3 py-2 text-[13px]"
                         >
                           <div>
                             <div className="font-medium text-[var(--color-text-primary)]">
@@ -912,7 +913,7 @@ export function ProjectDetailPage() {
                           setProjectUpdate(event.target.value)
                         }
                         rows={4}
-                        className="w-full rounded-lg border border-[var(--color-border)] bg-transparent px-3 py-2 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+                        className="editorial-input w-full px-3 py-2 text-[14px]"
                         placeholder="Share a concise update with progress, blockers, or the next checkpoint."
                       />
                       <div className="flex justify-end gap-2">
@@ -922,7 +923,7 @@ export function ProjectDetailPage() {
                             setProjectUpdate("");
                             setShowUpdateComposer(false);
                           }}
-                          className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+                          className="tty-row border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
                         >
                           Cancel
                         </button>
@@ -930,7 +931,7 @@ export function ProjectDetailPage() {
                           type="button"
                           disabled={saving || !projectUpdate.trim()}
                           onClick={handleWriteUpdate}
-                          className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                          className="tty-row border border-[var(--color-accent)] bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-[var(--editorial-accent-ink)] transition-opacity hover:opacity-90 disabled:opacity-50"
                         >
                           {saving ? "Saving..." : "Post update"}
                         </button>
@@ -940,7 +941,7 @@ export function ProjectDetailPage() {
                     <button
                       type="button"
                       onClick={() => setShowUpdateComposer(true)}
-                      className="flex w-full items-center justify-center rounded-lg border border-[var(--color-border)] px-4 py-6 text-[13px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                      className="tty-row flex w-full items-center justify-center border border-[var(--color-border)] px-4 py-6 text-[13px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
                     >
                       {data.activity.some((entry) => entry.type === "update")
                         ? "Write another project update"
@@ -958,7 +959,7 @@ export function ProjectDetailPage() {
                     {data.activity.map((entry) => (
                       <div
                         key={entry.id}
-                        className="rounded-lg border border-[var(--color-border)] px-4 py-3"
+                        className="tty-row border border-[var(--color-border)] px-4 py-3"
                       >
                         <div className="mb-1 flex items-center justify-between gap-4">
                           <div className="text-[13px] font-medium text-[var(--color-text-primary)]">
@@ -991,7 +992,7 @@ export function ProjectDetailPage() {
             {activeTab === "issues" ? (
               <SectionCard title="Issues">
                 {data.issueGroups.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-[var(--color-border)] px-6 py-8 text-center">
+                  <div className="tty-panel border-dashed px-6 py-8 text-center">
                     <p className="text-[13px] font-medium text-[var(--color-text-primary)]">
                       No issues in this project yet.
                     </p>
@@ -1003,14 +1004,14 @@ export function ProjectDetailPage() {
                       <button
                         type="button"
                         onClick={() => openCreateIssue()}
-                        className="mt-4 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+                        className="tty-row mt-4 border border-[var(--color-accent)] bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-[var(--editorial-accent-ink)] transition-colors hover:bg-[var(--color-accent-hover)]"
                       >
                         Create issue
                       </button>
                     ) : null}
                   </div>
                 ) : (
-                  <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
+                  <div className="tty-panel overflow-hidden">
                     {data.issueGroups.map((group) => (
                       <div key={group.state.id}>
                         <IssuesGroupHeader
@@ -1059,7 +1060,7 @@ export function ProjectDetailPage() {
                                   event.target.value || null,
                                 )
                               }
-                              className="mr-3 rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1 text-[12px] text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-accent)]"
+                              className="editorial-input mr-3 px-2 py-1 text-[12px] text-[var(--color-text-secondary)]"
                             >
                               <option value="">No milestone</option>
                               {data.milestones.map((milestone) => (

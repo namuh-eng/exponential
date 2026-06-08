@@ -3,9 +3,11 @@
 // source of truth at the repo root. apps/web/.env.local still wins for
 // personal overrides because Next loads it after this runs (existing values
 // in process.env are not overwritten).
+const childProcess = require("node:child_process");
+const fs = require("node:fs");
+const path = require("node:path");
+
 {
-  const fs = require("node:fs");
-  const path = require("node:path");
   const rootEnv = path.resolve(__dirname, "../../.env");
   if (fs.existsSync(rootEnv)) {
     for (const line of fs.readFileSync(rootEnv, "utf8").split(/\r?\n/)) {
@@ -18,8 +20,50 @@
   }
 }
 
+function readWebPackageVersion() {
+  try {
+    const packageJsonPath = path.resolve(__dirname, "package.json");
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+    return packageJson.version ?? "version:unknown";
+  } catch {
+    return "version:unknown";
+  }
+}
+
+function readGitValue(args, fallback) {
+  try {
+    const value = childProcess
+      .execFileSync("git", args, {
+        cwd: path.resolve(__dirname, "../.."),
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      })
+      .trim();
+
+    if (!value || value === "HEAD") {
+      return fallback;
+    }
+
+    return value;
+  } catch {
+    return fallback;
+  }
+}
+
+const publicBuildEnv = {
+  NEXT_PUBLIC_EXPONENTIAL_VERSION:
+    process.env.NEXT_PUBLIC_EXPONENTIAL_VERSION ?? readWebPackageVersion(),
+  NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH:
+    process.env.NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH ??
+    readGitValue(["rev-parse", "--abbrev-ref", "HEAD"], "branch:unknown"),
+  NEXT_PUBLIC_EXPONENTIAL_GIT_SHA:
+    process.env.NEXT_PUBLIC_EXPONENTIAL_GIT_SHA ??
+    readGitValue(["rev-parse", "--short=7", "HEAD"], "sha:unknown"),
+};
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  env: publicBuildEnv,
   output: "standalone",
   async headers() {
     const securityHeaders = [

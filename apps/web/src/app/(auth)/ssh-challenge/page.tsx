@@ -5,25 +5,25 @@ import { useEffect, useState } from "react";
 
 export const dynamic = "force-dynamic";
 
-const NONCE = "4f7c2a90-b1de-4d8e-9c11-7e3a0b94d617";
-const FINGERPRINT = "sha256:9e:21:8c:4d:a3:91:7b:ee";
-const KEYS = [
+const SAMPLE_NONCE = "4f7c2a90-b1de-4d8e-9c11-7e3a0b94d617";
+const SAMPLE_FINGERPRINT = "sha256:9e:21:8c:4d:a3:91:7b:ee";
+const SAMPLE_KEYS = [
   {
     id: "id_ed25519",
     type: "ssh-ed25519",
-    fingerprint: "SHA256:Q1pXq2vP…b5dM",
+    fingerprint: "SHA256:Q1pXq2vP...b5dM",
     active: true,
   },
   {
     id: "macbook-2024",
     type: "ssh-ed25519",
-    fingerprint: "SHA256:Mn7AYz…0kPo",
+    fingerprint: "SHA256:Mn7AYz...0kPo",
     active: false,
   },
   {
     id: "yubikey-fido",
     type: "sk-ssh-ed25519",
-    fingerprint: "SHA256:Yb44tQ…sk9c",
+    fingerprint: "SHA256:Yb44tQ...sk9c",
     active: false,
   },
 ];
@@ -48,7 +48,7 @@ export default function SshChallengePage() {
 
   function handleCopyNonce() {
     if (typeof navigator === "undefined" || !navigator.clipboard) return;
-    void navigator.clipboard.writeText(NONCE).then(() => {
+    void navigator.clipboard.writeText(SAMPLE_NONCE).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     });
@@ -60,17 +60,17 @@ export default function SshChallengePage() {
 
   return (
     <>
-      <header className="flex items-center justify-between border-b border-[var(--auth-secondary-border)] px-6 py-3 text-[12px] text-[var(--auth-muted)]">
-        <div className="flex items-center gap-3">
+      <header className="flex flex-col gap-2 border-b border-[var(--auth-secondary-border)] px-4 py-3 text-[12px] text-[var(--auth-muted)] sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="text-[var(--auth-text)]">exponential</span>
           <span className="text-[var(--auth-faint)]">/</span>
           <span>auth</span>
           <span className="text-[var(--auth-faint)]">/</span>
           <span className="text-[var(--auth-text)]">ssh challenge</span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="rounded-sm border border-[var(--auth-warn)]/40 bg-[var(--auth-warn)]/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] text-[var(--auth-warn)]">
-            mock · backend not wired
+            mock · sample challenge
           </span>
           <Link
             href="/login"
@@ -88,16 +88,19 @@ export default function SshChallengePage() {
               <p className="text-[11px] uppercase tracking-[0.2em] text-[var(--auth-muted)]">
                 {"// session · sign with key"}
               </p>
-              <h1 className="text-[22px] font-medium tracking-[-0.01em] text-[var(--auth-text)]">
+              <h1 className="text-[22px] font-medium text-[var(--auth-text)]">
                 <span aria-hidden="true" className="text-[var(--auth-prompt)]">
                   ${" "}
                 </span>
                 ssh challenge
               </h1>
               <p className="text-[12px] text-[var(--auth-muted)]">
-                sign the workspace nonce with your local SSH key. paste the
-                resulting signature here to bind a session. host fingerprint{" "}
-                <span className="text-[var(--auth-text)]">{FINGERPRINT}</span>.
+                This preview shows the intended SSH-signature flow, but no
+                backend verifier or key registry is wired. sample fingerprint{" "}
+                <span className="text-[var(--auth-text)]">
+                  {SAMPLE_FINGERPRINT}
+                </span>
+                .
               </p>
             </div>
 
@@ -119,7 +122,7 @@ export default function SshChallengePage() {
               </div>
               <div className="space-y-3 px-3 py-3">
                 <pre className="overflow-x-auto rounded-sm border border-[var(--auth-secondary-border)] bg-black/30 px-3 py-2 text-[12px] text-[var(--auth-text)]">
-                  {NONCE}
+                  {SAMPLE_NONCE}
                 </pre>
                 <div className="flex items-center gap-2 text-[11px]">
                   <button
@@ -128,7 +131,7 @@ export default function SshChallengePage() {
                     className="inline-flex items-center gap-2 border border-[var(--auth-secondary-border)] px-2 py-1 text-[var(--auth-text)] hover:bg-[var(--auth-secondary-bg-hover)]"
                   >
                     <span aria-hidden="true">⌘</span>
-                    <span>{copied ? "copied" : "copy nonce"}</span>
+                    <span>{copied ? "copied" : "copy sample nonce"}</span>
                   </button>
                   <button
                     type="button"
@@ -150,11 +153,12 @@ export default function SshChallengePage() {
                 # sign it locally
               </div>
               <pre className="overflow-x-auto px-3 py-3 text-[12px] leading-5 text-[var(--auth-text)]">
-                {`$ echo "${NONCE}" \\
+                {`$ echo "${SAMPLE_NONCE}" \\
     | ssh-keygen -Y sign -f ~/.ssh/id_ed25519 -n exponential`}
               </pre>
               <div className="border-t border-[var(--auth-secondary-border)] px-3 py-2 text-[11px] text-[var(--auth-muted)]">
-                pipe the output below — it's a single
+                pipe the output below for local format detection. server-side
+                verification is pending. it is a single
                 {" -----BEGIN SSH SIGNATURE----- "}block.
               </div>
             </section>
@@ -184,9 +188,9 @@ export default function SshChallengePage() {
                   }
                 >
                   {signature.length === 0
-                    ? "awaiting signature…"
+                    ? "awaiting signature..."
                     : valid
-                      ? "signature block detected"
+                      ? "signature block detected locally"
                       : "missing BEGIN/END markers"}
                 </span>
                 <span className="text-[var(--auth-faint)]">
@@ -197,15 +201,17 @@ export default function SshChallengePage() {
 
             <button
               type="button"
-              disabled={!valid || secondsLeft === 0}
+              disabled
               className="flex h-10 w-full items-center justify-between border border-[var(--auth-primary-border)] bg-[var(--auth-primary-bg)] px-3 text-[13px] text-[var(--auth-primary-text)] transition-colors hover:bg-[var(--auth-primary-bg-hover)] disabled:opacity-60"
             >
               <span className="inline-flex items-center gap-3">
                 <span aria-hidden="true">{"[↵]"}</span>
-                <span>verify &amp; open session</span>
+                <span>verification backend pending</span>
               </span>
               <span className="text-[11px] text-[var(--auth-muted)]">
-                mock · prints to console
+                {valid && secondsLeft > 0
+                  ? "local format ok · no session opened"
+                  : "mock · no session opened"}
               </span>
             </button>
           </section>
@@ -216,7 +222,7 @@ export default function SshChallengePage() {
                 # known keys
               </div>
               <ul className="divide-y divide-[var(--auth-secondary-border)] text-[12px]">
-                {KEYS.map((k) => (
+                {SAMPLE_KEYS.map((k) => (
                   <li
                     key={k.id}
                     className="px-3 py-2 hover:bg-[var(--auth-secondary-bg-hover)]"
@@ -243,7 +249,7 @@ export default function SshChallengePage() {
                 ))}
               </ul>
               <div className="border-t border-[var(--auth-secondary-border)] px-3 py-2 text-[11px] text-[var(--auth-faint)]">
-                {"// mock · key registry pending"}
+                {"// sample keys · registry pending"}
               </div>
             </section>
 
@@ -252,7 +258,7 @@ export default function SshChallengePage() {
               <p className="mt-1">
                 {"// docs · "}
                 <span className="text-[var(--auth-muted)]">
-                  exponential.local/docs/auth/ssh
+                  docs route pending
                 </span>
               </p>
               <p>
@@ -287,7 +293,7 @@ export default function SshChallengePage() {
             cancel
           </span>
           <span className="ml-auto text-[var(--auth-faint)]">
-            mock · backend not wired
+            sample challenge · no session will be opened
           </span>
         </div>
       </footer>

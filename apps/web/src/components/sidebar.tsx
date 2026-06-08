@@ -45,6 +45,36 @@ const SHORTCUTS_BY_CATEGORY = SHORTCUT_CATEGORY_ORDER.map((category) => ({
   ),
 })).filter((group) => group.shortcuts.length > 0);
 
+function normalizeBuildValue(value: string | undefined, fallback: string) {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed === "undefined" || trimmed === "null") {
+    return fallback;
+  }
+
+  return trimmed;
+}
+
+function formatVersion(value: string | undefined) {
+  const version = normalizeBuildValue(value, "version:unknown");
+  if (version === "version:unknown" || version.startsWith("v")) {
+    return version;
+  }
+
+  return `v${version}`;
+}
+
+const sidebarBuildMetadata = {
+  version: formatVersion(process.env.NEXT_PUBLIC_EXPONENTIAL_VERSION),
+  branch: normalizeBuildValue(
+    process.env.NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH,
+    "branch:unknown",
+  ),
+  sha: normalizeBuildValue(
+    process.env.NEXT_PUBLIC_EXPONENTIAL_GIT_SHA,
+    "sha:unknown",
+  ),
+};
+
 interface SidebarProps {
   workspaceName?: string;
   workspaceInitials?: string;
@@ -142,12 +172,12 @@ function SidebarLink({
   return (
     <Link
       href={canonicalHref}
-      className={`flex items-center gap-2.5 rounded-[6px] border border-transparent px-2 py-[6px] text-[13px] transition-colors ${
+      className={`tty-row flex min-h-[28px] items-center gap-2 border-l-2 px-2 py-[5px] text-[12px] ${
         indent ? "ml-4" : ""
       } ${
         active
-          ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text-primary)] shadow-[var(--shadow-editorial-sm)]"
-          : "text-[var(--color-text-secondary)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+          ? "tty-row-selected border-l-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text-primary)]"
+          : "border-l-transparent text-[var(--color-text-secondary)]"
       }`}
     >
       <span className="flex h-4 w-4 shrink-0 items-center justify-center">
@@ -182,7 +212,7 @@ function SidebarMenuButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-2.5 rounded-[6px] border border-transparent px-2 py-[6px] text-left text-[13px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+      className="tty-row flex min-h-[28px] w-full items-center gap-2 border-l-2 border-l-transparent px-2 py-[5px] text-left text-[12px] text-[var(--color-text-secondary)]"
     >
       <span className="flex h-4 w-4 shrink-0 items-center justify-center">
         {icon}
@@ -381,8 +411,9 @@ function SectionHeader({
     <button
       type="button"
       onClick={onToggle}
-      className="mb-0.5 mt-4 flex w-full items-center gap-1 px-2 text-[11px] font-medium font-mono uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-secondary)]"
+      className="mb-1 mt-4 flex w-full items-center gap-1 px-2 font-mono text-[10px] uppercase text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-secondary)]"
     >
+      <span aria-hidden="true">::</span>
       {collapsible && (
         <svg
           width="10"
@@ -694,7 +725,7 @@ export function Sidebar({
 
   return (
     <SidebarWorkspaceSlugContext.Provider value={workspaceSlug}>
-      <aside className="flex h-screen w-[260px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-sidebar-bg)] px-3 py-3 transition-colors">
+      <aside className="flex h-screen w-[264px] shrink-0 flex-col border-r border-[var(--color-border-strong)] bg-[var(--color-sidebar-bg)] px-2.5 py-2.5 transition-colors">
         <div className="mb-3 flex items-center justify-between">
           <div className="relative">
             <button
@@ -705,12 +736,12 @@ export function Sidebar({
                 setWorkspaceMenuOpen(!workspaceMenuOpen);
                 setHelpMenuOpen(false);
               }}
-              className="flex items-center gap-2 rounded-[6px] border border-transparent px-1.5 py-1 text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+              className="tty-row flex items-center gap-2 border border-[var(--color-border)] px-1.5 py-1 text-[var(--color-text-primary)]"
             >
-              <div className="flex h-5 w-5 items-center justify-center rounded-[6px] bg-[var(--color-accent)] text-[10px] font-bold text-white shadow-[var(--shadow-editorial-sm)]">
+              <div className="flex h-5 w-5 items-center justify-center border border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[10px] font-bold text-[var(--color-accent)]">
                 {workspaceInitials}
               </div>
-              <span className="max-w-[124px] truncate text-[13px] font-semibold tracking-[-0.01em]">
+              <span className="max-w-[124px] truncate text-[12px] font-semibold">
                 {workspaceName}
               </span>
               <svg
@@ -731,23 +762,23 @@ export function Sidebar({
               </svg>
             </button>
             {workspaceMenuOpen && (
-              <div className="absolute left-0 top-full z-20 mt-2 min-w-[220px] rounded-[10px] border border-[var(--color-border-strong)] bg-[var(--color-content-bg)] p-1 shadow-[var(--shadow-editorial-md)]">
-                <div className="px-3 py-2 text-[11px] font-medium font-mono uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+              <div className="tty-panel absolute left-0 top-full z-20 mt-2 min-w-[220px] p-1 shadow-[var(--shadow-editorial-md)]">
+                <div className="px-3 py-2 font-mono text-[10px] uppercase text-[var(--color-text-tertiary)]">
                   Workspace
                 </div>
                 <button
                   type="button"
                   disabled
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)]"
+                  className="tty-row flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-[var(--color-text-primary)]"
                 >
-                  <span className="flex h-5 w-5 items-center justify-center rounded-[6px] bg-[var(--color-accent)] text-[10px] font-bold text-white shadow-[var(--shadow-editorial-sm)]">
+                  <span className="flex h-5 w-5 items-center justify-center border border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[10px] font-bold text-[var(--color-accent)]">
                     {workspaceInitials}
                   </span>
                   <span className="truncate">{workspaceName}</span>
                 </button>
                 <Link
                   href={withWorkspaceSlug("/settings/workspace", workspaceSlug)}
-                  className="block rounded-md px-3 py-2 text-[13px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                  className="tty-row block px-3 py-2 text-[12px] text-[var(--color-text-secondary)]"
                 >
                   Workspace settings
                 </Link>
@@ -758,7 +789,7 @@ export function Sidebar({
           <div className="flex items-center gap-0.5">
             <button
               type="button"
-              className="flex h-7 w-7 items-center justify-center rounded-[6px] border border-transparent text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+              className="tty-row flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[var(--color-text-secondary)]"
               aria-label="Search"
               onClick={() =>
                 window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT))
@@ -781,7 +812,7 @@ export function Sidebar({
             </button>
             <button
               type="button"
-              className="flex h-7 w-7 items-center justify-center rounded-[6px] border border-transparent text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+              className="tty-row flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[var(--color-text-secondary)]"
               aria-label="Create issue"
               onClick={onCreateIssue}
             >
@@ -969,7 +1000,7 @@ export function Sidebar({
             type="button"
             aria-expanded={moreExpanded}
             onClick={() => setMoreExpanded(!moreExpanded)}
-            className="flex w-full items-center gap-2.5 rounded-[6px] border border-transparent px-2 py-[6px] text-[13px] text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+            className="tty-row flex min-h-[28px] w-full items-center gap-2 border-l-2 border-l-transparent px-2 py-[5px] text-[12px] text-[var(--color-text-secondary)]"
           >
             <span className="flex h-4 w-4 shrink-0 items-center justify-center">
               <svg
@@ -1134,17 +1165,17 @@ export function Sidebar({
                         [team.key]: !current[team.key],
                       }))
                     }
-                    className={`flex w-full items-center gap-2 rounded-[6px] border border-transparent px-2 py-[6px] text-[13px] transition-colors ${
+                    className={`tty-row flex min-h-[28px] w-full items-center gap-2 border-l-2 px-2 py-[5px] text-[12px] ${
                       teamSectionActive
-                        ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text-primary)] shadow-[var(--shadow-editorial-sm)]"
-                        : "text-[var(--color-text-secondary)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                        ? "tty-row-selected border-l-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text-primary)]"
+                        : "border-l-transparent text-[var(--color-text-secondary)]"
                     }`}
                     style={{ paddingLeft: `${8 + team.depth * 16}px` }}
                   >
                     {team.depth > 0 ? (
                       <span className="h-px w-3 shrink-0 bg-[var(--color-surface-subtle)]" />
                     ) : null}
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-[var(--color-accent)] text-[8px] font-bold text-white">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center border border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[8px] font-bold text-[var(--color-accent)]">
                       {team.key.charAt(0)}
                     </span>
                     <span className="truncate">{team.name}</span>
@@ -1354,12 +1385,12 @@ export function Sidebar({
 
         <div className="relative mt-auto pt-2">
           {helpMenuOpen && (
-            <div className="absolute bottom-9 left-0 z-20 min-w-[220px] rounded-[10px] border border-[var(--color-border-strong)] bg-[var(--color-content-bg)] p-1 shadow-[var(--shadow-editorial-md)]">
+            <div className="tty-panel absolute bottom-9 left-0 z-20 min-w-[220px] p-1 shadow-[var(--shadow-editorial-md)]">
               <a
                 href="https://exponential.app/docs"
                 target="_blank"
                 rel="noreferrer"
-                className="block rounded-md px-3 py-2 text-[13px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                className="tty-row block px-3 py-2 text-[12px] text-[var(--color-text-secondary)]"
               >
                 Docs
               </a>
@@ -1368,13 +1399,13 @@ export function Sidebar({
                 onClick={() => {
                   openShortcuts(helpButtonRef.current);
                 }}
-                className="block w-full rounded-md px-3 py-2 text-left text-[13px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                className="tty-row block w-full px-3 py-2 text-left text-[12px] text-[var(--color-text-secondary)]"
               >
                 Keyboard shortcuts
               </button>
               <Link
                 href={withWorkspaceSlug("/settings", workspaceSlug)}
-                className="block rounded-md px-3 py-2 text-[13px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                className="tty-row block px-3 py-2 text-[12px] text-[var(--color-text-secondary)]"
               >
                 Settings
               </Link>
@@ -1382,7 +1413,7 @@ export function Sidebar({
           )}
           <button
             type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-[6px] border border-transparent text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+            className="tty-row flex h-7 w-7 items-center justify-center border border-[var(--color-border)] text-[var(--color-text-secondary)]"
             aria-label="Help"
             aria-expanded={helpMenuOpen}
             ref={helpButtonRef}
@@ -1407,6 +1438,31 @@ export function Sidebar({
               <path d="M12 17h.01" />
             </svg>
           </button>
+        </div>
+
+        <div
+          data-testid="sidebar-status-strip"
+          aria-label="Build provenance"
+          className="tty-panel mt-2 shrink-0 px-2 py-2 font-mono text-[10px] leading-[1.6] text-[var(--color-text-tertiary)]"
+        >
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1 text-[var(--color-text-secondary)]">
+              <span aria-hidden="true">●</span>
+              <span>build</span>
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>frontend shell</span>
+            <span aria-hidden="true">·</span>
+            <span>provenance</span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[var(--color-text-tertiary)]">
+            <span>
+              <span className="text-[var(--color-text-secondary)]">git:</span>
+              {sidebarBuildMetadata.branch}@{sidebarBuildMetadata.sha}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>{sidebarBuildMetadata.version}</span>
+          </div>
         </div>
 
         {shortcutsOpen && (

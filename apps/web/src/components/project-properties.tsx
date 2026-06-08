@@ -228,7 +228,7 @@ function EditProjectPropertiesModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-[560px] rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] p-5 shadow-2xl">
+      <div className="tty-panel w-full max-w-[560px] p-5 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h4 className="text-[16px] font-semibold text-[var(--color-text-primary)]">
             Edit project properties
@@ -236,7 +236,7 @@ function EditProjectPropertiesModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+            className="tty-row px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
           >
             Close
           </button>
@@ -250,7 +250,7 @@ function EditProjectPropertiesModal({
               onChange={(event) =>
                 setDraftStatus(event.target.value as ProjectStatus)
               }
-              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+              className="editorial-input mt-1 w-full px-3 py-2 text-[13px]"
             >
               {(availableStatuses.length > 0
                 ? availableStatuses
@@ -275,7 +275,7 @@ function EditProjectPropertiesModal({
               onChange={(event) =>
                 setDraftPriority(event.target.value as ProjectPriority)
               }
-              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+              className="editorial-input mt-1 w-full px-3 py-2 text-[13px]"
             >
               {Object.entries(priorityLabels).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -290,7 +290,7 @@ function EditProjectPropertiesModal({
             <select
               value={draftLeadId}
               onChange={(event) => setDraftLeadId(event.target.value)}
-              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+              className="editorial-input mt-1 w-full px-3 py-2 text-[13px]"
             >
               <option value="">No lead</option>
               {availableMembers.map((member) => (
@@ -307,7 +307,7 @@ function EditProjectPropertiesModal({
               value={draftSlackChannel}
               onChange={(event) => setDraftSlackChannel(event.target.value)}
               placeholder="#project-updates"
-              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+              className="editorial-input mt-1 w-full px-3 py-2 text-[13px]"
             />
           </label>
 
@@ -317,7 +317,7 @@ function EditProjectPropertiesModal({
               type="date"
               value={draftStartDate}
               onChange={(event) => setDraftStartDate(event.target.value)}
-              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+              className="editorial-input mt-1 w-full px-3 py-2 text-[13px]"
             />
           </label>
 
@@ -327,7 +327,7 @@ function EditProjectPropertiesModal({
               type="date"
               value={draftTargetDate}
               onChange={(event) => setDraftTargetDate(event.target.value)}
-              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+              className="editorial-input mt-1 w-full px-3 py-2 text-[13px]"
             />
           </label>
         </div>
@@ -337,7 +337,7 @@ function EditProjectPropertiesModal({
             <h5 className="mb-2 text-[12px] font-medium text-[var(--color-text-secondary)]">
               Members
             </h5>
-            <div className="space-y-2 rounded-lg border border-[var(--color-border)] p-3">
+            <div className="tty-panel space-y-2 p-3">
               {availableMembers.length > 0 ? (
                 availableMembers.map((member) => (
                   <label
@@ -370,7 +370,7 @@ function EditProjectPropertiesModal({
             <h5 className="mb-2 text-[12px] font-medium text-[var(--color-text-secondary)]">
               Teams
             </h5>
-            <div className="space-y-2 rounded-lg border border-[var(--color-border)] p-3">
+            <div className="tty-panel space-y-2 p-3">
               {availableTeams.length > 0 ? (
                 availableTeams.map((team) => (
                   <label
@@ -399,7 +399,7 @@ function EditProjectPropertiesModal({
             <h5 className="mb-2 text-[12px] font-medium text-[var(--color-text-secondary)]">
               Labels
             </h5>
-            <div className="space-y-2 rounded-lg border border-[var(--color-border)] p-3">
+            <div className="tty-panel space-y-2 p-3">
               {availableLabels.length > 0 ? (
                 availableLabels.map((label) => (
                   <label
@@ -433,7 +433,7 @@ function EditProjectPropertiesModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+            className="tty-row border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
           >
             Cancel
           </button>
@@ -441,7 +441,7 @@ function EditProjectPropertiesModal({
             type="button"
             disabled={saving}
             onClick={handleSave}
-            className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="tty-row border border-[var(--color-accent)] bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-[var(--editorial-accent-ink)] transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {saving ? "Saving..." : "Save"}
           </button>
@@ -472,132 +472,134 @@ export function ProjectProperties({
 
   return (
     <>
-      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-secondary)]">
+      <div className="tty-panel overflow-hidden">
+        <div className="tty-status-bar justify-between border-b px-3 py-2">
+          <h3 className="editorial-section-title text-[11px] uppercase tracking-wider text-[var(--color-text-secondary)]">
             Properties
           </h3>
           {onSave ? (
             <button
               type="button"
               onClick={() => setShowEditor(true)}
-              className="rounded-md px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+              className="tty-row px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
             >
               Edit
             </button>
           ) : null}
         </div>
+        <div className="p-4">
+          <PropertyRow label="Status">
+            <span
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+              style={{
+                backgroundColor: `${statusOption.color}22`,
+                color: statusOption.color,
+              }}
+            >
+              <span>{statusOption.icon}</span>
+              {statusOption.name}
+            </span>
+          </PropertyRow>
 
-        <PropertyRow label="Status">
-          <span
-            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
-            style={{
-              backgroundColor: `${statusOption.color}22`,
-              color: statusOption.color,
-            }}
-          >
-            <span>{statusOption.icon}</span>
-            {statusOption.name}
-          </span>
-        </PropertyRow>
+          <PropertyRow label="Priority">
+            <PriorityIcon priority={priorityMap[priority]} size={14} />
+            <span>{priorityLabels[priority]}</span>
+          </PropertyRow>
 
-        <PropertyRow label="Priority">
-          <PriorityIcon priority={priorityMap[priority]} size={14} />
-          <span>{priorityLabels[priority]}</span>
-        </PropertyRow>
-
-        <PropertyRow label="Lead">
-          {lead ? (
-            <>
-              <Avatar
-                name={lead.name}
-                src={lead.image ?? undefined}
-                size="sm"
-              />
-              <span>{lead.name}</span>
-            </>
-          ) : (
-            <span className="text-[var(--color-text-secondary)]">Add lead</span>
-          )}
-        </PropertyRow>
-
-        <PropertyRow label="Members">
-          {members.length > 0 ? (
-            <div className="flex -space-x-1">
-              {members.map((member) => (
+          <PropertyRow label="Lead">
+            {lead ? (
+              <>
                 <Avatar
-                  key={member.id}
-                  name={member.name}
-                  src={member.image ?? undefined}
+                  name={lead.name}
+                  src={lead.image ?? undefined}
                   size="sm"
                 />
-              ))}
-            </div>
-          ) : (
-            <span className="text-[var(--color-text-secondary)]">
-              Add members
-            </span>
-          )}
-        </PropertyRow>
+                <span>{lead.name}</span>
+              </>
+            ) : (
+              <span className="text-[var(--color-text-secondary)]">
+                Add lead
+              </span>
+            )}
+          </PropertyRow>
 
-        <PropertyRow label="Dates">
-          {startDate || targetDate ? (
-            <span>
-              {startDate ? formatDate(startDate) : "Start"}
-              {" → "}
-              {targetDate ? formatDate(targetDate) : "Target"}
-            </span>
-          ) : (
-            <span className="text-[var(--color-text-secondary)]">
-              Set dates
-            </span>
-          )}
-        </PropertyRow>
+          <PropertyRow label="Members">
+            {members.length > 0 ? (
+              <div className="flex -space-x-1">
+                {members.map((member) => (
+                  <Avatar
+                    key={member.id}
+                    name={member.name}
+                    src={member.image ?? undefined}
+                    size="sm"
+                  />
+                ))}
+              </div>
+            ) : (
+              <span className="text-[var(--color-text-secondary)]">
+                Add members
+              </span>
+            )}
+          </PropertyRow>
 
-        <PropertyRow label="Teams">
-          {teams.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {teams.map((team) => (
-                <span
-                  key={team.id}
-                  className="rounded-md bg-[var(--color-surface-active)] px-1.5 py-0.5 text-[12px]"
-                >
-                  {team.name}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <span className="text-[var(--color-text-secondary)]">Add team</span>
-          )}
-        </PropertyRow>
+          <PropertyRow label="Dates">
+            {startDate || targetDate ? (
+              <span>
+                {startDate ? formatDate(startDate) : "Start"}
+                {" → "}
+                {targetDate ? formatDate(targetDate) : "Target"}
+              </span>
+            ) : (
+              <span className="text-[var(--color-text-secondary)]">
+                Set dates
+              </span>
+            )}
+          </PropertyRow>
 
-        <PropertyRow label="Slack">
-          {slackChannel ? (
-            <span>{slackChannel}</span>
-          ) : (
-            <span className="text-[var(--color-text-secondary)]">
-              Add Slack channel
-            </span>
-          )}
-        </PropertyRow>
+          <PropertyRow label="Teams">
+            {teams.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {teams.map((team) => (
+                  <span key={team.id} className="tty-chip text-[12px]">
+                    {team.name}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <span className="text-[var(--color-text-secondary)]">
+                Add team
+              </span>
+            )}
+          </PropertyRow>
 
-        <PropertyRow label="Labels">
-          {labels.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {labels.map((label) => (
-                <LabelChip
-                  key={label.id}
-                  name={label.name}
-                  color={label.color}
-                />
-              ))}
-            </div>
-          ) : (
-            <span className="text-[var(--color-text-secondary)]">
-              Add label
-            </span>
-          )}
-        </PropertyRow>
+          <PropertyRow label="Slack">
+            {slackChannel ? (
+              <span>{slackChannel}</span>
+            ) : (
+              <span className="text-[var(--color-text-secondary)]">
+                Add Slack channel
+              </span>
+            )}
+          </PropertyRow>
+
+          <PropertyRow label="Labels">
+            {labels.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {labels.map((label) => (
+                  <LabelChip
+                    key={label.id}
+                    name={label.name}
+                    color={label.color}
+                  />
+                ))}
+              </div>
+            ) : (
+              <span className="text-[var(--color-text-secondary)]">
+                Add label
+              </span>
+            )}
+          </PropertyRow>
+        </div>
       </div>
 
       {showEditor && onSave ? (

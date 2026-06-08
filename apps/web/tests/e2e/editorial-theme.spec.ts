@@ -80,11 +80,11 @@ async function expectEditorialTokens(page: import("@playwright/test").Page) {
     );
   }, tokenNames);
 
-  expect(["#faf7f2", "#15130f"]).toContain(tokenState["--color-content-bg"]);
-  expect(["#e2dccd", "#2e2a22"]).toContain(tokenState["--color-border"]);
+  expect(["#f0eee9", "#0c0d0c"]).toContain(tokenState["--color-content-bg"]);
+  expect(["#cdcabd", "#2a2e2c"]).toContain(tokenState["--color-border"]);
   expect(tokenState["--editorial-accent"].length).toBeGreaterThan(0);
   expect(tokenState["--color-accent"].length).toBeGreaterThan(0);
-  expect(tokenState["--editorial-display"]).toContain("Georgia");
+  expect(tokenState["--editorial-display"]).toContain("monospace");
 }
 
 async function expectNoHardcodedRegression(

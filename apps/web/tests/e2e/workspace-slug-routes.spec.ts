@@ -53,9 +53,9 @@ test.describe("Workspace slug routes", () => {
       `/${workspaceSlug}/team/${teamKey}/analytics`,
     );
     await insightsLink.click();
-    await expect(page).toHaveURL(
-      new RegExp(`/${workspaceSlug}/team/${teamKey}/analytics$`),
-    );
+    await expect(page).toHaveURL((url) => {
+      return url.pathname === `/${workspaceSlug}/team/${teamKey}/analytics`;
+    });
     await expect(page.getByText("exponential Insights")).toBeVisible();
     await expect(
       page.getByRole("heading", { name: /Analytics/ }),

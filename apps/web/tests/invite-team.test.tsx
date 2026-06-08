@@ -54,6 +54,15 @@ describe("Invite Team page", () => {
     expect(screen.getByText(/Invite teammates to collaborate/)).toBeDefined();
   });
 
+  it("renders the terminal invite manifest and request preview", () => {
+    render(<InviteTeamPage />);
+
+    expect(screen.getByText("step 3/4")).toBeDefined();
+    expect(screen.getByText("# invite manifest")).toBeDefined();
+    expect(screen.getByText("# request")).toBeDefined();
+    expect(screen.getByText(/real invite API/)).toBeDefined();
+  });
+
   it("disables native browser validation so mixed invite rows can reach the API", () => {
     const { container } = render(<InviteTeamPage />);
     expect(container.querySelector("form")).toHaveProperty("noValidate", true);

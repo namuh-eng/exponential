@@ -376,6 +376,12 @@ export function InboxClient({
     !notifications.some(
       (notification) => notification.id === initialSelectedId,
     );
+  const preferenceButtonClass = (active: boolean) =>
+    `tty-row min-h-7 border px-2.5 py-1 text-[12px] font-medium transition-colors ${
+      active
+        ? "tty-row-selected border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text-primary)]"
+        : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--editorial-line-strong)] hover:text-[var(--color-text-primary)]"
+    }`;
 
   if (loading) {
     return (
@@ -413,14 +419,12 @@ export function InboxClient({
 
   return (
     <div className="flex h-full min-w-0 flex-col overflow-hidden">
-      <div className="flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-3">
-        <h1 className="text-[18px] font-semibold text-[var(--color-text-primary)]">
+      <div className="tty-status-bar flex-wrap border-b px-3 py-2">
+        <h1 className="editorial-section-title text-[13px] text-[var(--color-text-primary)]">
           Inbox
         </h1>
         {unreadCount > 0 && (
-          <span className="text-[12px] text-[#6b6f76]">
-            {unreadCount} unread
-          </span>
+          <span className="tty-chip">{unreadCount} unread</span>
         )}
         <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
           <button
@@ -428,7 +432,7 @@ export function InboxClient({
             aria-label="Mark non-comment notifications as read"
             onClick={() => void bulkMarkRead()}
             data-editorial-control="true"
-            className="rounded-md border border-[var(--color-border)] px-2.5 py-1 text-[12px] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--editorial-line-strong)] hover:text-[var(--color-text-primary)]"
+            className="tty-row min-h-7 border border-[var(--color-border)] px-2.5 py-1 text-[12px] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--editorial-line-strong)] hover:text-[var(--color-text-primary)]"
           >
             Mark non-comments read
           </button>
@@ -442,11 +446,7 @@ export function InboxClient({
               })
             }
             data-editorial-control="true"
-            className={`rounded-md border px-2.5 py-1 text-[12px] font-medium transition-colors ${
-              preferences.showReadItems
-                ? "border-[var(--color-surface-active-line)] bg-[var(--color-surface-active)] text-[var(--color-text-primary)]"
-                : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--editorial-line-strong)] hover:text-[var(--color-text-primary)]"
-            }`}
+            className={preferenceButtonClass(preferences.showReadItems)}
           >
             Show read: {preferences.showReadItems ? "On" : "Off"}
           </button>
@@ -460,11 +460,7 @@ export function InboxClient({
               })
             }
             data-editorial-control="true"
-            className={`rounded-md border px-2.5 py-1 text-[12px] font-medium transition-colors ${
-              preferences.showUnreadItemsFirst
-                ? "border-[var(--color-surface-active-line)] bg-[var(--color-surface-active)] text-[var(--color-text-primary)]"
-                : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--editorial-line-strong)] hover:text-[var(--color-text-primary)]"
-            }`}
+            className={preferenceButtonClass(preferences.showUnreadItemsFirst)}
           >
             Unread first: {preferences.showUnreadItemsFirst ? "On" : "Off"}
           </button>
@@ -478,11 +474,7 @@ export function InboxClient({
               })
             }
             data-editorial-control="true"
-            className={`rounded-md border px-2.5 py-1 text-[12px] font-medium transition-colors ${
-              preferences.showSnoozedItems
-                ? "border-[var(--color-surface-active-line)] bg-[var(--color-surface-active)] text-[var(--color-text-primary)]"
-                : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--editorial-line-strong)] hover:text-[var(--color-text-primary)]"
-            }`}
+            className={preferenceButtonClass(preferences.showSnoozedItems)}
           >
             Show snoozed: {preferences.showSnoozedItems ? "On" : "Off"}
           </button>
@@ -495,21 +487,26 @@ export function InboxClient({
               )
             }
             data-editorial-control="true"
-            className={`rounded-md border px-2.5 py-1 text-[12px] font-medium transition-colors ${
-              sortMode === "priority"
-                ? "border-[var(--color-surface-active-line)] bg-[var(--color-surface-active)] text-[var(--color-text-primary)]"
-                : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--editorial-line-strong)] hover:text-[var(--color-text-primary)]"
-            }`}
+            className={preferenceButtonClass(sortMode === "priority")}
           >
             Sort: {sortMode === "priority" ? "Priority" : "Latest"}
           </button>
         </div>
       </div>
 
-      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(300px,380px)_minmax(360px,1fr)]">
+      <div
+        data-testid="inbox-tty-split"
+        className="grid min-h-0 min-w-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(300px,380px)_minmax(360px,1fr)]"
+      >
         <div className="min-w-0 overflow-y-auto border-r border-[var(--color-border)]">
+          <div className="tty-status-bar sticky top-0 z-10 h-8 border-b px-3">
+            <span>buffer:notifications</span>
+            <span className="ml-auto tty-chip">
+              {visibleNotifications.length} visible
+            </span>
+          </div>
           {visibleNotifications.length > 0 ? (
-            <div className="flex flex-col gap-0.5 p-1.5">
+            <div className="flex flex-col">
               {visibleNotifications.map((notification) => (
                 <NotificationRow
                   key={notification.id}
@@ -527,93 +524,103 @@ export function InboxClient({
                 />
               ))}
               {unreadCount === 0 && (
-                <div className="px-3 py-4 text-center text-[12px] text-[#6b6f76]">
+                <div className="px-3 py-4 text-center text-[12px] text-[var(--color-text-secondary)]">
                   No unread notifications
                 </div>
               )}
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center px-6 text-center text-[13px] text-[#6b6f76]">
+            <div className="flex h-full items-center justify-center px-6 text-center text-[13px] text-[var(--color-text-secondary)]">
               No notifications match the current display options.
             </div>
           )}
         </div>
 
-        <div className="hidden min-w-0 overflow-y-auto p-6 lg:block">
+        <div className="hidden min-w-0 overflow-y-auto p-4 lg:block">
           {missingDeepLink ? (
             <div className="flex h-full items-center justify-center text-center">
-              <span className="text-[13px] text-[#6b6f76]">
+              <span className="text-[13px] text-[var(--color-text-secondary)]">
                 Notification not found or no longer available.
               </span>
             </div>
           ) : selected ? (
-            <div className="mx-auto max-w-[68ch]">
+            <div className="tty-panel mx-auto max-w-[72ch] overflow-hidden">
               {selectedIsHidden && (
-                <div className="mb-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-hover)] px-3 py-2 text-[12px] text-[var(--color-text-secondary)]">
+                <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-hover)] px-3 py-2 text-[12px] text-[var(--color-text-secondary)]">
                   This notification is hidden by your display preferences.
                 </div>
               )}
-              <div className="mb-2 font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-text-secondary)]">
-                {selected.issueIdentifier}
+              <div className="tty-status-bar border-b px-3 py-2">
+                <span>preview:notification</span>
+                {selected.issueIdentifier ? (
+                  <span className="ml-auto tty-chip">
+                    {selected.issueIdentifier}
+                  </span>
+                ) : null}
               </div>
-              <h2 className="mb-4 [overflow-wrap:anywhere] text-pretty break-words text-[24px] font-semibold leading-[1.18] text-[var(--color-text-primary)]">
-                {selected.issueTitle}
-              </h2>
-              <p className="text-[14px] leading-6 text-[var(--color-text-secondary)]">
-                <span className="font-medium text-[var(--color-text-primary)]">
-                  {selected.actorName}
-                </span>{" "}
-                {selected.type === "assigned" && "assigned this issue to you"}
-                {selected.type === "mentioned" && "mentioned you in this issue"}
-                {selected.type === "status_change" &&
-                  "changed the status of this issue"}
-                {selected.type === "comment" && "commented on this issue"}
-                {selected.type === "duplicate" &&
-                  "marked this issue as duplicate"}
-              </p>
-              {isActiveSnooze(selected) && (
-                <p className="mt-3 text-[12px] text-[var(--color-text-secondary)]">
-                  Snoozed until{" "}
-                  {new Date(selected.snoozedUntilAt as string).toLocaleString()}
+              <div className="px-4 py-4">
+                <h2 className="mb-4 [overflow-wrap:anywhere] text-pretty break-words text-[24px] font-semibold leading-[1.18] text-[var(--color-text-primary)]">
+                  {selected.issueTitle}
+                </h2>
+                <p className="text-[14px] leading-6 text-[var(--color-text-secondary)]">
+                  <span className="font-medium text-[var(--color-text-primary)]">
+                    {selected.actorName}
+                  </span>{" "}
+                  {selected.type === "assigned" && "assigned this issue to you"}
+                  {selected.type === "mentioned" &&
+                    "mentioned you in this issue"}
+                  {selected.type === "status_change" &&
+                    "changed the status of this issue"}
+                  {selected.type === "comment" && "commented on this issue"}
+                  {selected.type === "duplicate" &&
+                    "marked this issue as duplicate"}
                 </p>
-              )}
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  data-testid="mark-unread-action"
-                  onClick={() =>
-                    selected.readAt
-                      ? void markNotificationUnread(selected.id)
-                      : void markNotificationRead(selected.id)
-                  }
-                  className="rounded-md border border-[var(--color-border)] px-2.5 py-1 text-[12px] font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                >
-                  Mark {selected.readAt ? "unread" : "read"}
-                </button>
-                <button
-                  type="button"
-                  data-testid="snooze-action"
-                  onClick={() => void toggleSnooze(selected.id)}
-                  className="rounded-md border border-[var(--color-border)] px-2.5 py-1 text-[12px] font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                >
-                  {isActiveSnooze(selected) ? "Unsnooze" : "Snooze 1 day"}
-                </button>
-                {selected.issueIdentifier && (
-                  <Link
-                    href={withWorkspaceSlug(
-                      `/issue/${selected.issueIdentifier}`,
-                      workspaceSlug,
-                    )}
-                    className="inline-flex rounded-md border border-transparent px-2.5 py-1 text-[12px] font-semibold text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
-                  >
-                    Open issue
-                  </Link>
+                {isActiveSnooze(selected) && (
+                  <p className="mt-3 text-[12px] text-[var(--color-text-secondary)]">
+                    Snoozed until{" "}
+                    {new Date(
+                      selected.snoozedUntilAt as string,
+                    ).toLocaleString()}
+                  </p>
                 )}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    data-testid="mark-unread-action"
+                    onClick={() =>
+                      selected.readAt
+                        ? void markNotificationUnread(selected.id)
+                        : void markNotificationRead(selected.id)
+                    }
+                    className="tty-row border border-[var(--color-border)] px-2.5 py-1 text-[12px] font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                  >
+                    Mark {selected.readAt ? "unread" : "read"}
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="snooze-action"
+                    onClick={() => void toggleSnooze(selected.id)}
+                    className="tty-row border border-[var(--color-border)] px-2.5 py-1 text-[12px] font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                  >
+                    {isActiveSnooze(selected) ? "Unsnooze" : "Snooze 1 day"}
+                  </button>
+                  {selected.issueIdentifier && (
+                    <Link
+                      href={withWorkspaceSlug(
+                        `/issue/${selected.issueIdentifier}`,
+                        workspaceSlug,
+                      )}
+                      className="tty-row inline-flex border border-transparent px-2.5 py-1 text-[12px] font-semibold text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
+                    >
+                      Open issue
+                    </Link>
+                  )}
+                </div>
               </div>
             </div>
           ) : (
             <div className="flex h-full items-center justify-center">
-              <span className="text-[13px] text-[#6b6f76]">
+              <span className="text-[13px] text-[var(--color-text-secondary)]">
                 Select a notification to view details
               </span>
             </div>

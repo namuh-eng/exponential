@@ -111,7 +111,7 @@ describe("Account Preferences Page", () => {
 
   it("renders General section with home view setting", () => {
     render(<PreferencesPage />);
-    expect(screen.getByText("General")).toBeInTheDocument();
+    expect(screen.getByText("General")).toHaveClass("tty-status-bar");
     expect(screen.getByText("Default home view")).toBeInTheDocument();
   });
 

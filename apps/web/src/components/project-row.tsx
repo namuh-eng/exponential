@@ -122,7 +122,7 @@ export function ProjectRow({
     <Link
       href={href}
       data-testid="project-row"
-      className="group flex h-[46px] items-center border-b border-[var(--color-border)] bg-[color-mix(in_oklab,var(--color-surface)_72%,transparent)] px-4 text-[13px] transition-colors hover:bg-[var(--color-surface-hover)]"
+      className="tty-row group grid min-h-10 min-w-[760px] grid-cols-[minmax(180px,1fr)_minmax(110px,150px)_64px_64px_90px_minmax(130px,160px)] items-center gap-3 border-b border-[var(--color-border)] bg-[color-mix(in_oklab,var(--color-surface)_72%,transparent)] px-3 py-1.5 text-[12px] transition-colors hover:bg-[var(--color-surface-hover)]"
     >
       {/* Icon + Name */}
       <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -133,7 +133,7 @@ export function ProjectRow({
       </div>
 
       {/* Health */}
-      <div className="w-[120px] shrink-0 text-[12px] text-[var(--color-text-secondary)]">
+      <div className="min-w-0 text-[12px] text-[var(--color-text-secondary)]">
         {labels.length > 0 ? (
           <div className="flex min-w-0 flex-wrap gap-1">
             {labels.slice(0, 2).map((label) => (
@@ -146,13 +146,13 @@ export function ProjectRow({
       </div>
 
       {/* Priority */}
-      <div className="flex w-[60px] shrink-0 items-center justify-center">
+      <div className="flex items-center justify-center">
         <PriorityIcon priority={priorityMap[priority] ?? 0} size={14} />
       </div>
 
       {/* Lead */}
       <div
-        className="flex w-[60px] shrink-0 items-center justify-center"
+        className="flex items-center justify-center"
         data-testid="project-lead"
       >
         {lead ? (
@@ -163,15 +163,15 @@ export function ProjectRow({
       </div>
 
       {/* Target date */}
-      <div className="w-[80px] shrink-0 text-[12px] text-[var(--color-text-secondary)]">
+      <div className="text-[12px] text-[var(--color-text-secondary)]">
         {targetDate ? formatDate(targetDate) : ""}
       </div>
 
       {/* Status */}
-      <div className="flex w-[120px] shrink-0 items-center gap-1.5">
+      <div className="flex min-w-0 items-center gap-1.5">
         <ProgressRing progress={progress} status={status} />
         <span
-          className="inline-flex min-w-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+          className="tty-chip inline-flex min-w-0 items-center gap-1 text-[11px] font-medium"
           style={{
             backgroundColor: `${statusColor ?? "#6b6f76"}22`,
             color: statusColor ?? "var(--color-text-secondary)",

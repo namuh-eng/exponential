@@ -31,6 +31,12 @@ describe("IssueRow", () => {
     expect(screen.getByText("Fix login bug")).toBeDefined();
   });
 
+  it("uses dense TTY row chrome", () => {
+    render(<IssueRow {...defaultProps} />);
+    expect(screen.getByTestId("issue-row").className).toContain("tty-row");
+    expect(screen.getByText("ENG-123").className).toContain("tty-chip");
+  });
+
   it("renders priority icon", () => {
     render(<IssueRow {...defaultProps} />);
     const icon = screen.getByRole("img", { name: /medium/i });
@@ -96,6 +102,7 @@ describe("IssuesGroupHeader", () => {
     );
     expect(screen.getByText("Backlog")).toBeDefined();
     expect(screen.getByText("6")).toBeDefined();
+    expect(screen.getByText("6").className).toContain("tty-chip");
   });
 
   it("renders status icon", () => {

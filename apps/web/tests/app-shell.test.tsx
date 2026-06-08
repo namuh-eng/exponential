@@ -99,11 +99,9 @@ describe("Sidebar", () => {
     render(<Sidebar />);
 
     const activeLink = screen.getByRole("link", { name: /My Issues/i });
-    expect(activeLink.className).toContain("border-[var(--color-accent)]");
+    expect(activeLink.className).toContain("tty-row-selected");
+    expect(activeLink.className).toContain("border-l-[var(--color-accent)]");
     expect(activeLink.className).toContain("bg-[var(--color-accent-soft)]");
-    expect(activeLink.className).toContain(
-      "shadow-[var(--shadow-editorial-sm)]",
-    );
   });
 
   it("shows the inbox unread badge when provided", () => {
@@ -429,6 +427,7 @@ describe("Sidebar", () => {
 
 describe("AppShell", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
 
@@ -452,6 +451,7 @@ describe("AppShell", () => {
 
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
     mockPathname = "/inbox";
     vi.restoreAllMocks();
   });
@@ -492,8 +492,8 @@ describe("AppShell", () => {
     expect(screen.getByText("Hello World")).toBeDefined();
   });
 
-  it("has rounded content container with correct background", () => {
-    const { container } = render(
+  it("renders the terminal workspace shell and status bars", () => {
+    render(
       <AppShell
         workspaceName="WS"
         workspaceInitials="WS"
@@ -505,10 +505,86 @@ describe("AppShell", () => {
         <div>Test</div>
       </AppShell>,
     );
-    const contentDiv = Array.from(container.querySelectorAll("div")).find(
-      (element) => element.className.includes("rounded-[10px]"),
+    expect(screen.getByTestId("tty-workspace-shell").className).toContain(
+      "tty-shell-frame",
     );
-    expect(contentDiv).toBeDefined();
+    expect(screen.getByTestId("tty-route-status-bar")).toBeInTheDocument();
+    expect(screen.getByTestId("tty-shortcut-status-bar")).toBeInTheDocument();
+  });
+
+  it("collapses the desktop sidebar and reveals it from the left edge on hover", () => {
+    render(
+      <AppShell
+        workspaceName="WS"
+        workspaceInitials="WS"
+        teamName="Team"
+        teamId="team-1"
+        teamKey="T"
+        teams={[{ id: "team-1", name: "Team", key: "T" }]}
+      >
+        <div>Test</div>
+      </AppShell>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Workspace switcher" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("sidebar-toggle-button"));
+
+    expect(window.localStorage.getItem("exponential:sidebar-collapsed")).toBe(
+      "true",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Workspace switcher" }),
+    ).toBeNull();
+    expect(screen.getByTestId("app-sidebar-hover-zone")).toBeInTheDocument();
+    expect(screen.getByTestId("app-sidebar-shell").className).toContain(
+      "fixed",
+    );
+
+    fireEvent.mouseEnter(screen.getByTestId("app-sidebar-hover-zone"));
+    expect(screen.getByTestId("app-sidebar-reveal-panel")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Workspace switcher" }),
+    ).toBeInTheDocument();
+
+    fireEvent.mouseLeave(screen.getByTestId("app-sidebar-shell"));
+    expect(
+      screen.queryByRole("button", { name: "Workspace switcher" }),
+    ).toBeNull();
+  });
+
+  it("toggles the sidebar with the global keyboard shortcut", () => {
+    render(
+      <AppShell
+        workspaceName="WS"
+        workspaceInitials="WS"
+        teamName="Team"
+        teamId="team-1"
+        teamKey="T"
+        teams={[{ id: "team-1", name: "Team", key: "T" }]}
+      >
+        <div>Test</div>
+      </AppShell>,
+    );
+
+    fireEvent.keyDown(document, { key: "\\", metaKey: true });
+
+    expect(window.localStorage.getItem("exponential:sidebar-collapsed")).toBe(
+      "true",
+    );
+    expect(screen.getByTestId("sidebar-toggle-button")).toHaveAccessibleName(
+      "Show sidebar",
+    );
+
+    fireEvent.keyDown(document, { key: "\\", metaKey: true });
+
+    expect(window.localStorage.getItem("exponential:sidebar-collapsed")).toBe(
+      "false",
+    );
+    expect(screen.getByTestId("sidebar-toggle-button")).toHaveAccessibleName(
+      "Hide sidebar",
+    );
   });
 
   it("hides the app sidebar on mobile settings routes", () => {
@@ -524,6 +600,27 @@ describe("AppShell", () => {
         teams={[{ id: "team-1", name: "Team", key: "T" }]}
       >
         <div>Settings</div>
+      </AppShell>,
+    );
+
+    expect(screen.getByTestId("app-sidebar-shell").className).toContain(
+      "hidden md:block",
+    );
+  });
+
+  it("hides the app sidebar on non-settings mobile routes", () => {
+    mockPathname = "/inbox";
+
+    render(
+      <AppShell
+        workspaceName="WS"
+        workspaceInitials="WS"
+        teamName="Team"
+        teamId="team-1"
+        teamKey="T"
+        teams={[{ id: "team-1", name: "Team", key: "T" }]}
+      >
+        <div>Inbox</div>
       </AppShell>,
     );
 

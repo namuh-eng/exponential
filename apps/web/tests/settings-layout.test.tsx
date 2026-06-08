@@ -56,6 +56,7 @@ describe("Settings Layout Shell", () => {
       </SettingsLayout>,
     );
 
+    expect(screen.getByTestId("settings-tty-layout")).toBeInTheDocument();
     const backLink = screen.getByText("Back to app");
     expect(backLink.closest("a")).toHaveAttribute("href", "/namuh/inbox");
   });
@@ -134,14 +135,10 @@ describe("Settings Layout Shell", () => {
     );
 
     const profileLink = screen.getByText("Profile").closest("a");
-    expect(profileLink?.className).toContain(
-      "bg-[var(--color-surface-active)]",
-    );
+    expect(profileLink?.className).toContain("tty-row-selected");
 
     const prefsLink = screen.getByText("Preferences").closest("a");
-    expect(prefsLink?.className).not.toContain(
-      "bg-[var(--color-surface-active)]",
-    );
+    expect(prefsLink?.className).not.toContain("tty-row-selected");
   });
 
   it("renders children in content area", () => {
@@ -198,9 +195,7 @@ describe("Settings Layout Shell", () => {
     );
 
     const initiativesLink = screen.getByText("Initiatives").closest("a");
-    expect(initiativesLink?.className).toContain(
-      "bg-[var(--color-surface-active)]",
-    );
+    expect(initiativesLink?.className).toContain("tty-row-selected");
   });
 
   it("renders the dynamic Your teams section", () => {
@@ -224,6 +219,6 @@ describe("Settings Layout Shell", () => {
     );
 
     const teamLink = screen.getByText("Engineering").closest("a");
-    expect(teamLink?.className).toContain("bg-[var(--color-surface-active)]");
+    expect(teamLink?.className).toContain("tty-row-selected");
   });
 });

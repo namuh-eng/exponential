@@ -405,11 +405,11 @@ export default function TeamBoardPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center border-b border-[var(--color-border)] px-4 py-2">
-        <h1 className="mr-4 text-[15px] font-medium text-[var(--color-text-primary)]">
+      <div className="tty-status-bar flex-wrap gap-2 border-b px-3 py-1.5 max-sm:items-start">
+        <h1 className="mr-3 text-[15px] font-semibold text-[var(--color-text-primary)]">
           {data.team.name}
         </h1>
-        <div className="ml-2">
+        <div className="ml-2 min-w-0 max-sm:order-last max-sm:ml-0 max-sm:w-full">
           <FilterBar
             filters={filters}
             onFiltersChange={updateFilters}
@@ -433,67 +433,66 @@ export default function TeamBoardPage() {
             }
           />
         </div>
-        <div className="flex-1" />
-        <span className="mr-2 text-[12px] text-[var(--color-text-secondary)]">
-          {totalIssues} issues
-        </span>
-        {/* Display options trigger */}
-        <div className="relative">
-          <button
-            type="button"
-            aria-label="Display options"
-            onClick={() => setShowDisplayOptions(!showDisplayOptions)}
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 max-sm:ml-0 max-sm:w-full max-sm:justify-start">
+          <span className="tty-chip">{totalIssues} issues</span>
+          {/* Display options trigger */}
+          <div className="relative">
+            <button
+              type="button"
+              aria-label="Display options"
+              onClick={() => setShowDisplayOptions(!showDisplayOptions)}
+              className="tty-row flex items-center gap-1 px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
             >
-              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-            Display
-          </button>
-          <DisplayOptionsPanel
-            open={showDisplayOptions}
-            onClose={() => setShowDisplayOptions(false)}
-            layout={options.layout}
-            onLayoutChange={handleLayoutChange}
-            groupBy={options.groupBy}
-            onGroupByChange={(g) => updateOptions({ groupBy: g })}
-            subGroupBy={options.subGroupBy}
-            onSubGroupByChange={(s) => updateOptions({ subGroupBy: s })}
-            orderBy={options.orderBy}
-            onOrderByChange={(o) => updateOptions({ orderBy: o })}
-            displayProperties={options.displayProperties}
-            onDisplayPropertyToggle={handlePropertyToggle}
-            showSubIssues={options.showSubIssues}
-            onShowSubIssuesToggle={() =>
-              updateOptions({ showSubIssues: !options.showSubIssues })
-            }
-            showTriageIssues={options.showTriageIssues}
-            onShowTriageIssuesToggle={() =>
-              updateOptions({ showTriageIssues: !options.showTriageIssues })
-            }
-            showEmptyColumns={options.showEmptyColumns}
-            onShowEmptyColumnsToggle={() =>
-              updateOptions({ showEmptyColumns: !options.showEmptyColumns })
-            }
-            onReset={reset}
-            onSaveAsDefault={saveAsDefault}
-          />
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              Display
+            </button>
+            <DisplayOptionsPanel
+              open={showDisplayOptions}
+              onClose={() => setShowDisplayOptions(false)}
+              layout={options.layout}
+              onLayoutChange={handleLayoutChange}
+              groupBy={options.groupBy}
+              onGroupByChange={(g) => updateOptions({ groupBy: g })}
+              subGroupBy={options.subGroupBy}
+              onSubGroupByChange={(s) => updateOptions({ subGroupBy: s })}
+              orderBy={options.orderBy}
+              onOrderByChange={(o) => updateOptions({ orderBy: o })}
+              displayProperties={options.displayProperties}
+              onDisplayPropertyToggle={handlePropertyToggle}
+              showSubIssues={options.showSubIssues}
+              onShowSubIssuesToggle={() =>
+                updateOptions({ showSubIssues: !options.showSubIssues })
+              }
+              showTriageIssues={options.showTriageIssues}
+              onShowTriageIssuesToggle={() =>
+                updateOptions({ showTriageIssues: !options.showTriageIssues })
+              }
+              showEmptyColumns={options.showEmptyColumns}
+              onShowEmptyColumnsToggle={() =>
+                updateOptions({ showEmptyColumns: !options.showEmptyColumns })
+              }
+              onReset={reset}
+              onSaveAsDefault={saveAsDefault}
+            />
+          </div>
         </div>
       </div>
 
       {/* Board */}
-      <div className="flex flex-1 gap-0 overflow-x-auto p-2">
+      <div className="flex min-h-0 flex-1 gap-2 overflow-x-auto bg-[color-mix(in_oklab,var(--color-content-bg)_88%,var(--color-surface))] p-2">
         {visibleGroups.map((group) => (
           <BoardColumn
             key={group.state.id}
@@ -546,8 +545,11 @@ export default function TeamBoardPage() {
       </div>
 
       {/* Footer */}
-      <div className="flex items-center border-t border-[var(--color-border)] px-4 py-1.5 text-[12px] text-[var(--color-text-secondary)]">
-        {totalIssues} issues
+      <div className="tty-status-bar border-t px-3 py-1.5">
+        <span className="tty-chip">{totalIssues} issues</span>
+        <span className="hidden sm:inline">
+          drag cards between columns to update status
+        </span>
       </div>
 
       <CreateIssueModal

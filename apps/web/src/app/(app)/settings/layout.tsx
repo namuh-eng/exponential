@@ -90,10 +90,10 @@ function SettingsSidebarLink({
   return (
     <Link
       href={withWorkspaceSlug(href, workspaceSlug)}
-      className={`block rounded-md px-2 py-[5px] text-[13px] transition-colors ${
+      className={`tty-row block border-l-2 px-2 py-[5px] text-[13px] transition-colors ${
         active
-          ? "bg-[var(--color-surface-active)] text-[var(--color-text-primary)]"
-          : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+          ? "tty-row-selected border-l-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text-primary)]"
+          : "border-l-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
       }`}
     >
       {label}
@@ -103,7 +103,7 @@ function SettingsSidebarLink({
 
 function SectionTitle({ title }: { title: string }) {
   return (
-    <div className="mt-4 mb-1 px-2 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-tertiary)]">
+    <div className="editorial-section-title mt-4 mb-1 px-2 text-[11px] uppercase tracking-wider text-[var(--color-text-tertiary)]">
       {title}
     </div>
   );
@@ -132,12 +132,15 @@ export default function SettingsLayout({
       : sections;
 
   return (
-    <div className="editorial-page-surface flex h-full flex-col md:flex-row">
+    <div
+      data-testid="settings-tty-layout"
+      className="editorial-page-surface flex h-full flex-col md:flex-row"
+    >
       {/* Settings sidebar */}
-      <aside className="max-h-[40vh] w-full shrink-0 overflow-y-auto border-b border-[var(--color-border)] bg-[color-mix(in_oklab,var(--color-surface)_64%,transparent)] px-3 py-4 md:max-h-none md:w-[220px] md:border-b-0 md:border-r">
+      <aside className="max-h-[40vh] w-full shrink-0 overflow-y-auto border-b border-[var(--color-border)] bg-[color-mix(in_oklab,var(--color-surface)_64%,transparent)] px-2 py-3 md:max-h-none md:w-[220px] md:border-b-0 md:border-r">
         <Link
           href={withWorkspaceSlug("/inbox", workspaceSlug)}
-          className="mb-4 flex items-center gap-1.5 px-2 text-[13px] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
+          className="tty-row mb-3 flex items-center gap-1.5 px-2 py-1 text-[13px] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
         >
           <svg
             width="14"
@@ -155,7 +158,7 @@ export default function SettingsLayout({
           Back to app
         </Link>
 
-        <h2 className="mb-2 px-2 text-[15px] font-semibold text-[var(--color-text-primary)]">
+        <h2 className="tty-status-bar mb-2 border px-2 py-1 text-[13px] font-semibold text-[var(--color-text-primary)]">
           Settings
         </h2>
 
@@ -178,7 +181,7 @@ export default function SettingsLayout({
       </aside>
 
       {/* Content area */}
-      <main className="min-w-0 flex-1 overflow-y-auto p-4 md:p-8">
+      <main className="min-w-0 flex-1 overflow-y-auto p-4 md:p-6">
         {children}
       </main>
     </div>
