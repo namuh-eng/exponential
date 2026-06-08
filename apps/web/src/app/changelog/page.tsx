@@ -2,6 +2,7 @@ import {
   MarketingCard,
   MarketingShell,
 } from "@/components/marketing/public-marketing";
+import { StatusChip } from "@/components/marketing/terminal-primitives";
 
 const posts = [
   [
@@ -30,7 +31,7 @@ export default function ChangelogPage() {
   return (
     <MarketingShell eyebrow="Now / Changelog">
       <div className="py-14">
-        <h1 className="max-w-4xl text-balance text-5xl font-semibold leading-none tracking-[-0.05em] sm:text-6xl">
+        <h1 className="max-w-4xl text-balance text-5xl font-semibold leading-none sm:text-6xl">
           The latest from exponential product development
         </h1>
         <div className="mt-8 flex flex-wrap gap-3">
@@ -40,13 +41,13 @@ export default function ChangelogPage() {
           <input
             id="changelog-search"
             placeholder="Search changelog"
-            className="min-w-64 rounded-full border border-[var(--editorial-line)] bg-[var(--editorial-surface)] px-4 py-2 text-sm outline-none"
+            className="min-w-64 border border-[var(--editorial-line)] bg-[var(--editorial-surface)] px-4 py-2 text-sm text-[var(--editorial-ink-1)] outline-none placeholder:text-[var(--editorial-ink-4)] focus:border-[var(--editorial-accent)]"
           />
           {["Product", "Agents", "Integrations"].map((filter) => (
             <button
               key={filter}
               type="button"
-              className="rounded-full border border-[var(--editorial-line)] bg-[var(--editorial-surface)] px-4 py-2 text-sm"
+              className="border border-[var(--editorial-line)] bg-[var(--editorial-surface)] px-4 py-2 text-sm transition-colors hover:bg-[var(--editorial-hover)]"
             >
               {filter}
             </button>
@@ -55,10 +56,8 @@ export default function ChangelogPage() {
         <div className="mt-10 space-y-5">
           {posts.map(([date, title, copy]) => (
             <MarketingCard key={title}>
-              <p className="text-sm text-[var(--editorial-ink-4)]">{date}</p>
-              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">
-                {title}
-              </h2>
+              <StatusChip>{date}</StatusChip>
+              <h2 className="mt-3 text-3xl font-semibold">{title}</h2>
               <p className="mt-4 max-w-3xl text-sm leading-6 text-[var(--editorial-ink-3)]">
                 {copy}
               </p>

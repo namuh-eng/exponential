@@ -1,3 +1,8 @@
+import {
+  PublicPageFrame,
+  TerminalHeader,
+  TerminalPanel,
+} from "@/components/marketing/terminal-primitives";
 import { chooseActiveWorkspace } from "@/lib/active-workspace";
 import { requireApiData } from "@/lib/api-response";
 import { autoJoinWorkspaceForApprovedDomain } from "@/lib/approved-domain-auto-join";
@@ -15,50 +20,73 @@ import { cookies, headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { AppShell } from "./app-shell";
 
+function AppStateShell({
+  children,
+  meta,
+  title,
+}: {
+  children: React.ReactNode;
+  meta: string;
+  title: string;
+}) {
+  return (
+    <PublicPageFrame className="flex items-center justify-center px-6">
+      <TerminalPanel
+        className="w-full max-w-xl"
+        header={<TerminalHeader label={title} meta={meta} />}
+      >
+        <div className="p-8">{children}</div>
+      </TerminalPanel>
+    </PublicPageFrame>
+  );
+}
+
 function DatabaseBootstrapError() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#0f1117] px-6 text-[#f4f5f8]">
-      <section className="max-w-xl rounded-2xl border border-[#343847] bg-[#171a22] p-8 shadow-2xl">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[#8a90a2]">
+    <AppStateShell title="dev/bootstrap" meta="setup required">
+      <div>
+        <p className="mb-3 text-xs font-semibold uppercase text-[var(--editorial-ink-4)]">
           Dev setup required
         </p>
-        <h1 className="text-2xl font-semibold">{DATABASE_BOOTSTRAP_TITLE}</h1>
-        <p className="mt-3 text-sm leading-6 text-[#c4c8d4]">
+        <h1 className="text-2xl font-semibold text-[var(--editorial-ink-1)]">
+          {DATABASE_BOOTSTRAP_TITLE}
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-[var(--editorial-ink-3)]">
           {DATABASE_BOOTSTRAP_MESSAGE}
         </p>
-        <div className="mt-6 rounded-xl bg-[#0d0f15] p-4 font-mono text-sm text-[#d7dae3]">
+        <div className="mt-6 border border-[var(--editorial-line)] bg-[var(--editorial-surface-2)] p-4 font-mono text-sm text-[var(--editorial-ink-2)]">
           {DATABASE_BOOTSTRAP_SETUP_COMMANDS.map((command) => (
             <div key={command}>{command}</div>
           ))}
           <div>PLAYWRIGHT_TEST=true npm run dev -- -p 7015</div>
         </div>
-        <p className="mt-5 text-sm text-[#9aa1b3]">
+        <p className="mt-5 text-sm text-[var(--editorial-ink-3)]">
           If you use a custom database, set DATABASE_URL in .env.local and make
           sure Postgres accepts TCP connections before loading protected routes.
         </p>
-      </section>
-    </main>
+      </div>
+    </AppStateShell>
   );
 }
 
 function WorkspaceIpAccessDenied() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#0f1117] px-6 text-[#f4f5f8]">
-      <section className="max-w-xl rounded-2xl border border-[#3f2530] bg-[#1b1117] p-8 shadow-2xl">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[#ff8ba7]">
+    <AppStateShell title="workspace/access" meta="denied">
+      <div>
+        <p className="mb-3 text-xs font-semibold uppercase text-[var(--editorial-err)]">
           Access denied
         </p>
-        <h1 className="text-2xl font-semibold">
+        <h1 className="text-2xl font-semibold text-[var(--editorial-ink-1)]">
           Your network is not allowed for this workspace
         </h1>
-        <p className="mt-3 text-sm leading-6 text-[#f0c9d4]">
+        <p className="mt-3 text-sm leading-6 text-[var(--editorial-ink-3)]">
           This workspace only allows access from configured IP ranges. Switch to
           an approved network or contact a workspace admin to update Security
           settings. Login, logout, invite acceptance, static assets, and test
           setup routes remain outside this workspace gate.
         </p>
-      </section>
-    </main>
+      </div>
+    </AppStateShell>
   );
 }
 

@@ -1,4 +1,9 @@
 import { ExponentialMark } from "@/components/exponential-mark";
+import {
+  CommandLink,
+  PublicPageFrame,
+  StatusChip,
+} from "@/components/marketing/terminal-primitives";
 import Link from "next/link";
 
 const NAV_LINKS = [
@@ -55,7 +60,7 @@ $ docker compose up -d`;
 
 export function LandingPage() {
   return (
-    <div className="min-h-screen bg-white font-mono text-black antialiased">
+    <PublicPageFrame>
       <TopNav />
       <main className="mx-auto max-w-[1180px] px-6 pb-24 pt-10 sm:px-10">
         <Hero />
@@ -63,38 +68,35 @@ export function LandingPage() {
         <CodeBlocks />
       </main>
       <Footer />
-    </div>
+    </PublicPageFrame>
   );
 }
 
 function TopNav() {
   return (
-    <header className="border-b border-black/15">
+    <header className="border-b border-[var(--editorial-line)]">
       <div className="mx-auto flex max-w-[1180px] items-center justify-between px-6 py-4 sm:px-10">
-        <Link href="/" className="flex items-center gap-3">
-          <ExponentialMark size={20} className="text-black" />
-          <span className="text-[13px] font-medium tracking-tight">
-            exponential
-          </span>
+        <Link
+          href="/"
+          className="flex items-center gap-3 transition-colors hover:text-[var(--editorial-accent)]"
+        >
+          <ExponentialMark size={20} />
+          <span className="text-[13px] font-medium">exponential</span>
         </Link>
         <nav className="hidden items-center gap-6 text-[12px] sm:flex">
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="text-black/70 transition-colors hover:text-black"
+              className="border border-transparent px-2 py-1 text-[var(--editorial-ink-3)] transition-colors hover:border-[var(--editorial-line)] hover:bg-[var(--editorial-hover)] hover:text-[var(--editorial-ink-1)]"
             >
               {link.label}
             </Link>
           ))}
-          <span className="text-black/40">★ 14.2k</span>
         </nav>
-        <Link
-          href="/login"
-          className="border border-black px-3 py-1.5 text-[12px] font-medium transition-colors hover:bg-black hover:text-white"
-        >
+        <CommandLink href="/login" variant="ghost" className="min-h-8 px-3">
           log in
-        </Link>
+        </CommandLink>
       </div>
     </header>
   );
@@ -104,11 +106,13 @@ function Hero() {
   return (
     <section className="grid gap-10 pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
       <div>
-        <p className="text-[12px] text-black/55">$ npm i -g exponential-cli</p>
-        <p className="mt-2 text-[12px] text-black/55">
+        <p className="text-[12px] text-[var(--editorial-ink-3)]">
+          $ npm i -g exponential-cli
+        </p>
+        <p className="mt-2 text-[12px] text-[var(--editorial-ink-3)]">
           {"// source-available · ELv2 · self-hostable"}
         </p>
-        <h1 className="mt-8 text-balance font-sans text-[44px] font-medium leading-[1.05] tracking-[-0.025em] sm:text-[56px] lg:text-[68px]">
+        <h1 className="mt-8 text-balance font-mono text-[44px] font-medium leading-[1.05] sm:text-[56px] lg:text-[68px]">
           the issue tracker
           <br />
           that <span className="italic">compiles</span>
@@ -118,25 +122,21 @@ function Hero() {
         <div className="mt-10 flex flex-wrap items-center gap-4">
           <button
             type="button"
-            className="border border-black bg-black px-4 py-2.5 text-[13px] text-white transition-opacity hover:opacity-85"
+            className="inline-flex min-h-10 items-center border border-[var(--editorial-accent)] bg-[var(--editorial-accent)] px-4 py-2.5 text-[13px] font-medium text-[var(--editorial-accent-ink)] transition-colors hover:bg-[var(--editorial-accent-hover)]"
           >
             $ docker run exponential
           </button>
           <Link
             href="/docs"
-            className="text-[13px] text-black/80 underline-offset-4 hover:underline"
+            className="border border-transparent px-2 py-1 text-[13px] text-[var(--editorial-ink-2)] transition-colors hover:border-[var(--editorial-line)] hover:bg-[var(--editorial-hover)]"
           >
             read the docs →
           </Link>
         </div>
-        <ul className="mt-10 flex flex-wrap gap-x-5 gap-y-2 text-[12px] text-black/65">
+        <ul className="mt-10 flex flex-wrap gap-2 text-[12px] text-[var(--editorial-ink-3)]">
           {STATUS_PILLS.map((pill) => (
-            <li key={pill} className="inline-flex items-center gap-2">
-              <span
-                aria-hidden="true"
-                className="inline-block h-1.5 w-1.5 rounded-full bg-black"
-              />
-              {pill}
+            <li key={pill}>
+              <StatusChip>{pill}</StatusChip>
             </li>
           ))}
         </ul>
@@ -146,28 +146,28 @@ function Hero() {
         <div className="space-y-1 text-[12px] leading-relaxed">
           <Line c="dim">$ exp issue list --team core --status open</Line>
           <Line>
-            <span className="text-black/45">ENG-142</span> rate limit cache
-            stampede on cold start{" "}
-            <span className="ml-2 border border-black/25 px-1 text-[10px] text-black/55">
+            <span className="text-[var(--editorial-ink-4)]">ENG-142</span> rate
+            limit cache stampede on cold start{" "}
+            <span className="ml-2 border border-[var(--editorial-line)] px-1 text-[10px] text-[var(--editorial-ink-3)]">
               p1
             </span>
           </Line>
           <Line>
-            <span className="text-black/45">ENG-138</span> sso jit-provisioning
-            fails for nested groups
+            <span className="text-[var(--editorial-ink-4)]">ENG-138</span> sso
+            jit-provisioning fails for nested groups
           </Line>
           <Line>
-            <span className="text-black/45">ENG-131</span> editor: paste images
-            into markdown
+            <span className="text-[var(--editorial-ink-4)]">ENG-131</span>{" "}
+            editor: paste images into markdown
           </Line>
           <Line>
-            <span className="text-black/45">ENG-129</span> cli: --json output
-            for `exp issue show`
+            <span className="text-[var(--editorial-ink-4)]">ENG-129</span> cli:
+            --json output for `exp issue show`
           </Line>
           <Line c="dim">$ exp cycle status</Line>
           <Line>
             cycle 24 · 11 / 18 done ·{" "}
-            <span className="text-black/55">3 days left</span>
+            <span className="text-[var(--editorial-ink-3)]">3 days left</span>
           </Line>
           <Line c="dim">$ _</Line>
         </div>
@@ -178,17 +178,17 @@ function Hero() {
 
 function Features() {
   return (
-    <section className="mt-28 border-t border-black/15 pt-14">
+    <section className="mt-28 border-t border-[var(--editorial-line)] pt-14">
       <div className="grid gap-10 md:grid-cols-3">
         {FEATURES.map((f) => (
           <article key={f.n}>
-            <p className="text-[11px] uppercase tracking-[0.2em] text-black/45">
+            <p className="text-[11px] uppercase text-[var(--editorial-ink-4)]">
               {`// ${f.n}`}
             </p>
-            <h3 className="mt-3 font-sans text-[20px] font-medium tracking-tight">
+            <h3 className="mt-3 font-mono text-[20px] font-medium">
               {f.title}
             </h3>
-            <p className="mt-3 text-[13px] leading-relaxed text-black/70">
+            <p className="mt-3 text-[13px] leading-relaxed text-[var(--editorial-ink-3)]">
               {f.body}
             </p>
           </article>
@@ -202,15 +202,15 @@ function CodeBlocks() {
   return (
     <section className="mt-24 grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
       <TerminalWindow path="# issue as text" tone="dark">
-        <pre className="overflow-x-auto whitespace-pre text-[12px] leading-relaxed text-white/85">
+        <pre className="whitespace-pre-wrap break-words text-[12px] leading-relaxed">
           {ISSUE_AS_TEXT}
         </pre>
       </TerminalWindow>
       <TerminalWindow path="# self-host in 3 lines" tone="dark">
-        <pre className="overflow-x-auto whitespace-pre text-[12px] leading-relaxed text-white/85">
+        <pre className="whitespace-pre-wrap break-words text-[12px] leading-relaxed">
           {SELF_HOST}
         </pre>
-        <p className="mt-6 text-[11px] text-white/45">
+        <p className="mt-6 text-[11px] text-[var(--editorial-ink-4)]">
           backed by postgres · redis · S3-compatible blob
         </p>
       </TerminalWindow>
@@ -232,28 +232,16 @@ function TerminalWindow({
     <div
       className={
         isDark
-          ? "border border-black bg-black text-white"
-          : "border border-black/20 bg-white"
+          ? "min-w-0 overflow-hidden border border-[var(--editorial-line-strong)] bg-[var(--editorial-surface-2)] text-[var(--editorial-ink-1)]"
+          : "tty-panel min-w-0 overflow-hidden"
       }
     >
-      <div
-        className={`flex items-center justify-between border-b px-3 py-2 text-[11px] ${
-          isDark
-            ? "border-white/15 text-white/60"
-            : "border-black/15 text-black/55"
-        }`}
-      >
+      <div className="tty-status-bar justify-between border-b px-3 py-2">
         <span>{path}</span>
         <span className="flex items-center gap-1.5" aria-hidden="true">
-          <span
-            className={`h-2 w-2 ${isDark ? "bg-white/25" : "bg-black/25"}`}
-          />
-          <span
-            className={`h-2 w-2 ${isDark ? "bg-white/25" : "bg-black/25"}`}
-          />
-          <span
-            className={`h-2 w-2 ${isDark ? "bg-white/25" : "bg-black/25"}`}
-          />
+          <span className="h-2 w-2 bg-[var(--editorial-ink-5)]" />
+          <span className="h-2 w-2 bg-[var(--editorial-ink-5)]" />
+          <span className="h-2 w-2 bg-[var(--editorial-ink-5)]" />
         </span>
       </div>
       <div className="px-4 py-4 sm:px-5 sm:py-5">{children}</div>
@@ -269,7 +257,13 @@ function Line({
   children: React.ReactNode;
 }) {
   return (
-    <div className={c === "dim" ? "text-black/45" : "text-black/85"}>
+    <div
+      className={
+        c === "dim"
+          ? "break-words text-[var(--editorial-ink-4)]"
+          : "break-words text-[var(--editorial-ink-2)]"
+      }
+    >
       {children}
     </div>
   );
@@ -277,10 +271,10 @@ function Line({
 
 function Footer() {
   return (
-    <footer className="border-t border-black/15">
-      <div className="mx-auto flex max-w-[1180px] flex-col gap-2 px-6 py-6 text-[11px] text-black/55 sm:flex-row sm:items-center sm:justify-between sm:px-10">
+    <footer className="border-t border-[var(--editorial-line)]">
+      <div className="mx-auto flex max-w-[1180px] flex-col gap-2 px-6 py-6 text-[11px] text-[var(--editorial-ink-3)] sm:flex-row sm:items-center sm:justify-between sm:px-10">
         <span>© 2026 exponential · ELv2 (source-available)</span>
-        <span>v0.4.2 · build a3f10c2 · runs on your hardware</span>
+        <span>runs on your hardware</span>
       </div>
     </footer>
   );
