@@ -134,6 +134,7 @@ services:
       - pnpm_store:/root/.local/share/pnpm/store
       - web_node_modules:/workspace/node_modules
       - web_app_node_modules:/workspace/apps/web/node_modules
+      - web_next:/workspace/apps/web/.next
     depends_on:
       redis:
         condition: service_healthy
@@ -146,3 +147,4 @@ volumes:
   pnpm_store:
   web_node_modules:
   web_app_node_modules:
+  web_next:
