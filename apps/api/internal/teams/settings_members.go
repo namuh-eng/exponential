@@ -249,8 +249,32 @@ func (h Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 			settings[k] = v
 		}
 	}
-	_, err := h.DB.Exec(r.Context(), `update team set name=$1,key=$2,icon=$3,timezone=$4,estimate_type=$5,triage_enabled=$6,cycles_enabled=$7,cycle_start_day=$8,cycle_duration_weeks=$9,settings=$10,updated_at=now() where id=$11::uuid and workspace_id=$12::uuid`, strings.TrimSpace(name), key, icon, timezone, estimateType, triageEnabled, cyclesEnabled, cycleStartDay, cycleDurationWeeks, settings, team.ID, team.WorkspaceID)
+	tx, err := h.DB.Begin(r.Context())
 	if err != nil {
+		problem.Write(w, 500, "Update team settings failed", err.Error())
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	if err := lockTeamForWorkflowStateRepair(r.Context(), tx, team.ID); err != nil {
+		problem.Write(w, 500, "Update team settings failed", err.Error())
+		return
+	}
+	if triageEnabled {
+		if err := ensureTriageWorkflowState(r.Context(), tx, team.ID); err != nil {
+			problem.Write(w, 500, "Update team settings failed", err.Error())
+			return
+		}
+	}
+	if err := reconcileTriageDestinationSettings(r.Context(), tx, team.ID, settings); err != nil {
+		problem.Write(w, 500, "Update team settings failed", err.Error())
+		return
+	}
+	_, err = tx.Exec(r.Context(), `update team set name=$1,key=$2,icon=$3,timezone=$4,estimate_type=$5,triage_enabled=$6,cycles_enabled=$7,cycle_start_day=$8,cycle_duration_weeks=$9,settings=$10,updated_at=now() where id=$11::uuid and workspace_id=$12::uuid`, strings.TrimSpace(name), key, icon, timezone, estimateType, triageEnabled, cyclesEnabled, cycleStartDay, cycleDurationWeeks, settings, team.ID, team.WorkspaceID)
+	if err != nil {
+		problem.Write(w, 500, "Update team settings failed", err.Error())
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
 		problem.Write(w, 500, "Update team settings failed", err.Error())
 		return
 	}

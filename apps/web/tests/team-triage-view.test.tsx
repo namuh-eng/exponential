@@ -23,6 +23,11 @@ vi.mock("@/components/issue-detail-view", () => ({
 
 import TeamTriagePage from "@/app/(app)/team/[key]/triage/page";
 
+function setEditableValue(element: HTMLElement, value: string) {
+  element.textContent = value;
+  fireEvent.input(element);
+}
+
 const mockTriageData = {
   team: { id: "team-1", name: "Engineering", key: "ENG" },
   count: 2,
@@ -313,5 +318,118 @@ describe("TeamTriagePage UI", () => {
     render(<TeamTriagePage />);
 
     expect(await screen.findByText("No issues to triage")).toBeInTheDocument();
+  });
+
+  it("fails closed when triage is enabled without a triage status", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...mockTriageData,
+        issues: [],
+        count: 0,
+        createStateId: null,
+        createStateName: null,
+        triageEnabled: true,
+      }),
+    } as Response);
+
+    render(<TeamTriagePage />);
+
+    expect(
+      await screen.findByText("Triage status missing"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Create triage issue" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open workflow statuses" }),
+    ).toHaveAttribute("href", "/settings/teams/ENG/statuses");
+  });
+
+  it("creates from the empty triage page with the triage state id", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation((input, init) => {
+        const url = input.toString();
+
+        if (url === "/api/teams/ENG/triage") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ ...mockTriageData, issues: [], count: 0 }),
+          } as Response);
+        }
+
+        if (url === "/api/teams/ENG/create-issue-options") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              team: { id: "team-1", name: "Engineering", key: "ENG" },
+              statuses: [
+                {
+                  id: "s-triage",
+                  name: "Triage",
+                  category: "triage",
+                  color: "#f59e0b",
+                },
+                {
+                  id: "s-backlog",
+                  name: "Backlog",
+                  category: "backlog",
+                  color: "#999",
+                },
+              ],
+              priorities: [{ value: "none", label: "No priority" }],
+              assignees: [],
+              labels: [],
+              projects: [],
+              cycles: [],
+              estimates: [],
+              relationIssues: [],
+              dueDatePresets: [],
+            }),
+          } as Response);
+        }
+
+        if (url === "/api/teams/ENG/templates") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ templates: [] }),
+          } as Response);
+        }
+
+        if (url === "/api/issues" && init?.method === "POST") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ id: "created-issue" }),
+          } as Response);
+        }
+
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({}),
+        } as Response);
+      });
+
+    render(<TeamTriagePage />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Create triage issue" }),
+    );
+
+    const titleBox = await screen.findByRole("textbox", {
+      name: "Issue title",
+    });
+    setEditableValue(titleBox, "Needs intake review");
+    fireEvent.click(screen.getByText("Create Issue"));
+
+    await waitFor(() => {
+      const createCall = fetchSpy.mock.calls.find(
+        ([url, init]) => url === "/api/issues" && init?.method === "POST",
+      );
+      expect(createCall).toBeDefined();
+      expect(JSON.parse(String(createCall?.[1]?.body))).toMatchObject({
+        title: "Needs intake review",
+        stateId: "s-triage",
+      });
+    });
   });
 });

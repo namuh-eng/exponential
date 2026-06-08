@@ -251,7 +251,7 @@ func (h Handler) loadTriageTeam(w http.ResponseWriter, r *http.Request, workspac
 }
 
 func (h Handler) triageStates(r *http.Request, teamID string) ([]map[string]any, error) {
-	rows, err := h.DB.Query(r.Context(), `select id::text,name,color from workflow_state where team_id=$1::uuid and category='triage'`, teamID)
+	rows, err := h.DB.Query(r.Context(), `select id::text,name,color from workflow_state where team_id=$1::uuid and category='triage' order by coalesce(is_default,false) desc, position asc, name asc, id asc`, teamID)
 	if err != nil {
 		return nil, err
 	}

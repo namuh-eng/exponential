@@ -1,6 +1,7 @@
 package teams
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 )
 
 var statusCategories = []string{"triage", "backlog", "unstarted", "started", "completed", "canceled"}
+var errDuplicateStatusMissing = errors.New("duplicate status missing")
 
 type statusBehavior map[string]any
 
@@ -80,37 +82,60 @@ func (h Handler) CreateStatus(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 400, "Invalid status behavior", "")
 		return
 	}
-	unique, err := h.statusNameUnique(r, team.ID, category, name, "")
+	tx, err := h.DB.Begin(r.Context())
 	if err != nil {
 		problem.Write(w, 500, "Create status failed", err.Error())
 		return
 	}
-	if !unique {
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	if err := lockTeamForWorkflowStateRepair(r.Context(), tx, team.ID); err != nil {
+		problem.Write(w, 500, "Create status failed", err.Error())
+		return
+	}
+	var nameExists bool
+	if err := tx.QueryRow(r.Context(), `select exists(select 1 from workflow_state where team_id=$1::uuid and category=$2 and lower(name)=lower($3))`, team.ID, category, name).Scan(&nameExists); err != nil {
+		problem.Write(w, 500, "Create status failed", err.Error())
+		return
+	}
+	if nameExists {
 		problem.Write(w, 409, "A status with that name already exists in this category", "")
 		return
 	}
-	positions, err := h.categoryStatusPositions(r, team.ID, category)
-	if err != nil {
+	var statusCount int64
+	var highestPosition int32
+	if err := tx.QueryRow(r.Context(), `select count(*), coalesce(max(position), 0)::int from workflow_state where team_id=$1::uuid and category=$2`, team.ID, category).Scan(&statusCount, &highestPosition); err != nil {
 		problem.Write(w, 500, "Create status failed", err.Error())
 		return
 	}
 	nextPosition := int32(0)
-	if len(positions) > 0 {
-		nextPosition = maxPosition(positions) + 1
+	if statusCount > 0 {
+		nextPosition = highestPosition + 1
 	}
-	isDefault := len(positions) == 0
+	isDefault := statusCount == 0
 	description := normalizeStatusDescription(body["description"], true)
 	var createdID string
-	if err := h.DB.QueryRow(r.Context(), `insert into workflow_state (team_id,category,name,description,color,position,is_default,updated_at) values ($1::uuid,$2,$3,$4,$5,$6,$7,now()) returning id::text`, team.ID, category, name, description, valueOrString(color, "#6b6f76"), nextPosition, isDefault).Scan(&createdID); err != nil {
+	if err := tx.QueryRow(r.Context(), `insert into workflow_state (team_id,category,name,description,color,position,is_default,updated_at) values ($1::uuid,$2,$3,$4,$5,$6,$7,now()) returning id::text`, team.ID, category, name, description, valueOrString(color, "#6b6f76"), nextPosition, isDefault).Scan(&createdID); err != nil {
 		problem.Write(w, 500, "Create status failed", err.Error())
 		return
 	}
 	if behaviorSet {
-		team.Settings = setStatusBehavior(team.Settings, createdID, behavior)
-		if err := h.saveTeamSettings(r, team.ID, team.Settings); err != nil {
+		var settingsRaw []byte
+		if err := tx.QueryRow(r.Context(), `select coalesce(settings,'{}'::jsonb) from team where id=$1::uuid`, team.ID).Scan(&settingsRaw); err != nil {
 			problem.Write(w, 500, "Create status failed", err.Error())
 			return
 		}
+		team.Settings = map[string]any{}
+		_ = json.Unmarshal(settingsRaw, &team.Settings)
+		team.Settings = setStatusBehavior(team.Settings, createdID, behavior)
+		raw, _ := json.Marshal(team.Settings)
+		if _, err := tx.Exec(r.Context(), `update team set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, raw, team.ID); err != nil {
+			problem.Write(w, 500, "Create status failed", err.Error())
+			return
+		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		problem.Write(w, 500, "Create status failed", err.Error())
+		return
 	}
 	h.writeStatuses(w, r, team)
 }
@@ -126,20 +151,25 @@ func (h Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if duplicateID, ok := body["duplicateStatusId"].(string); ok {
-		exists, err := h.statusExists(r, team.ID, duplicateID)
-		if err != nil {
-			problem.Write(w, 500, "Update statuses failed", err.Error())
-			return
-		}
-		if !exists {
+		settings, err := h.mutateTeamSettingsLocked(r, team.ID, func(tx pgx.Tx, settings map[string]any) (map[string]any, error) {
+			var exists bool
+			if err := tx.QueryRow(r.Context(), `select exists(select 1 from workflow_state where team_id=$1::uuid and id=$2::uuid)`, team.ID, duplicateID).Scan(&exists); err != nil {
+				return settings, err
+			}
+			if !exists {
+				return settings, errDuplicateStatusMissing
+			}
+			settings["duplicateIssueStatusId"] = duplicateID
+			return settings, nil
+		})
+		if errors.Is(err, errDuplicateStatusMissing) {
 			problem.Write(w, 400, "Duplicate issue status must exist on this team", "")
 			return
-		}
-		team.Settings["duplicateIssueStatusId"] = duplicateID
-		if err := h.saveTeamSettings(r, team.ID, team.Settings); err != nil {
+		} else if err != nil {
 			problem.Write(w, 500, "Update statuses failed", err.Error())
 			return
 		}
+		team.Settings = settings
 		h.writeStatuses(w, r, team)
 		return
 	}
@@ -152,7 +182,25 @@ func (h Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 400, "Status id is required", "")
 		return
 	}
-	existing, err := h.statusSummary(r, team.ID, id)
+	tx, err := h.DB.Begin(r.Context())
+	if err != nil {
+		problem.Write(w, 500, "Update status failed", err.Error())
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	if err := lockTeamForWorkflowStateRepair(r.Context(), tx, team.ID); err != nil {
+		problem.Write(w, 500, "Update status failed", err.Error())
+		return
+	}
+	var settingsRaw []byte
+	if err := tx.QueryRow(r.Context(), `select triage_enabled, coalesce(settings,'{}'::jsonb) from team where id=$1::uuid`, team.ID).Scan(&team.TriageEnabled, &settingsRaw); err != nil {
+		problem.Write(w, 500, "Update status failed", err.Error())
+		return
+	}
+	team.Settings = map[string]any{}
+	_ = json.Unmarshal(settingsRaw, &team.Settings)
+	var existing statusSummary
+	err = tx.QueryRow(r.Context(), `select id::text,category::text,coalesce(is_default,false) from workflow_state where team_id=$1::uuid and id=$2::uuid for update`, team.ID, id).Scan(&existing.ID, &existing.Category, &existing.IsDefault)
 	if errors.Is(err, pgx.ErrNoRows) {
 		problem.Write(w, 404, "Status not found", "")
 		return
@@ -179,12 +227,12 @@ func (h Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 			problem.Write(w, 400, "Status name is required", "")
 			return
 		}
-		unique, err := h.statusNameUnique(r, team.ID, nextCategory, name, id)
-		if err != nil {
+		var nameExists bool
+		if err := tx.QueryRow(r.Context(), `select exists(select 1 from workflow_state where team_id=$1::uuid and category=$2 and lower(name)=lower($3) and id<>$4::uuid)`, team.ID, nextCategory, name, id).Scan(&nameExists); err != nil {
 			problem.Write(w, 500, "Update status failed", err.Error())
 			return
 		}
-		if !unique {
+		if nameExists {
 			problem.Write(w, 409, "A status with that name already exists in this category", "")
 			return
 		}
@@ -199,8 +247,9 @@ func (h Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 400, "Invalid status behavior", "")
 		return
 	}
-	targetPositions, err := h.categoryStatusPositions(r, team.ID, nextCategory)
-	if err != nil {
+	var targetStatusCount int64
+	var targetMaxPosition int32
+	if err := tx.QueryRow(r.Context(), `select count(*), coalesce(max(position), 0)::int from workflow_state where team_id=$1::uuid and category=$2`, team.ID, nextCategory).Scan(&targetStatusCount, &targetMaxPosition); err != nil {
 		problem.Write(w, 500, "Update status failed", err.Error())
 		return
 	}
@@ -208,12 +257,23 @@ func (h Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	if _, present := body["isDefault"]; present {
 		nextIsDefault = body["isDefault"] == true
 	}
-	if len(targetPositions) == 0 && nextCategory != existing.Category {
+	if targetStatusCount == 0 && nextCategory != existing.Category {
 		nextIsDefault = true
 	}
+	if existing.Category == "triage" && nextCategory != "triage" && boolPtrVal(team.TriageEnabled, true) {
+		var hasOtherTriage bool
+		if err := tx.QueryRow(r.Context(), `select exists(select 1 from workflow_state where team_id=$1::uuid and category='triage' and id<>$2::uuid)`, team.ID, id).Scan(&hasOtherTriage); err != nil {
+			problem.Write(w, 500, "Update status failed", err.Error())
+			return
+		}
+		if shouldBlockTriageStatusDelete(team, existing, hasOtherTriage) {
+			problem.Write(w, 400, "Teams with triage enabled must keep a Triage status", "")
+			return
+		}
+	}
 	if existing.IsDefault && (nextCategory != existing.Category || !nextIsDefault) {
-		hasOther, err := h.categoryHasOtherDefault(r, team.ID, existing.Category, id)
-		if err != nil {
+		var hasOther bool
+		if err := tx.QueryRow(r.Context(), `select exists(select 1 from workflow_state where team_id=$1::uuid and category=$2 and coalesce(is_default,false)=true and id<>$3::uuid)`, team.ID, existing.Category, id).Scan(&hasOther); err != nil {
 			problem.Write(w, 500, "Update status failed", err.Error())
 			return
 		}
@@ -241,35 +301,48 @@ func (h Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		add("category=$%d", nextCategory)
 	}
 	if _, present := body["category"]; present && nextCategory != existing.Category {
-		add("position=$%d", maxPosition(targetPositions)+1)
+		add("position=$%d", targetMaxPosition+1)
 	}
-	if _, present := body["isDefault"]; present || (len(targetPositions) == 0 && nextCategory != existing.Category) {
+	if _, present := body["isDefault"]; present || (targetStatusCount == 0 && nextCategory != existing.Category) {
 		add("is_default=$%d", nextIsDefault)
 	}
 	args = append(args, id, team.ID)
 	query := fmt.Sprintf("update workflow_state set %s where id=$%d::uuid and team_id=$%d::uuid", strings.Join(setParts, ", "), len(args)-1, len(args))
-	if _, err := h.DB.Exec(r.Context(), query, args...); err != nil {
+	if _, err := tx.Exec(r.Context(), query, args...); err != nil {
 		problem.Write(w, 500, "Update status failed", err.Error())
 		return
 	}
 	if behaviorSet {
 		existingBehavior := statusBehaviorFor(team.Settings, id)
-		if behavior["slaBehavior"] == "inherit" {
+		nextBehavior := statusBehavior{}
+		for key, value := range behavior {
+			nextBehavior[key] = value
+		}
+		if nextBehavior["slaBehavior"] == "inherit" {
 			if existingSLA, ok := existingBehavior["slaBehavior"].(string); ok && existingSLA != "" && existingSLA != "inherit" {
-				behavior["slaBehavior"] = existingSLA
+				nextBehavior["slaBehavior"] = existingSLA
 			}
 		}
-		team.Settings = setStatusBehavior(team.Settings, id, behavior)
-		if err := h.saveTeamSettings(r, team.ID, team.Settings); err != nil {
+		team.Settings = setStatusBehavior(team.Settings, id, nextBehavior)
+	}
+	if nextCategory != existing.Category {
+		clearInvalidTriageDestinationSettings(team.Settings, id, nextCategory)
+	}
+	if behaviorSet || nextCategory != existing.Category {
+		if err := saveTeamSettingsTx(r.Context(), tx, team.ID, team.Settings); err != nil {
 			problem.Write(w, 500, "Update status failed", err.Error())
 			return
 		}
 	}
 	if nextIsDefault {
-		if _, err := h.DB.Exec(r.Context(), `update workflow_state set is_default=false, updated_at=now() where team_id=$1::uuid and category=$2 and id<>$3::uuid`, team.ID, nextCategory, id); err != nil {
+		if _, err := tx.Exec(r.Context(), `update workflow_state set is_default=false, updated_at=now() where team_id=$1::uuid and category=$2 and id<>$3::uuid`, team.ID, nextCategory, id); err != nil {
 			problem.Write(w, 500, "Update status failed", err.Error())
 			return
 		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		problem.Write(w, 500, "Update status failed", err.Error())
+		return
 	}
 	h.writeStatuses(w, r, team)
 }
@@ -289,7 +362,25 @@ func (h Handler) DeleteStatus(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 400, "Status id is required", "")
 		return
 	}
-	existing, err := h.statusSummary(r, team.ID, id)
+	tx, err := h.DB.Begin(r.Context())
+	if err != nil {
+		problem.Write(w, 500, "Delete status failed", err.Error())
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	if err := lockTeamForWorkflowStateRepair(r.Context(), tx, team.ID); err != nil {
+		problem.Write(w, 500, "Delete status failed", err.Error())
+		return
+	}
+	var settingsRaw []byte
+	if err := tx.QueryRow(r.Context(), `select triage_enabled, coalesce(settings,'{}'::jsonb) from team where id=$1::uuid`, team.ID).Scan(&team.TriageEnabled, &settingsRaw); err != nil {
+		problem.Write(w, 500, "Delete status failed", err.Error())
+		return
+	}
+	team.Settings = map[string]any{}
+	_ = json.Unmarshal(settingsRaw, &team.Settings)
+	var existing statusSummary
+	err = tx.QueryRow(r.Context(), `select id::text,category::text,coalesce(is_default,false) from workflow_state where team_id=$1::uuid and id=$2::uuid for update`, team.ID, id).Scan(&existing.ID, &existing.Category, &existing.IsDefault)
 	if errors.Is(err, pgx.ErrNoRows) {
 		problem.Write(w, 404, "Status not found", "")
 		return
@@ -302,41 +393,67 @@ func (h Handler) DeleteStatus(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 400, "Default statuses cannot be deleted", "")
 		return
 	}
+	if existing.Category == "triage" && boolPtrVal(team.TriageEnabled, true) {
+		var hasOther bool
+		if err := tx.QueryRow(r.Context(), `select exists(select 1 from workflow_state where team_id=$1::uuid and category='triage' and id<>$2::uuid)`, team.ID, id).Scan(&hasOther); err != nil {
+			problem.Write(w, 500, "Delete status failed", err.Error())
+			return
+		}
+		if shouldBlockTriageStatusDelete(team, existing, hasOther) {
+			problem.Write(w, 400, "Teams with triage enabled must keep a Triage status", "")
+			return
+		}
+	}
 	var issueCount int64
-	if err := h.DB.QueryRow(r.Context(), `select count(*) from issue where state_id=$1::uuid`, id).Scan(&issueCount); err != nil {
+	if err := tx.QueryRow(r.Context(), `select count(*) from issue where state_id=$1::uuid`, id).Scan(&issueCount); err != nil {
 		problem.Write(w, 500, "Delete status failed", err.Error())
 		return
 	}
 	if issueCount > 0 {
 		replacementID, _ := body["replacementStatusId"].(string)
-		exists, err := h.statusExists(r, team.ID, replacementID)
-		if err != nil {
-			problem.Write(w, 500, "Delete status failed", err.Error())
-			return
-		}
-		if replacementID == "" || replacementID == id || !exists {
+		if replacementID == "" || replacementID == id {
 			problem.Write(w, 400, "Replacement status must exist on this team", "")
 			return
 		}
-		if _, err := h.DB.Exec(r.Context(), `update issue set state_id=$1::uuid where state_id=$2::uuid`, replacementID, id); err != nil {
+		var exists bool
+		if err := tx.QueryRow(r.Context(), `select exists(select 1 from workflow_state where team_id=$1::uuid and id=$2::uuid)`, team.ID, replacementID).Scan(&exists); err != nil {
+			problem.Write(w, 500, "Delete status failed", err.Error())
+			return
+		}
+		if !exists {
+			problem.Write(w, 400, "Replacement status must exist on this team", "")
+			return
+		}
+		if _, err := tx.Exec(r.Context(), `update issue set state_id=$1::uuid where state_id=$2::uuid`, replacementID, id); err != nil {
 			problem.Write(w, 500, "Delete status failed", err.Error())
 			return
 		}
 	}
-	if _, err := h.DB.Exec(r.Context(), `delete from workflow_state where id=$1::uuid and team_id=$2::uuid`, id, team.ID); err != nil {
+	if _, err := tx.Exec(r.Context(), `delete from workflow_state where id=$1::uuid and team_id=$2::uuid`, id, team.ID); err != nil {
 		problem.Write(w, 500, "Delete status failed", err.Error())
 		return
 	}
 	team.Settings = deleteStatusBehavior(team.Settings, id)
 	if team.Settings["duplicateIssueStatusId"] == id {
-		fallback, _ := h.firstStatusID(r, team.ID)
+		fallback := ""
+		err := tx.QueryRow(r.Context(), `select id::text from workflow_state where team_id=$1::uuid and category='canceled' order by coalesce(is_default,false) desc, position asc limit 1`, team.ID).Scan(&fallback)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			problem.Write(w, 500, "Delete status failed", err.Error())
+			return
+		}
 		if fallback == "" {
 			delete(team.Settings, "duplicateIssueStatusId")
 		} else {
 			team.Settings["duplicateIssueStatusId"] = fallback
 		}
 	}
-	if err := h.saveTeamSettings(r, team.ID, team.Settings); err != nil {
+	_ = clearStatusSettingIfMatches(team.Settings, "triageAcceptDestinationStateId", id)
+	_ = clearStatusSettingIfMatches(team.Settings, "triageDeclineDestinationStateId", id)
+	if err := saveTeamSettingsTx(r.Context(), tx, team.ID, team.Settings); err != nil {
+		problem.Write(w, 500, "Delete status failed", err.Error())
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
 		problem.Write(w, 500, "Delete status failed", err.Error())
 		return
 	}
@@ -386,20 +503,23 @@ func (h Handler) writeStatuses(w http.ResponseWriter, r *http.Request, team team
 		}
 		statuses[category] = items
 	}
-	duplicateID := stringSetting(team.Settings, "duplicateIssueStatusId")
-	if duplicateID == "" || !contains(ids, duplicateID) {
-		duplicateID = ""
-		if items := statuses["canceled"]; len(items) > 0 {
-			duplicateID = items[0].ID
-		} else if len(ids) > 0 {
-			duplicateID = ids[0]
-		}
-	}
+	duplicateID := duplicateIssueStatusID(team.Settings, statuses, ids)
 	var duplicate *string
 	if duplicateID != "" {
 		duplicate = &duplicateID
 	}
 	problem.JSON(w, 200, statusesResponse{Statuses: statuses, DuplicateStatusID: duplicate, CanManage: true})
+}
+
+func duplicateIssueStatusID(settings map[string]any, statuses map[string][]workflowStatus, ids []string) string {
+	duplicateID := stringSetting(settings, "duplicateIssueStatusId")
+	if duplicateID != "" && contains(ids, duplicateID) {
+		return duplicateID
+	}
+	if items := statuses["canceled"]; len(items) > 0 {
+		return items[0].ID
+	}
+	return ""
 }
 
 func (h Handler) requireStatusManage(w http.ResponseWriter, r *http.Request, workspaceID, key, role string) (teamRecordForSettings, bool) {
@@ -419,60 +539,8 @@ func (h Handler) requireStatusManage(w http.ResponseWriter, r *http.Request, wor
 	return team, true
 }
 
-func (h Handler) statusSummary(r *http.Request, teamID, id string) (statusSummary, error) {
-	var out statusSummary
-	err := h.DB.QueryRow(r.Context(), `select id::text,category::text,coalesce(is_default,false) from workflow_state where team_id=$1::uuid and id=$2::uuid`, teamID, id).Scan(&out.ID, &out.Category, &out.IsDefault)
-	return out, err
-}
-
-func (h Handler) statusExists(r *http.Request, teamID, id string) (bool, error) {
-	if id == "" {
-		return false, nil
-	}
-	var exists bool
-	err := h.DB.QueryRow(r.Context(), `select exists(select 1 from workflow_state where team_id=$1::uuid and id=$2::uuid)`, teamID, id).Scan(&exists)
-	return exists, err
-}
-
-func (h Handler) statusNameUnique(r *http.Request, teamID, category, name, ignoreID string) (bool, error) {
-	rows, err := h.DB.Query(r.Context(), `select id::text,name from workflow_state where team_id=$1::uuid and category=$2`, teamID, category)
-	if err != nil {
-		return false, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var id, existing string
-		if err := rows.Scan(&id, &existing); err != nil {
-			return false, err
-		}
-		if id != ignoreID && strings.EqualFold(existing, name) {
-			return false, nil
-		}
-	}
-	return true, rows.Err()
-}
-
-func (h Handler) categoryStatusPositions(r *http.Request, teamID, category string) ([]int32, error) {
-	rows, err := h.DB.Query(r.Context(), `select position from workflow_state where team_id=$1::uuid and category=$2`, teamID, category)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []int32{}
-	for rows.Next() {
-		var position int32
-		if err := rows.Scan(&position); err != nil {
-			return nil, err
-		}
-		out = append(out, position)
-	}
-	return out, rows.Err()
-}
-
-func (h Handler) categoryHasOtherDefault(r *http.Request, teamID, category, ignoreID string) (bool, error) {
-	var exists bool
-	err := h.DB.QueryRow(r.Context(), `select exists(select 1 from workflow_state where team_id=$1::uuid and category=$2 and coalesce(is_default,false)=true and id<>$3::uuid)`, teamID, category, ignoreID).Scan(&exists)
-	return exists, err
+func shouldBlockTriageStatusDelete(team teamRecordForSettings, existing statusSummary, hasOtherTriageStatus bool) bool {
+	return existing.Category == "triage" && boolPtrVal(team.TriageEnabled, true) && !hasOtherTriageStatus
 }
 
 func (h Handler) reorderStatuses(w http.ResponseWriter, r *http.Request, team teamRecordForSettings, reorder map[string]any) {
@@ -491,7 +559,17 @@ func (h Handler) reorderStatuses(w http.ResponseWriter, r *http.Request, team te
 		}
 		ordered = append(ordered, id)
 	}
-	rows, err := h.DB.Query(r.Context(), `select id::text from workflow_state where team_id=$1::uuid and category=$2`, team.ID, category)
+	tx, err := h.DB.Begin(r.Context())
+	if err != nil {
+		problem.Write(w, 500, "Update statuses failed", err.Error())
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	if err := lockTeamForWorkflowStateRepair(r.Context(), tx, team.ID); err != nil {
+		problem.Write(w, 500, "Update statuses failed", err.Error())
+		return
+	}
+	rows, err := tx.Query(r.Context(), `select id::text from workflow_state where team_id=$1::uuid and category=$2`, team.ID, category)
 	if err != nil {
 		problem.Write(w, 500, "Update statuses failed", err.Error())
 		return
@@ -507,15 +585,23 @@ func (h Handler) reorderStatuses(w http.ResponseWriter, r *http.Request, team te
 		ids = append(ids, id)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		problem.Write(w, 500, "Update statuses failed", err.Error())
+		return
+	}
 	if !sameStringSet(ids, ordered) {
 		problem.Write(w, 400, "Reorder must include every status in the category", "")
 		return
 	}
 	for position, id := range ordered {
-		if _, err := h.DB.Exec(r.Context(), `update workflow_state set position=$1, updated_at=now() where id=$2::uuid`, position, id); err != nil {
+		if _, err := tx.Exec(r.Context(), `update workflow_state set position=$1, updated_at=now() where id=$2::uuid`, position, id); err != nil {
 			problem.Write(w, 500, "Update statuses failed", err.Error())
 			return
 		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		problem.Write(w, 500, "Update statuses failed", err.Error())
+		return
 	}
 	h.writeStatuses(w, r, team)
 }
@@ -538,19 +624,30 @@ func (h Handler) statusIssueCounts(r *http.Request, teamID string) (map[string]i
 	return out, rows.Err()
 }
 
-func (h Handler) firstStatusID(r *http.Request, teamID string) (string, error) {
-	var id string
-	err := h.DB.QueryRow(r.Context(), `select id::text from workflow_state where team_id=$1::uuid order by position asc limit 1`, teamID).Scan(&id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil
+func (h Handler) mutateTeamSettingsLocked(r *http.Request, teamID string, mutate func(pgx.Tx, map[string]any) (map[string]any, error)) (map[string]any, error) {
+	tx, err := h.DB.Begin(r.Context())
+	if err != nil {
+		return nil, err
 	}
-	return id, err
-}
-
-func (h Handler) saveTeamSettings(r *http.Request, teamID string, settings map[string]any) error {
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	if err := lockTeamForWorkflowStateRepair(r.Context(), tx, teamID); err != nil {
+		return nil, err
+	}
+	var settingsRaw []byte
+	if err := tx.QueryRow(r.Context(), `select coalesce(settings,'{}'::jsonb) from team where id=$1::uuid`, teamID).Scan(&settingsRaw); err != nil {
+		return nil, err
+	}
+	settings := map[string]any{}
+	_ = json.Unmarshal(settingsRaw, &settings)
+	settings, err = mutate(tx, settings)
+	if err != nil {
+		return settings, err
+	}
 	raw, _ := json.Marshal(settings)
-	_, err := h.DB.Exec(r.Context(), `update team set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, raw, teamID)
-	return err
+	if _, err := tx.Exec(r.Context(), `update team set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, raw, teamID); err != nil {
+		return settings, err
+	}
+	return settings, tx.Commit(r.Context())
 }
 
 func decodeStatusBody(w http.ResponseWriter, r *http.Request) (map[string]any, bool) {
@@ -672,6 +769,59 @@ func deleteStatusBehavior(settings map[string]any, id string) map[string]any {
 		settings["statusBehaviors"] = behaviors
 	}
 	return settings
+}
+func clearInvalidTriageDestinationSettings(settings map[string]any, id, category string) {
+	if !triageAcceptCategories[category] {
+		_ = clearStatusSettingIfMatches(settings, "triageAcceptDestinationStateId", id)
+	}
+	if category != "canceled" {
+		_ = clearStatusSettingIfMatches(settings, "triageDeclineDestinationStateId", id)
+	}
+}
+
+func reconcileTriageDestinationSettings(ctx context.Context, tx pgx.Tx, teamID string, settings map[string]any) error {
+	if err := reconcileTriageDestinationSetting(ctx, tx, teamID, settings, "triageAcceptDestinationStateId", triageAcceptCategories); err != nil {
+		return err
+	}
+	return reconcileTriageDestinationSetting(ctx, tx, teamID, settings, "triageDeclineDestinationStateId", map[string]bool{"canceled": true})
+}
+
+func reconcileTriageDestinationSetting(ctx context.Context, tx pgx.Tx, teamID string, settings map[string]any, key string, allowed map[string]bool) error {
+	value, ok := settings[key].(string)
+	value = strings.TrimSpace(value)
+	if !ok || value == "" {
+		delete(settings, key)
+		return nil
+	}
+	var category string
+	err := tx.QueryRow(ctx, `select category::text from workflow_state where team_id=$1::uuid and id=$2::uuid`, teamID, value).Scan(&category)
+	if errors.Is(err, pgx.ErrNoRows) {
+		delete(settings, key)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !allowed[category] {
+		delete(settings, key)
+		return nil
+	}
+	settings[key] = value
+	return nil
+}
+
+func clearStatusSettingIfMatches(settings map[string]any, key, id string) bool {
+	if value, ok := settings[key].(string); ok && value == id {
+		delete(settings, key)
+		return true
+	}
+	return false
+}
+
+func saveTeamSettingsTx(ctx context.Context, tx pgx.Tx, teamID string, settings map[string]any) error {
+	raw, _ := json.Marshal(settings)
+	_, err := tx.Exec(ctx, `update team set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, raw, teamID)
+	return err
 }
 func stringSetting(settings map[string]any, key string) string {
 	if v, ok := settings[key].(string); ok {

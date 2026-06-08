@@ -976,6 +976,39 @@ export default function TeamTriagePage() {
     );
   }
 
+  if (!data.createStateId) {
+    return (
+      <div className="flex h-full flex-col">
+        <TriageHeader count={0}>{sortControl}</TriageHeader>
+        <EmptyState
+          title="Triage status missing"
+          description="This team needs a Triage workflow status before new issues can enter triage."
+          icon={
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#6b6f76"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              role="img"
+              aria-label="Triage status missing"
+            >
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+              <circle cx="12" cy="12" r="9" />
+            </svg>
+          }
+          action={{
+            label: "Open workflow statuses",
+            href: `/settings/teams/${encodeURIComponent(params.key)}/statuses`,
+          }}
+        />
+      </div>
+    );
+  }
+
   if (data.issues.length === 0) {
     return (
       <>

@@ -2034,25 +2034,32 @@ func (h Handler) nextTeamKey(ctx context.Context, tx pgx.Tx, name string) (strin
 }
 
 func insertDefaultWorkflowStates(ctx context.Context, tx pgx.Tx, teamID string) error {
-	states := []struct {
-		Name      string
-		Category  string
-		Color     string
-		Position  float32
-		IsDefault bool
-	}{
-		{"Backlog", "backlog", "#bec2c8", 1000, true},
-		{"Todo", "unstarted", "#bec2c8", 2000, true},
-		{"In Progress", "started", "#f2c94c", 3000, true},
-		{"Done", "completed", "#27ae60", 4000, true},
-		{"Canceled", "canceled", "#828282", 5000, true},
-	}
+	states := defaultWorkflowStates()
 	for _, state := range states {
 		if _, err := tx.Exec(ctx, `insert into workflow_state (team_id, name, category, color, position, is_default) values ($1::uuid,$2,$3,$4,$5,$6)`, teamID, state.Name, state.Category, state.Color, state.Position, state.IsDefault); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+type defaultWorkflowState struct {
+	Name      string
+	Category  string
+	Color     string
+	Position  float32
+	IsDefault bool
+}
+
+func defaultWorkflowStates() []defaultWorkflowState {
+	return []defaultWorkflowState{
+		{"Triage", "triage", "#f59e0b", 0, true},
+		{"Backlog", "backlog", "#bec2c8", 1000, true},
+		{"Todo", "unstarted", "#bec2c8", 2000, true},
+		{"In Progress", "started", "#f2c94c", 3000, true},
+		{"Done", "completed", "#27ae60", 4000, true},
+		{"Canceled", "canceled", "#828282", 5000, true},
+	}
 }
 
 func applyWorkspaceSettings(ws *Workspace, raw []byte) {

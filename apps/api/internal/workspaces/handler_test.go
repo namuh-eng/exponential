@@ -68,6 +68,22 @@ func TestMemberEntryTeamsCarryStableKeys(t *testing.T) {
 	}
 }
 
+func TestDefaultWorkflowStatesIncludeTriageBeforeBacklog(t *testing.T) {
+	states := defaultWorkflowStates()
+	if len(states) == 0 {
+		t.Fatal("default workflow states missing")
+	}
+	if states[0].Name != "Triage" || states[0].Category != "triage" {
+		t.Fatalf("first default state = %#v", states[0])
+	}
+	if states[1].Name != "Backlog" || states[1].Category != "backlog" {
+		t.Fatalf("second default state = %#v", states[1])
+	}
+	if states[0].Position >= states[1].Position {
+		t.Fatalf("triage position should precede backlog: %#v", states[:2])
+	}
+}
+
 func TestEmailDomain(t *testing.T) {
 	if got := emailDomain(" Person@Example.COM "); got != "example.com" {
 		t.Fatalf("domain = %q", got)

@@ -26,6 +26,7 @@ const optionsResponse = {
       name: "Backlog",
       category: "backlog",
       color: "#6b6f76",
+      isDefault: true,
     },
     {
       id: "state-2",
@@ -197,6 +198,239 @@ describe("CreateIssueModal", () => {
     expect(
       screen.getByText("Create Issue").closest("button"),
     ).not.toBeDisabled();
+  });
+
+  it("defaults ordinary creation to the default backlog category status when Backlog is renamed", async () => {
+    vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+
+      if (url.includes("/create-issue-options")) {
+        return mockJsonResponse({
+          ...optionsResponse,
+          statuses: [
+            {
+              id: "state-triage",
+              name: "Triage",
+              category: "triage",
+              color: "#f59e0b",
+              isDefault: true,
+            },
+            {
+              id: "state-icebox-next",
+              name: "Icebox",
+              category: "backlog",
+              color: "#6b6f76",
+              isDefault: false,
+            },
+            {
+              id: "state-icebox-default",
+              name: "Incoming",
+              category: "backlog",
+              color: "#6b6f76",
+              isDefault: true,
+            },
+          ],
+        });
+      }
+
+      if (url === "/api/teams/ENG/templates") {
+        return mockJsonResponse({ templates: [] });
+      }
+
+      if (url === "/api/issues" && init?.method === "POST") {
+        return mockJsonResponse({ id: "issue-1" }, true, 201);
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    render(<CreateIssueModal {...defaultProps} defaultStateId={undefined} />);
+
+    const titleBox = await screen.findByRole("textbox", {
+      name: "Issue title",
+    });
+    setEditableValue(titleBox, "Ordinary issue");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Status" })).toHaveTextContent(
+        "Incoming",
+      );
+    });
+    fireEvent.click(screen.getByText("Create Issue"));
+
+    await waitFor(() => {
+      const createCall = vi
+        .mocked(globalThis.fetch)
+        .mock.calls.find(
+          ([url, init]) => url === "/api/issues" && init?.method === "POST",
+        );
+      expect(JSON.parse(String(createCall?.[1]?.body))).toMatchObject({
+        title: "Ordinary issue",
+        stateId: "state-icebox-default",
+      });
+    });
+  });
+
+  it("defaults generic creation without state props to backlog even when triage is first", async () => {
+    vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+
+      if (url.includes("/create-issue-options")) {
+        return mockJsonResponse({
+          ...optionsResponse,
+          statuses: [
+            {
+              id: "state-triage",
+              name: "Triage",
+              category: "triage",
+              color: "#f59e0b",
+              isDefault: true,
+            },
+            {
+              id: "state-backlog",
+              name: "Backlog",
+              category: "backlog",
+              color: "#6b6f76",
+              isDefault: true,
+            },
+          ],
+        });
+      }
+
+      if (url === "/api/teams/ENG/templates") {
+        return mockJsonResponse({ templates: [] });
+      }
+
+      if (url === "/api/issues" && init?.method === "POST") {
+        return mockJsonResponse({ id: "issue-1" }, true, 201);
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    render(
+      <CreateIssueModal
+        open={true}
+        onClose={vi.fn()}
+        teamKey="ENG"
+        teamName="Engineering"
+        teamId="team-1"
+      />,
+    );
+
+    const titleBox = await screen.findByRole("textbox", {
+      name: "Issue title",
+    });
+    setEditableValue(titleBox, "Generic issue");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Status" })).toHaveTextContent(
+        "Backlog",
+      );
+    });
+    fireEvent.click(screen.getByText("Create Issue"));
+
+    await waitFor(() => {
+      const createCall = vi
+        .mocked(globalThis.fetch)
+        .mock.calls.find(
+          ([url, init]) => url === "/api/issues" && init?.method === "POST",
+        );
+      expect(JSON.parse(String(createCall?.[1]?.body))).toMatchObject({
+        title: "Generic issue",
+        stateId: "state-backlog",
+      });
+    });
+  });
+
+  it("does not fallback generic creation to triage when backlog is missing", async () => {
+    vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+
+      if (url.includes("/create-issue-options")) {
+        return mockJsonResponse({
+          ...optionsResponse,
+          statuses: [
+            {
+              id: "state-triage",
+              name: "Triage",
+              category: "triage",
+              color: "#f59e0b",
+              isDefault: true,
+            },
+          ],
+        });
+      }
+
+      if (url === "/api/teams/ENG/templates") {
+        return mockJsonResponse({ templates: [] });
+      }
+
+      if (url === "/api/issues" && init?.method === "POST") {
+        return mockJsonResponse({ id: "issue-1" }, true, 201);
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    render(
+      <CreateIssueModal
+        open={true}
+        onClose={vi.fn()}
+        teamKey="ENG"
+        teamName="Engineering"
+        teamId="team-1"
+      />,
+    );
+
+    const titleBox = await screen.findByRole("textbox", {
+      name: "Issue title",
+    });
+    setEditableValue(titleBox, "Malformed team issue");
+    fireEvent.click(screen.getByText("Create Issue"));
+
+    await waitFor(() => {
+      const createCall = vi
+        .mocked(globalThis.fetch)
+        .mock.calls.find(
+          ([url, init]) => url === "/api/issues" && init?.method === "POST",
+        );
+      const payload = JSON.parse(String(createCall?.[1]?.body)) as {
+        stateId?: string;
+      };
+      expect(payload.stateId).toBeUndefined();
+    });
+  });
+
+  it("honors a non-backlog default state name when no default state id is provided", async () => {
+    render(
+      <CreateIssueModal
+        {...defaultProps}
+        defaultStateId={undefined}
+        defaultStateName="In Progress"
+      />,
+    );
+
+    const titleBox = await screen.findByRole("textbox", {
+      name: "Issue title",
+    });
+    setEditableValue(titleBox, "Started issue");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Status" })).toHaveTextContent(
+        "In Progress",
+      );
+    });
+    fireEvent.click(screen.getByText("Create Issue"));
+
+    await waitFor(() => {
+      const createCall = vi
+        .mocked(globalThis.fetch)
+        .mock.calls.find(
+          ([url, init]) => url === "/api/issues" && init?.method === "POST",
+        );
+      expect(JSON.parse(String(createCall?.[1]?.body))).toMatchObject({
+        title: "Started issue",
+        stateId: "state-2",
+      });
+    });
   });
 
   it("applies an issue template without overwriting user title edits", async () => {

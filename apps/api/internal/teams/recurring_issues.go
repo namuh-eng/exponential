@@ -499,10 +499,7 @@ func formatOptionalTime(value *time.Time) *string {
 }
 func (h Handler) defaultStateID(r *http.Request, teamID string) (*string, error) {
 	var id string
-	err := h.DB.QueryRow(r.Context(), `select id::text from workflow_state where team_id=$1::uuid and coalesce(is_default,false)=true limit 1`, teamID).Scan(&id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		err = h.DB.QueryRow(r.Context(), `select id::text from workflow_state where team_id=$1::uuid limit 1`, teamID).Scan(&id)
-	}
+	err := h.DB.QueryRow(r.Context(), `select id::text from workflow_state where team_id=$1::uuid and category='backlog' order by is_default desc, position asc limit 1`, teamID).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

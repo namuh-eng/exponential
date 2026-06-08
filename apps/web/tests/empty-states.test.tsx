@@ -482,6 +482,8 @@ describe("Empty state pages", () => {
             team: { id: "1", name: "Engineering", key: "ENG" },
             issues: [],
             count: 0,
+            createStateId: "state-triage",
+            createStateName: "Triage",
           }),
       });
     }) as unknown as typeof fetch;
