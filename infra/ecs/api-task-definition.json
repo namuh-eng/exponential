@@ -68,6 +68,10 @@
         {
           "name": "EXPONENTIAL_METRICS_TOKEN",
           "valueFrom": "${METRICS_TOKEN_SECRET_ARN}"
+        },
+        {
+          "name": "STRIPE_WEBHOOK_SIGNING_SECRET",
+          "valueFrom": "${STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN}"
         }
       ],
       "logConfiguration": {

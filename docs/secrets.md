@@ -21,6 +21,7 @@ contains no secret values and is committed.
 | `session`       | `secret`       | `EXPONENTIAL_SESSION_SECRET`     |
 | `google-oauth`  | `id`           | `AUTH_GOOGLE_ID`                 |
 | `google-oauth`  | `secret`       | `AUTH_GOOGLE_SECRET`             |
+| `stripe`        | `webhook-signing-secret` | `STRIPE_WEBHOOK_SIGNING_SECRET` |
 | `aws`           | `s3-bucket`    | `S3_BUCKET`                      |
 | `aws`           | `sender-email` | `SENDER_EMAIL`                   |
 | `opensend-exponential` | `credential` | `OPENSEND_API_KEY`         |
@@ -158,6 +159,17 @@ existing target with `op run`:
 deploy-oauth-secrets:
 	$(OP_RUN) bash scripts/sync-google-oauth-secrets.sh
 ```
+
+## Stripe webhook callback
+
+Stripe calls the Go API provider callback at `/api/stripe/webhook`; the same
+handler is also available under `/v1/stripe/webhook`. This route is
+intentionally excluded from the public OpenAPI/SDK contract because it is an
+inbound third-party callback, not an endpoint application clients should call.
+
+The API verifies the exact raw request body with `Stripe-Signature` and
+`STRIPE_WEBHOOK_SIGNING_SECRET`. Logs and responses must never include the
+secret value or Stripe API keys.
 
 (Not changed by default — opt in when you're ready to retire `.env` as a
 deploy-time source.)

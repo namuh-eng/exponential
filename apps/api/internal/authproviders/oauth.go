@@ -202,8 +202,8 @@ func scanOAuthWorkspace(rows pgx.Rows) (oauthWorkspace, error) {
 }
 
 func (h Handler) saveOAuthWorkspace(r *http.Request, ws oauthWorkspace) error {
-	raw, _ := json.Marshal(ws.Settings)
-	_, err := h.DB.Exec(r.Context(), `update workspace set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, raw, ws.ID)
+	raw, _ := json.Marshal(ws.API)
+	_, err := h.DB.Exec(r.Context(), `update workspace set settings=jsonb_set(coalesce(settings,'{}'::jsonb), '{api}', $1::jsonb, true), updated_at=now() where id=$2::uuid`, raw, ws.ID)
 	return err
 }
 

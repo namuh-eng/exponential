@@ -5,6 +5,11 @@ const openapi = fs.readFileSync("packages/proto/openapi.yaml", "utf8");
 const routerFiles = ["apps/api/internal/http/router.go"];
 const mountedRoutes = new Set();
 const nonContractProxyMounts = new Set();
+const nonContractProviderCallbacks = new Set([
+  // Inbound Stripe provider callback. This route is not a client/business API
+  // surface and must not appear in the generated public SDK.
+  "/stripe/webhook",
+]);
 
 for (const file of routerFiles) {
   const source = fs.readFileSync(file, "utf8");
@@ -19,6 +24,9 @@ for (const file of routerFiles) {
     /\.(?:Get|Post|Patch|Delete|Put)\("([^"]+)"/g,
   )) {
     const path = match[1];
+    if (nonContractProviderCallbacks.has(path)) {
+      continue;
+    }
     if (path.startsWith("/sync/")) {
       mountedRoutes.add(`/v1${path}`);
     }

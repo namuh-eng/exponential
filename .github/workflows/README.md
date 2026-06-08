@@ -51,6 +51,7 @@ running `scripts/prepare-ecs-deploy-env.sh`.
 | `GOOGLE_CLIENT_ID_SECRET_ARN`     | Secrets Manager ARN                                                  |
 | `GOOGLE_CLIENT_SECRET_SECRET_ARN` | Secrets Manager ARN                                                  |
 | `METRICS_TOKEN_SECRET_ARN`        | Secrets Manager ARN for the RED metrics token                        |
+| `STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN` | Secrets Manager ARN for Stripe webhook signatures           |
 | `PUBLIC_BASE_URL`                 | `https://<your-domain>` (or `http://<alb-dns>`)                      |
 | `PRIV_SUBNET_A`, `PRIV_SUBNET_B`  | Private subnet IDs                                                   |
 | `APP_SG`                          | App security group ID                                                |
@@ -67,6 +68,7 @@ out of `.env` for paste-in (run on your laptop):
 for k in AWS_REGION APP_NAME ECS_EXECUTION_ROLE_ARN ECS_TASK_ROLE_ARN \
          DATABASE_URL_SECRET_ARN REDIS_URL_SECRET_ARN \
          SESSION_SECRET_SECRET_ARN METRICS_TOKEN_SECRET_ARN \
+         STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN \
          GOOGLE_CLIENT_ID_SECRET_ARN GOOGLE_CLIENT_SECRET_SECRET_ARN \
          PUBLIC_BASE_URL PRIV_SUBNET_A PRIV_SUBNET_B APP_SG ALB_SG \
          API_TG_ARN WEB_TG_ARN OTEL_EXPORTER_OTLP_ENDPOINT \
@@ -83,6 +85,12 @@ gh variable set AWS_REGION --body "us-east-1"
 gh variable set ECS_EXECUTION_ROLE_ARN --body "arn:aws:iam::...:role/exponential-ecs-execution-role"
 # ...etc
 ```
+
+`scripts/prepare-ecs-deploy-env.sh` reuses existing `DATABASE_URL_SECRET_ARN`
+and `REDIS_URL_SECRET_ARN` values by default so local development URLs are not
+mirrored into production accidentally. Set `SYNC_DEPLOY_SECRET_VALUES=true`
+only when you intentionally want to overwrite the backing Secrets Manager
+values from the current shell environment.
 
 ### 4. First deploy
 

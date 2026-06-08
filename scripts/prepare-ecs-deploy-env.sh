@@ -54,6 +54,41 @@ secret_arn() {
   aws secretsmanager describe-secret --secret-id "$name" --region "$REGION" --query ARN --output text
 }
 
+existing_or_synced_secret_arn() {
+  local arn_env_name="$1"
+  local name="$2"
+  local value="$3"
+  local existing_arn="${!arn_env_name:-}"
+  if [ -n "$existing_arn" ] && [ "${SYNC_DEPLOY_SECRET_VALUES:-false}" != "true" ]; then
+    printf '%s\n' "$existing_arn"
+    return
+  fi
+  secret_arn "$name" "$value"
+}
+
+required_existing_or_synced_secret_arn() {
+  local arn_env_name="$1"
+  local name="$2"
+  local value="$3"
+  local existing_arn="${!arn_env_name:-}"
+  if [ -n "$existing_arn" ] && [ "${SYNC_DEPLOY_SECRET_VALUES:-false}" != "true" ]; then
+    printf '%s\n' "$existing_arn"
+    return
+  fi
+  if aws secretsmanager describe-secret --secret-id "$name" --region "$REGION" >/dev/null 2>&1; then
+    if [ -n "$value" ] && [ "${SYNC_DEPLOY_SECRET_VALUES:-false}" = "true" ]; then
+      secret_arn "$name" "$value" >/dev/null
+    fi
+    aws secretsmanager describe-secret --secret-id "$name" --region "$REGION" --query ARN --output text
+    return
+  fi
+  if [ -z "$value" ]; then
+    echo "Missing required env: $arn_env_name or raw value for $name" >&2
+    exit 1
+  fi
+  secret_arn "$name" "$value"
+}
+
 role_arn() {
   local role_name="$1"
   local policy_doc="$2"
@@ -169,10 +204,10 @@ if [ -n "${ALB_DNS:-}" ] && [ -z "${WEB_INTERNAL_API_URL:-}" ]; then
   set_env WEB_INTERNAL_API_URL "http://${ALB_DNS}/api"
 fi
 if [ -n "${DATABASE_URL:-}" ]; then
-  set_env DATABASE_URL_SECRET_ARN "$(secret_arn "${APP_NAME}/database-url" "$DATABASE_URL")"
+  set_env DATABASE_URL_SECRET_ARN "$(existing_or_synced_secret_arn DATABASE_URL_SECRET_ARN "${APP_NAME}/database-url" "$DATABASE_URL")"
 fi
 if [ -n "${REDIS_URL:-}" ]; then
-  set_env REDIS_URL_SECRET_ARN "$(secret_arn "${APP_NAME}/redis-url" "$REDIS_URL")"
+  set_env REDIS_URL_SECRET_ARN "$(existing_or_synced_secret_arn REDIS_URL_SECRET_ARN "${APP_NAME}/redis-url" "$REDIS_URL")"
 fi
 if [ -z "${EXPONENTIAL_SESSION_SECRET:-}" ]; then
   set_env EXPONENTIAL_SESSION_SECRET "$(random_hex 32)"
@@ -184,6 +219,7 @@ set_env SESSION_SECRET_SECRET_ARN "$(secret_arn "${APP_NAME}/session-secret" "$E
 set_env METRICS_TOKEN_SECRET_ARN "$(secret_arn "${APP_NAME}/metrics-token" "$EXPONENTIAL_METRICS_TOKEN")"
 set_env GOOGLE_CLIENT_ID_SECRET_ARN "$(secret_arn "${APP_NAME}/google-client-id" "${GOOGLE_CLIENT_ID:-${AUTH_GOOGLE_ID:-dev-google-client-id}}")"
 set_env GOOGLE_CLIENT_SECRET_SECRET_ARN "$(secret_arn "${APP_NAME}/google-client-secret" "${GOOGLE_CLIENT_SECRET:-${AUTH_GOOGLE_SECRET:-dev-google-client-secret}}")"
+set_env STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN "$(required_existing_or_synced_secret_arn STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN "${APP_NAME}/stripe-webhook-signing-secret" "${STRIPE_WEBHOOK_SIGNING_SECRET:-}")"
 
 cat <<MSG
 Prepared ECS deploy environment in ${ENV_FILE}.

@@ -182,8 +182,8 @@ func (h Handler) write(w http.ResponseWriter, r *http.Request, workspaceID strin
 	next := map[string]any{}
 	_ = json.Unmarshal(settings, &next)
 	next["projectUpdateConfigurations"] = configs
-	body, _ := json.Marshal(next)
-	if _, err := h.DB.Exec(r.Context(), `update workspace set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, body, workspaceID); err != nil {
+	body, _ := json.Marshal(next["projectUpdateConfigurations"])
+	if _, err := h.DB.Exec(r.Context(), `update workspace set settings=jsonb_set(coalesce(settings,'{}'::jsonb), '{projectUpdateConfigurations}', $1::jsonb, true), updated_at=now() where id=$2::uuid`, body, workspaceID); err != nil {
 		problem.Write(w, 500, "Save project update configuration failed", err.Error())
 		return false
 	}

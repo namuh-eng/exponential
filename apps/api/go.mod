@@ -15,6 +15,7 @@ require (
 	github.com/oapi-codegen/runtime v1.1.2
 	github.com/redis/go-redis/v9 v9.20.0
 	github.com/spf13/viper v1.21.0
+	github.com/stripe/stripe-go/v82 v82.5.1
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.44.0
 	go.opentelemetry.io/otel/sdk v1.44.0

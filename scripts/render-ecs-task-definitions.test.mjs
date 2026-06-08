@@ -24,6 +24,8 @@ const env = {
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:google-secret",
   METRICS_TOKEN_SECRET_ARN:
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:metrics",
+  STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN:
+    "arn:aws:secretsmanager:us-east-1:123456789012:secret:stripe-webhook",
   OTEL_EXPORTER_OTLP_ENDPOINT: "collector.example:4318",
   PUBLIC_BASE_URL: "https://app.example",
   WEB_INTERNAL_API_URL: "http://app-alb.example/api",
@@ -44,6 +46,14 @@ assert.throws(
       DATABASE_URL_SECRET_ARN: "None",
     }),
   /Missing required environment variables: DATABASE_URL_SECRET_ARN/,
+);
+assert.throws(
+  () =>
+    renderTaskDefinitionFile("infra/ecs/api-task-definition.json", {
+      ...env,
+      STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN: "",
+    }),
+  /Missing required environment variables: STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN/,
 );
 
 for (const file of [
