@@ -212,7 +212,7 @@ describe("TeamIssuesPage UI", () => {
     await screen.findByText("Engineering");
 
     expect(screen.getByRole("button", { name: "Active" }).className).toContain(
-      "bg-[var(--color-surface-active)]",
+      "tty-row-selected",
     );
     expect(screen.getByText("Working on it")).toBeInTheDocument();
     expect(screen.queryByText("Fix bug")).not.toBeInTheDocument();
@@ -229,7 +229,7 @@ describe("TeamIssuesPage UI", () => {
     await screen.findByText("Engineering");
 
     expect(screen.getByRole("button", { name: "Backlog" }).className).toContain(
-      "bg-[var(--color-surface-active)]",
+      "tty-row-selected",
     );
     expect(screen.getByText("Fix bug")).toBeInTheDocument();
     expect(screen.queryByText("Working on it")).not.toBeInTheDocument();

@@ -11,6 +11,7 @@ export type KeyboardShortcutAction =
   | "open-create-issue"
   | "open-create-issue-fullscreen"
   | "open-keyboard-shortcuts"
+  | "toggle-sidebar"
   | "go-to-inbox"
   | "go-to-my-issues"
   | "go-to-views"
@@ -47,6 +48,14 @@ export const KEYBOARD_SHORTCUTS: KeyboardShortcutDefinition[] = [
     category: "Command",
     scope: "global",
     action: "open-keyboard-shortcuts",
+  },
+  {
+    id: "toggle-sidebar",
+    label: "Toggle sidebar",
+    keys: ["Cmd/Ctrl", "\\"],
+    category: "Command",
+    scope: "global",
+    action: "toggle-sidebar",
   },
   {
     id: "create-issue",
@@ -129,6 +138,7 @@ export const GLOBAL_SHORTCUT_ACTIONS = new Set<KeyboardShortcutAction>([
   "open-create-issue",
   "open-create-issue-fullscreen",
   "open-keyboard-shortcuts",
+  "toggle-sidebar",
   "go-to-inbox",
   "go-to-my-issues",
   "go-to-views",

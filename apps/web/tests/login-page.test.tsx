@@ -68,6 +68,41 @@ describe("Login page", () => {
     });
   });
 
+  it("does not leak prototype host/version facts into the login surface", async () => {
+    render(<LoginPage />);
+
+    expect(screen.queryByText("v0.4.2")).toBeNull();
+    expect(screen.queryByText(/exponential\.local/)).toBeNull();
+    expect(screen.queryByText("headless api")).toBeNull();
+    expect(screen.getByText("api check pending")).toBeDefined();
+    expect(screen.getByText("# auth methods")).toBeDefined();
+    expect(screen.getByText("checked on load")).toBeDefined();
+    expect(screen.getByText("opened after sign-in")).toBeDefined();
+    expect(screen.queryByText(/live where probed/)).toBeNull();
+    expect(screen.getAllByText("ssh challenge").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("mock").length).toBeGreaterThan(0);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+  });
+
+  it("keeps the top bar neutral when provider capability probing fails", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({}) });
+
+    render(<LoginPage />);
+
+    expect(screen.getByText("api check pending")).toBeDefined();
+    expect(screen.queryByText("headless api")).toBeNull();
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/auth/provider-capabilities?callbackUrl=%2Finbox",
+        expect.objectContaining({ cache: "no-store" }),
+      );
+    });
+  });
+
   it("starts Google OAuth through the first-party Go API with the default app callback", async () => {
     fetchMock.mockResolvedValueOnce(providerCapabilities());
 
@@ -201,6 +236,17 @@ describe("Signup page", () => {
     expect(
       screen.getByRole("button", { name: "Create account" }),
     ).toBeDefined();
+  });
+
+  it("keeps signup truthful about the separate workspace creation step", () => {
+    render(<SignupPage />);
+
+    expect(screen.queryByText("v0.4.2")).toBeNull();
+    expect(screen.queryByText(/exponential\.local/)).toBeNull();
+    expect(
+      screen.getByText(/Create-workspace is the next step after signup/),
+    ).toBeDefined();
+    expect(screen.getByText("password path pending")).toBeDefined();
   });
 
   it("shows signup password registration as not configured", async () => {

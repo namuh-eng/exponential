@@ -427,7 +427,7 @@ export function DisplayOptionsPanel({
               onClick={() => onDisplayPropertyToggle(key)}
               className={`rounded-md border px-2 py-0.5 text-[12px] transition-colors ${
                 displayProperties[key]
-                  ? "border-[var(--color-accent)] bg-[var(--color-accent)] bg-opacity-10 text-[var(--color-text-primary)]"
+                  ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--editorial-accent-ink)]"
                   : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
               }`}
             >

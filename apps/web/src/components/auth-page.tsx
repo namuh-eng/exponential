@@ -16,8 +16,27 @@ type ProviderCapabilities = {
   };
 };
 
-const WORKSPACE_HOST = "exponential.local";
-const WORKSPACE_VERSION = "v0.4.2";
+const HOST_UNKNOWN_LABEL = "host:unknown";
+
+function runtimeHostLabel() {
+  if (typeof window === "undefined") return HOST_UNKNOWN_LABEL;
+  const host = window.location.host;
+  if (!host) return HOST_UNKNOWN_LABEL;
+  if (host.startsWith("localhost") || host.startsWith("127.0.0.1")) {
+    return "local preview";
+  }
+  return host;
+}
+
+function useRuntimeHostLabel() {
+  const [hostLabel, setHostLabel] = useState(HOST_UNKNOWN_LABEL);
+
+  useEffect(() => {
+    setHostLabel(runtimeHostLabel());
+  }, []);
+
+  return hostLabel;
+}
 
 function isProviderEnabled(
   value: boolean | { configured?: boolean } | undefined,
@@ -52,28 +71,37 @@ function getSafeCallbackPath(): string {
   return getCurrentPathCallback();
 }
 
-function TopBar({ mode }: { mode: AuthMode }) {
+function TopBar({ mode, hostLabel }: { mode: AuthMode; hostLabel: string }) {
   return (
-    <header className="flex items-center justify-between border-b border-[var(--auth-secondary-border)] px-6 py-3 text-[12px] text-[var(--auth-muted)]">
+    <header className="flex flex-col gap-2 border-b border-[var(--auth-secondary-border)] px-4 py-3 text-[12px] text-[var(--auth-muted)] sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div className="flex items-center gap-3">
         <ExponentialMark size={18} className="text-[var(--auth-text)]/80" />
         <span className="text-[var(--auth-text)]">exponential</span>
-        <span className="text-[var(--auth-faint)]">{WORKSPACE_VERSION}</span>
+        <span className="text-[var(--auth-faint)]">auth</span>
       </div>
-      <div className="flex items-center gap-4">
-        <span>{WORKSPACE_HOST}</span>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span>{hostLabel}</span>
         <span className="text-[var(--auth-faint)]">·</span>
         <span>{mode === "signup" ? "new workspace" : "session"}</span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-[var(--auth-ok)]" />
-          ready
+          <span
+            aria-hidden="true"
+            className="h-1.5 w-1.5 rounded-full bg-[var(--auth-faint)]"
+          />
+          api check pending
         </span>
       </div>
     </header>
   );
 }
 
-function HotkeyBar({ mode }: { mode: AuthMode }) {
+function HotkeyBar({
+  mode,
+  hostLabel,
+}: {
+  mode: AuthMode;
+  hostLabel: string;
+}) {
   const keys =
     mode === "signup"
       ? [
@@ -101,7 +129,7 @@ function HotkeyBar({ mode }: { mode: AuthMode }) {
           </span>
         ))}
         <span className="ml-auto text-[var(--auth-faint)]">
-          {WORKSPACE_HOST} · {WORKSPACE_VERSION}
+          {hostLabel} · ssh preview marked mock
         </span>
       </div>
     </footer>
@@ -220,10 +248,10 @@ function AdvancedAuth() {
         {tab === "ssh" ? (
           <div className="space-y-2">
             <p className="text-[var(--auth-text)]">
-              sign a workspace nonce with your local SSH key.
+              SSH challenge preview. backend verification is not wired.
             </p>
             <p>
-              host fingerprint{" "}
+              sample fingerprint{" "}
               <span className="text-[var(--auth-text)]">
                 sha256:9e:21:8c:4d:a3:91:7b:ee
               </span>
@@ -233,7 +261,7 @@ function AdvancedAuth() {
               className="inline-flex items-center gap-2 border border-[var(--auth-primary-border)] px-2 py-1 text-[var(--auth-primary-text)] hover:bg-[var(--auth-primary-bg-hover)]"
             >
               <span>{">"}</span>
-              <span>open ssh challenge</span>
+              <span>open ssh challenge preview</span>
               <kbd className="ml-1 rounded border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-1 py-0.5 text-[10px]">
                 ⌘ ⇧ S
               </kbd>
@@ -242,7 +270,7 @@ function AdvancedAuth() {
         ) : tab === "oidc" ? (
           <div className="space-y-1">
             <p className="text-[var(--auth-text)]">
-              OIDC discovery via {WORKSPACE_HOST}/.well-known
+              OIDC discovery endpoint pending.
             </p>
             <p>backend wiring pending — coming soon.</p>
           </div>
@@ -260,16 +288,16 @@ function AdvancedAuth() {
 }
 
 const PREFLIGHT_ROWS = [
-  { name: "tls handshake", status: "ok", detail: "TLSv1.3 · X25519" },
-  { name: "geo", status: "ok", detail: "iad1 · 17ms rtt" },
-  { name: "directory", status: "ok", detail: "scim · in sync" },
+  { name: "provider capability", status: "warn", detail: "checked on load" },
+  { name: "callback allowlist", status: "ok", detail: "local paths only" },
+  { name: "cookie session", status: "warn", detail: "opened after sign-in" },
   {
-    name: "device posture",
+    name: "password auth",
     status: "warn",
-    detail: "screen lock < 5m recommended",
+    detail: "not configured",
   },
-  { name: "passkey", status: "ok", detail: "platform · touch id" },
-  { name: "audit log", status: "ok", detail: "streaming · last 12s" },
+  { name: "passkey", status: "warn", detail: "pending" },
+  { name: "ssh challenge", status: "warn", detail: "mock preview" },
 ];
 
 function PreflightRail() {
@@ -302,47 +330,50 @@ function PreflightRail() {
         ))}
       </ul>
       <div className="border-t border-[var(--auth-secondary-border)] px-3 py-2 text-[11px] text-[var(--auth-faint)]">
-        {"// mock · backend not wired"}
+        {"// provider checked client-side · pending where marked"}
       </div>
     </section>
   );
 }
 
-const RECENT_SESSIONS = [
-  { when: "2m ago", host: "macbook-2024", region: "iad1", ok: true },
-  { when: "1h ago", host: "iphone-15", region: "iad1", ok: true },
-  { when: "yesterday", host: "macbook-2024", region: "sfo1", ok: true },
-  { when: "3d ago", host: "unknown · vpn", region: "fra1", ok: false },
+const SESSION_METHOD_ROWS = [
+  { method: "google oauth", state: "wired", detail: "/api/auth/google/start" },
+  { method: "magic link", state: "wired", detail: "/api/auth/magic-link" },
+  { method: "saml sso", state: "pending", detail: "policy-only branch" },
+  { method: "ssh challenge", state: "mock", detail: "no verifier service" },
 ];
 
-function RecentSessionsRail() {
+function SessionMethodsRail() {
   return (
     <section className="border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)]">
       <div className="border-b border-[var(--auth-secondary-border)] px-3 py-2 text-[11px] text-[var(--auth-muted)]">
-        # recent sessions
+        # auth methods
       </div>
       <ul className="divide-y divide-[var(--auth-secondary-border)] text-[12px]">
-        {RECENT_SESSIONS.map((s) => (
-          <li key={`${s.when}-${s.host}`} className="px-3 py-1.5">
+        {SESSION_METHOD_ROWS.map((row) => (
+          <li key={row.method} className="px-3 py-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-[var(--auth-text)]">{s.host}</span>
-              <span className="text-[var(--auth-muted)]">{s.when}</span>
-            </div>
-            <div className="flex items-center justify-between text-[11px] text-[var(--auth-muted)]">
-              <span>{s.region}</span>
+              <span className="text-[var(--auth-text)]">{row.method}</span>
               <span
                 className={
-                  s.ok ? "text-[var(--auth-ok)]" : "text-[var(--auth-err)]"
+                  row.state === "wired"
+                    ? "text-[var(--auth-ok)]"
+                    : row.state === "pending"
+                      ? "text-[var(--auth-warn)]"
+                      : "text-[var(--auth-muted)]"
                 }
               >
-                {s.ok ? "verified" : "unrecognized origin"}
+                {row.state}
               </span>
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-[var(--auth-muted)]">
+              <span className="truncate">{row.detail}</span>
             </div>
           </li>
         ))}
       </ul>
       <div className="border-t border-[var(--auth-secondary-border)] px-3 py-2 text-[11px] text-[var(--auth-faint)]">
-        {"// mock · backend not wired"}
+        {"// no fake recent-session telemetry"}
       </div>
     </section>
   );
@@ -350,10 +381,10 @@ function RecentSessionsRail() {
 
 function NextStepsRail() {
   const steps = [
-    "[ ] connect git provider",
+    "[ ] create workspace",
     "[ ] invite teammates",
-    "[ ] import from linear",
-    "[ ] set workspace timezone",
+    "[ ] configure auth policy",
+    "[ ] import issues when integration exists",
   ];
   return (
     <section className="border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)]">
@@ -371,7 +402,7 @@ function NextStepsRail() {
         ))}
       </ul>
       <div className="border-t border-[var(--auth-secondary-border)] px-3 py-2 text-[11px] text-[var(--auth-faint)]">
-        {"// mock · post-signup checklist"}
+        {"// setup checklist · not an automation claim"}
       </div>
     </section>
   );
@@ -484,6 +515,7 @@ function FooterLinks({ mode }: { mode: AuthMode }) {
 
 export function AuthPage({ mode }: { mode: AuthMode }) {
   const isSignup = mode === "signup";
+  const hostLabel = useRuntimeHostLabel();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [workspace, setWorkspace] = useState("");
@@ -592,7 +624,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
   return (
     <>
-      <TopBar mode={mode} />
+      <TopBar mode={mode} hostLabel={hostLabel} />
       <main className="flex-1 px-6 py-8 text-[var(--auth-text)]">
         <div className="mx-auto grid w-full max-w-[1180px] grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
           <section className="space-y-6">
@@ -602,7 +634,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               </p>
               <h1
                 aria-label={ariaTitle}
-                className="text-[22px] font-medium tracking-[-0.01em] text-[var(--auth-text)]"
+                className="text-[22px] font-medium text-[var(--auth-text)]"
               >
                 <span aria-hidden="true" className="text-[var(--auth-prompt)]">
                   ${" "}
@@ -615,7 +647,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               </h1>
               <p className="text-[12px] text-[var(--auth-muted)]">
                 {isSignup
-                  ? `we'll provision a workspace at ${WORKSPACE_HOST} · Authentication is handled by the headless Go API.`
+                  ? "Create-workspace is the next step after signup. Authentication is handled by the headless Go API."
                   : "Authentication is handled by the headless Go API. session is bound to this device."}
               </p>
               {isSignup ? <SignupSteps current={1} /> : null}
@@ -727,7 +759,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                   </span>
                 </span>
                 <span className="text-[11px] text-[var(--auth-muted)]">
-                  {isSignup ? "provisions workspace" : "binds session"}
+                  {isSignup ? "password path pending" : "binds session"}
                 </span>
               </button>
             </form>
@@ -769,13 +801,13 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             ) : (
               <>
                 <PreflightRail />
-                <RecentSessionsRail />
+                <SessionMethodsRail />
               </>
             )}
           </aside>
         </div>
       </main>
-      <HotkeyBar mode={mode} />
+      <HotkeyBar mode={mode} hostLabel={hostLabel} />
     </>
   );
 }

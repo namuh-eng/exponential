@@ -33,11 +33,20 @@ test.describe("TTY terminal redesign", () => {
     expect(tokens["--editorial-display"]).toContain("monospace");
     expect(tokens["--editorial-mono"]).toContain("monospace");
 
-    // The sidebar carries the terminal self-host status strip.
+    // The sidebar carries terminal build provenance without runtime status claims.
     const strip = page.getByTestId("sidebar-status-strip");
     await expect(strip).toBeVisible();
-    await expect(strip).toContainText("self-hosted");
-    await expect(strip).toContainText("v0.4.2");
+    await expect(strip).toHaveAttribute("aria-label", "Build provenance");
+    await expect(strip).toContainText("frontend shell");
+    await expect(strip).toContainText("provenance");
+    await expect(strip).toContainText(/version:unknown|v\d+\.\d+\.\d+/);
+    await expect(strip).not.toContainText("main@a3f10c2");
+    await expect(strip).not.toContainText("v0.4.2");
+    await expect(strip).not.toContainText("self-hosted");
+    await expect(strip).not.toContainText("ELv2");
+
+    await expect(page.getByTestId("tty-route-status-bar")).toBeVisible();
+    await expect(page.getByTestId("tty-shortcut-status-bar")).toBeVisible();
 
     await page.screenshot({
       path: testInfo.outputPath("tty-theme-inbox.png"),

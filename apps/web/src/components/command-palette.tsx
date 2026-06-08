@@ -586,6 +586,19 @@ export function CommandPalette({
     project.name.toLowerCase().includes(projectPickerQuery.toLowerCase()),
   );
   const selectedProject = filteredProjects[selectedProjectIndex];
+  const selectedCommand =
+    selectedIndex >= results.length
+      ? filteredCommands[selectedIndex - results.length]
+      : null;
+  const selectedResult =
+    selectedIndex < results.length ? results[selectedIndex] : null;
+  const selectedStatus = selectedResult
+    ? "issue result ready"
+    : selectedCommand
+      ? "command ready"
+      : query
+        ? "no matching command"
+        : "choose a command";
 
   function handleProjectPickerKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Escape") {
@@ -623,10 +636,10 @@ export function CommandPalette({
   let itemIndex = 0;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]">
+    <div className="fixed inset-0 z-[100] flex items-start justify-center px-3 pt-[12vh]">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-[rgba(20,18,14,0.40)] backdrop-blur-[2px]"
+        className="absolute inset-0 bg-[rgba(12,13,12,0.55)] backdrop-blur-[2px]"
         onClick={() => (projectPickerOpen ? closeProjectPicker() : close())}
         onKeyDown={(e) =>
           e.key === "Escape" &&
@@ -639,49 +652,34 @@ export function CommandPalette({
       {open ? (
         <dialog
           open
-          className="relative z-10 flex w-full max-w-[640px] flex-col overflow-hidden rounded-[10px] border border-[var(--color-border-strong)] bg-[var(--color-content-bg)] shadow-[var(--shadow-editorial-md)]"
+          className="tty-panel relative z-10 flex w-full max-w-[720px] flex-col overflow-hidden shadow-[var(--shadow-editorial-md)]"
           aria-label="Command palette"
           onKeyDown={handlePaletteKeyDown}
         >
           {/* Search input */}
-          <div className="flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-3">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="shrink-0 text-[var(--color-text-secondary)]"
-              aria-hidden="true"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
+          <div className="tty-prompt-line px-4 py-3">
+            <span className="shrink-0 text-[var(--color-accent)]">exp</span>
+            <span aria-hidden="true">$</span>
             <input
               ref={inputRef}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Type a command or search..."
-              className="flex-1 bg-transparent text-[14px] text-[var(--color-text-primary)] placeholder-[var(--color-text-tertiary)] focus:outline-none"
+              className="min-w-0 flex-1 bg-transparent font-mono text-[14px] text-[var(--color-text-primary)] placeholder-[var(--color-text-tertiary)] focus:outline-none"
             />
             {searching && (
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-text-secondary)] border-t-transparent" />
             )}
-            <kbd className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-0.5 text-[11px] text-[var(--color-text-secondary)]">
-              ESC
-            </kbd>
+            <kbd className="tty-kbd">ESC</kbd>
           </div>
 
           {/* Results */}
-          <div className="max-h-[400px] overflow-y-auto py-2">
+          <div className="max-h-[420px] overflow-y-auto px-2 py-2">
             {/* Search results */}
             {results.length > 0 && (
-              <div className="px-2">
-                <div className="px-2 py-1.5 text-[11px] font-medium font-mono uppercase tracking-[0.08em] text-[var(--color-text-secondary)]">
+              <div>
+                <div className="px-2 py-1.5 font-mono text-[10px] uppercase text-[var(--color-text-secondary)]">
                   Quick results for &ldquo;{query}&rdquo;
                 </div>
                 {results.map((result) => {
@@ -690,10 +688,10 @@ export function CommandPalette({
                     <button
                       key={result.id}
                       type="button"
-                      className={`flex w-full items-center gap-3 rounded-[6px] border border-transparent px-2 py-1.5 text-left transition-colors ${
+                      className={`tty-row grid w-full grid-cols-[16px_minmax(64px,92px)_minmax(0,1fr)] items-center gap-3 px-2 py-1.5 text-left ${
                         selectedIndex === idx
-                          ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text-primary)] shadow-[var(--shadow-editorial-sm)]"
-                          : "text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                          ? "tty-row-selected bg-[var(--color-accent-soft)] text-[var(--color-text-primary)]"
+                          : "text-[var(--color-text-primary)]"
                       }`}
                       onClick={() => {
                         close();
@@ -716,8 +714,8 @@ export function CommandPalette({
 
             {/* Commands */}
             {Object.entries(groupedCommands).map(([group, cmds]) => (
-              <div key={group} className="px-2">
-                <div className="px-2 py-1.5 text-[11px] font-medium font-mono uppercase tracking-[0.08em] text-[var(--color-text-secondary)]">
+              <div key={group}>
+                <div className="px-2 py-1.5 font-mono text-[10px] uppercase text-[var(--color-text-secondary)]">
                   {group}
                 </div>
                 {cmds.map((cmd) => {
@@ -726,10 +724,10 @@ export function CommandPalette({
                     <button
                       key={cmd.id}
                       type="button"
-                      className={`flex w-full items-center gap-3 rounded-[6px] border border-transparent px-2 py-1.5 text-left transition-colors ${
+                      className={`tty-row grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-2 py-1.5 text-left ${
                         selectedIndex === idx
-                          ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text-primary)] shadow-[var(--shadow-editorial-sm)]"
-                          : "text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                          ? "tty-row-selected bg-[var(--color-accent-soft)] text-[var(--color-text-primary)]"
+                          : "text-[var(--color-text-primary)]"
                       }`}
                       onClick={() => executeCommand(cmd)}
                       onMouseEnter={() => setSelectedIndex(idx)}
@@ -740,10 +738,10 @@ export function CommandPalette({
                           {cmd.shortcut.split(" ").map((key) => (
                             <kbd
                               key={key}
-                              className={`rounded border px-1.5 py-0.5 text-[11px] ${
+                              className={`tty-kbd ${
                                 selectedIndex === idx
                                   ? "border-[var(--color-accent)] text-[var(--color-text-primary)]"
-                                  : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]"
+                                  : "text-[var(--color-text-secondary)]"
                               }`}
                             >
                               {key}
@@ -766,32 +764,24 @@ export function CommandPalette({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center gap-4 border-t border-[var(--color-border)] px-4 py-2 text-[11px] text-[var(--color-text-secondary)]">
+          <div className="tty-status-bar min-h-[34px] flex-wrap border-t px-4 py-2">
+            <span className="min-w-0 flex-1 truncate text-[var(--color-text-secondary)]">
+              selected: {selectedStatus}
+            </span>
             <span className="flex items-center gap-1">
-              <kbd className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-0.5 text-[10px]">
-                &crarr;
-              </kbd>
+              <kbd className="tty-kbd">&crarr;</kbd>
               Open
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-0.5 text-[10px]">
-                ⌘
-              </kbd>
-              <kbd className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-0.5 text-[10px]">
-                /
-              </kbd>
+              <kbd className="tty-kbd">⌘</kbd>
+              <kbd className="tty-kbd">/</kbd>
               Advanced search
             </span>
-            <span className="flex items-center gap-1">
-              <kbd className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-0.5 text-[10px]">
-                &uarr;
-              </kbd>
-              <kbd className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-0.5 text-[10px]">
-                &darr;
-              </kbd>
+            <span className="hidden items-center gap-1 sm:flex">
+              <kbd className="tty-kbd">&uarr;</kbd>
+              <kbd className="tty-kbd">&darr;</kbd>
               More actions
             </span>
-            <span>Quick look</span>
           </div>
         </dialog>
       ) : null}
@@ -799,19 +789,13 @@ export function CommandPalette({
       {projectPickerOpen ? (
         <dialog
           open
-          className="relative z-10 flex w-full max-w-[520px] flex-col overflow-hidden rounded-[10px] border border-[var(--color-border-strong)] bg-[var(--color-content-bg)] shadow-[var(--shadow-editorial-md)]"
+          className="tty-panel relative z-10 flex w-full max-w-[560px] flex-col overflow-hidden shadow-[var(--shadow-editorial-md)]"
           aria-label="Choose a project for update"
           onKeyDown={handleProjectPickerKeyDown}
         >
-          <div className="border-b border-[var(--color-border)] px-4 py-3">
-            <div className="mb-1 text-[14px] font-medium text-[var(--color-text-primary)]">
-              New project update
-            </div>
-            <p className="text-[12px] text-[var(--color-text-secondary)]">
-              Select a project to open a focused update composer.
-            </p>
-          </div>
-          <div className="border-b border-[var(--color-border)] px-4 py-3">
+          <div className="tty-prompt-line px-4 py-3">
+            <span className="shrink-0 text-[var(--color-accent)]">project</span>
+            <span aria-hidden="true">$</span>
             <input
               ref={projectPickerInputRef}
               type="text"
@@ -822,10 +806,10 @@ export function CommandPalette({
               }}
               placeholder="Search projects..."
               aria-label="Search projects for update"
-              className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[14px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
+              className="min-w-0 flex-1 bg-transparent font-mono text-[14px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none"
             />
           </div>
-          <div className="max-h-[320px] overflow-y-auto py-2">
+          <div className="max-h-[340px] overflow-y-auto px-2 py-2">
             {projectsLoading ? (
               <div className="px-4 py-8 text-center text-[13px] text-[var(--color-text-secondary)]">
                 Loading projects...
@@ -848,10 +832,10 @@ export function CommandPalette({
                   <button
                     key={project.id}
                     type="button"
-                    className={`flex w-full items-center justify-between gap-3 px-4 py-2 text-left transition-colors ${
+                    className={`tty-row grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left ${
                       selectedProjectIndex === index
-                        ? "bg-[var(--color-accent)] text-white"
-                        : "text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                        ? "tty-row-selected bg-[var(--color-accent-soft)] text-[var(--color-text-primary)]"
+                        : "text-[var(--color-text-primary)]"
                     }`}
                     onClick={() => openProjectUpdateForProject(project.slug)}
                     onMouseEnter={() => setSelectedProjectIndex(index)}
@@ -863,7 +847,7 @@ export function CommandPalette({
                       <span
                         className={`block truncate text-[12px] ${
                           selectedProjectIndex === index
-                            ? "text-white/75"
+                            ? "text-[var(--color-text-secondary)]"
                             : "text-[var(--color-text-secondary)]"
                         }`}
                       >
@@ -877,8 +861,8 @@ export function CommandPalette({
                     <span
                       className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${
                         selectedProjectIndex === index
-                          ? "bg-white/20 text-white"
-                          : "bg-[var(--color-surface)] text-[var(--color-text-secondary)]"
+                          ? "border border-[var(--color-accent)] text-[var(--color-accent)]"
+                          : "border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]"
                       }`}
                     >
                       {project.status}
@@ -887,12 +871,14 @@ export function CommandPalette({
                 ))
               : null}
           </div>
-          <div className="flex items-center justify-between border-t border-[var(--color-border)] px-4 py-2 text-[11px] text-[var(--color-text-secondary)]">
-            <span>Enter opens composer</span>
+          <div className="tty-status-bar justify-between border-t px-4 py-2">
+            <span>
+              selected: {selectedProject ? "project ready" : "choose project"}
+            </span>
             <button
               type="button"
               onClick={closeProjectPicker}
-              className="rounded px-2 py-1 transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+              className="tty-row px-2 py-1 text-[11px] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
             >
               Cancel
             </button>

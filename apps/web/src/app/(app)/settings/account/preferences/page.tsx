@@ -23,7 +23,7 @@ function SettingRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-6 border-b border-[var(--color-border)] py-4 last:border-b-0">
+    <div className="tty-row flex items-center justify-between gap-6 border-b border-[var(--color-border)] px-3 py-3 last:border-b-0">
       <div className="min-w-0 flex-1">
         <div className="text-[13px] font-medium text-[var(--color-text-primary)]">
           {label}
@@ -55,7 +55,7 @@ function Select({
       aria-label={ariaLabel}
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="min-w-[138px] rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] outline-none transition-colors focus:border-[var(--color-accent)]"
+      className="editorial-input min-w-[138px] px-3 py-1.5 text-[12px]"
     >
       {options.map((option) => (
         <option key={option.value} value={option.value}>
@@ -82,12 +82,12 @@ function Toggle({
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={`relative h-5 w-9 rounded-full transition-colors ${
+      className={`relative h-5 w-9 rounded-[2px] border border-[var(--color-border)] transition-colors ${
         checked ? "bg-[var(--color-accent)]" : "bg-[var(--color-border)]"
       }`}
     >
       <span
-        className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+        className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-[1px] bg-[var(--editorial-accent-ink)] transition-transform ${
           checked ? "translate-x-4" : ""
         }`}
       />
@@ -97,7 +97,7 @@ function Toggle({
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <h2 className="mt-10 mb-4 text-[13px] font-semibold text-[var(--color-text-primary)]">
+    <h2 className="tty-status-bar mt-6 border px-3 py-2 text-[12px] font-semibold text-[var(--color-text-primary)]">
       {title}
     </h2>
   );
@@ -125,14 +125,14 @@ function ThemeCard({
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-[78px] flex-col items-center gap-2 rounded-xl border p-2 transition-colors ${
+      className={`tty-panel flex w-[86px] flex-col items-center gap-2 p-2 transition-colors ${
         active
           ? "border-[var(--color-accent)] bg-[var(--color-surface)]"
           : "border-[var(--color-border)] hover:border-[var(--color-text-tertiary)]"
       }`}
     >
       <div
-        className={`flex h-[42px] w-full items-center justify-center rounded-md border border-[var(--color-border)] ${backgroundClass}`}
+        className={`flex h-[42px] w-full items-center justify-center rounded-[2px] border border-[var(--color-border)] ${backgroundClass}`}
       >
         <span
           className={`text-[14px] font-medium ${
@@ -181,7 +181,7 @@ function SidebarCustomizeModal({
       <dialog
         open
         aria-label="Customize sidebar"
-        className="w-full max-w-[520px] rounded-xl border border-[var(--color-border)] bg-[var(--color-content-bg)] p-5 shadow-2xl"
+        className="tty-panel w-full max-w-[520px] p-5 shadow-2xl"
       >
         <div className="flex items-center justify-between">
           <div>
@@ -197,7 +197,7 @@ function SidebarCustomizeModal({
             type="button"
             aria-label="Close modal dialog"
             onClick={onClose}
-            className="rounded-md p-1 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+            className="tty-row p-1 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
           >
             <svg
               width="14"
@@ -239,10 +239,10 @@ function SidebarCustomizeModal({
 
           {["Personal", "Workspace"].map((group) => (
             <div key={group}>
-              <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-tertiary)]">
+              <div className="editorial-section-title mb-2 text-[11px] uppercase tracking-wider text-[var(--color-text-tertiary)]">
                 {group}
               </div>
-              <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+              <div className="tty-panel overflow-hidden">
                 {sidebarItems
                   .filter((item) => item.group === group)
                   .map((item) => (
@@ -418,21 +418,22 @@ export default function PreferencesPage() {
   return (
     <>
       <div className="max-w-[820px]">
-        <div className="mb-8 flex items-start justify-between gap-4">
+        <div className="tty-panel mb-4 flex items-start justify-between gap-4 px-4 py-3">
           <div>
-            <h1 className="text-[28px] font-semibold text-[var(--color-text-primary)]">
+            <h1 className="text-[18px] font-semibold text-[var(--color-text-primary)]">
               Preferences
             </h1>
           </div>
-          <div className="text-[12px] text-[var(--color-text-secondary)]">
+          <div className="tty-chip text-[12px] text-[var(--color-text-secondary)]">
             {saveState === "saving" && "Saving…"}
             {saveState === "saved" && "Saved"}
             {saveState === "error" && "Save failed"}
+            {saveState === "idle" && "idle"}
           </div>
         </div>
 
         <SectionHeader title="General" />
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+        <div className="tty-panel overflow-hidden">
           <SettingRow
             label="Default home view"
             description="Select which view to display when launching exponential."
@@ -527,7 +528,7 @@ export default function PreferencesPage() {
         </div>
 
         <SectionHeader title="Interface and theme" />
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+        <div className="tty-panel overflow-hidden">
           <SettingRow
             label="App sidebar"
             description="Customize sidebar item visibility, ordering, and badge style."
@@ -536,7 +537,7 @@ export default function PreferencesPage() {
               type="button"
               aria-label="Customize sidebar"
               onClick={() => setIsSidebarModalOpen(true)}
-              className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+              className="tty-row border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
             >
               Customize
             </button>
@@ -573,7 +574,7 @@ export default function PreferencesPage() {
             />
           </SettingRow>
 
-          <div className="border-b border-[var(--color-border)] py-4">
+          <div className="border-b border-[var(--color-border)] px-3 py-3">
             <div className="text-[13px] font-medium text-[var(--color-text-primary)]">
               Interface theme
             </div>
@@ -604,7 +605,7 @@ export default function PreferencesPage() {
         </div>
 
         <SectionHeader title="Automations" />
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+        <div className="tty-panel overflow-hidden">
           <SettingRow
             label="Auto-assignment"
             description="When you create an unassigned issue, assign it to you before team-level assignment rules run."
@@ -684,7 +685,7 @@ export default function PreferencesPage() {
         </div>
 
         <SectionHeader title="Desktop application" />
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+        <div className="tty-panel overflow-hidden">
           <SettingRow
             label="Open in desktop app"
             description="Automatically open links in desktop app when possible."
@@ -700,7 +701,7 @@ export default function PreferencesPage() {
         </div>
 
         <SectionHeader title="Coding tools" />
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+        <div className="tty-panel overflow-hidden">
           <SettingRow
             label="Configure coding tools"
             description="Review the agent personalization settings used by assisted coding flows."
@@ -708,7 +709,7 @@ export default function PreferencesPage() {
             <Link
               aria-label="Configure coding tools settings"
               href="/settings/account/agents"
-              className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+              className="tty-row border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
             >
               Configure coding tools
             </Link>

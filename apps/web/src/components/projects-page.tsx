@@ -207,7 +207,7 @@ export function ProjectsPage({
         <select
           name="templateId"
           aria-label="Apply project template"
-          className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+          className="editorial-input min-h-8 px-3 py-1.5 text-[13px]"
         >
           <option value="">No template</option>
           {projectTemplates.map((template) => (
@@ -260,19 +260,19 @@ export function ProjectsPage({
                 type="text"
                 placeholder="Project name"
                 required
-                className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
+                className="editorial-input px-3 py-1.5 text-[13px] placeholder:text-[var(--color-text-tertiary)]"
               />
               <textarea
                 name="description"
                 placeholder="Description (optional)"
                 rows={2}
-                className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
+                className="editorial-input px-3 py-1.5 text-[13px] placeholder:text-[var(--color-text-tertiary)]"
               />
               <textarea
                 name="projectMilestones"
                 placeholder="Initial milestones (one per line, optional)"
                 rows={3}
-                className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
+                className="editorial-input px-3 py-1.5 text-[13px] placeholder:text-[var(--color-text-tertiary)]"
               />
 
               {templateSelect}
@@ -284,7 +284,7 @@ export function ProjectsPage({
                     name="labelIds"
                     multiple
                     aria-label="Apply project labels"
-                    className="min-h-[72px] rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                    className="editorial-input min-h-[72px] px-3 py-1.5 text-[13px]"
                   >
                     {availableLabels.map((label) => (
                       <option key={label.id} value={label.id}>
@@ -297,14 +297,14 @@ export function ProjectsPage({
               <div className="flex items-center gap-2">
                 <button
                   type="submit"
-                  className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:opacity-90"
+                  className="tty-row border border-[var(--color-accent)] bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-[var(--editorial-accent-ink)] transition-colors hover:opacity-90"
                 >
                   Create project
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowCreateForm(false)}
-                  className="rounded-md px-3 py-1.5 text-[13px] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
+                  className="tty-row px-3 py-1.5 text-[13px] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
                 >
                   Cancel
                 </button>
@@ -407,13 +407,13 @@ export function ProjectsPage({
       : null;
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center border-b border-[var(--color-border)] px-4 py-2">
-        <h1 className="mr-4 text-[15px] font-medium text-[var(--color-text-primary)]">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden">
+      <div className="tty-status-bar flex-wrap border-b px-3 py-2">
+        <h1 className="editorial-section-title mr-2 text-[13px] text-[var(--color-text-primary)]">
           {activeTeamName ? `${activeTeamName} Projects` : "Projects"}
         </h1>
         <div className="flex items-center gap-0.5">
-          <span className="rounded-md bg-[var(--color-surface-active)] px-2.5 py-1 text-[13px] text-[var(--color-text-primary)]">
+          <span className="tty-chip text-[var(--color-text-primary)]">
             All projects
           </span>
         </div>
@@ -428,7 +428,7 @@ export function ProjectsPage({
                 statusFilter: event.target.value as StatusFilter,
               })
             }
-            className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-2 py-1 text-[12px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+            className="editorial-input min-h-7 px-2 py-1 text-[12px]"
           >
             <option value="all">All statuses</option>
             {statusOptions.map(([value, label]) => (
@@ -444,7 +444,7 @@ export function ProjectsPage({
             aria-label="Filter projects by label"
             value={labelFilterId}
             onChange={(event) => setLabelFilterId(event.target.value)}
-            className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-2 py-1 text-[12px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+            className="editorial-input min-h-7 px-2 py-1 text-[12px]"
           >
             <option value="all">All labels</option>
             {availableLabels.map((label) => (
@@ -462,7 +462,7 @@ export function ProjectsPage({
             onChange={(event) =>
               updateState({ sortBy: event.target.value as SortOption })
             }
-            className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-2 py-1 text-[12px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+            className="editorial-input min-h-7 px-2 py-1 text-[12px]"
           >
             <option value="created-desc">Newest</option>
             <option value="created-asc">Oldest</option>
@@ -474,7 +474,7 @@ export function ProjectsPage({
         <button
           type="button"
           onClick={() => setShowCreateForm(true)}
-          className="mr-3 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:opacity-90"
+          className="tty-row mr-3 border border-[var(--color-accent)] bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-[var(--editorial-accent-ink)] transition-colors hover:opacity-90"
         >
           New project
         </button>
@@ -482,12 +482,12 @@ export function ProjectsPage({
           <button
             type="button"
             onClick={() => updateState({ teamId: null })}
-            className="mr-3 rounded-md border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
+            className="tty-row mr-3 border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
           >
             {activeTeamName} only
           </button>
         )}
-        <span className="text-[12px] text-[var(--color-text-secondary)]">
+        <span className="tty-chip">
           {visibleProjects.length} of {scopedProjects.length} projects
         </span>
       </div>
@@ -495,7 +495,7 @@ export function ProjectsPage({
       {showCreateForm && (
         <form
           onSubmit={handleCreate}
-          className="border-b border-[var(--color-border)] bg-[var(--color-surface-hover)] px-4 py-3"
+          className="tty-panel mx-3 mt-3 border-[var(--color-border)] bg-[var(--color-surface-hover)] px-4 py-3"
         >
           <div className="flex flex-col gap-3">
             <input
@@ -503,19 +503,19 @@ export function ProjectsPage({
               type="text"
               placeholder="Project name"
               required
-              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
+              className="editorial-input px-3 py-1.5 text-[13px] placeholder:text-[var(--color-text-tertiary)]"
             />
             <textarea
               name="description"
               placeholder="Description (optional)"
               rows={2}
-              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
+              className="editorial-input px-3 py-1.5 text-[13px] placeholder:text-[var(--color-text-tertiary)]"
             />
             <textarea
               name="projectMilestones"
               placeholder="Initial milestones (one per line, optional)"
               rows={3}
-              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
+              className="editorial-input px-3 py-1.5 text-[13px] placeholder:text-[var(--color-text-tertiary)]"
             />
 
             {templateSelect}
@@ -527,7 +527,7 @@ export function ProjectsPage({
                   name="labelIds"
                   multiple
                   aria-label="Apply project labels"
-                  className="min-h-[72px] rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                  className="editorial-input min-h-[72px] px-3 py-1.5 text-[13px]"
                 >
                   {availableLabels.map((label) => (
                     <option key={label.id} value={label.id}>
@@ -540,14 +540,14 @@ export function ProjectsPage({
             <div className="flex items-center gap-2">
               <button
                 type="submit"
-                className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:opacity-90"
+                className="tty-row border border-[var(--color-accent)] bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-[var(--editorial-accent-ink)] transition-colors hover:opacity-90"
               >
                 Create project
               </button>
               <button
                 type="button"
                 onClick={() => setShowCreateForm(false)}
-                className="rounded-md px-3 py-1.5 text-[13px] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
+                className="tty-row px-3 py-1.5 text-[13px] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
               >
                 Cancel
               </button>
@@ -556,42 +556,43 @@ export function ProjectsPage({
         </form>
       )}
 
-      <div className="flex h-[32px] items-center border-b border-[var(--color-border)] px-4 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-secondary)]">
-        <div className="min-w-0 flex-1">Name</div>
-        <div className="w-[120px] shrink-0">Health</div>
-        <div className="w-[60px] shrink-0 text-center">Priority</div>
-        <div className="w-[60px] shrink-0 text-center">Lead</div>
-        <div className="w-[80px] shrink-0">Target date</div>
-        <div className="w-[120px] shrink-0">Status</div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-w-0 flex-1 overflow-auto">
+        <div className="tty-status-bar sticky top-0 z-10 grid h-8 min-w-[760px] grid-cols-[minmax(180px,1fr)_minmax(110px,150px)_64px_64px_90px_minmax(130px,160px)] gap-3 border-b px-3 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-secondary)]">
+          <div className="min-w-0">Name</div>
+          <div>Health</div>
+          <div className="text-center">Priority</div>
+          <div className="text-center">Lead</div>
+          <div>Target date</div>
+          <div>Status</div>
+        </div>
         {visibleProjects.length > 0 ? (
-          visibleProjects.map((project) => (
-            <ProjectRow
-              key={project.id}
-              name={project.name}
-              icon={project.icon}
-              slug={project.slug}
-              status={project.status}
-              statusLabel={project.statusLabel}
-              statusColor={project.statusColor}
-              statusIcon={project.statusIcon}
-              priority={project.priority}
-              health={project.health}
-              lead={
-                project.lead
-                  ? {
-                      name: project.lead.name,
-                      image: project.lead.image ?? undefined,
-                    }
-                  : null
-              }
-              targetDate={project.targetDate}
-              progress={project.progress}
-              labels={project.labels}
-            />
-          ))
+          <div>
+            {visibleProjects.map((project) => (
+              <ProjectRow
+                key={project.id}
+                name={project.name}
+                icon={project.icon}
+                slug={project.slug}
+                status={project.status}
+                statusLabel={project.statusLabel}
+                statusColor={project.statusColor}
+                statusIcon={project.statusIcon}
+                priority={project.priority}
+                health={project.health}
+                lead={
+                  project.lead
+                    ? {
+                        name: project.lead.name,
+                        image: project.lead.image ?? undefined,
+                      }
+                    : null
+                }
+                targetDate={project.targetDate}
+                progress={project.progress}
+                labels={project.labels}
+              />
+            ))}
+          </div>
         ) : (
           <EmptyState
             title="No matching projects"
@@ -611,7 +612,7 @@ export function ProjectsPage({
         )}
       </div>
 
-      <div className="flex items-center border-t border-[var(--color-border)] px-4 py-1.5 text-[12px] text-[var(--color-text-secondary)]">
+      <div className="tty-status-bar border-t px-3 py-1.5 text-[12px]">
         {visibleProjects.length} visible
       </div>
     </div>

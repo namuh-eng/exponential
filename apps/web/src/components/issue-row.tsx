@@ -117,7 +117,7 @@ export function IssueRow({
 
       {/* Identifier */}
       {showProp("id") && (
-        <span className="t-mono-sm shrink-0 text-[var(--color-text-secondary)]">
+        <span className="tty-chip shrink-0 text-[var(--color-text-secondary)]">
           {identifier}
         </span>
       )}
@@ -141,34 +141,37 @@ export function IssueRow({
 
       {/* Project */}
       {showProp("project") && projectName && (
-        <div className="flex max-w-[220px] shrink-0 items-center gap-1 text-[12px] text-[var(--color-text-secondary)]">
-          <span aria-hidden="true">›</span>
+        <div className="hidden max-w-[220px] shrink-0 items-center gap-1 text-[11px] text-[var(--color-text-secondary)] md:flex">
+          <span
+            aria-hidden="true"
+            className="text-[var(--color-text-tertiary)]"
+          >
+            proj:
+          </span>
           <span className="truncate">{projectName}</span>
         </div>
       )}
 
       {/* Cycle and estimate */}
       {cycleName && (
-        <span className="shrink-0 text-[12px] text-[var(--color-text-secondary)]">
+        <span className="hidden shrink-0 text-[11px] text-[var(--color-text-secondary)] lg:inline">
           {cycleName}
         </span>
       )}
       {estimate !== null && estimate !== undefined && (
-        <span className="shrink-0 rounded border border-[var(--color-border)] px-1.5 py-0.5 text-[11px] text-[var(--color-text-secondary)]">
-          {estimate} pt
-        </span>
+        <span className="tty-chip shrink-0">{estimate} pt</span>
       )}
 
       {/* Due date */}
       {showProp("dueDate") && dueDate && (
-        <span className="shrink-0 text-[12px] text-[var(--color-text-secondary)]">
+        <span className="hidden shrink-0 text-[11px] text-[var(--color-text-secondary)] xl:inline">
           Due {formatDate(dueDate)}
         </span>
       )}
 
       {/* Date */}
       {showProp("created") && (
-        <span className="shrink-0 text-[12px] text-[var(--color-text-secondary)]">
+        <span className="hidden shrink-0 text-[11px] text-[var(--color-text-secondary)] md:inline">
           {formatDate(createdAt)}
         </span>
       )}
@@ -189,9 +192,9 @@ export function IssueRow({
     ? identifier
     : `${identifier} ${title}`;
 
-  const className = `group flex h-[42px] items-center gap-2 border-b border-[var(--color-border)] bg-[color-mix(in_oklab,var(--color-surface)_72%,transparent)] px-4 text-[13px] transition-colors hover:bg-[var(--color-surface-hover)] ${
+  const className = `tty-row group mx-1 flex min-h-9 items-center gap-2 border-b border-[var(--color-border)] bg-[color-mix(in_oklab,var(--color-surface)_68%,transparent)] px-3 py-1 text-[12px] transition-colors hover:bg-[var(--color-surface-hover)] ${
     selected
-      ? "bg-[var(--color-surface-active)] shadow-[inset_2px_0_0_var(--color-accent)]"
+      ? "tty-row-selected shadow-[inset_2px_0_0_var(--color-accent)]"
       : ""
   }`;
 

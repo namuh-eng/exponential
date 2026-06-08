@@ -24,16 +24,19 @@ export function IssuesGroupHeader({
   onAddIssue,
 }: IssuesGroupHeaderProps) {
   return (
-    <div className="flex h-[36px] items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 text-[13px]">
+    <div className="tty-status-bar sticky top-0 z-10 h-8 border-b px-3">
+      <span aria-hidden="true" className="text-[var(--color-text-tertiary)]">
+        ::
+      </span>
       <StatusIcon category={statusCategory} color={statusColor} size={14} />
       <span className="editorial-section-title">{name}</span>
-      <span className="text-[var(--color-text-secondary)]">{count}</span>
+      <span className="tty-chip">{count}</span>
       <div className="flex-1" />
       <button
         type="button"
         aria-label="Add issue"
         onClick={onAddIssue}
-        className="flex h-5 w-5 items-center justify-center rounded text-[var(--color-text-secondary)] opacity-0 transition-opacity hover:text-[var(--color-text-primary)] group-hover:opacity-100"
+        className="tty-row flex h-6 w-6 items-center justify-center text-[var(--color-text-secondary)] opacity-60 transition-opacity hover:text-[var(--color-text-primary)] focus:opacity-100 group-hover:opacity-100"
       >
         <svg
           width="14"

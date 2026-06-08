@@ -36,7 +36,7 @@ export function EmptyState({
         (action.href ? (
           <a
             href={action.href}
-            className="mt-4 rounded-md bg-[var(--color-accent)] px-4 py-[8px] text-[13px] font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+            className="mt-4 rounded-md bg-[var(--color-accent)] px-4 py-[8px] text-[13px] font-medium text-[var(--editorial-accent-ink)] transition-colors hover:bg-[var(--color-accent-hover)]"
           >
             {action.label}
           </a>
@@ -46,7 +46,7 @@ export function EmptyState({
               type="button"
               onClick={action.onClick}
               disabled={action.disabled}
-              className="rounded-md bg-[var(--color-accent)] px-4 py-[8px] text-[13px] font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-[var(--color-accent)]"
+              className="rounded-md bg-[var(--color-accent)] px-4 py-[8px] text-[13px] font-medium text-[var(--editorial-accent-ink)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-[var(--color-accent)]"
             >
               {action.label}
             </button>

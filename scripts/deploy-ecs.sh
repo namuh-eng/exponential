@@ -13,6 +13,12 @@ REGION="${AWS_REGION:-us-east-1}"
 APP_NAME="${APP_NAME:-exponential}"
 CLUSTER="${ECS_CLUSTER:-${APP_NAME}-cluster}"
 IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD)}"
+NEXT_PUBLIC_EXPONENTIAL_VERSION="${NEXT_PUBLIC_EXPONENTIAL_VERSION:-$(node -p "require('./apps/web/package.json').version" 2>/dev/null || echo version:unknown)}"
+NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH="${NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo branch:unknown)}"
+if [ "$NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH" = "HEAD" ]; then
+  NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH="branch:unknown"
+fi
+NEXT_PUBLIC_EXPONENTIAL_GIT_SHA="${NEXT_PUBLIC_EXPONENTIAL_GIT_SHA:-$(git rev-parse --short=7 HEAD 2>/dev/null || echo sha:unknown)}"
 AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}"
 ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
 TASK_OUT_DIR="${TASK_OUT_DIR:-dist/ecs-task-definitions}"
@@ -34,6 +40,7 @@ for name in \
 done
 
 export AWS_ACCOUNT_ID REGION AWS_REGION="$REGION" IMAGE_TAG
+export NEXT_PUBLIC_EXPONENTIAL_VERSION NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH NEXT_PUBLIC_EXPONENTIAL_GIT_SHA
 export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
 
 if [ -z "${WEB_INTERNAL_API_URL:-}" ]; then
@@ -83,7 +90,13 @@ if [ -z "${DEPLOY_SKIP_ECR_LOGIN:-}" ]; then
 fi
 
 docker build --platform linux/amd64 -f infra/docker/api.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-api:$IMAGE_TAG" .
-docker build --platform linux/amd64 -f infra/docker/web.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-web:$IMAGE_TAG" .
+docker build \
+  --platform linux/amd64 \
+  -f infra/docker/web.Dockerfile \
+  --build-arg "NEXT_PUBLIC_EXPONENTIAL_VERSION=$NEXT_PUBLIC_EXPONENTIAL_VERSION" \
+  --build-arg "NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH=$NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH" \
+  --build-arg "NEXT_PUBLIC_EXPONENTIAL_GIT_SHA=$NEXT_PUBLIC_EXPONENTIAL_GIT_SHA" \
+  -t "$ECR_REGISTRY/${APP_NAME}-web:$IMAGE_TAG" .
 
 docker push "$ECR_REGISTRY/${APP_NAME}-api:$IMAGE_TAG"
 docker push "$ECR_REGISTRY/${APP_NAME}-web:$IMAGE_TAG"

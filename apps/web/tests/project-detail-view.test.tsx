@@ -144,11 +144,12 @@ describe("ProjectDetailPage UI", () => {
       json: async () => mockProjectData,
     } as Response);
 
-    render(<ProjectDetailPage />);
+    const { container } = render(<ProjectDetailPage />);
 
     expect(screen.getByText("Loading...")).toBeInTheDocument();
 
     expect(await screen.findByText("Agent Speed")).toBeInTheDocument();
+    expect(container.querySelectorAll(".tty-panel").length).toBeGreaterThan(3);
     expect(screen.getByText("Optimize things")).toBeInTheDocument();
     expect(screen.getByText("30%")).toBeInTheDocument();
     expect(screen.getByText("3 of 10 issues completed")).toBeInTheDocument();

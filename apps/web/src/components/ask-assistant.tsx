@@ -149,18 +149,18 @@ export function AskAssistant({
         onClick={openAssistant}
         disabled={!canAskLinear}
         title={policyMessage ?? undefined}
-        className="fixed right-5 bottom-5 z-40 flex items-center gap-2 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-content-bg)] px-4 py-2.5 text-[13px] font-medium text-[var(--color-text-primary)] shadow-[var(--shadow-editorial-md)] transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-2 focus:ring-offset-[var(--color-content-bg)] disabled:cursor-not-allowed disabled:opacity-50"
+        className="fixed right-3 bottom-1 z-50 flex h-7 w-7 items-center justify-center gap-2 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-content-bg)] text-[13px] font-medium text-[var(--color-text-primary)] shadow-[var(--shadow-editorial-md)] transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-2 focus:ring-offset-[var(--color-content-bg)] disabled:cursor-not-allowed disabled:opacity-50 sm:right-5 sm:bottom-14 sm:z-40 sm:h-auto sm:w-auto sm:px-4 sm:py-2.5"
       >
         <span aria-hidden="true" className="text-[15px]">
           ✦
         </span>
-        <span>Ask exponential</span>
+        <span className="hidden sm:inline">Ask exponential</span>
       </button>
 
       {open ? (
         <aside
           aria-label="Ask exponential assistant"
-          className="fixed right-5 bottom-20 z-[90] flex h-[min(560px,calc(100vh-7rem))] w-[min(420px,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-[14px] border border-[var(--color-border-strong)] bg-[var(--color-content-bg)] shadow-[var(--shadow-editorial-md)]"
+          className="fixed right-5 bottom-28 z-[90] flex h-[min(560px,calc(100vh-10rem))] w-[min(420px,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-[14px] border border-[var(--color-border-strong)] bg-[var(--color-content-bg)] shadow-[var(--shadow-editorial-md)]"
         >
           <header className="flex items-start justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
             <div>

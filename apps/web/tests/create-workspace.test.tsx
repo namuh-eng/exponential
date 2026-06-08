@@ -47,6 +47,15 @@ describe("Create Workspace page", () => {
     ).toBeDefined();
   });
 
+  it("renders the terminal first-run structure and config preview", () => {
+    render(<CreateWorkspacePage />);
+
+    expect(screen.getByText("step 2/4")).toBeDefined();
+    expect(screen.getByText("# workspace manifest")).toBeDefined();
+    expect(screen.getByText("# config preview")).toBeDefined();
+    expect(screen.getByText(/defaults editable later/)).toBeDefined();
+  });
+
   it("renders workspace name and URL inputs", () => {
     render(<CreateWorkspacePage />);
     expect(screen.getByLabelText("Workspace name")).toBeDefined();

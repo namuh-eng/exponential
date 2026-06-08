@@ -81,6 +81,7 @@ describe("ProjectRow", () => {
     render(<ProjectRow {...defaultProps} />);
     const row = screen.getByTestId("project-row");
     expect(row).toBeDefined();
+    expect(row).toHaveClass("tty-row");
     expect(row).toHaveAttribute(
       "href",
       "/project/agent-speed-optimization/overview",
@@ -166,6 +167,7 @@ describe("ProjectsPage", () => {
     render(<ProjectsPage />);
 
     expect(await screen.findByText("Alpha")).toBeInTheDocument();
+    expect(screen.getByText("All projects")).toHaveClass("tty-chip");
     fireEvent.change(screen.getByLabelText("Filter projects by status"), {
       target: { value: "completed" },
     });

@@ -20,27 +20,31 @@ const baseProps = {
   teams: [{ id: "t-a", name: "Team A", key: "TA" }],
 };
 
-describe("Sidebar TTY self-host status strip", () => {
+describe("Sidebar TTY build provenance strip", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it("renders the terminal self-host status signals at the foot of the sidebar", () => {
+  it("renders terminal build provenance without unbacked runtime status", () => {
     render(<Sidebar {...baseProps} />);
 
     const strip = screen.getByTestId("sidebar-status-strip");
     expect(strip).toBeInTheDocument();
-    expect(strip).toHaveAttribute("aria-label", "Self-host status");
+    expect(strip).toHaveAttribute("aria-label", "Build provenance");
 
-    // Open-source / terminal chrome signals from the TTY design.
     const scoped = within(strip);
-    expect(scoped.getByText("live")).toBeInTheDocument();
-    expect(scoped.getByText("self-hosted")).toBeInTheDocument();
-    expect(scoped.getByText("ELv2")).toBeInTheDocument();
+    expect(scoped.getByText("build")).toBeInTheDocument();
+    expect(scoped.getByText("frontend shell")).toBeInTheDocument();
+    expect(scoped.getByText("provenance")).toBeInTheDocument();
     expect(scoped.getByText("git:")).toBeInTheDocument();
-    expect(scoped.getByText(/main@a3f10c2/)).toBeInTheDocument();
-    expect(scoped.getByText(/^v\d+\.\d+\.\d+$/)).toBeInTheDocument();
+    expect(strip).toHaveTextContent(/branch:unknown|[A-Za-z0-9/_-]+@/);
+    expect(strip).toHaveTextContent(/version:unknown|v\d+\.\d+\.\d+/);
+    expect(strip).not.toHaveTextContent("main@a3f10c2");
+    expect(strip).not.toHaveTextContent("v0.4.2");
+    expect(strip).not.toHaveTextContent("live");
+    expect(strip).not.toHaveTextContent("self-hosted");
+    expect(strip).not.toHaveTextContent("ELv2");
   });
 
   it("renders the status strip in a monospace family for the terminal aesthetic", () => {

@@ -11,6 +11,12 @@ RUN pnpm install --frozen-lockfile
 FROM node:20-alpine AS builder
 RUN corepack enable
 WORKDIR /workspace
+ARG NEXT_PUBLIC_EXPONENTIAL_VERSION=version:unknown
+ARG NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH=branch:unknown
+ARG NEXT_PUBLIC_EXPONENTIAL_GIT_SHA=sha:unknown
+ENV NEXT_PUBLIC_EXPONENTIAL_VERSION=$NEXT_PUBLIC_EXPONENTIAL_VERSION
+ENV NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH=$NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH
+ENV NEXT_PUBLIC_EXPONENTIAL_GIT_SHA=$NEXT_PUBLIC_EXPONENTIAL_GIT_SHA
 COPY --from=deps /workspace/node_modules ./node_modules
 COPY --from=deps /workspace/apps/web/node_modules ./apps/web/node_modules
 COPY --from=deps /workspace/packages/sdk/node_modules ./packages/sdk/node_modules

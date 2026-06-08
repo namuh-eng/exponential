@@ -124,7 +124,7 @@ describe("NotificationRow", () => {
   it("applies selected style when isSelected", () => {
     render(<NotificationRow {...defaultProps} isSelected={true} />);
     const row = screen.getByTestId("notification-row");
-    expect(row.className).toContain("bg-");
+    expect(row.className).toContain("tty-row-selected");
   });
 
   it("renders relative timestamp", () => {

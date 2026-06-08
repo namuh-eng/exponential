@@ -1504,16 +1504,19 @@ export function IssueDetailView({
     richTextHtmlToPlainText(descriptionDraft).trim().length === 0;
 
   return (
-    <div className="flex h-full overflow-y-auto bg-[var(--color-content-bg)]">
+    <div
+      data-testid="issue-detail-tty-shell"
+      className="flex h-full overflow-y-auto bg-transparent"
+    >
       <div
         className={`mx-auto grid w-full grid-cols-1 ${
           compact
             ? "max-w-full gap-5 px-4 py-5"
-            : "max-w-[1440px] gap-8 px-6 py-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-10"
+            : "max-w-[1440px] gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_320px]"
         }`}
       >
         <div className="min-w-0">
-          <div className="flex flex-col gap-6 border-b border-[var(--color-border)] pb-6 sm:flex-row sm:items-start sm:justify-between">
+          <div className="tty-panel flex flex-col gap-4 overflow-visible p-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2 text-[12px] uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                 <Link
@@ -1523,7 +1526,7 @@ export function IssueDetailView({
                   {issue.team.name}
                 </Link>
                 <span>{issue.identifier}</span>
-                <span className="rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[11px] tracking-normal text-[var(--color-text-secondary)]">
+                <span className="tty-chip text-[11px] tracking-normal text-[var(--color-text-secondary)]">
                   {issue.state?.name ?? "No status"}
                 </span>
               </div>
@@ -1569,14 +1572,14 @@ export function IssueDetailView({
               />
               <Link
                 href={teamIssuesHref}
-                className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                className="tty-row border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
               >
                 Back to issues
               </Link>
               <button
                 type="button"
                 onClick={() => void handleCopyLink(detailHref)}
-                className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                className="tty-row border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
               >
                 {copyState === "copied"
                   ? "Copied"
@@ -1594,7 +1597,7 @@ export function IssueDetailView({
                     : "Subscribe to issue notifications"
                 }
                 aria-pressed={issue.subscription.subscribed}
-                className={`rounded-full border px-3 py-1.5 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                className={`tty-row border px-3 py-1.5 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                   issue.subscription.subscribed
                     ? "border-[var(--color-accent)] bg-[var(--color-accent-muted)] text-[var(--color-text-primary)]"
                     : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
@@ -1612,7 +1615,7 @@ export function IssueDetailView({
               <Link
                 href={detailHref}
                 target="_blank"
-                className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                className="tty-row border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
               >
                 Open in tab
               </Link>
@@ -1622,7 +1625,7 @@ export function IssueDetailView({
                   aria-haspopup="menu"
                   aria-expanded={actionsOpen}
                   onClick={() => setActionsOpen((current) => !current)}
-                  className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                  className="tty-row border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
                 >
                   Actions
                 </button>
@@ -1630,13 +1633,13 @@ export function IssueDetailView({
                   <div
                     role="menu"
                     aria-label="Issue actions"
-                    className="absolute right-0 z-10 mt-2 w-40 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-content-bg)] p-1 shadow-lg"
+                    className="tty-panel absolute right-0 z-10 mt-2 w-40 p-1 shadow-lg"
                   >
                     <button
                       type="button"
                       role="menuitem"
                       onClick={handleEditIssue}
-                      className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                      className="tty-row block w-full px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
                     >
                       Edit
                     </button>
@@ -1645,7 +1648,7 @@ export function IssueDetailView({
                       role="menuitem"
                       onClick={() => void handleArchiveIssue()}
                       disabled={runningAction !== null}
-                      className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                      className="tty-row block w-full px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
                     >
                       {runningAction === "archive" ? "Archiving..." : "Archive"}
                     </button>
@@ -1654,7 +1657,7 @@ export function IssueDetailView({
                       role="menuitem"
                       onClick={() => void handleDeleteIssue()}
                       disabled={runningAction !== null}
-                      className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-red-500 hover:bg-[var(--color-surface-hover)]"
+                      className="tty-row block w-full px-3 py-2 text-left text-[13px] text-red-500 hover:bg-[var(--color-surface-hover)]"
                     >
                       {runningAction === "delete" ? "Deleting..." : "Delete"}
                     </button>
@@ -1664,8 +1667,8 @@ export function IssueDetailView({
             </div>
           </div>
 
-          <div className="mt-8 space-y-6">
-            <section className="rounded-[24px] border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+          <div className="mt-4 space-y-4">
+            <section className="tty-panel px-5 py-4">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
@@ -1685,14 +1688,14 @@ export function IssueDetailView({
                       onClick={() =>
                         applyDescriptionCommand(action.command, action.value)
                       }
-                      className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                      className="tty-row border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
                     >
                       {action.label}
                     </button>
                   ))}
                 </div>
               </div>
-              <div className="relative rounded-[20px] border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-4">
+              <div className="tty-panel relative px-4 py-4">
                 {!descriptionFocused && descriptionIsEmpty && (
                   <span className="pointer-events-none absolute left-4 top-4 text-[15px] text-[var(--color-text-secondary)]">
                     Add a description...
@@ -1721,7 +1724,7 @@ export function IssueDetailView({
               </div>
             </section>
 
-            <section className="rounded-[24px] border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+            <section className="tty-panel px-5 py-4">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-[13px] font-medium text-[var(--color-text-secondary)]">
                   Sub-issues
@@ -1729,7 +1732,7 @@ export function IssueDetailView({
                 <button
                   type="button"
                   onClick={() => setShowSubIssueForm((current) => !current)}
-                  className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                  className="tty-row border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
                 >
                   {showSubIssueForm ? "Cancel" : "Create sub-issue"}
                 </button>
@@ -1748,13 +1751,13 @@ export function IssueDetailView({
                       }
                     }}
                     placeholder="Sub-issue title"
-                    className="flex-1 rounded-full border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-2.5 text-[13px] text-[var(--color-text-primary)] outline-none transition-shadow focus:shadow-[0_0_0_2px_color-mix(in_srgb,var(--color-accent)_25%,transparent)]"
+                    className="editorial-input flex-1 px-4 py-2.5 text-[13px]"
                   />
                   <button
                     type="button"
                     disabled={submittingSubIssue || !subIssueTitle.trim()}
                     onClick={() => void handleSubIssueSubmit()}
-                    className="rounded-full bg-[var(--color-accent)] px-4 py-2.5 text-[12px] font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+                    className="tty-row border border-[var(--color-accent)] bg-[var(--color-accent)] px-4 py-2.5 text-[12px] font-medium text-[var(--editorial-accent-ink)] transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {submittingSubIssue ? "Creating..." : "Create"}
                   </button>
@@ -1770,7 +1773,7 @@ export function IssueDetailView({
                         `/team/${issue.team.key}/issue/${subIssue.identifier}`,
                         workspaceSlug,
                       )}
-                      className="flex items-center justify-between rounded-[18px] border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-3 text-[13px] transition-colors hover:bg-[var(--color-surface-hover)]"
+                      className="tty-row flex items-center justify-between border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-3 text-[13px] transition-colors hover:bg-[var(--color-surface-hover)]"
                     >
                       <div className="min-w-0">
                         <div className="text-[12px] text-[var(--color-text-secondary)]">
@@ -1793,14 +1796,14 @@ export function IssueDetailView({
               )}
             </section>
 
-            <section className="rounded-[24px] border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+            <section className="tty-panel px-5 py-4">
               <h2 className="mb-4 text-[13px] font-medium text-[var(--color-text-secondary)]">
                 Activity
               </h2>
 
               {issue.discussionSummary.enabled ? (
                 <div
-                  className="mb-5 rounded-[18px] border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-3"
+                  className="tty-panel mb-5 px-4 py-3"
                   aria-label="Discussion summary"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -1821,7 +1824,7 @@ export function IssueDetailView({
                     {issue.comments.length >= 2 ? (
                       <button
                         type="button"
-                        className="rounded-md border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-primary)] hover:bg-[var(--color-card-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+                        className="tty-row border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-primary)] hover:bg-[var(--color-card-hover)] disabled:cursor-not-allowed disabled:opacity-60"
                         onClick={() => void handleGenerateDiscussionSummary()}
                         disabled={summaryGenerating}
                       >
@@ -1875,13 +1878,13 @@ export function IssueDetailView({
               ) : null}
 
               {historyLoading && (
-                <div className="mb-4 rounded-[18px] border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
+                <div className="tty-panel mb-4 px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
                   Loading activity history...
                 </div>
               )}
 
               {historyError && (
-                <div className="mb-4 rounded-[18px] border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
+                <div className="tty-panel mb-4 px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
                   {historyError}
                 </div>
               )}
@@ -1891,7 +1894,7 @@ export function IssueDetailView({
                   {historyEvents.map((event) => (
                     <div
                       key={event.id}
-                      className="flex gap-3 rounded-[18px] border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-3"
+                      className="tty-row flex gap-3 border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-3"
                     >
                       <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--color-accent)]" />
                       <div className="min-w-0">
@@ -1917,7 +1920,7 @@ export function IssueDetailView({
               ) : null}
 
               {commentActionStatus ? (
-                <div className="mb-4 rounded-[18px] border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
+                <div className="tty-panel mb-4 px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
                   {commentActionStatus}
                 </div>
               ) : null}
@@ -1928,7 +1931,7 @@ export function IssueDetailView({
                     <div
                       key={comment.id}
                       id={`comment-${comment.id}`}
-                      className="rounded-[20px] border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-4"
+                      className="tty-panel px-4 py-4"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
@@ -1955,7 +1958,7 @@ export function IssueDetailView({
                                 current === comment.id ? null : comment.id,
                               )
                             }
-                            className="rounded-full border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]"
+                            className="tty-row border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]"
                           >
                             •••
                           </button>
@@ -1963,12 +1966,12 @@ export function IssueDetailView({
                             <div
                               role="menu"
                               aria-label="More actions"
-                              className="absolute right-0 z-20 mt-2 w-36 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-content-bg)] p-1 shadow-lg"
+                              className="tty-panel absolute right-0 z-20 mt-2 w-36 p-1 shadow-lg"
                             >
                               <button
                                 type="button"
                                 role="menuitem"
-                                className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                                className="tty-row block w-full px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
                                 onClick={() => {
                                   setCommentActionMenuId(null);
                                   void handleCopyCommentLink(
@@ -1983,7 +1986,7 @@ export function IssueDetailView({
                                 <button
                                   type="button"
                                   role="menuitem"
-                                  className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                                  className="tty-row block w-full px-3 py-2 text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
                                   onClick={() => {
                                     setCommentActionMenuId(null);
                                     setEditingCommentId(comment.id);
@@ -1997,7 +2000,7 @@ export function IssueDetailView({
                                 <button
                                   type="button"
                                   role="menuitem"
-                                  className="block w-full rounded-[10px] px-3 py-2 text-left text-[13px] text-red-500 hover:bg-[var(--color-surface-hover)]"
+                                  className="tty-row block w-full px-3 py-2 text-left text-[13px] text-red-500 hover:bg-[var(--color-surface-hover)]"
                                   onClick={() => {
                                     setCommentActionMenuId(null);
                                     void handleCommentDelete(comment.id);
@@ -2017,21 +2020,21 @@ export function IssueDetailView({
                             onChange={(event) =>
                               setCommentEditBody(event.target.value)
                             }
-                            className="w-full resize-none rounded-[14px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none"
+                            className="editorial-input w-full resize-none px-3 py-2 text-[13px]"
                             rows={3}
                             aria-label="Edit comment"
                           />
                           <div className="flex gap-2">
                             <button
                               type="button"
-                              className="rounded-full bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white"
+                              className="tty-row border border-[var(--color-accent)] bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-[var(--editorial-accent-ink)]"
                               onClick={() => void handleCommentEdit(comment.id)}
                             >
                               Save
                             </button>
                             <button
                               type="button"
-                              className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)]"
+                              className="tty-row border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)]"
                               onClick={() => setEditingCommentId(null)}
                             >
                               Cancel
@@ -2063,7 +2066,7 @@ export function IssueDetailView({
                 </div>
               ) : null}
 
-              <div className="mt-6 rounded-[24px] border border-[var(--color-border)] bg-[var(--color-content-bg)] px-4 py-4">
+              <div className="tty-panel mt-6 px-4 py-4">
                 <div
                   className="mb-3 flex flex-wrap items-center gap-2"
                   aria-label="Comment composer toolbar"
@@ -2076,7 +2079,7 @@ export function IssueDetailView({
                       onClick={() =>
                         applyCommentFormat(action.prefix, action.suffix)
                       }
-                      className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                      className="tty-row border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
                     >
                       {action.label}
                     </button>
@@ -2084,7 +2087,7 @@ export function IssueDetailView({
                   <button
                     type="button"
                     onClick={() => openMentionPicker()}
-                    className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                    className="tty-row border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
                     aria-haspopup="listbox"
                     aria-expanded={mentionPickerOpen}
                   >
@@ -2093,14 +2096,14 @@ export function IssueDetailView({
                   <button
                     type="button"
                     onClick={() => insertCommentSnippet("🎉")}
-                    className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                    className="tty-row border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
                   >
                     Emoji
                   </button>
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="rounded-full border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                    className="tty-row border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
                   >
                     Attach
                   </button>
@@ -2175,7 +2178,7 @@ export function IssueDetailView({
                   <div
                     role="menu"
                     aria-label="Mention members"
-                    className="mt-2 max-h-56 overflow-y-auto rounded-[16px] border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-lg"
+                    className="tty-panel mt-2 max-h-56 overflow-y-auto p-1 shadow-lg"
                   >
                     {filteredMentionMembers.length > 0 ? (
                       filteredMentionMembers.map((member, index) => (
@@ -2188,7 +2191,7 @@ export function IssueDetailView({
                           }
                           onMouseEnter={() => setMentionActiveIndex(index)}
                           onClick={() => insertMention(member)}
-                          className={`flex w-full items-center gap-3 rounded-[12px] px-3 py-2 text-left text-[13px] ${
+                          className={`tty-row flex w-full items-center gap-3 px-3 py-2 text-left text-[13px] ${
                             index === mentionActiveIndex
                               ? "bg-[var(--color-surface-hover)] text-[var(--color-text-primary)]"
                               : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]"
@@ -2239,7 +2242,7 @@ export function IssueDetailView({
                         key={`${attachment.name}-${attachment.size}-${attachment.lastModified}`}
                         type="button"
                         onClick={() => removePendingAttachment(index)}
-                        className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+                        className="tty-row inline-flex items-center gap-2 border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
                       >
                         <span>{attachment.name}</span>
                         <span className="text-[var(--color-text-secondary)]">
@@ -2265,7 +2268,7 @@ export function IssueDetailView({
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                      className="tty-row border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
                     >
                       Add attachments
                     </button>
@@ -2285,7 +2288,7 @@ export function IssueDetailView({
                           pendingAttachments.length === 0)
                       }
                       onClick={() => void handleCommentSubmit()}
-                      className="rounded-full bg-[var(--color-accent)] px-4 py-2 text-[12px] font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+                      className="tty-row border border-[var(--color-accent)] bg-[var(--color-accent)] px-4 py-2 text-[12px] font-medium text-[var(--editorial-accent-ink)] transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {submittingComment ? "Posting..." : "Comment"}
                     </button>
@@ -2296,9 +2299,9 @@ export function IssueDetailView({
           </div>
         </div>
 
-        <aside className="h-fit rounded-[24px] border border-[var(--color-border)] bg-[var(--color-sidebar-bg)] p-5 lg:sticky lg:top-4">
-          <div className="rounded-[20px] border border-[var(--color-border)] bg-[var(--color-content-bg)] p-4">
-            <div className="mb-3 text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+        <aside className="tty-panel h-fit overflow-visible p-0 lg:sticky lg:top-4">
+          <div className="border-b border-[var(--color-border)] p-4">
+            <div className="editorial-section-title mb-3 text-[12px] uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               Properties
             </div>
             {issue.state && (
@@ -2354,8 +2357,8 @@ export function IssueDetailView({
             )}
           </div>
 
-          <div className="mt-4 rounded-[20px] border border-[var(--color-border)] bg-[var(--color-content-bg)] p-4">
-            <div className="mb-3 text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+          <div className="border-b border-[var(--color-border)] p-4">
+            <div className="editorial-section-title mb-3 text-[12px] uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               Issue reactions
             </div>
             <div
@@ -2380,7 +2383,7 @@ export function IssueDetailView({
                     type="button"
                     onClick={() => handleIssueReactionClick(emoji)}
                     disabled={reactingIssueEmoji !== null}
-                    className={`inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-full border px-2 text-[14px] transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60 ${
+                    className={`tty-row inline-flex h-8 min-w-8 items-center justify-center gap-1 border px-2 text-[14px] transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60 ${
                       reactedByMe
                         ? "border-[var(--color-accent)] bg-[var(--color-accent-muted)] text-[var(--color-text-primary)]"
                         : "border-[var(--color-border)] text-[var(--color-text-secondary)]"
@@ -2402,7 +2405,7 @@ export function IssueDetailView({
                     setIssueReactionPickerOpen((current) => !current)
                   }
                   disabled={reactingIssueEmoji !== null}
-                  className="inline-flex h-8 items-center justify-center rounded-full border border-[var(--color-border)] px-3 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="tty-row inline-flex h-8 items-center justify-center border border-[var(--color-border)] px-3 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
                   aria-label="Open issue reaction picker"
                   aria-haspopup="menu"
                   aria-expanded={issueReactionPickerOpen}
@@ -2413,7 +2416,7 @@ export function IssueDetailView({
                   <div
                     role="menu"
                     aria-label="Issue reaction picker"
-                    className="absolute right-0 z-20 mt-2 grid w-48 grid-cols-6 gap-1 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-content-bg)] p-2 shadow-lg"
+                    className="tty-panel absolute right-0 z-20 mt-2 grid w-48 grid-cols-6 gap-1 p-2 shadow-lg"
                   >
                     {EMOJI_REACTIONS.map((emoji) => (
                       <button
@@ -2441,8 +2444,8 @@ export function IssueDetailView({
             ) : null}
           </div>
 
-          <div className="mt-4 rounded-[20px] border border-[var(--color-border)] bg-[var(--color-content-bg)] p-4">
-            <div className="mb-3 text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+          <div className="p-4">
+            <div className="editorial-section-title mb-3 text-[12px] uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               Details
             </div>
             <div className="space-y-3 text-[12px]">

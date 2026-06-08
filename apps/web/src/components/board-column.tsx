@@ -38,26 +38,29 @@ export function BoardColumn({
   return (
     <div
       data-testid={testId}
-      className={`flex min-w-[280px] flex-1 flex-col rounded-xl transition-colors ${
-        isDropTarget ? "bg-[var(--color-surface-hover)]" : ""
+      data-drop-target={isDropTarget ? "true" : "false"}
+      className={`tty-panel flex min-w-[260px] flex-1 flex-col overflow-hidden rounded-[6px] transition-colors ${
+        isDropTarget
+          ? "border-[var(--color-accent)] bg-[var(--color-surface-hover)]"
+          : ""
       }`}
     >
       {/* Column header */}
-      <div className="flex items-center gap-2 px-2 py-2.5">
+      <div className="tty-status-bar border-b px-2.5 py-1.5">
+        <span aria-hidden="true" className="text-[var(--color-text-tertiary)]">
+          col
+        </span>
         <StatusIcon category={statusCategory} color={statusColor} size={14} />
-        <span className="text-[13px] font-medium text-[var(--color-text-primary)]">
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--color-text-primary)]">
           {name}
         </span>
-        <span className="text-[13px] text-[var(--color-text-secondary)]">
-          {count}
-        </span>
-        <div className="flex-1" />
+        <span className="tty-chip">{count}</span>
         <button
           type="button"
           aria-label={`Add issue to ${name}`}
           onClick={onAddIssue}
           disabled={!onAddIssue}
-          className="flex h-5 w-5 items-center justify-center rounded text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
+          className="tty-row flex h-6 w-6 items-center justify-center text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           <svg
             width="14"
@@ -82,9 +85,9 @@ export function BoardColumn({
         onDragOver={onDragOver}
         onDrop={onDrop}
         onDragLeave={onDragLeave}
-        className={`flex flex-1 flex-col gap-1.5 overflow-y-auto rounded-lg px-1.5 pb-2 transition-colors ${
+        className={`flex flex-1 flex-col gap-1.5 overflow-y-auto px-1.5 py-1.5 transition-colors ${
           isDropTarget
-            ? "border border-dashed border-[var(--color-accent)]"
+            ? "bg-[color-mix(in_oklab,var(--color-accent)_10%,transparent)]"
             : "border border-transparent"
         }`}
       >

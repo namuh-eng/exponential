@@ -62,9 +62,9 @@ export function NotificationRow({
           : `Select notification ${issueTitle}`
       }
       onClick={() => onClick(id)}
-      className={`relative flex w-full min-w-0 items-start gap-3 rounded-md border border-transparent px-3 py-2.5 text-left transition-colors ${
+      className={`tty-row relative grid w-full min-w-0 grid-cols-[10px_28px_minmax(0,1fr)_auto] items-start gap-2 border-b border-[var(--color-border)] px-2.5 py-2 text-left transition-colors ${
         isSelected
-          ? "bg-[var(--color-surface-active)] shadow-[inset_2px_0_0_var(--color-accent)]"
+          ? "tty-row-selected shadow-[inset_2px_0_0_var(--color-accent)]"
           : readAt
             ? "hover:bg-[var(--color-surface-hover)]"
             : "bg-[color-mix(in_srgb,var(--color-accent)_10%,var(--color-surface))] hover:bg-[color-mix(in_srgb,var(--color-accent)_16%,var(--color-surface))]"
@@ -75,7 +75,7 @@ export function NotificationRow({
         {readAt === null ? (
           <span
             data-testid="unread-dot"
-            className="block h-2 w-2 rounded-full bg-[var(--color-accent)]"
+            className="block h-2 w-2 rounded-[1px] bg-[var(--color-accent)]"
           />
         ) : (
           <span className="block h-2 w-2" />
@@ -98,9 +98,11 @@ export function NotificationRow({
           </span>
         </div>
         <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px]">
-          <span className="shrink-0 text-[var(--color-text-secondary)]">
-            {issueIdentifier}
-          </span>
+          {issueIdentifier ? (
+            <span className="tty-chip shrink-0 text-[var(--color-text-secondary)]">
+              {issueIdentifier}
+            </span>
+          ) : null}
           <span className="editorial-row-title truncate text-[var(--color-text-primary)]">
             {issueTitle}
           </span>
@@ -109,11 +111,7 @@ export function NotificationRow({
 
       <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5 text-[12px] text-[var(--color-text-secondary)]">
         <span>{formatRelativeTime(createdAt)}</span>
-        {isSnoozed && (
-          <span className="rounded bg-[var(--color-surface-hover)] px-1">
-            Snoozed
-          </span>
-        )}
+        {isSnoozed && <span className="tty-chip">Snoozed</span>}
       </div>
     </button>
   );

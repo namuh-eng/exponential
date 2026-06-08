@@ -19,8 +19,16 @@ import {
   isPlainKeyShortcut,
 } from "@/lib/keyboard-shortcuts";
 import { stripWorkspaceSlug, withWorkspaceSlug } from "@/lib/workspace-paths";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -47,6 +55,7 @@ interface ShellContext {
 
 const AppShellContext = createContext<ShellContext | null>(null);
 type CreateIssueMode = "modal" | "fullscreen";
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "exponential:sidebar-collapsed";
 
 export function useAppShellContext() {
   return useContext(AppShellContext);
@@ -66,6 +75,58 @@ function getActiveTeamKey(pathname: string): string | null {
   return null;
 }
 
+function getBufferLabel(pathname: string) {
+  if (pathname === "/" || pathname === "") {
+    return "home";
+  }
+
+  const segments = pathname.split("/").filter(Boolean);
+  if (segments[0] === "team" && segments.length >= 2) {
+    return [segments[0], segments[1], segments[2] ?? "overview"]
+      .map((segment) => decodeURIComponent(segment))
+      .join("/");
+  }
+
+  return segments
+    .slice(0, 3)
+    .map((segment) => decodeURIComponent(segment))
+    .join("/");
+}
+
+function getRouteStatus(pathname: string, teamKey: string) {
+  if (pathname.startsWith("/settings")) {
+    return "settings";
+  }
+
+  if (pathname.startsWith(`/team/${teamKey}/board`)) {
+    return "board";
+  }
+
+  const teamIssuesPrefix = `/team/${teamKey}/`;
+  if (
+    pathname.startsWith(teamIssuesPrefix) &&
+    ["all", "active", "backlog"].includes(
+      pathname.slice(teamIssuesPrefix.length),
+    )
+  ) {
+    return "issues";
+  }
+
+  if (pathname.includes("/issue/")) {
+    return "issue";
+  }
+
+  if (pathname.startsWith("/inbox")) {
+    return "inbox";
+  }
+
+  if (pathname.startsWith("/projects") || pathname.startsWith("/project/")) {
+    return "projects";
+  }
+
+  return "workspace";
+}
+
 export function AppShell({
   children,
   workspaceId = "",
@@ -83,12 +144,13 @@ export function AppShell({
     key: string;
     timestamp: number;
   } | null>(null);
-  const isSettingsRoute = pathname.startsWith("/settings");
   const [createIssueMode, setCreateIssueMode] =
     useState<CreateIssueMode | null>(null);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
   const [accountPreferences, setAccountPreferences] =
     useState<AccountPreferences>(DEFAULT_ACCOUNT_PREFERENCES);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarPreviewOpen, setSidebarPreviewOpen] = useState(false);
   const [shellContext, setShellContext] = useState<ShellContext>({
     workspaceId,
     workspaceSlug,
@@ -102,6 +164,34 @@ export function AppShell({
         ? teams
         : [{ id: teamId, name: teamName, key: teamKey }],
   });
+  const updateSidebarCollapsed = useCallback(
+    (next: boolean | ((current: boolean) => boolean)) => {
+      setSidebarCollapsed((current) => {
+        const resolved = typeof next === "function" ? next(current) : next;
+        try {
+          window.localStorage.setItem(
+            SIDEBAR_COLLAPSED_STORAGE_KEY,
+            resolved ? "true" : "false",
+          );
+        } catch {
+          // Local persistence is a convenience; the runtime layout state still works.
+        }
+        return resolved;
+      });
+      setSidebarPreviewOpen(false);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    try {
+      setSidebarCollapsed(
+        window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true",
+      );
+    } catch {
+      setSidebarCollapsed(false);
+    }
+  }, []);
 
   useEffect(() => {
     const fallbackContext = {
@@ -293,6 +383,19 @@ export function AppShell({
 
     function handleKeyDown(event: KeyboardEvent) {
       if (
+        (event.metaKey || event.ctrlKey) &&
+        event.key === "\\" &&
+        !event.altKey &&
+        !event.shiftKey &&
+        !isEditableShortcutTarget(event.target)
+      ) {
+        event.preventDefault();
+        navigationShortcutRef.current = null;
+        updateSidebarCollapsed((current) => !current);
+        return;
+      }
+
+      if (
         event.metaKey ||
         event.ctrlKey ||
         event.altKey ||
@@ -364,51 +467,137 @@ export function AppShell({
       );
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [router, shellContext.teamKey, shellContext.teams, workspaceSlug]);
+  }, [
+    router,
+    shellContext.teamKey,
+    shellContext.teams,
+    updateSidebarCollapsed,
+    workspaceSlug,
+  ]);
+
+  const bufferLabel = getBufferLabel(pathname);
+  const routeStatus = getRouteStatus(pathname, shellContext.teamKey);
+  const sidebar = (
+    <Sidebar
+      workspaceName={shellContext.workspaceName}
+      workspaceInitials={shellContext.workspaceInitials}
+      teamName={shellContext.teamName}
+      teamKey={shellContext.teamKey}
+      teams={shellContext.teams}
+      inboxUnreadCount={inboxUnreadCount}
+      onCreateIssue={
+        shellContext.teams.find((team) => team.key === shellContext.teamKey)
+          ?.retiredAt
+          ? undefined
+          : () => setCreateIssueMode("modal")
+      }
+      accountPreferences={accountPreferences}
+      workspaceSlug={shellContext.workspaceSlug}
+    />
+  );
 
   return (
     <AppShellContext.Provider value={shellContext}>
       <div
-        className="flex h-screen bg-[var(--color-sidebar-bg)] text-[var(--color-text-primary)]"
+        className="flex h-screen overflow-hidden bg-[var(--color-sidebar-bg)] text-[var(--color-text-primary)]"
         data-editorial-theme="product"
       >
+        {sidebarCollapsed && (
+          <div
+            data-testid="app-sidebar-hover-zone"
+            aria-hidden="true"
+            className="fixed inset-y-0 left-0 z-40 hidden w-3 bg-transparent md:block"
+            onMouseEnter={() => setSidebarPreviewOpen(true)}
+          />
+        )}
         <div
           data-testid="app-sidebar-shell"
-          className={isSettingsRoute ? "hidden md:block" : "block"}
-        >
-          <Sidebar
-            workspaceName={shellContext.workspaceName}
-            workspaceInitials={shellContext.workspaceInitials}
-            teamName={shellContext.teamName}
-            teamKey={shellContext.teamKey}
-            teams={shellContext.teams}
-            inboxUnreadCount={inboxUnreadCount}
-            onCreateIssue={
-              shellContext.teams.find(
-                (team) => team.key === shellContext.teamKey,
-              )?.retiredAt
-                ? undefined
-                : () => setCreateIssueMode("modal")
-            }
-            accountPreferences={accountPreferences}
-            workspaceSlug={shellContext.workspaceSlug}
-          />
-        </div>
-        <main
-          className={
-            isSettingsRoute
-              ? "flex-1 overflow-hidden p-0 md:p-2 md:pl-0"
-              : "flex-1 overflow-hidden p-3 pl-0"
+          className={`hidden md:block ${
+            sidebarCollapsed ? "fixed inset-y-0 left-0 z-50" : ""
+          }`}
+          onMouseLeave={
+            sidebarCollapsed ? () => setSidebarPreviewOpen(false) : undefined
           }
         >
+          {(!sidebarCollapsed || sidebarPreviewOpen) && (
+            <div
+              data-testid={
+                sidebarCollapsed ? "app-sidebar-reveal-panel" : undefined
+              }
+              className={
+                sidebarCollapsed ? "shadow-[12px_0_34px_rgba(0,0,0,0.34)]" : ""
+              }
+              onFocus={
+                sidebarCollapsed ? () => setSidebarPreviewOpen(true) : undefined
+              }
+            >
+              {sidebar}
+            </div>
+          )}
+        </div>
+        <main
+          className={`flex min-w-0 flex-1 flex-col overflow-hidden p-0 md:p-2 ${
+            sidebarCollapsed ? "" : "md:pl-0"
+          }`}
+        >
           <div
-            className={
-              isSettingsRoute
-                ? "editorial-page-surface h-full overflow-hidden bg-[var(--color-content-bg)] transition-colors md:rounded-[10px] md:border md:border-[var(--color-border)] md:shadow-[var(--editorial-shadow-sm)]"
-                : "editorial-page-surface h-full overflow-hidden rounded-[10px] border border-[var(--color-border)] bg-[var(--color-content-bg)] shadow-[var(--editorial-shadow-sm)] transition-colors"
-            }
+            className="tty-shell-frame editorial-page-surface flex h-full min-w-0 flex-col overflow-hidden transition-colors"
+            data-testid="tty-workspace-shell"
           >
-            {children}
+            <header
+              className="tty-status-bar shrink-0 flex-wrap border-b px-3 py-1"
+              data-testid="tty-route-status-bar"
+            >
+              <button
+                type="button"
+                aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+                title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+                data-testid="sidebar-toggle-button"
+                onClick={() => updateSidebarCollapsed((current) => !current)}
+                className="tty-row hidden h-6 w-6 items-center justify-center border border-[var(--color-border)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)] md:inline-flex"
+              >
+                {sidebarCollapsed ? (
+                  <PanelLeftOpen className="h-3.5 w-3.5" aria-hidden="true" />
+                ) : (
+                  <PanelLeftClose className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+              </button>
+              <span className="text-[var(--color-accent)]">exp</span>
+              <span aria-hidden="true">/</span>
+              <span className="max-w-[180px] truncate">
+                workspace:{shellContext.workspaceName}
+              </span>
+              <span className="hidden sm:inline" aria-hidden="true">
+                /
+              </span>
+              <span className="hidden sm:inline">
+                team:{shellContext.teamKey}
+              </span>
+              <span className="hidden md:inline" aria-hidden="true">
+                ::
+              </span>
+              <span className="hidden max-w-[260px] truncate md:inline">
+                buf:{bufferLabel}
+              </span>
+              <span className="ml-auto tty-chip">status:{routeStatus}</span>
+            </header>
+
+            <section className="min-h-0 flex-1 overflow-hidden bg-[var(--color-content-bg)]">
+              {children}
+            </section>
+
+            <footer
+              className="tty-status-bar shrink-0 flex-wrap border-t px-3 py-1"
+              data-testid="tty-shortcut-status-bar"
+            >
+              <span className="tty-chip">c create</span>
+              <span className="tty-chip">v fullscreen</span>
+              <span className="tty-chip">g i inbox</span>
+              <span className="tty-chip">g p projects</span>
+              <span className="ml-auto hidden sm:inline">
+                cmd+k palette / ? shortcuts
+              </span>
+            </footer>
           </div>
         </main>
         <CreateIssueModal

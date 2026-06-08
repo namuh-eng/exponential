@@ -33,6 +33,12 @@ describe("IssueCard", () => {
     ).toBeDefined();
   });
 
+  it("uses compact TTY card chrome", () => {
+    render(<IssueCard {...defaultProps} />);
+    expect(screen.getByTestId("issue-card").className).toContain("tty-panel");
+    expect(screen.getByText("ENG-116").className).toContain("tty-chip");
+  });
+
   it("renders priority icon", () => {
     render(<IssueCard {...defaultProps} />);
     const icon = screen.getByRole("img", { name: /medium/i });
@@ -128,6 +134,7 @@ describe("BoardColumn", () => {
     );
     expect(screen.getByText("Backlog")).toBeDefined();
     expect(screen.getByText("6")).toBeDefined();
+    expect(screen.getByText("6").className).toContain("tty-chip");
   });
 
   it("renders status icon in header", () => {
@@ -143,6 +150,9 @@ describe("BoardColumn", () => {
     );
     const icon = screen.getByRole("img", { name: /started/i });
     expect(icon).toBeDefined();
+    expect(
+      screen.getByText("In Progress").closest("[data-drop-target]"),
+    ).not.toBeNull();
   });
 
   it("renders children (issue cards)", () => {

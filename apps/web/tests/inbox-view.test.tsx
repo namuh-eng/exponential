@@ -65,10 +65,12 @@ describe("InboxPage UI", () => {
 
     expect(await screen.findByText("Inbox")).toBeInTheDocument();
     expect(screen.getByText("1 unread")).toBeInTheDocument();
+    expect(screen.getByTestId("inbox-tty-split")).toBeInTheDocument();
 
     // Check both notifications exist in the list
     expect(screen.getAllByText("A bug to fix").length).toBeGreaterThan(0);
     expect(screen.getByText("New task")).toBeInTheDocument();
+    expect(screen.getAllByTestId("notification-row")[0]).toHaveClass("tty-row");
   });
 
   it("marks a notification as read when selected", async () => {
