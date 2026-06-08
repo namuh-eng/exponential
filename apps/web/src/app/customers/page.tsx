@@ -2,6 +2,7 @@ import {
   MarketingCard,
   MarketingShell,
 } from "@/components/marketing/public-marketing";
+import { StatusChip } from "@/components/marketing/terminal-primitives";
 
 const filters = ["All", "Startups", "Enterprise", "AI", "Design partners"];
 const stories = [
@@ -31,7 +32,7 @@ export default function CustomersPage() {
   return (
     <MarketingShell eyebrow="Customers">
       <div className="py-14">
-        <h1 className="max-w-4xl text-balance text-5xl font-semibold leading-none tracking-[-0.05em] sm:text-6xl">
+        <h1 className="max-w-4xl text-balance text-5xl font-semibold leading-none sm:text-6xl">
           Built with the teams defining modern product development
         </h1>
         <div
@@ -42,7 +43,7 @@ export default function CustomersPage() {
             <button
               key={filter}
               type="button"
-              className="rounded-full border border-[var(--editorial-line)] bg-[var(--editorial-surface)] px-4 py-2 text-sm text-[var(--editorial-ink-2)]"
+              className="border border-[var(--editorial-line)] bg-[var(--editorial-surface)] px-4 py-2 text-sm text-[var(--editorial-ink-2)] transition-colors hover:bg-[var(--editorial-hover)]"
             >
               {filter}
             </button>
@@ -51,12 +52,8 @@ export default function CustomersPage() {
         <div className="mt-10 grid gap-5 lg:grid-cols-3">
           {stories.map(([company, title, copy]) => (
             <MarketingCard key={company}>
-              <p className="text-sm font-semibold text-[var(--editorial-accent)]">
-                {company}
-              </p>
-              <h2 className="mt-4 text-2xl font-semibold tracking-[-0.03em]">
-                {title}
-              </h2>
+              <StatusChip tone="accent">{company}</StatusChip>
+              <h2 className="mt-4 text-2xl font-semibold">{title}</h2>
               <p className="mt-4 text-sm leading-6 text-[var(--editorial-ink-3)]">
                 {copy}
               </p>

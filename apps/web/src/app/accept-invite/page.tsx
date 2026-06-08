@@ -1,3 +1,8 @@
+import {
+  PublicPageFrame,
+  TerminalHeader,
+  TerminalPanel,
+} from "@/components/marketing/terminal-primitives";
 import { requireApiData } from "@/lib/api-response";
 import { createServerApiClient } from "@/lib/server-api-client";
 import { getWebSession } from "@/lib/web-session";
@@ -12,16 +17,26 @@ function InviteError({
   description: string;
 }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#090909] px-4">
-      <div className="w-full max-w-[420px] rounded-2xl border border-[#26262a] bg-[#111113] p-8 text-center">
-        <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
-          {title}
-        </h1>
-        <p className="mt-3 text-[14px] leading-6 text-[#9095a1]">
-          {description}
-        </p>
-      </div>
-    </div>
+    <PublicPageFrame className="flex items-center justify-center px-4">
+      <TerminalPanel
+        className="w-full max-w-[420px] text-center"
+        header={
+          <TerminalHeader
+            label="invite/error"
+            meta={<span aria-hidden="true">!</span>}
+          />
+        }
+      >
+        <div className="p-8">
+          <h1 className="text-[22px] font-semibold text-[var(--editorial-ink-1)]">
+            {title}
+          </h1>
+          <p className="mt-3 text-[14px] leading-6 text-[var(--editorial-ink-3)]">
+            {description}
+          </p>
+        </div>
+      </TerminalPanel>
+    </PublicPageFrame>
   );
 }
 
@@ -65,26 +80,31 @@ export default async function AcceptInvitePage({
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
+    <PublicPageFrame className="flex items-center justify-center px-6">
       <form
         action="/accept-invite/complete"
         method="post"
-        className="flex w-full max-w-sm flex-col gap-4 border border-border bg-card p-6"
+        className="tty-panel flex w-full max-w-sm flex-col gap-4 p-6"
       >
         <input type="hidden" name="token" value={token} />
         <div className="space-y-2">
-          <h1 className="font-semibold text-xl">Join workspace</h1>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-[11px] uppercase text-[var(--editorial-ink-4)]">
+            invite/accept
+          </p>
+          <h1 className="font-semibold text-[var(--editorial-ink-1)] text-xl">
+            Join workspace
+          </h1>
+          <p className="text-[var(--editorial-ink-3)] text-sm">
             Continue with {session.user.email}.
           </p>
         </div>
         <button
           type="submit"
-          className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 font-medium text-primary-foreground text-sm"
+          className="inline-flex h-10 items-center justify-center border border-[var(--editorial-accent)] bg-[var(--editorial-accent)] px-4 font-medium text-[var(--editorial-accent-ink)] text-sm transition-colors hover:bg-[var(--editorial-accent-hover)]"
         >
           Accept invitation
         </button>
       </form>
-    </div>
+    </PublicPageFrame>
   );
 }

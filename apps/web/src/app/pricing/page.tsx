@@ -2,6 +2,10 @@ import {
   MarketingCard,
   MarketingShell,
 } from "@/components/marketing/public-marketing";
+import {
+  CommandLink,
+  StatusChip,
+} from "@/components/marketing/terminal-primitives";
 
 const plans = [
   [
@@ -43,7 +47,7 @@ export default function PricingPage() {
   return (
     <MarketingShell eyebrow="Pricing">
       <div className="py-14">
-        <h1 className="max-w-4xl text-balance text-5xl font-semibold leading-none tracking-[-0.05em] sm:text-6xl">
+        <h1 className="max-w-4xl text-balance text-5xl font-semibold leading-none sm:text-6xl">
           Plans that scale from first issue to enterprise product operations
         </h1>
         <p className="mt-5 max-w-2xl text-lg leading-8 text-[var(--editorial-ink-3)]">
@@ -54,18 +58,13 @@ export default function PricingPage() {
           {plans.map(([name, price, copy]) => (
             <MarketingCard key={name}>
               <h2 className="text-2xl font-semibold">{name}</h2>
-              <p className="mt-4 text-4xl font-semibold tracking-[-0.04em]">
-                {price}
-              </p>
+              <p className="mt-4 text-4xl font-semibold">{price}</p>
               <p className="mt-4 min-h-24 text-sm leading-6 text-[var(--editorial-ink-3)]">
                 {copy}
               </p>
-              <a
-                href="/signup"
-                className="mt-6 inline-flex rounded-full bg-[var(--editorial-ink-1)] px-4 py-2 text-sm font-medium text-[var(--editorial-bg)]"
-              >
+              <CommandLink href="/signup" variant="primary" className="mt-6">
                 Get started
-              </a>
+              </CommandLink>
             </MarketingCard>
           ))}
         </div>
@@ -73,12 +72,9 @@ export default function PricingPage() {
           <h2 className="text-2xl font-semibold">Feature comparison</h2>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {features.map((feature) => (
-              <div
-                key={feature}
-                className="rounded-2xl border border-[var(--editorial-line-soft)] bg-[var(--editorial-surface-2)] px-4 py-3 text-sm"
-              >
+              <StatusChip key={feature} className="justify-center px-4 py-3">
                 {feature}
-              </div>
+              </StatusChip>
             ))}
           </div>
         </MarketingCard>
