@@ -70,7 +70,7 @@ func (h Handler) UpdateCurrentAPISettings(w http.ResponseWriter, r *http.Request
 	permissions["apiKeyCreationRole"] = body.PermissionLevel
 	security["permissions"] = permissions
 	settings["security"] = security
-	if err := h.saveWorkspaceSettings(r.Context(), p.WorkspaceID, settings); err != nil {
+	if err := h.saveWorkspaceSettingsKey(r.Context(), p.WorkspaceID, "security", settings["security"]); err != nil {
 		problem.Write(w, 500, "Update workspace API settings failed", err.Error())
 		return
 	}
@@ -188,7 +188,7 @@ func (h Handler) MutateCurrentAPI(w http.ResponseWriter, r *http.Request) {
 			problem.Write(w, 400, err.Error(), "")
 			return
 		}
-		if err := h.saveWorkspaceSettings(r.Context(), p.WorkspaceID, settings); err != nil {
+		if err := h.saveWorkspaceSettingsKey(r.Context(), p.WorkspaceID, "api", settings["api"]); err != nil {
 			problem.Write(w, 500, "Update OAuth applications failed", err.Error())
 			return
 		}

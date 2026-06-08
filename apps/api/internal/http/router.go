@@ -16,6 +16,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/attachments"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/authproviders"
+	"github.com/namuh-eng/exponential/apps/api/internal/billing"
 	"github.com/namuh-eng/exponential/apps/api/internal/comments"
 	"github.com/namuh-eng/exponential/apps/api/internal/documents"
 	"github.com/namuh-eng/exponential/apps/api/internal/email"
@@ -82,20 +83,22 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 	r.Get("/metrics/red", metricsHandler)
 	r.Get("/api/metrics/red", metricsHandler)
 
-	mountAPIRoutes(r, "/v1", db, emailSender)
-	mountAPIRoutes(r, "/api", db, emailSender)
+	mountAPIRoutes(r, "/v1", db, emailSender, logger)
+	mountAPIRoutes(r, "/api", db, emailSender, logger)
 	return r
 }
 
-func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender email.Sender) {
+func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender email.Sender, logger *zap.Logger) {
 	authMiddleware := auth.Middleware{DB: db}
 	authProvidersHandler := authproviders.Handler{DB: db, Email: emailSender}
+	stripeWebhookHandler := billing.NewStripeWebhookHandler(db, logger)
 	commentsHandler := comments.Handler{DB: db}
 	documentsHandler := documents.Handler{DB: db}
 	labelsHandler := labels.Handler{DB: db}
 	workspacesHandler := workspaces.Handler{DB: db}
 	r.Route(prefix, func(v1 chi.Router) {
 		v1.Get("/auth/session", authMiddleware.Session)
+		v1.Post("/stripe/webhook", stripeWebhookHandler.ServeHTTP)
 		v1.Group(func(publicAuth chi.Router) {
 			publicAuth.Use(ratelimit.PublicMiddleware())
 			publicAuth.Mount("/auth", authProvidersHandler.Routes())

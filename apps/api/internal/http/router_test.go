@@ -3,6 +3,7 @@ package http
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"go.uber.org/zap"
@@ -41,6 +42,22 @@ func TestRouterServesPublicAPICollectionAlias(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/issues", nil))
 	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestRouterServesStripeWebhookWithoutAuth(t *testing.T) {
+	t.Setenv("STRIPE_WEBHOOK_SIGNING_SECRET", "whsec_test")
+	router := NewRouter(zap.NewNop(), nil)
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/stripe/webhook", strings.NewReader(`{}`))
+
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code == http.StatusNotFound || recorder.Code == http.StatusUnauthorized {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
 	}
 }

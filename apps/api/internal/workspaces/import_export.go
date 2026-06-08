@@ -328,7 +328,7 @@ func (h Handler) requireImportExportWorkspace(w http.ResponseWriter, r *http.Req
 func (h Handler) saveImportExportState(ctx context.Context, current importExportWorkspace, state importExportStateGo) error {
 	settings := current.Settings
 	settings["importExport"] = map[string]any{"exports": state.Exports, "imports": state.Imports, "artifacts": state.Artifacts}
-	return h.saveWorkspaceSettings(ctx, current.ID, settings)
+	return h.saveWorkspaceSettingsKey(ctx, current.ID, "importExport", settings["importExport"])
 }
 
 func readImportExportStateGo(settings map[string]any) importExportStateGo {

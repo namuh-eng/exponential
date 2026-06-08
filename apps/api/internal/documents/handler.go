@@ -302,8 +302,8 @@ func (h Handler) persist(ctx context.Context, access access, documents Settings)
 	root := map[string]any{}
 	_ = json.Unmarshal(access.Settings, &root)
 	root["documents"] = documents
-	body, _ := json.Marshal(root)
-	_, err := h.DB.Exec(ctx, `update workspace set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, body, access.WorkspaceID)
+	body, _ := json.Marshal(root["documents"])
+	_, err := h.DB.Exec(ctx, `update workspace set settings=jsonb_set(coalesce(settings,'{}'::jsonb), '{documents}', $1::jsonb, true), updated_at=now() where id=$2::uuid`, body, access.WorkspaceID)
 	return err
 }
 

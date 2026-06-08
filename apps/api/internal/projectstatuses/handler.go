@@ -102,8 +102,8 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	next := asMap(settings)
 	next["projectStatuses"] = serialize(validated)
-	body, _ := json.Marshal(next)
-	if _, err := h.DB.Exec(r.Context(), `update workspace set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, body, p.WorkspaceID); err != nil {
+	body, _ := json.Marshal(next["projectStatuses"])
+	if _, err := h.DB.Exec(r.Context(), `update workspace set settings=jsonb_set(coalesce(settings,'{}'::jsonb), '{projectStatuses}', $1::jsonb, true), updated_at=now() where id=$2::uuid`, body, p.WorkspaceID); err != nil {
 		problem.Write(w, 500, "Update project statuses failed", err.Error())
 		return
 	}

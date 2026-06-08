@@ -85,22 +85,22 @@ type patchWorkspaceRequest struct {
 }
 
 type memberEntry struct {
-	ID            string   `json:"id"`
-	Kind          string   `json:"kind"`
-	UserID        *string  `json:"userId"`
-	Name          string   `json:"name"`
-	Email         string   `json:"email"`
-	Image         *string  `json:"image"`
-	Role          string   `json:"role"`
-	Status        string   `json:"status"`
+	ID            string       `json:"id"`
+	Kind          string       `json:"kind"`
+	UserID        *string      `json:"userId"`
+	Name          string       `json:"name"`
+	Email         string       `json:"email"`
+	Image         *string      `json:"image"`
+	Role          string       `json:"role"`
+	Status        string       `json:"status"`
 	Teams         []memberTeam `json:"teams"`
-	JoinedAt      string   `json:"joinedAt"`
-	LastSeenAt    *string  `json:"lastSeenAt"`
-	Pronouns      string   `json:"pronouns,omitempty"`
-	Title         string   `json:"title,omitempty"`
-	Location      string   `json:"location,omitempty"`
-	Timezone      string   `json:"timezone,omitempty"`
-	ShowLocalTime bool     `json:"showLocalTime,omitempty"`
+	JoinedAt      string       `json:"joinedAt"`
+	LastSeenAt    *string      `json:"lastSeenAt"`
+	Pronouns      string       `json:"pronouns,omitempty"`
+	Title         string       `json:"title,omitempty"`
+	Location      string       `json:"location,omitempty"`
+	Timezone      string       `json:"timezone,omitempty"`
+	ShowLocalTime bool         `json:"showLocalTime,omitempty"`
 }
 
 type membersResponse struct {
@@ -1246,8 +1246,7 @@ func (h Handler) UpdateAISettings(w http.ResponseWriter, r *http.Request) {
 	}
 	next := patchAISettings(readWorkspaceAISettings(settings), patch)
 	settings["ai"] = serializeWorkspaceAISettings(next)
-	raw, _ := json.Marshal(settings)
-	if _, err := h.DB.Exec(r.Context(), `update workspace set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, raw, p.WorkspaceID); err != nil {
+	if err := h.saveWorkspaceSettingsKey(r.Context(), p.WorkspaceID, "ai", settings["ai"]); err != nil {
 		problem.Write(w, 500, "Update AI settings failed", err.Error())
 		return
 	}
@@ -1296,8 +1295,7 @@ func (h Handler) UpdateInitiativeSettings(w http.ResponseWriter, r *http.Request
 	features := recordFromAny(settings["features"])
 	features["initiatives"] = next
 	settings["features"] = features
-	raw, _ := json.Marshal(settings)
-	if _, err := h.DB.Exec(r.Context(), `update workspace set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, raw, p.WorkspaceID); err != nil {
+	if err := h.saveWorkspaceSettingsKey(r.Context(), p.WorkspaceID, "features", features); err != nil {
 		problem.Write(w, 500, "Update initiative settings failed", err.Error())
 		return
 	}
@@ -1340,8 +1338,7 @@ func (h Handler) UpdateCollaboration(w http.ResponseWriter, r *http.Request) {
 	}
 	collaboration := mergeCollaborationSettings(settings, body)
 	settings["collaboration"] = collaboration
-	raw, _ := json.Marshal(settings)
-	if _, err := h.DB.Exec(r.Context(), `update workspace set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, raw, p.WorkspaceID); err != nil {
+	if err := h.saveWorkspaceSettingsKey(r.Context(), p.WorkspaceID, "collaboration", collaboration); err != nil {
 		problem.Write(w, 500, "Update collaboration settings failed", err.Error())
 		return
 	}
@@ -1453,7 +1450,13 @@ func (h Handler) UpdateBilling(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 400, "Unsupported billing plan", "")
 		return
 	}
-	settings, err := h.workspaceSettings(r.Context(), p.WorkspaceID)
+	tx, err := h.DB.Begin(r.Context())
+	if err != nil {
+		problem.Write(w, 500, "Update billing failed", err.Error())
+		return
+	}
+	defer tx.Rollback(r.Context()) //nolint:errcheck
+	settings, err := workspaceSettingsForUpdate(r.Context(), tx, p.WorkspaceID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		problem.Write(w, 404, "No active workspace found", "")
 		return
@@ -1467,7 +1470,11 @@ func (h Handler) UpdateBilling(w http.ResponseWriter, r *http.Request) {
 	billing["plan"] = requestedPlan
 	settings["billing"] = billing
 	body, _ := json.Marshal(settings)
-	if _, err := h.DB.Exec(r.Context(), `update workspace set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, body, p.WorkspaceID); err != nil {
+	if _, err := tx.Exec(r.Context(), `update workspace set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, body, p.WorkspaceID); err != nil {
+		problem.Write(w, 500, "Update billing failed", err.Error())
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
 		problem.Write(w, 500, "Update billing failed", err.Error())
 		return
 	}
@@ -2325,6 +2332,15 @@ func (h Handler) workspaceSettings(ctx context.Context, workspaceID string) (map
 	return mapFromJSON(raw), nil
 }
 
+func workspaceSettingsForUpdate(ctx context.Context, tx pgx.Tx, workspaceID string) (map[string]any, error) {
+	var raw []byte
+	err := tx.QueryRow(ctx, `select coalesce(settings,'{}'::jsonb) from workspace where id=$1::uuid for update`, workspaceID).Scan(&raw)
+	if err != nil {
+		return nil, err
+	}
+	return mapFromJSON(raw), nil
+}
+
 type billingState struct {
 	plan           string
 	seatsUsed      int
@@ -2437,9 +2453,7 @@ func normalizeWorkspaceDocuments(settings map[string]any) workspaceDocumentsSett
 
 func (h Handler) saveWorkspaceDocuments(ctx context.Context, workspaceID string, settings map[string]any, documents workspaceDocumentsSettings) error {
 	settings["documents"] = documents
-	body, _ := json.Marshal(settings)
-	_, err := h.DB.Exec(ctx, `update workspace set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, body, workspaceID)
-	return err
+	return h.saveWorkspaceSettingsKey(ctx, workspaceID, "documents", documents)
 }
 
 func asStringValue(value any) string {
@@ -2791,9 +2805,7 @@ func (h Handler) saveSLASettings(ctx context.Context, workspaceID string, settin
 	existing := recordFromAny(settings["sla"])
 	existing["policies"] = sla.Policies
 	settings["sla"] = existing
-	raw, _ := json.Marshal(settings)
-	_, err := h.DB.Exec(ctx, `update workspace set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, raw, workspaceID)
-	return err
+	return h.saveWorkspaceSettingsKey(ctx, workspaceID, "sla", existing)
 }
 
 func policyToMap(policy slaPolicy) map[string]any {
@@ -3072,8 +3084,12 @@ func (h Handler) storeSCIMSettings(ctx context.Context, workspaceID string, sett
 }
 
 func (h Handler) saveWorkspaceSettings(ctx context.Context, workspaceID string, settings map[string]any) error {
-	raw, _ := json.Marshal(settings)
-	_, err := h.DB.Exec(ctx, `update workspace set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, raw, workspaceID)
+	return h.saveWorkspaceSettingsKey(ctx, workspaceID, "security", settings["security"])
+}
+
+func (h Handler) saveWorkspaceSettingsKey(ctx context.Context, workspaceID string, key string, value any) error {
+	raw, _ := json.Marshal(value)
+	_, err := h.DB.Exec(ctx, `update workspace set settings=jsonb_set(coalesce(settings,'{}'::jsonb), $3::text[], $1::jsonb, true), updated_at=now() where id=$2::uuid`, raw, workspaceID, []string{key})
 	return err
 }
 

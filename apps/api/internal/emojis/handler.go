@@ -179,11 +179,11 @@ func (h Handler) workspaceSettings(ctx context.Context, workspaceID string) ([]b
 }
 
 func (h Handler) updateSettings(ctx context.Context, tx pgx.Tx, workspaceID string, settings map[string]any) error {
-	body, err := json.Marshal(settings)
+	body, err := json.Marshal(settings["customEmojis"])
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `update workspace set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, body, workspaceID)
+	_, err = tx.Exec(ctx, `update workspace set settings=jsonb_set(coalesce(settings,'{}'::jsonb), '{customEmojis}', $1::jsonb, true), updated_at=now() where id=$2::uuid`, body, workspaceID)
 	return err
 }
 
