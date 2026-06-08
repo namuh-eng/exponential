@@ -50,3 +50,61 @@ func TestCreateIssueOptionStaticLists(t *testing.T) {
 		t.Fatal("due date presets drifted")
 	}
 }
+
+func TestDefaultWorkflowStatesIncludeTriageBeforeBacklog(t *testing.T) {
+	states := defaultWorkflowStates()
+	if len(states) == 0 {
+		t.Fatal("default workflow states missing")
+	}
+	if states[0].Name != "Triage" || states[0].Category != "triage" {
+		t.Fatalf("first default state = %#v", states[0])
+	}
+	if states[1].Name != "Backlog" || states[1].Category != "backlog" {
+		t.Fatalf("second default state = %#v", states[1])
+	}
+	if states[0].Position >= states[1].Position {
+		t.Fatalf("triage position should precede backlog: %#v", states[:2])
+	}
+}
+
+func TestShouldBlockTriageStatusDelete(t *testing.T) {
+	enabled := true
+	disabled := false
+	triageStatus := statusSummary{ID: "s-triage", Category: "triage"}
+	backlogStatus := statusSummary{ID: "s-backlog", Category: "backlog"}
+
+	if !shouldBlockTriageStatusDelete(teamRecordForSettings{TriageEnabled: &enabled}, triageStatus, false) {
+		t.Fatal("triage-enabled teams should keep a triage status")
+	}
+	if shouldBlockTriageStatusDelete(teamRecordForSettings{TriageEnabled: &enabled}, triageStatus, true) {
+		t.Fatal("teams with another triage status should allow deleting this one")
+	}
+	if shouldBlockTriageStatusDelete(teamRecordForSettings{TriageEnabled: &disabled}, triageStatus, false) {
+		t.Fatal("triage-disabled teams should not be blocked by this guard")
+	}
+	if shouldBlockTriageStatusDelete(teamRecordForSettings{TriageEnabled: &enabled}, backlogStatus, false) {
+		t.Fatal("non-triage statuses should not be blocked by this guard")
+	}
+}
+
+func TestDuplicateIssueStatusIDDoesNotFallbackToTriage(t *testing.T) {
+	statuses := map[string][]workflowStatus{
+		"triage":  {{ID: "s-triage"}},
+		"backlog": {{ID: "s-backlog"}},
+	}
+	ids := []string{"s-triage", "s-backlog"}
+
+	if got := duplicateIssueStatusID(map[string]any{}, statuses, ids); got != "" {
+		t.Fatalf("duplicate fallback = %q, want empty without canceled status", got)
+	}
+
+	statuses["canceled"] = []workflowStatus{{ID: "s-canceled"}}
+	if got := duplicateIssueStatusID(map[string]any{}, statuses, ids); got != "s-canceled" {
+		t.Fatalf("duplicate fallback = %q, want canceled", got)
+	}
+
+	settings := map[string]any{"duplicateIssueStatusId": "s-backlog"}
+	if got := duplicateIssueStatusID(settings, statuses, ids); got != "s-backlog" {
+		t.Fatalf("configured duplicate status = %q", got)
+	}
+}

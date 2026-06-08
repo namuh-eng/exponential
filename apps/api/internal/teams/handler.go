@@ -248,25 +248,54 @@ func (h Handler) generatedKey(ctx context.Context, workspaceID, name string) (st
 }
 
 func insertDefaultWorkflowStates(ctx context.Context, tx pgx.Tx, teamID string) error {
-	states := []struct {
-		Name      string
-		Category  string
-		Color     string
-		Position  float32
-		IsDefault bool
-	}{
-		{"Backlog", "backlog", "#bec2c8", 1000, true},
-		{"Todo", "unstarted", "#bec2c8", 2000, true},
-		{"In Progress", "started", "#f2c94c", 3000, true},
-		{"Done", "completed", "#27ae60", 4000, true},
-		{"Canceled", "canceled", "#828282", 5000, true},
-	}
+	states := defaultWorkflowStates()
 	for _, state := range states {
 		if _, err := tx.Exec(ctx, `insert into workflow_state (team_id, name, category, color, position, is_default) values ($1::uuid,$2,$3,$4,$5,$6)`, teamID, state.Name, state.Category, state.Color, state.Position, state.IsDefault); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+type defaultWorkflowState struct {
+	Name      string
+	Category  string
+	Color     string
+	Position  float32
+	IsDefault bool
+}
+
+func defaultWorkflowStates() []defaultWorkflowState {
+	return []defaultWorkflowState{
+		{"Triage", "triage", "#f59e0b", 0, true},
+		{"Backlog", "backlog", "#bec2c8", 1000, true},
+		{"Todo", "unstarted", "#bec2c8", 2000, true},
+		{"In Progress", "started", "#f2c94c", 3000, true},
+		{"Done", "completed", "#27ae60", 4000, true},
+		{"Canceled", "canceled", "#828282", 5000, true},
+	}
+}
+
+type workflowStateExec interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}
+
+func ensureTriageWorkflowState(ctx context.Context, exec workflowStateExec, teamID string) error {
+	_, err := exec.Exec(ctx, `
+		insert into workflow_state (team_id, name, category, color, position, is_default, updated_at)
+		select $1::uuid, 'Triage', 'triage'::workflow_state_category, '#f59e0b',
+		       coalesce((select min(position) from workflow_state where team_id=$1::uuid), 0) - 1,
+		       true, now()
+		where not exists (
+			select 1 from workflow_state
+			where team_id=$1::uuid and category='triage'::workflow_state_category
+		)`, teamID)
+	return err
+}
+
+func lockTeamForWorkflowStateRepair(ctx context.Context, tx pgx.Tx, teamID string) error {
+	var lockedID string
+	return tx.QueryRow(ctx, `select id::text from team where id=$1::uuid for update`, teamID).Scan(&lockedID)
 }
 
 var nonKey = regexp.MustCompile(`[^A-Z0-9]+`)

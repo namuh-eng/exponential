@@ -55,6 +55,7 @@ interface CreateIssueOptions {
     name: string;
     category: string;
     color: string;
+    isDefault?: boolean | null;
   }>;
   priorities: Array<{
     value: string;
@@ -86,6 +87,39 @@ interface CreateIssueOptions {
   templates?: IssueTemplateOption[];
   relationIssues: Array<{ id: string; identifier: string; title: string }>;
   dueDatePresets?: Array<{ value: string; label: string }>;
+}
+
+type CreateIssueStatusOption = CreateIssueOptions["statuses"][number];
+
+function defaultCreateStateId(
+  statuses: CreateIssueStatusOption[],
+  defaultStateId: string | undefined,
+  defaultStateName: string | undefined,
+): string {
+  if (defaultStateId) {
+    return defaultStateId;
+  }
+
+  const requestedStateName = defaultStateName?.trim();
+  const namedStatus = requestedStateName
+    ? statuses.find((status) => status.name === requestedStateName)
+    : undefined;
+  const backlogStatus =
+    statuses.find(
+      (status) => status.category === "backlog" && status.isDefault === true,
+    ) ?? statuses.find((status) => status.category === "backlog");
+
+  if (!requestedStateName || requestedStateName === "Backlog") {
+    return backlogStatus?.id || namedStatus?.id || "";
+  }
+  if (namedStatus) {
+    return namedStatus.id;
+  }
+  if (backlogStatus) {
+    return backlogStatus.id;
+  }
+
+  return "";
 }
 
 type ToolbarMenu =
@@ -490,13 +524,9 @@ export function CreateIssueModal({
           setTemplates(data.templates);
         }
 
-        const nextStateId =
-          defaultStateId ||
-          data.statuses.find((status) => status.name === defaultStateName)
-            ?.id ||
-          data.statuses[0]?.id ||
-          "";
-        setSelectedStateId(nextStateId);
+        setSelectedStateId(
+          defaultCreateStateId(data.statuses, defaultStateId, defaultStateName),
+        );
       } catch (loadError) {
         if (!cancelled) {
           setError(

@@ -40,11 +40,12 @@ type displayOptionsRequest struct {
 }
 
 type teamRecordForSettings struct {
-	ID          string
-	Name        string
-	Key         string
-	WorkspaceID string
-	Settings    map[string]any
+	ID            string
+	Name          string
+	Key           string
+	WorkspaceID   string
+	TriageEnabled *bool
+	Settings      map[string]any
 }
 
 func (h Handler) Context(w http.ResponseWriter, r *http.Request) {
@@ -131,7 +132,7 @@ func (h Handler) UpdateDisplayOptions(w http.ResponseWriter, r *http.Request) {
 func (h Handler) findTeamRecord(r *http.Request, workspaceID, key string) (teamRecordForSettings, error) {
 	var team teamRecordForSettings
 	var settingsRaw []byte
-	err := h.DB.QueryRow(r.Context(), `select id::text, name, key, workspace_id::text, coalesce(settings,'{}'::jsonb) from team where workspace_id=$1::uuid and key=$2 and deleted_at is null limit 1`, workspaceID, key).Scan(&team.ID, &team.Name, &team.Key, &team.WorkspaceID, &settingsRaw)
+	err := h.DB.QueryRow(r.Context(), `select id::text, name, key, workspace_id::text, triage_enabled, coalesce(settings,'{}'::jsonb) from team where workspace_id=$1::uuid and key=$2 and deleted_at is null limit 1`, workspaceID, key).Scan(&team.ID, &team.Name, &team.Key, &team.WorkspaceID, &team.TriageEnabled, &settingsRaw)
 	if err != nil {
 		return team, err
 	}
