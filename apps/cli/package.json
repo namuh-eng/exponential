@@ -1,6 +1,6 @@
 {
-  "name": "@namuh-eng/exponential-cli",
-  "version": "0.1.1",
+  "name": "@expn/cli",
+  "version": "0.1.0",
   "description": "Command-line interface for Exponential issue tracking.",
   "type": "module",
   "license": "Elastic-2.0",
@@ -18,7 +18,7 @@
   "files": ["bin", "dist", "README.md"],
   "bin": {
     "exponential": "bin/exponential",
-    "exo": "bin/exponential"
+    "expn": "bin/exponential"
   },
   "engines": {
     "node": ">=20"
@@ -33,7 +33,7 @@
     "cli": "tsx src/index.ts"
   },
   "dependencies": {
-    "@namuh-eng/exponential-sdk": "workspace:*"
+    "@expn/sdk": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",

@@ -1,10 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
-import {
-  createExponentialClient,
-  syncWebSocketUrl,
-} from "@namuh-eng/exponential-sdk";
-import type { ExponentialClient } from "@namuh-eng/exponential-sdk";
+import { createExponentialClient, syncWebSocketUrl } from "@expn/sdk";
+import type { ExponentialClient } from "@expn/sdk";
 import { parseIssueBody, readFlag, readOption, requireOption } from "./args.js";
 import {
   assertPatToken,
@@ -109,7 +106,7 @@ export async function runCli(options: RunCliOptions = {}) {
       !token
     ) {
       writeStderr(
-        "EXPONENTIAL_TOKEN is required or run `exo login --token pat_...`\n",
+        "EXPONENTIAL_TOKEN is required or run `expn login --token pat_...`\n",
       );
       return 1;
     }
@@ -1409,92 +1406,92 @@ function readJSONOption(args: string[], name: string) {
 function usage(code = 1): never {
   const write = code === 0 ? writeStdout : writeStderr;
   write(`Usage:
-  exo login --token pat_<token> [--api-url http://localhost:7016/v1]
-  exo --help
-  exo whoami [--json]
-  exo doctor [--json]
-  exo config get [token|baseUrl] [--json]
-  exo config set [--token pat_<token>] [--api-url http://localhost:7016/v1]
-  exo issue ls [--team-id <uuid>] [--cursor <cursor>] [--limit <n>]
-  exo issue view <id-or-identifier>
-  exo issue create --title <title> --team-id <uuid> [--idempotency-key <key>]
-  exo issue update <id-or-identifier> [--title <title>] [--state-id <uuid>]
-  exo project ls
-  exo project view <slug>
-  exo cycle current --team-key <key>
-  exo issues list [--team-id <uuid>] [--cursor <cursor>] [--limit <n>]
-  exo issues search --query <text> [--workspace-id <uuid>]
-  exo issues get --id <id-or-identifier>
-  exo issues create --title <title> --team-id <uuid> [--idempotency-key <key>]
-  exo issues update --id <id-or-identifier> [--title <title>] [--state-id <uuid>]
-  exo issues delete --id <id-or-identifier> [--idempotency-key <key>]
-  exo issues subscription --id <id-or-identifier>
-  exo issues subscribe --id <id-or-identifier>
-  exo issues unsubscribe --id <id-or-identifier>
-  exo issues watch [--version <n>]
-  exo workspaces list
-  exo workspaces create --name <name> --url-slug <slug>
-  exo workspaces current
-  exo workspaces members
-  exo workspaces invite --email <email> [--role member|admin|guest]
-  exo teams list
-  exo teams create --name <name> [--key <key>] [--private true]
-  exo teams create-issue-options --team-key <key>
-  exo tokens list
-  exo tokens create --name <name> [--scopes read,write]
-  exo tokens revoke --id <uuid>
-  exo projects list
-  exo projects get --slug <slug>
-  exo projects create --name <name> [--slug <slug>] [--team-keys ENG,DES]
-  exo projects update --slug <slug> [--name <name>] [--new-slug <slug>]
-  exo projects delete --slug <slug>
-  exo project-statuses list
-  exo project-statuses update --statuses-json '<json-array>'
-  exo project-templates list
-  exo project-templates create --name <name> [--description <text>] [--settings-json '<json>']
-  exo project-templates update --id <uuid> --name <name> [--settings-json '<json>']
-  exo project-templates delete --id <uuid>
-  exo cycles list --team-key <key>
-  exo cycles create --team-key <key> --start-date YYYY-MM-DD --end-date YYYY-MM-DD
-  exo cycles update --team-key <key> --id <uuid> [--name <name>]
-  exo cycles delete --team-key <key> --id <uuid>
-  exo comments create --issue-id <id-or-identifier> --body <text>
-  exo comments update --id <uuid> --body <text>
-  exo comments delete --id <uuid>
-  exo comments react --id <uuid> --emoji <emoji>
-  exo issue-templates list [--team-key <key>]
-  exo issue-templates create [--name <name>] [--description <text>] [--settings-json '<json>']
-  exo issue-templates update --id <uuid> [--name <name>] [--settings-json '<json>']
-  exo issue-templates archive --id <uuid>
-  exo issue-templates delete --id <uuid>
-  exo labels list [--scope workspace|team|all] [--team-id <uuid>]
-  exo labels create --name <name> [--color #6b6f76] [--team-id <uuid>]
-  exo labels update --id <uuid> [--name <name>] [--color #6b6f76]
-  exo labels delete --id <uuid>
-  exo labels bulk --action archive|unarchive|delete|convertToGroup|rescope|merge --label-ids <ids>
-  exo emojis list
-  exo emojis create --name <name> --image-url <url-or-data-url>
-  exo emojis delete --id <id>
-  exo documents settings
-  exo documents create-folder --name <name> [--color gray|blue|green|yellow|orange|purple|pink]
-  exo documents update-folder --id <id> [--name <name>] [--color gray]
-  exo documents delete-folder --id <id>
-  exo documents create-template --name <name> --content <markdown>
-  exo documents update-template --id <id> [--name <name>] [--content <markdown>]
-  exo documents delete-template --id <id>
-  exo integrations list
-  exo integrations disconnect --provider slack|github|zendesk
-  exo account profile
-  exo account preferences
-  exo notifications list
-  exo notifications mark-read
-  exo notifications read --id <uuid>
-  exo notifications unread --id <uuid>
-  exo notifications snooze --id <uuid> [--until ISO_DATE]
-  exo favorites list
-  exo favorites add --object-type project|issue|view --object-id <id>
-  exo favorites reorder --ordered-ids project:id,issue:id
-  exo favorites remove --object-type project|issue|view --object-id <id>
+  expn login --token pat_<token> [--api-url http://localhost:7016/v1]
+  expn --help
+  expn whoami [--json]
+  expn doctor [--json]
+  expn config get [token|baseUrl] [--json]
+  expn config set [--token pat_<token>] [--api-url http://localhost:7016/v1]
+  expn issue ls [--team-id <uuid>] [--cursor <cursor>] [--limit <n>]
+  expn issue view <id-or-identifier>
+  expn issue create --title <title> --team-id <uuid> [--idempotency-key <key>]
+  expn issue update <id-or-identifier> [--title <title>] [--state-id <uuid>]
+  expn project ls
+  expn project view <slug>
+  expn cycle current --team-key <key>
+  expn issues list [--team-id <uuid>] [--cursor <cursor>] [--limit <n>]
+  expn issues search --query <text> [--workspace-id <uuid>]
+  expn issues get --id <id-or-identifier>
+  expn issues create --title <title> --team-id <uuid> [--idempotency-key <key>]
+  expn issues update --id <id-or-identifier> [--title <title>] [--state-id <uuid>]
+  expn issues delete --id <id-or-identifier> [--idempotency-key <key>]
+  expn issues subscription --id <id-or-identifier>
+  expn issues subscribe --id <id-or-identifier>
+  expn issues unsubscribe --id <id-or-identifier>
+  expn issues watch [--version <n>]
+  expn workspaces list
+  expn workspaces create --name <name> --url-slug <slug>
+  expn workspaces current
+  expn workspaces members
+  expn workspaces invite --email <email> [--role member|admin|guest]
+  expn teams list
+  expn teams create --name <name> [--key <key>] [--private true]
+  expn teams create-issue-options --team-key <key>
+  expn tokens list
+  expn tokens create --name <name> [--scopes read,write]
+  expn tokens revoke --id <uuid>
+  expn projects list
+  expn projects get --slug <slug>
+  expn projects create --name <name> [--slug <slug>] [--team-keys ENG,DES]
+  expn projects update --slug <slug> [--name <name>] [--new-slug <slug>]
+  expn projects delete --slug <slug>
+  expn project-statuses list
+  expn project-statuses update --statuses-json '<json-array>'
+  expn project-templates list
+  expn project-templates create --name <name> [--description <text>] [--settings-json '<json>']
+  expn project-templates update --id <uuid> --name <name> [--settings-json '<json>']
+  expn project-templates delete --id <uuid>
+  expn cycles list --team-key <key>
+  expn cycles create --team-key <key> --start-date YYYY-MM-DD --end-date YYYY-MM-DD
+  expn cycles update --team-key <key> --id <uuid> [--name <name>]
+  expn cycles delete --team-key <key> --id <uuid>
+  expn comments create --issue-id <id-or-identifier> --body <text>
+  expn comments update --id <uuid> --body <text>
+  expn comments delete --id <uuid>
+  expn comments react --id <uuid> --emoji <emoji>
+  expn issue-templates list [--team-key <key>]
+  expn issue-templates create [--name <name>] [--description <text>] [--settings-json '<json>']
+  expn issue-templates update --id <uuid> [--name <name>] [--settings-json '<json>']
+  expn issue-templates archive --id <uuid>
+  expn issue-templates delete --id <uuid>
+  expn labels list [--scope workspace|team|all] [--team-id <uuid>]
+  expn labels create --name <name> [--color #6b6f76] [--team-id <uuid>]
+  expn labels update --id <uuid> [--name <name>] [--color #6b6f76]
+  expn labels delete --id <uuid>
+  expn labels bulk --action archive|unarchive|delete|convertToGroup|rescope|merge --label-ids <ids>
+  expn emojis list
+  expn emojis create --name <name> --image-url <url-or-data-url>
+  expn emojis delete --id <id>
+  expn documents settings
+  expn documents create-folder --name <name> [--color gray|blue|green|yellow|orange|purple|pink]
+  expn documents update-folder --id <id> [--name <name>] [--color gray]
+  expn documents delete-folder --id <id>
+  expn documents create-template --name <name> --content <markdown>
+  expn documents update-template --id <id> [--name <name>] [--content <markdown>]
+  expn documents delete-template --id <id>
+  expn integrations list
+  expn integrations disconnect --provider slack|github|zendesk
+  expn account profile
+  expn account preferences
+  expn notifications list
+  expn notifications mark-read
+  expn notifications read --id <uuid>
+  expn notifications unread --id <uuid>
+  expn notifications snooze --id <uuid> [--until ISO_DATE]
+  expn favorites list
+  expn favorites add --object-type project|issue|view --object-id <id>
+  expn favorites reorder --ordered-ids project:id,issue:id
+  expn favorites remove --object-type project|issue|view --object-id <id>
 
 Output:
   Legacy plural commands default to JSON.

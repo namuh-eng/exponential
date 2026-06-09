@@ -100,7 +100,7 @@ describe("cli command runner", () => {
 
     expect(result.code).toBe(0);
     for (const group of commandGroups) {
-      expect(result.stdout).toContain(`exo ${group}`);
+      expect(result.stdout).toContain(`expn ${group}`);
     }
   });
 

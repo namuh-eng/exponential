@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@namuh-eng/exponential-sdk": "workspace:*",
+    "@expn/sdk": "workspace:*",
     "@modelcontextprotocol/sdk": "1.29.0",
     "zod": "^4.1.13"
   },

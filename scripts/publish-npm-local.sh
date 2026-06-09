@@ -22,19 +22,19 @@ mkdir -p .release
 
 pnpm install --frozen-lockfile
 
-pnpm --filter @namuh-eng/exponential-sdk typecheck
-pnpm --filter @namuh-eng/exponential-sdk test
-pnpm --filter @namuh-eng/exponential-sdk build
+pnpm --filter @expn/sdk typecheck
+pnpm --filter @expn/sdk test
+pnpm --filter @expn/sdk build
 
-pnpm --filter @namuh-eng/exponential-cli typecheck
-pnpm --filter @namuh-eng/exponential-cli test
-pnpm --filter @namuh-eng/exponential-cli build
+pnpm --filter @expn/cli typecheck
+pnpm --filter @expn/cli test
+pnpm --filter @expn/cli build
 
-pnpm --filter @namuh-eng/exponential-sdk pack --pack-destination "$PWD/.release"
-pnpm --filter @namuh-eng/exponential-cli pack --pack-destination "$PWD/.release"
+pnpm --filter @expn/sdk pack --pack-destination "$PWD/.release"
+pnpm --filter @expn/cli pack --pack-destination "$PWD/.release"
 
-sdk_tarballs=(.release/namuh-eng-exponential-sdk-*.tgz)
-cli_tarballs=(.release/namuh-eng-exponential-cli-*.tgz)
+sdk_tarballs=(.release/expn-sdk-*.tgz)
+cli_tarballs=(.release/expn-cli-*.tgz)
 
 if [[ "${#sdk_tarballs[@]}" -ne 1 || "${#cli_tarballs[@]}" -ne 1 ]]; then
   echo "Expected exactly one SDK tarball and one CLI tarball in .release." >&2
@@ -54,6 +54,6 @@ echo "Publishing ${cli_tarballs[0]} with DRY_RUN=$dry_run"
 npm publish "${cli_tarballs[0]}" "${publish_args[@]}"
 
 if [[ "$dry_run" == "false" ]]; then
-  npm view @namuh-eng/exponential-sdk version
-  npm view @namuh-eng/exponential-cli version
+  npm view @expn/sdk version
+  npm view @expn/cli version
 fi

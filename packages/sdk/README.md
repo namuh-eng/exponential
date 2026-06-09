@@ -1,9 +1,9 @@
-# @namuh-eng/exponential-sdk
+# @expn/sdk
 
 Generated TypeScript SDK for the Exponential headless API.
 
 ```ts
-import { createExponentialClient } from "@namuh-eng/exponential-sdk";
+import { createExponentialClient } from "@expn/sdk";
 
 const client = createExponentialClient({
   baseUrl: process.env.EXPONENTIAL_API_URL,
