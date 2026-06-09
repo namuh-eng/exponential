@@ -55,9 +55,14 @@
 
   /* Legacy app aliases consume Editorial tokens so existing features keep behavior with refreshed styling. */
   --color-sidebar-bg: var(--editorial-bg);
+  --color-bg: var(--editorial-bg);
+  --color-bg-primary: var(--editorial-surface);
   --color-content-bg: var(--editorial-bg);
   --color-background: var(--editorial-bg);
   --color-border: var(--editorial-line);
+  --color-border-primary: var(--editorial-line-strong);
+  --color-bg-tertiary: var(--editorial-surface-3);
+  --color-selected-bg: var(--editorial-pressed);
   --color-text-primary: var(--editorial-ink-1);
   --color-text-secondary: var(--editorial-ink-3);
   --color-text-tertiary: var(--editorial-ink-4);
@@ -89,13 +94,13 @@
     var(--editorial-accent) 20%,
     transparent
   );
-  --editorial-ink-1: #d8d4c8;
-  --editorial-ink-2: #b8b3a6;
-  --editorial-ink-3: #8a8579;
-  --editorial-ink-4: #5e5b53;
-  --editorial-ink-5: #42403a;
-  --editorial-line: #2a2e2c;
-  --editorial-line-strong: #3a3f3c;
+  --editorial-ink-1: #f0eadc;
+  --editorial-ink-2: #d0cabd;
+  --editorial-ink-3: #aaa497;
+  --editorial-ink-4: #827d73;
+  --editorial-ink-5: #5c5952;
+  --editorial-line: #343a36;
+  --editorial-line-strong: #48504a;
   --editorial-line-soft: #1e2120;
   --editorial-accent: #7ee787;
   --editorial-accent-hover: #9af0a0;

@@ -26,7 +26,13 @@ import {
   projectViewStatusOptions,
 } from "@/lib/views";
 import { withWorkspaceSlug } from "@/lib/workspace-paths";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import {
+  useParams,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface ViewTeam {
@@ -261,20 +267,28 @@ function LayoutIcon({
 
 function ViewRow({
   view,
+  href,
   onOpen,
   onEdit,
   onDelete,
 }: {
   view: ViewSummary;
+  href: string | null;
   onOpen: (view: ViewSummary) => void;
   onEdit: (view: ViewSummary) => void;
   onDelete: (view: ViewSummary) => void;
 }) {
   return (
     <div className="group flex min-h-[48px] items-center border-b border-[var(--color-border)] px-4 text-[13px] transition-colors hover:bg-[var(--color-surface-hover)]">
-      <button
-        type="button"
-        onClick={() => onOpen(view)}
+      <a
+        href={href ?? "#"}
+        onClick={(event) => {
+          if (!href) {
+            event.preventDefault();
+            return;
+          }
+          onOpen(view);
+        }}
         className="flex min-w-0 flex-1 items-center gap-3 py-2 text-left"
       >
         <span className="text-[var(--color-text-secondary)]">
@@ -290,7 +304,7 @@ function ViewRow({
               : "Workspace view"}
           </span>
         </span>
-      </button>
+      </a>
 
       <div className="hidden w-[180px] shrink-0 sm:block">
         {view.owner && (
@@ -405,7 +419,9 @@ function CreateViewModal({
   const [scope, setScope] = useState<ViewScope>(view?.scope ?? "workspace");
   const [teamId, setTeamId] = useState<string>(
     view?.teamId ??
-      teams.find((team) => team.key === activeTeamKey)?.id ??
+      teams.find(
+        (team) => team.key.toUpperCase() === activeTeamKey?.toUpperCase(),
+      )?.id ??
       teams[0]?.id ??
       "",
   );
@@ -941,6 +957,7 @@ export function ViewsPage({
 }) {
   const router = useRouter();
   const params = useParams<{ key?: string }>();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const workspaceSlug = useAppShellContext()?.workspaceSlug;
   const [views, setViews] = useState<ViewSummary[]>([]);
@@ -951,8 +968,16 @@ export function ViewsPage({
   const [showCreate, setShowCreate] = useState(false);
 
   const routeTeamKey = initialTeamKeyFromRoute ? params.key : undefined;
+  const pathTeamKey = useMemo(() => {
+    const segments = pathname.split("/").filter(Boolean);
+    const teamSegmentIndex = segments.indexOf("team");
+    const key = segments[teamSegmentIndex + 1];
+    return teamSegmentIndex === -1 || !key
+      ? undefined
+      : decodeURIComponent(key);
+  }, [pathname]);
   const activeTeamKey =
-    initialTeamKey ?? routeTeamKey ?? searchParams.get("team");
+    initialTeamKey ?? routeTeamKey ?? pathTeamKey ?? searchParams.get("team");
 
   const fetchViews = useCallback(async () => {
     try {
@@ -987,13 +1012,16 @@ export function ViewsPage({
         return true;
       }
 
-      return view.teamKey === activeTeamKey;
+      return view.teamKey?.toUpperCase() === activeTeamKey.toUpperCase();
     });
   }, [activeTab, activeTeamKey, views]);
 
   const personalViews = filteredViews.filter((view) => view.isPersonal);
   const sharedViews = filteredViews.filter((view) => !view.isPersonal);
-  const activeTeam = teams.find((team) => team.key === activeTeamKey) ?? null;
+  const activeTeam =
+    teams.find(
+      (team) => team.key.toUpperCase() === activeTeamKey?.toUpperCase(),
+    ) ?? null;
   const teamRouteNotFound = Boolean(activeTeamKey && !activeTeam);
 
   const handleTabChange = (tab: ViewEntityType) => {
@@ -1002,10 +1030,15 @@ export function ViewsPage({
       return;
     }
 
-    if (initialTeamKey || routeTeamKey) {
+    if (initialTeamKey || routeTeamKey || pathTeamKey) {
+      const targetTeamKey =
+        activeTeam?.key ?? initialTeamKey ?? routeTeamKey ?? pathTeamKey;
+      if (!targetTeamKey) {
+        return;
+      }
       router.push(
         withWorkspaceSlug(
-          `/team/${encodeURIComponent(activeTeamKey ?? "")}/views/${tab}`,
+          `/team/${encodeURIComponent(targetTeamKey)}/views/${tab}`,
           workspaceSlug,
         ),
       );
@@ -1017,6 +1050,53 @@ export function ViewsPage({
       ? `?team=${encodeURIComponent(activeTeamKey)}`
       : "";
     router.push(withWorkspaceSlug(`${basePath}${query}`, workspaceSlug));
+  };
+
+  const tabHref = (tab: ViewEntityType) => {
+    if (keepCanonicalTabRoute && !initialTeamKey && !routeTeamKey) {
+      return withWorkspaceSlug("/views", workspaceSlug);
+    }
+
+    if (initialTeamKey || routeTeamKey || pathTeamKey) {
+      const targetTeamKey =
+        activeTeam?.key ?? initialTeamKey ?? routeTeamKey ?? pathTeamKey;
+      return targetTeamKey
+        ? withWorkspaceSlug(
+            `/team/${encodeURIComponent(targetTeamKey)}/views/${tab}`,
+            workspaceSlug,
+          )
+        : "#";
+    }
+
+    const basePath = tab === "issues" ? "/views/issues" : "/views/projects";
+    const query = activeTeamKey
+      ? `?team=${encodeURIComponent(activeTeamKey)}`
+      : "";
+    return withWorkspaceSlug(`${basePath}${query}`, workspaceSlug);
+  };
+
+  const viewHref = (view: ViewSummary) => {
+    if (view.entityType === "issues") {
+      const viewTeamKey =
+        view.teamKey ??
+        teams.find((team) => team.id === view.teamId)?.key ??
+        activeTeamKey;
+
+      if (!viewTeamKey) {
+        return null;
+      }
+
+      return withWorkspaceSlug(
+        view.layout === "board"
+          ? `/team/${viewTeamKey}/board`
+          : view.layout === "timeline"
+            ? `/team/${viewTeamKey}/timeline`
+            : `/team/${viewTeamKey}/all`,
+        workspaceSlug,
+      );
+    }
+
+    return withWorkspaceSlug("/projects", workspaceSlug);
   };
 
   const handleOpenView = (view: ViewSummary) => {
@@ -1100,8 +1180,8 @@ export function ViewsPage({
           Views
         </h1>
         <div className="flex items-center gap-0.5">
-          <button
-            type="button"
+          <Link
+            href={tabHref("issues")}
             data-active={activeTab === "issues"}
             onClick={() => handleTabChange("issues")}
             className={`rounded-md px-2.5 py-1 text-[13px] ${
@@ -1111,9 +1191,9 @@ export function ViewsPage({
             }`}
           >
             Issues
-          </button>
-          <button
-            type="button"
+          </Link>
+          <Link
+            href={tabHref("projects")}
             data-active={activeTab === "projects"}
             onClick={() => handleTabChange("projects")}
             className={`rounded-md px-2.5 py-1 text-[13px] ${
@@ -1123,7 +1203,7 @@ export function ViewsPage({
             }`}
           >
             Projects
-          </button>
+          </Link>
         </div>
         {activeTeam && (
           <button
@@ -1223,6 +1303,7 @@ export function ViewsPage({
                 <ViewRow
                   key={view.id}
                   view={view}
+                  href={viewHref(view)}
                   onOpen={handleOpenView}
                   onEdit={(nextView) => {
                     setEditingView(nextView);
@@ -1243,6 +1324,7 @@ export function ViewsPage({
                 <ViewRow
                   key={view.id}
                   view={view}
+                  href={viewHref(view)}
                   onOpen={handleOpenView}
                   onEdit={(nextView) => {
                     setEditingView(nextView);

@@ -6,9 +6,12 @@ async function clickUntilUrl(page: Page, locator: Locator, expected: RegExp) {
     await expect(locator).toBeVisible();
     await locator.click();
     try {
-      await expect(page).toHaveURL(expected, { timeout: 1250 });
+      await expect(page).toHaveURL(expected, { timeout: 5000 });
       return;
     } catch {
+      if (expected.test(page.url())) {
+        return;
+      }
       // Route-changing buttons can receive one pre-hydration click in dev mode.
     }
   }
@@ -39,7 +42,7 @@ test.describe("Workspace Views canonical route", () => {
       page.getByRole("heading", { name: "Views", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Issues", exact: true }),
+      page.getByRole("link", { name: "Issues", exact: true }),
     ).toHaveAttribute("data-active", "true");
 
     await page.goto("/foreverbrowsing/inbox");
@@ -68,17 +71,17 @@ test.describe("Workspace Views canonical route", () => {
     await expect(page).toHaveURL(/\/foreverbrowsing\/views$/);
     await clickUntilUrl(
       page,
-      page.getByRole("button", {
+      page.getByRole("link", {
         name: new RegExp(`^Timeline layout ${issueViewName}`),
       }),
       /\/foreverbrowsing\/team\/.+\/timeline$/,
     );
     await page.goto("/views");
 
-    await page.getByRole("button", { name: "Projects", exact: true }).click();
+    await page.getByRole("link", { name: "Projects", exact: true }).click();
     await expect(page).toHaveURL(/\/foreverbrowsing\/views$/);
     await expect(
-      page.getByRole("button", { name: "Projects", exact: true }),
+      page.getByRole("link", { name: "Projects", exact: true }),
     ).toHaveAttribute("data-active", "true");
 
     await page.getByLabel("Create view").first().click();
@@ -93,12 +96,12 @@ test.describe("Workspace Views canonical route", () => {
       page.getByRole("heading", { name: "Views", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Issues", exact: true }),
+      page.getByRole("link", { name: "Issues", exact: true }),
     ).toHaveAttribute("data-active", "true");
-    await page.getByRole("button", { name: "Projects", exact: true }).click();
+    await page.getByRole("link", { name: "Projects", exact: true }).click();
     await expect(page).toHaveURL(/\/views\/all$/);
     await expect(
-      page.getByRole("button", { name: "Projects", exact: true }),
+      page.getByRole("link", { name: "Projects", exact: true }),
     ).toHaveAttribute("data-active", "true");
 
     await page.goto("/foreverbrowsing/views/all");
@@ -113,7 +116,7 @@ test.describe("Workspace Views canonical route", () => {
       page.getByRole("heading", { name: "Views", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Issues", exact: true }),
+      page.getByRole("link", { name: "Issues", exact: true }),
     ).toHaveAttribute("data-active", "true");
 
     await page.goto("/views/projects");
@@ -122,7 +125,7 @@ test.describe("Workspace Views canonical route", () => {
       page.getByRole("heading", { name: "Views", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Projects", exact: true }),
+      page.getByRole("link", { name: "Projects", exact: true }),
     ).toHaveAttribute("data-active", "true");
 
     expect(pageErrors).toEqual([]);
@@ -140,7 +143,7 @@ test.describe("Team Views tab routes", () => {
       page.getByRole("heading", { name: "Views", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Issues", exact: true }),
+      page.getByRole("link", { name: "Issues", exact: true }),
     ).toHaveAttribute("data-active", "true");
     await expect(
       page.getByText("This page could not be found"),
@@ -158,7 +161,7 @@ test.describe("Team Views tab routes", () => {
         page.getByRole("button", { name: "Engineering", exact: true }),
       ).toBeVisible();
       await expect(
-        page.getByRole("button", {
+        page.getByRole("link", {
           name: tab === "issues" ? "Issues" : "Projects",
           exact: true,
         }),
@@ -176,7 +179,7 @@ test.describe("Team Views tab routes", () => {
       page.getByRole("heading", { name: "Views", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Projects", exact: true }),
+      page.getByRole("link", { name: "Projects", exact: true }),
     ).toHaveAttribute("data-active", "true");
     await expect(
       page.getByText("This page could not be found"),
@@ -184,11 +187,11 @@ test.describe("Team Views tab routes", () => {
 
     await clickUntilUrl(
       page,
-      page.getByRole("button", { name: "Issues", exact: true }),
+      page.getByRole("link", { name: "Issues", exact: true }),
       /\/foreverbrowsing\/team\/ENG\/views\/issues$/,
     );
     await expect(
-      page.getByRole("button", { name: "Issues", exact: true }),
+      page.getByRole("link", { name: "Issues", exact: true }),
     ).toHaveAttribute("data-active", "true");
     await expect(
       page.getByText("This page could not be found"),

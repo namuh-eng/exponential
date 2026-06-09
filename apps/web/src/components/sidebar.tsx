@@ -7,6 +7,7 @@ import {
   dispatchAccountPreferencesChanged,
   mergeAccountPreferences,
 } from "@/lib/account-preferences";
+import { signOut } from "@/lib/auth-client";
 import { OPEN_COMMAND_PALETTE_EVENT } from "@/lib/command-palette";
 import {
   KEYBOARD_SHORTCUTS,
@@ -85,6 +86,7 @@ interface SidebarProps {
   onCreateIssue?: () => void;
   accountPreferences?: AccountPreferences;
   workspaceSlug?: string;
+  width?: number;
 }
 
 const SidebarWorkspaceSlugContext = createContext<string>("");
@@ -444,6 +446,7 @@ export function Sidebar({
   onCreateIssue,
   accountPreferences,
   workspaceSlug = "",
+  width = 264,
 }: SidebarProps) {
   const pathname = stripWorkspaceSlug(usePathname(), workspaceSlug);
   const resolvedTeams =
@@ -725,7 +728,10 @@ export function Sidebar({
 
   return (
     <SidebarWorkspaceSlugContext.Provider value={workspaceSlug}>
-      <aside className="flex h-screen w-[264px] shrink-0 flex-col border-r border-[var(--color-border-strong)] bg-[var(--color-sidebar-bg)] px-2.5 py-2.5 transition-colors">
+      <aside
+        className="flex h-screen shrink-0 flex-col border-r border-[var(--color-border-strong)] bg-[var(--color-sidebar-bg)] px-2.5 py-2.5 transition-colors"
+        style={{ width }}
+      >
         <div className="mb-3 flex items-center justify-between">
           <div className="relative">
             <button
@@ -782,6 +788,16 @@ export function Sidebar({
                 >
                   Workspace settings
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorkspaceMenuOpen(false);
+                    void signOut();
+                  }}
+                  className="tty-row mt-1 block w-full border-t border-[var(--color-border)] px-3 py-2 text-left text-[12px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                >
+                  Log out
+                </button>
               </div>
             )}
           </div>

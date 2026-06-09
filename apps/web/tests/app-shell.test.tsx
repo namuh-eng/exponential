@@ -36,8 +36,13 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+vi.mock("@/lib/auth-client", () => ({
+  signOut: vi.fn(),
+}));
+
 import { AppShell } from "@/app/(app)/app-shell";
 import { Sidebar } from "@/components/sidebar";
+import { signOut } from "@/lib/auth-client";
 import {
   OPEN_COMMAND_PALETTE_EVENT,
   OPEN_CREATE_ISSUE_EVENT,
@@ -64,6 +69,7 @@ describe("Sidebar", () => {
   afterEach(() => {
     cleanup();
     mockPathname = "/inbox";
+    vi.clearAllMocks();
   });
 
   it("renders workspace name", () => {
@@ -206,7 +212,17 @@ describe("Sidebar", () => {
     fireEvent.click(screen.getByLabelText("Workspace switcher"));
 
     expect(screen.getByText("Workspace settings")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Log out" })).toBeInTheDocument();
     expect(screen.getAllByText("Acme Inc").length).toBeGreaterThan(0);
+  });
+
+  it("logs out from the workspace switcher menu", () => {
+    render(<Sidebar workspaceName="Acme Inc" workspaceInitials="AC" />);
+
+    fireEvent.click(screen.getByLabelText("Workspace switcher"));
+    fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+
+    expect(signOut).toHaveBeenCalledOnce();
   });
 
   it("has help button", () => {
@@ -513,7 +529,7 @@ describe("AppShell", () => {
     expect(screen.getByTestId("tty-shortcut-status-bar")).toBeInTheDocument();
   });
 
-  it("reveals the collapsed desktop sidebar from the left edge on hover", () => {
+  it("reveals the collapsed desktop sidebar from the left edge on hover", async () => {
     render(
       <AppShell
         workspaceName="WS"
@@ -535,8 +551,12 @@ describe("AppShell", () => {
       "fixed",
     );
 
-    fireEvent.mouseEnter(screen.getByTestId("app-sidebar-hover-zone"));
-    expect(screen.getByTestId("app-sidebar-reveal-panel")).toBeInTheDocument();
+    fireEvent.mouseEnter(screen.getByTestId("app-sidebar-preview-zone"));
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("app-sidebar-reveal-panel"),
+      ).toBeInTheDocument();
+    });
     expect(
       screen.getByRole("button", { name: "Workspace switcher" }),
     ).toBeInTheDocument();
@@ -566,9 +586,14 @@ describe("AppShell", () => {
     expect(window.localStorage.getItem("exponential:sidebar-collapsed")).toBe(
       "false",
     );
-    expect(screen.getByTestId("sidebar-toggle-button")).toHaveAccessibleName(
-      "Hide sidebar",
-    );
+    expect(
+      screen.getByRole("button", {
+        name: "Resize sidebar. Click to hide sidebar",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Show sidebar" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Workspace switcher" }),
     ).toBeInTheDocument();
@@ -578,9 +603,88 @@ describe("AppShell", () => {
     expect(window.localStorage.getItem("exponential:sidebar-collapsed")).toBe(
       "true",
     );
-    expect(screen.getByTestId("sidebar-toggle-button")).toHaveAccessibleName(
-      "Show sidebar",
+    expect(
+      screen.getByRole("button", { name: "Show sidebar" }),
+    ).toBeInTheDocument();
+  });
+
+  it("resizes the sidebar from the divider without collapsing it", async () => {
+    window.localStorage.setItem("exponential:sidebar-collapsed", "false");
+
+    render(
+      <AppShell
+        workspaceName="WS"
+        workspaceInitials="WS"
+        teamName="Team"
+        teamId="team-1"
+        teamKey="T"
+        teams={[{ id: "team-1", name: "Team", key: "T" }]}
+      >
+        <div>Test</div>
+      </AppShell>,
     );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Workspace switcher" }),
+      ).toBeInTheDocument();
+    });
+
+    const resizeHandle = screen.getByRole("button", {
+      name: "Resize sidebar. Click to hide sidebar",
+    });
+
+    fireEvent.mouseDown(resizeHandle, { button: 0, clientX: 264 });
+    fireEvent.mouseMove(window, { clientX: 318 });
+    fireEvent.mouseUp(window, { clientX: 318 });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("app-sidebar-shell")).toHaveStyle({
+        width: "318px",
+      });
+    });
+    expect(window.localStorage.getItem("exponential:sidebar-width")).toBe(
+      "318",
+    );
+    expect(
+      screen.getByRole("button", { name: "Workspace switcher" }),
+    ).toBeInTheDocument();
+  });
+
+  it("collapses the sidebar when the divider is clicked", async () => {
+    window.localStorage.setItem("exponential:sidebar-collapsed", "false");
+
+    render(
+      <AppShell
+        workspaceName="WS"
+        workspaceInitials="WS"
+        teamName="Team"
+        teamId="team-1"
+        teamKey="T"
+        teams={[{ id: "team-1", name: "Team", key: "T" }]}
+      >
+        <div>Test</div>
+      </AppShell>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", {
+          name: "Resize sidebar. Click to hide sidebar",
+        }),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Resize sidebar. Click to hide sidebar",
+      }),
+    );
+
+    expect(window.localStorage.getItem("exponential:sidebar-collapsed")).toBe(
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Show sidebar" })).toBeDefined();
   });
 
   it("hides the app sidebar on mobile settings routes", () => {
@@ -600,7 +704,7 @@ describe("AppShell", () => {
     );
 
     expect(screen.getByTestId("app-sidebar-shell").className).toContain(
-      "hidden md:block",
+      "hidden shrink-0 md:block",
     );
   });
 
@@ -621,7 +725,7 @@ describe("AppShell", () => {
     );
 
     expect(screen.getByTestId("app-sidebar-shell").className).toContain(
-      "hidden md:block",
+      "hidden shrink-0 md:block",
     );
   });
 
