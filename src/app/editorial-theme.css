@@ -61,6 +61,7 @@
   --color-text-tertiary: var(--editorial-ink-4);
   --color-accent: var(--editorial-accent);
   --color-accent-hover: var(--editorial-accent-hover);
+  --color-accent-ink: var(--editorial-accent-ink);
   --color-surface: var(--editorial-surface);
   --color-surface-hover: var(--editorial-hover);
   --color-surface-active: color-mix(
@@ -97,6 +98,7 @@
   --editorial-accent: oklch(0.68 0.15 32);
   --editorial-accent-hover: oklch(0.74 0.16 32);
   --editorial-accent-soft: oklch(0.3 0.08 32);
+  --editorial-accent-ink: #14120e;
 }
 
 .ui-button {

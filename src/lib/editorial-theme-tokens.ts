@@ -57,7 +57,7 @@ export const editorialThemeTokens = {
       default: "oklch(0.68 0.15 32)",
       hover: "oklch(0.74 0.16 32)",
       soft: "oklch(0.3 0.08 32)",
-      ink: "#ffffff",
+      ink: "#14120e",
     },
   },
   type: {

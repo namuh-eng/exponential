@@ -22,8 +22,10 @@ describe("Editorial theme tokens", () => {
       "oklch(0.56 0.16 32)",
     );
     expect(editorialThemeTokens.dark.paper.bg).toBe("#15130f");
+    expect(editorialThemeTokens.dark.accent.ink).toBe("#14120e");
     expect(css).toContain("--editorial-bg: #faf7f2");
     expect(css).toContain("--editorial-accent: oklch(0.56 0.16 32)");
+    expect(css).toContain("--editorial-accent-ink: #14120e");
     expect(css).toContain("--editorial-sans: var(--font-inter-tight)");
     expect(css).toContain("--shadow-editorial-sm: var(--editorial-shadow-sm)");
     expect(editorialThemeTokens.shadow.md).toBe("var(--editorial-shadow-md)");
@@ -84,6 +86,7 @@ describe("Editorial theme tokens", () => {
     expect(css).toContain("--color-content-bg: var(--editorial-bg)");
     expect(css).toContain("--color-border: var(--editorial-line)");
     expect(css).toContain("--color-text-primary: var(--editorial-ink-1)");
+    expect(css).toContain("--color-accent-ink: var(--editorial-accent-ink)");
     expect(css).toContain("--color-surface-hover: var(--editorial-hover)");
   });
 });

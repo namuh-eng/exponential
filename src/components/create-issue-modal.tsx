@@ -1214,7 +1214,7 @@ export function CreateIssueModal({
       >
         <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
           <span className="flex items-center gap-1.5 rounded-md bg-[var(--color-surface)] px-2 py-0.5 text-[12px] font-medium text-[var(--color-text-primary)]">
-            <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-[var(--color-accent)] text-[7px] font-bold text-white">
+            <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-[var(--color-accent)] text-[7px] font-bold text-[var(--color-accent-ink)]">
               {teamKey.charAt(0)}
             </span>
             {teamKey}
@@ -1560,7 +1560,7 @@ export function CreateIssueModal({
               type="button"
               disabled={!canSubmit}
               onClick={() => void handleSubmit()}
-              className="rounded-full bg-[var(--color-accent)] px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-full bg-[var(--color-accent)] px-4 py-1.5 text-[13px] font-medium text-[var(--color-accent-ink)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {submitting ? "Creating..." : "Create Issue"}
             </button>
