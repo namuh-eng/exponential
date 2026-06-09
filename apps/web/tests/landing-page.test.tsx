@@ -53,13 +53,43 @@ describe("landing page", () => {
       "https://github.com/namuh-eng/exponential",
     );
     expect(screen.getByLabelText("GitHub stars").textContent).toBe(
-      "stars 1.2k",
+      "github stars 1.2k",
     );
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.github.com/repos/namuh-eng/exponential",
       expect.objectContaining({
         headers: { Accept: "application/vnd.github+json" },
       }),
+    );
+  });
+
+  it("wires the self-host call to action to the operator guide", async () => {
+    vi.stubEnv(
+      "NEXT_PUBLIC_EXPONENTIAL_GITHUB_URL",
+      "https://github.com/namuh-eng/exponential/tree/main",
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue({
+        ok: true,
+        json: async () => ({ stargazers_count: 4 }),
+      } as Response),
+    );
+    const { LandingPage } = await import("@/components/landing-page");
+
+    render(await LandingPage());
+
+    expect(
+      screen.getByRole("link", { name: "open self-host guide" }),
+    ).toHaveAttribute(
+      "href",
+      "https://github.com/namuh-eng/exponential/blob/main/docs/self-hosting.md",
+    );
+    expect(
+      screen.getByRole("link", { name: "view docker compose setup →" }),
+    ).toHaveAttribute(
+      "href",
+      "https://github.com/namuh-eng/exponential/blob/main/docs/self-hosting.md",
     );
   });
 
