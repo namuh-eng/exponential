@@ -1,7 +1,7 @@
 "use client";
 
 import { EmptyState } from "@/components/empty-state";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Integration = {
   provider: string;
@@ -20,8 +20,49 @@ type Integration = {
 
 type IntegrationsPayload = {
   integrations?: Integration[];
+  integrationRoadmap?: IntegrationRoadmap;
   canManageIntegrations?: boolean;
   error?: string;
+};
+
+type RoadmapItem = {
+  id: string;
+  priority: "P0" | "P1" | "P2" | "P3";
+  buildOrder: number;
+  name: string;
+  provider: string | null;
+  category: string;
+  status: "build_issue" | "parent_tracking" | "out_of_scope";
+  issue: {
+    number: number;
+    title: string;
+    url: string;
+  };
+  scope: string;
+  planning: {
+    setup: string;
+    dataModel: string;
+    runtime: string;
+    permissions: string;
+    adminUx: string;
+  };
+  acceptanceCriteria: string[];
+  validationPlan: string[];
+};
+
+type RoadmapPhase = {
+  priority: RoadmapItem["priority"];
+  label: string;
+  items: RoadmapItem[];
+};
+
+type IntegrationRoadmap = {
+  summary?: {
+    totalItems: number;
+    buildIssues: number;
+    trackedParentItems: number;
+  };
+  phases?: RoadmapPhase[];
 };
 
 function statusLabel(integration: Integration) {
@@ -32,10 +73,18 @@ function statusLabel(integration: Integration) {
   return "Not connected";
 }
 
+function roadmapStatusLabel(status: RoadmapItem["status"]) {
+  if (status === "parent_tracking") return "Parent tracked";
+  if (status === "out_of_scope") return "Out of scope";
+  return "Build issue";
+}
+
 export default function IntegrationsSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [integrationRoadmap, setIntegrationRoadmap] =
+    useState<IntegrationRoadmap | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pendingProvider, setPendingProvider] = useState<string | null>(null);
@@ -56,6 +105,7 @@ export default function IntegrationsSettingsPage() {
       setIntegrations(
         Array.isArray(data.integrations) ? data.integrations : [],
       );
+      setIntegrationRoadmap(data.integrationRoadmap ?? null);
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -70,6 +120,14 @@ export default function IntegrationsSettingsPage() {
   useEffect(() => {
     void loadIntegrations();
   }, [loadIntegrations]);
+
+  const roadmapPhases = useMemo(
+    () =>
+      Array.isArray(integrationRoadmap?.phases)
+        ? integrationRoadmap.phases
+        : [],
+    [integrationRoadmap],
+  );
 
   async function connectSlack() {
     setPendingProvider("slack");
@@ -156,6 +214,70 @@ export default function IntegrationsSettingsPage() {
         your workflow.
       </p>
 
+      {roadmapPhases.length ? (
+        <section aria-labelledby="integration-roadmap-title" className="mt-8">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2
+                className="text-[16px] font-semibold text-[var(--color-text-primary)]"
+                id="integration-roadmap-title"
+              >
+                Integration build order
+              </h2>
+              <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
+                Linear parity providers are ordered by platform dependency and
+                implementation ownership.
+              </p>
+            </div>
+            {integrationRoadmap?.summary ? (
+              <div className="shrink-0 text-right text-[12px] text-[var(--color-text-tertiary)]">
+                <div>{integrationRoadmap.summary.totalItems} backlog items</div>
+                <div>{integrationRoadmap.summary.buildIssues} build issues</div>
+              </div>
+            ) : null}
+          </div>
+          <div className="mt-4 divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
+            {roadmapPhases.map((phase) => (
+              <div className="p-4" key={phase.priority}>
+                <h3 className="text-[13px] font-medium text-[var(--color-text-primary)]">
+                  {phase.label}
+                </h3>
+                <div className="mt-3 flex flex-col gap-3">
+                  {phase.items.map((item) => (
+                    <article
+                      className="border-l border-[var(--color-border)] pl-3"
+                      key={item.id}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h4 className="text-[13px] font-medium text-[var(--color-text-primary)]">
+                            {item.name}
+                          </h4>
+                          <p className="mt-1 text-[12px] text-[var(--color-text-secondary)]">
+                            {item.scope}
+                          </p>
+                          <p className="mt-2 text-[12px] text-[var(--color-text-tertiary)]">
+                            {item.category} · {roadmapStatusLabel(item.status)}
+                          </p>
+                        </div>
+                        <a
+                          className="shrink-0 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                          href={item.issue.url}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          #{item.issue.number}
+                        </a>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {notice ? (
         <output className="mt-6 block rounded-md border border-green-500/30 bg-green-500/10 px-4 py-3 text-[13px] text-green-300">
           {notice}
@@ -226,7 +348,7 @@ export default function IntegrationsSettingsPage() {
           className="fixed inset-0 z-50 flex h-full max-h-none w-full max-w-none items-center justify-center bg-black/60 p-4"
           open
         >
-          <div className="w-full max-w-[560px] rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] p-6 shadow-xl">
+          <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-[560px] flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] p-6 shadow-xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2
@@ -249,7 +371,7 @@ export default function IntegrationsSettingsPage() {
                 ×
               </button>
             </div>
-            <div className="mt-5 flex flex-col gap-3">
+            <div className="mt-5 flex flex-col gap-3 overflow-y-auto pr-1">
               {integrations.map((integration) => (
                 <div
                   className="rounded-lg border border-[var(--color-border)] p-4"

@@ -9,11 +9,12 @@ import {
   workspace,
   workspaceIntegration,
 } from "@/lib/db/schema";
+import { LINEAR_INTEGRATION_ROADMAP } from "@/lib/integration-roadmap";
 import { getWorkspaceSlugFromPath } from "@/lib/workspace-paths";
 import { isWorkspaceAdminRole } from "@/lib/workspace-permissions";
 import { and, eq } from "drizzle-orm";
 
-export type IntegrationProvider = "github" | "slack" | "zendesk";
+export type IntegrationProvider = string;
 
 export type WorkspaceAccess = {
   workspaceId: string;
@@ -53,24 +54,56 @@ export const INTEGRATION_CATALOG: Array<{
   provider: IntegrationProvider;
   name: string;
   description: string;
-}> = [
-  {
-    provider: "github",
-    name: "GitHub",
-    description: "Sync pull requests, commits, and issue links with Linear.",
-  },
-  {
-    provider: "slack",
-    name: "Slack",
-    description: "Send issue updates and create issues from Slack messages.",
-  },
-  {
-    provider: "zendesk",
-    name: "Zendesk",
-    description:
-      "Connect support tickets to product work and customer requests.",
-  },
-];
+  roadmapIssue: number;
+}> = Array.from(
+  new Map(
+    LINEAR_INTEGRATION_ROADMAP.filter((item) => item.provider).map((item) => [
+      item.provider,
+      {
+        provider: item.provider as string,
+        name: providerDisplayName(item.provider as string),
+        description: providerDescription(item.provider as string, item.scope),
+        roadmapIssue: item.issue.number,
+      },
+    ]),
+  ).values(),
+);
+
+function providerDisplayName(provider: string) {
+  const labels: Record<string, string> = {
+    "ai-agents": "AI Agents",
+    airbyte: "Airbyte",
+    "customer-requests": "Customer Requests",
+    discord: "Discord",
+    figma: "Figma",
+    front: "Front",
+    github: "GitHub",
+    "google-sheets": "Google Sheets",
+    gitlab: "GitLab",
+    gong: "Gong",
+    intercom: "Intercom",
+    jira: "Jira",
+    mcp: "MCP",
+    "microsoft-teams": "Microsoft Teams",
+    notion: "Notion",
+    salesforce: "Salesforce",
+    sentry: "Sentry",
+    slack: "Slack",
+    webhooks: "Outbound webhooks",
+    zapier: "Zapier",
+    zendesk: "Zendesk",
+  };
+  return labels[provider] ?? provider;
+}
+
+function providerDescription(provider: string, fallback: string) {
+  const descriptions: Record<string, string> = {
+    github: "Sync pull requests, commits, repositories, and issue links.",
+    slack: "Send issue updates and create issues or Asks from Slack messages.",
+    zendesk: "Connect support tickets to product work and customer requests.",
+  };
+  return descriptions[provider] ?? fallback;
+}
 
 function getRequestedWorkspaceSlug(request?: Request) {
   const explicitSlug = request?.headers.get("x-workspace-slug");

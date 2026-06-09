@@ -2,6 +2,10 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { workspaceIntegration } from "@/lib/db/schema";
 import {
+  INTEGRATION_ROADMAP_PHASES,
+  getIntegrationRoadmapSummary,
+} from "@/lib/integration-roadmap";
+import {
   INTEGRATION_CATALOG,
   canManageIntegrations,
   getWorkspaceAccess,
@@ -18,10 +22,13 @@ function setupRequirement(provider: string) {
         "Slack OAuth credentials are not configured. Add AUTH_SLACK_ID and AUTH_SLACK_SECRET to enable installation.",
     };
   }
-  if (provider === "github" || provider === "zendesk") {
+  if (provider !== "slack") {
+    const catalogItem = INTEGRATION_CATALOG.find(
+      (item) => item.provider === provider,
+    );
     return {
       type: "configuration_required",
-      message: `${provider === "github" ? "GitHub" : "Zendesk"} setup is not configured in this environment yet.`,
+      message: `${catalogItem?.name ?? provider} setup follows roadmap issue #${catalogItem?.roadmapIssue ?? 592} and is not configured in this environment yet.`,
     };
   }
   return null;
@@ -56,6 +63,10 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     canManageIntegrations: canManage,
+    integrationRoadmap: {
+      summary: getIntegrationRoadmapSummary(),
+      phases: INTEGRATION_ROADMAP_PHASES,
+    },
     integrations: INTEGRATION_CATALOG.map((catalogItem) => {
       const connected = byProvider.get(catalogItem.provider);
       const requirement = connected

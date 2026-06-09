@@ -3,6 +3,7 @@ import { defineConfig } from "@playwright/test";
 const authFile = "tests/e2e/.auth/user.json";
 const port = Number(process.env.PLAYWRIGHT_PORT ?? process.env.PORT ?? "3015");
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${port}`;
+const chromiumExecutablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -11,6 +12,9 @@ export default defineConfig({
   use: {
     baseURL,
     headless: true,
+    launchOptions: chromiumExecutablePath
+      ? { executablePath: chromiumExecutablePath }
+      : undefined,
     screenshot: "only-on-failure",
   },
   projects: [
