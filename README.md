@@ -90,6 +90,8 @@ pnpm --filter @exponential/mcp exec exponential-mcp
 ```
 
 See [docs/cli.md](docs/cli.md) and [docs/mcp.md](docs/mcp.md).
+Maintainer release notes for npm publishing live in
+[docs/cli-publishing.md](docs/cli-publishing.md).
 
 ### Option 3: AWS ECS Deployment
 

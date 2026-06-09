@@ -6,6 +6,12 @@ and scriptable issue/project workflows.
 
 ## Install and run
 
+Published package:
+
+```bash
+npm install -g @exponential/cli
+```
+
 From a source checkout:
 
 ```bash
@@ -116,3 +122,8 @@ Common failures:
 - Wrong API URL: set `EXPONENTIAL_API_URL` to the API base URL ending in `/v1`.
 - Auth failure: create a new PAT and verify it can call `GET /account/profile`.
 - Self-host proxy failure: verify `/api/healthz` reaches the Go API service.
+
+## Publishing
+
+Maintainers can publish the CLI package through the manual GitHub Actions
+workflow documented in [cli-publishing.md](cli-publishing.md).
