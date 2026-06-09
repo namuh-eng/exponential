@@ -7,6 +7,7 @@ import {
 import Link from "next/link";
 
 const REPOSITORY_URL = process.env.NEXT_PUBLIC_EXPONENTIAL_GITHUB_URL?.trim();
+const GITHUB_STARS_REVALIDATE_SECONDS = 60 * 60;
 
 const NAV_LINKS = [
   { href: "/docs", label: "docs" },
@@ -60,12 +61,87 @@ $ git clone <your-fork-url>
 $ cd exponential && cp .env.example .env
 $ docker compose up -d`;
 
-export function LandingPage() {
+type GitHubRepo = {
+  owner: string;
+  repo: string;
+};
+
+type GitHubRepoResponse = {
+  stargazers_count?: unknown;
+};
+
+function parseGitHubRepo(repositoryUrl: string | undefined): GitHubRepo | null {
+  if (!repositoryUrl) {
+    return null;
+  }
+
+  try {
+    const url = new URL(repositoryUrl);
+    if (url.hostname !== "github.com") {
+      return null;
+    }
+
+    const [owner, rawRepo] = url.pathname.split("/").filter(Boolean);
+    const repo = rawRepo?.replace(/\.git$/, "");
+
+    if (!owner || !repo) {
+      return null;
+    }
+
+    return { owner, repo };
+  } catch {
+    return null;
+  }
+}
+
+async function getGitHubStars(
+  repositoryUrl: string | undefined,
+): Promise<number | null> {
+  const repo = parseGitHubRepo(repositoryUrl);
+  if (!repo) {
+    return null;
+  }
+
+  const requestInit: RequestInit & { next?: { revalidate: number } } = {
+    headers: { Accept: "application/vnd.github+json" },
+    next: { revalidate: GITHUB_STARS_REVALIDATE_SECONDS },
+  };
+
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${repo.owner}/${repo.repo}`,
+      requestInit,
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = (await response.json()) as GitHubRepoResponse;
+    return typeof data.stargazers_count === "number"
+      ? data.stargazers_count
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatStarCount(stars: number): string {
+  if (stars >= 1000) {
+    return `${Number((stars / 1000).toFixed(1))}k`;
+  }
+
+  return String(stars);
+}
+
+export async function LandingPage() {
+  const githubStars = await getGitHubStars(REPOSITORY_URL);
+
   return (
     <PublicPageFrame>
       <TopNav />
       <main className="mx-auto max-w-[1180px] px-6 pb-24 pt-10 sm:px-10">
-        <Hero />
+        <Hero githubStars={githubStars} />
         <Features />
         <CodeBlocks />
       </main>
@@ -113,16 +189,25 @@ function TopNav() {
   );
 }
 
-function Hero() {
+function Hero({ githubStars }: { githubStars: number | null }) {
   return (
     <section className="grid gap-10 pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
       <div>
         <p className="text-[12px] text-[var(--editorial-ink-3)]">
           $ npm i -g @expn/cli
         </p>
-        <p className="mt-2 text-[12px] text-[var(--editorial-ink-3)]">
-          {"// source-available · ELv2 · self-hostable"}
-        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-[var(--editorial-ink-3)]">
+          <span>{"// source-available · ELv2 · self-hostable"}</span>
+          {REPOSITORY_URL && githubStars !== null ? (
+            <Link
+              href={REPOSITORY_URL}
+              aria-label="GitHub stars"
+              className="border border-[var(--editorial-line)] px-2 py-0.5 text-[var(--editorial-ink-2)] transition-colors hover:border-[var(--editorial-line-strong)] hover:bg-[var(--editorial-hover)]"
+            >
+              stars {formatStarCount(githubStars)}
+            </Link>
+          ) : null}
+        </div>
         <h1 className="mt-8 text-balance font-mono text-[44px] font-medium leading-[1.05] sm:text-[56px] lg:text-[68px]">
           the issue tracker
           <br />
