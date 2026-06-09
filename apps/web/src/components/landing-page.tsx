@@ -6,11 +6,13 @@ import {
 } from "@/components/marketing/terminal-primitives";
 import Link from "next/link";
 
+const REPOSITORY_URL = process.env.NEXT_PUBLIC_EXPONENTIAL_GITHUB_URL?.trim();
+
 const NAV_LINKS = [
   { href: "/docs", label: "docs" },
   { href: "/self-host", label: "self-host" },
   { href: "/changelog", label: "changelog" },
-  { href: "https://github.com/namuh-eng/exponential", label: "github" },
+  ...(REPOSITORY_URL ? [{ href: REPOSITORY_URL, label: "github" }] : []),
 ];
 
 const STATUS_PILLS = ["postgres", "redis", "single binary", "< 80MB ram idle"];
@@ -54,7 +56,7 @@ service sees 14k qps for ~8s, then settles.
 - [ ] write regression for cold-start fanout`;
 
 const SELF_HOST = `# one network, one volume, three services.
-$ git clone github.com/namuh-eng/exponential
+$ git clone <your-fork-url>
 $ cd exponential && cp .env.example .env
 $ docker compose up -d`;
 
@@ -98,7 +100,7 @@ function TopNav() {
           ))}
         </nav>
         <div className="hidden items-center gap-3 text-[12px] text-[var(--editorial-ink-3)] md:flex">
-          <span aria-label="GitHub stars">★ 14.2k</span>
+          <span aria-label="Source availability">source available</span>
           <span className="border border-[var(--editorial-line-strong)] px-2.5 py-1 text-[var(--editorial-ink-1)]">
             $ npm i -g @namuh-eng/exponential-cli
           </span>
