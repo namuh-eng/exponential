@@ -59,6 +59,7 @@ tar -tf .release/namuh-eng-exponential-cli-*.tgz
 ```
 
 The CLI tarball should contain `bin/exponential`, `dist/`, and `README.md`.
+Its package manifest should expose both `exo` and `exponential` binaries.
 
 ## Local manual publish
 

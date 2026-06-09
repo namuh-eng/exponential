@@ -119,8 +119,8 @@ The CLI and local MCP server use the Go API base URL and a personal access token
 export EXPONENTIAL_TOKEN=pat_your_token
 export EXPONENTIAL_API_URL=http://localhost:7016/v1
 
-exponential doctor --json
-exponential issue ls --json
+exo doctor --json
+exo issue ls --json
 ```
 
 For MCP v0, configure clients to spawn the local stdio command. It exposes only

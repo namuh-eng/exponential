@@ -8,6 +8,9 @@ Command-line interface for Exponential.
 npm install -g @namuh-eng/exponential-cli
 ```
 
+The package installs both `exo` and `exponential` binaries. `exo` is the short
+daily-driver alias; `exponential` remains available for scripts.
+
 ## Configure
 
 Use a personal access token from Exponential:
@@ -26,17 +29,17 @@ export EXPONENTIAL_API_URL=http://localhost:7016/v1
 You can also store local config:
 
 ```bash
-exponential login --token pat_your_token --api-url http://localhost:7016/v1
+exo login --token pat_your_token --api-url http://localhost:7016/v1
 ```
 
 ## Usage
 
 ```bash
-exponential --help
-exponential doctor --json
-exponential issue ls
-exponential issue view EXP-1
-exponential project ls
+exo --help
+exo doctor --json
+exo issue ls
+exo issue view EXP-1
+exo project ls
 ```
 
 Legacy plural commands keep JSON as their default output for automation. New
