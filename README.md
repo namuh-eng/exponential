@@ -96,7 +96,7 @@ the same Go API:
 export EXPONENTIAL_TOKEN=pat_your_token
 export EXPONENTIAL_API_URL=http://localhost:7016/v1
 
-pnpm --filter @exponential/cli cli -- issue ls --json
+pnpm --filter @namuh-eng/exponential-cli cli -- issue ls --json
 pnpm --filter @exponential/mcp exec exponential-mcp
 ```
 

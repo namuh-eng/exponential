@@ -167,8 +167,8 @@ thing as a deployed and live-verified change.
 
 - Go API tests: `cd apps/api && go test ./...` or `make test`.
 - Vitest unit/component tests: `pnpm test` or `make test`.
-- SDK tests: `pnpm --filter @exponential/sdk test`.
-- CLI tests: `pnpm --filter @exponential/cli test`.
+- SDK tests: `pnpm --filter @namuh-eng/exponential-sdk test`.
+- CLI tests: `pnpm --filter @namuh-eng/exponential-cli test`.
 - Playwright E2E: `make test-e2e`, with the dev stack running.
 
 Run a single E2E file from the web package when iterating:

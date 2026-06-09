@@ -1,5 +1,5 @@
 {
-  "name": "@exponential/sdk",
+  "name": "@namuh-eng/exponential-sdk",
   "version": "0.1.0",
   "description": "Generated TypeScript SDK for the Exponential headless API.",
   "type": "module",

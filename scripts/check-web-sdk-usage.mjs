@@ -5,8 +5,10 @@ const browserClient = readFileSync(
   "apps/web/src/lib/browser-api-client.ts",
   "utf8",
 );
-if (!browserClient.includes('from "@exponential/sdk"')) {
-  throw new Error("apps/web browser API client must use @exponential/sdk");
+if (!browserClient.includes('from "@namuh-eng/exponential-sdk"')) {
+  throw new Error(
+    "apps/web browser API client must use @namuh-eng/exponential-sdk",
+  );
 }
 if (
   !browserClient.includes("baseUrl: browserApiBaseUrl()") ||

@@ -1,11 +1,11 @@
-# @exponential/cli
+# @namuh-eng/exponential-cli
 
 Command-line interface for Exponential.
 
 ## Install
 
 ```bash
-npm install -g @exponential/cli
+npm install -g @namuh-eng/exponential-cli
 ```
 
 ## Configure

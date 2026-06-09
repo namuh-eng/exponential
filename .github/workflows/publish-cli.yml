@@ -35,21 +35,21 @@ jobs:
 
       - name: Verify SDK
         run: |
-          pnpm --filter @exponential/sdk typecheck
-          pnpm --filter @exponential/sdk test
-          pnpm --filter @exponential/sdk build
+          pnpm --filter @namuh-eng/exponential-sdk typecheck
+          pnpm --filter @namuh-eng/exponential-sdk test
+          pnpm --filter @namuh-eng/exponential-sdk build
 
       - name: Verify CLI
         run: |
-          pnpm --filter @exponential/cli typecheck
-          pnpm --filter @exponential/cli test
-          pnpm --filter @exponential/cli build
+          pnpm --filter @namuh-eng/exponential-cli typecheck
+          pnpm --filter @namuh-eng/exponential-cli test
+          pnpm --filter @namuh-eng/exponential-cli build
 
       - name: Pack release tarballs
         run: |
           mkdir -p .release
-          pnpm --filter @exponential/sdk pack --pack-destination "$PWD/.release"
-          pnpm --filter @exponential/cli pack --pack-destination "$PWD/.release"
+          pnpm --filter @namuh-eng/exponential-sdk pack --pack-destination "$PWD/.release"
+          pnpm --filter @namuh-eng/exponential-cli pack --pack-destination "$PWD/.release"
           ls -la .release
 
       - name: Publish release tarballs
@@ -62,5 +62,5 @@ jobs:
             publish_args="$publish_args --dry-run"
           fi
 
-          npm publish .release/exponential-sdk-*.tgz $publish_args
-          npm publish .release/exponential-cli-*.tgz $publish_args
+          npm publish .release/namuh-eng-exponential-sdk-*.tgz $publish_args
+          npm publish .release/namuh-eng-exponential-cli-*.tgz $publish_args

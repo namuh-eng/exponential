@@ -100,7 +100,7 @@ function TopNav() {
         <div className="hidden items-center gap-3 text-[12px] text-[var(--editorial-ink-3)] md:flex">
           <span aria-label="GitHub stars">★ 14.2k</span>
           <span className="border border-[var(--editorial-line-strong)] px-2.5 py-1 text-[var(--editorial-ink-1)]">
-            $ npm i -g exponential-cli
+            $ npm i -g @namuh-eng/exponential-cli
           </span>
           <CommandLink href="/login" variant="ghost" className="min-h-8 px-3">
             log in
@@ -116,7 +116,7 @@ function Hero() {
     <section className="grid gap-10 pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
       <div>
         <p className="text-[12px] text-[var(--editorial-ink-3)]">
-          $ npm i -g exponential-cli
+          $ npm i -g @namuh-eng/exponential-cli
         </p>
         <p className="mt-2 text-[12px] text-[var(--editorial-ink-3)]">
           {"// source-available · ELv2 · self-hostable"}

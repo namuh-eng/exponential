@@ -1,7 +1,7 @@
-import { createExponentialClient } from "@exponential/sdk";
-import type { ExponentialClient } from "@exponential/sdk";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { createExponentialClient } from "@namuh-eng/exponential-sdk";
+import type { ExponentialClient } from "@namuh-eng/exponential-sdk";
 import { z } from "zod";
 
 const emptyInputSchema = z.object({}).strict();

@@ -2,8 +2,8 @@
 
 This repo publishes two npm packages for the CLI distribution path:
 
-- `@exponential/sdk`
-- `@exponential/cli`
+- `@namuh-eng/exponential-sdk`
+- `@namuh-eng/exponential-cli`
 
 The CLI package depends on the SDK package, so publish the SDK first and the CLI
 second. The publish workflow does this ordering automatically.
@@ -34,8 +34,8 @@ workflow with `dry_run: false`.
 The workflow:
 
 1. Installs dependencies with pnpm.
-2. Typechecks, tests, and builds `@exponential/sdk`.
-3. Typechecks, tests, and builds `@exponential/cli`.
+2. Typechecks, tests, and builds `@namuh-eng/exponential-sdk`.
+3. Typechecks, tests, and builds `@namuh-eng/exponential-cli`.
 4. Creates release tarballs with `pnpm pack`.
 5. Publishes the SDK tarball first, then the CLI tarball.
 
@@ -44,18 +44,18 @@ The workflow:
 From a source checkout:
 
 ```bash
-pnpm --filter @exponential/sdk build
-pnpm --filter @exponential/cli build
+pnpm --filter @namuh-eng/exponential-sdk build
+pnpm --filter @namuh-eng/exponential-cli build
 mkdir -p .release
-pnpm --filter @exponential/sdk pack --pack-destination "$PWD/.release"
-pnpm --filter @exponential/cli pack --pack-destination "$PWD/.release"
+pnpm --filter @namuh-eng/exponential-sdk pack --pack-destination "$PWD/.release"
+pnpm --filter @namuh-eng/exponential-cli pack --pack-destination "$PWD/.release"
 ```
 
 Inspect the tarballs:
 
 ```bash
-tar -tf .release/exponential-sdk-*.tgz
-tar -tf .release/exponential-cli-*.tgz
+tar -tf .release/namuh-eng-exponential-sdk-*.tgz
+tar -tf .release/namuh-eng-exponential-cli-*.tgz
 ```
 
 The CLI tarball should contain `bin/exponential`, `dist/`, and `README.md`.

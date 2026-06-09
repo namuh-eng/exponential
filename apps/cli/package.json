@@ -1,5 +1,5 @@
 {
-  "name": "@exponential/cli",
+  "name": "@namuh-eng/exponential-cli",
   "version": "0.1.0",
   "description": "Command-line interface for Exponential issue tracking.",
   "type": "module",
@@ -32,7 +32,7 @@
     "cli": "tsx src/index.ts"
   },
   "dependencies": {
-    "@exponential/sdk": "workspace:*"
+    "@namuh-eng/exponential-sdk": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",
