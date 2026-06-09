@@ -94,6 +94,16 @@ function parseGitHubRepo(repositoryUrl: string | undefined): GitHubRepo | null {
   }
 }
 
+function githubRepoBaseUrl(repositoryUrl: string | undefined): string | null {
+  const repo = parseGitHubRepo(repositoryUrl);
+  return repo ? `https://github.com/${repo.owner}/${repo.repo}` : null;
+}
+
+function selfHostingGuideUrl(repositoryUrl: string | undefined): string {
+  const repoUrl = githubRepoBaseUrl(repositoryUrl);
+  return repoUrl ? `${repoUrl}/blob/main/docs/self-hosting.md` : "/self-host";
+}
+
 async function getGitHubStars(
   repositoryUrl: string | undefined,
 ): Promise<number | null> {
@@ -136,12 +146,13 @@ function formatStarCount(stars: number): string {
 
 export async function LandingPage() {
   const githubStars = await getGitHubStars(REPOSITORY_URL);
+  const selfHostHref = selfHostingGuideUrl(REPOSITORY_URL);
 
   return (
     <PublicPageFrame>
       <TopNav />
       <main className="mx-auto max-w-[1180px] px-6 pb-24 pt-10 sm:px-10">
-        <Hero githubStars={githubStars} />
+        <Hero githubStars={githubStars} selfHostHref={selfHostHref} />
         <Features />
         <CodeBlocks />
       </main>
@@ -189,7 +200,13 @@ function TopNav() {
   );
 }
 
-function Hero({ githubStars }: { githubStars: number | null }) {
+function Hero({
+  githubStars,
+  selfHostHref,
+}: {
+  githubStars: number | null;
+  selfHostHref: string;
+}) {
   return (
     <section className="grid gap-10 pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
       <div>
@@ -202,9 +219,9 @@ function Hero({ githubStars }: { githubStars: number | null }) {
             <Link
               href={REPOSITORY_URL}
               aria-label="GitHub stars"
-              className="border border-[var(--editorial-line)] px-2 py-0.5 text-[var(--editorial-ink-2)] transition-colors hover:border-[var(--editorial-line-strong)] hover:bg-[var(--editorial-hover)]"
+              className="inline-flex min-h-7 items-center border border-[var(--editorial-accent)] bg-[var(--editorial-accent)] px-3 py-1 text-[12px] font-semibold text-[var(--editorial-accent-ink)] transition-colors hover:bg-[var(--editorial-accent-hover)]"
             >
-              stars {formatStarCount(githubStars)}
+              github stars {formatStarCount(githubStars)}
             </Link>
           ) : null}
         </div>
@@ -221,17 +238,17 @@ function Hero({ githubStars }: { githubStars: number | null }) {
           company. The one thing you cannot do is resell it as a hosted service.
         </p>
         <div className="mt-10 flex flex-wrap items-center gap-4">
-          <button
-            type="button"
+          <Link
+            href={selfHostHref}
             className="inline-flex min-h-10 items-center border border-[var(--editorial-accent)] bg-[var(--editorial-accent)] px-4 py-2.5 text-[13px] font-medium text-[var(--editorial-accent-ink)] transition-colors hover:bg-[var(--editorial-accent-hover)]"
           >
-            $ docker run exponential
-          </button>
+            open self-host guide
+          </Link>
           <Link
-            href="/docs"
+            href={selfHostHref}
             className="border border-transparent px-2 py-1 text-[13px] text-[var(--editorial-ink-2)] transition-colors hover:border-[var(--editorial-line)] hover:bg-[var(--editorial-hover)]"
           >
-            read the docs →
+            view docker compose setup →
           </Link>
         </div>
         <ul className="mt-10 flex flex-wrap gap-2 text-[12px] text-[var(--editorial-ink-3)]">
