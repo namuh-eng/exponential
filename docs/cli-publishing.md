@@ -2,8 +2,8 @@
 
 This repo publishes two npm packages for the CLI distribution path:
 
-- `@namuh-eng/exponential-sdk`
-- `@namuh-eng/exponential-cli`
+- `@expn/sdk`
+- `@expn/cli`
 
 The CLI package depends on the SDK package, so publish the SDK first and the CLI
 second. The publish workflow does this ordering automatically.
@@ -13,7 +13,7 @@ second. The publish workflow does this ordering automatically.
 The workflow uses npm trusted publishing from GitHub Actions. In npm, configure
 trusted publishing for both packages with:
 
-- Organization/user: `namuh-eng`
+- Organization/user: `expn`
 - Repository: `exponential`
 - Workflow file: `publish-cli.yml`
 - Allowed action: `npm publish`
@@ -34,8 +34,8 @@ workflow with `dry_run: false`.
 The workflow:
 
 1. Installs dependencies with pnpm.
-2. Typechecks, tests, and builds `@namuh-eng/exponential-sdk`.
-3. Typechecks, tests, and builds `@namuh-eng/exponential-cli`.
+2. Typechecks, tests, and builds `@expn/sdk`.
+3. Typechecks, tests, and builds `@expn/cli`.
 4. Creates release tarballs with `pnpm pack`.
 5. Publishes the SDK tarball first, then the CLI tarball.
 
@@ -44,22 +44,22 @@ The workflow:
 From a source checkout:
 
 ```bash
-pnpm --filter @namuh-eng/exponential-sdk build
-pnpm --filter @namuh-eng/exponential-cli build
+pnpm --filter @expn/sdk build
+pnpm --filter @expn/cli build
 mkdir -p .release
-pnpm --filter @namuh-eng/exponential-sdk pack --pack-destination "$PWD/.release"
-pnpm --filter @namuh-eng/exponential-cli pack --pack-destination "$PWD/.release"
+pnpm --filter @expn/sdk pack --pack-destination "$PWD/.release"
+pnpm --filter @expn/cli pack --pack-destination "$PWD/.release"
 ```
 
 Inspect the tarballs:
 
 ```bash
-tar -tf .release/namuh-eng-exponential-sdk-*.tgz
-tar -tf .release/namuh-eng-exponential-cli-*.tgz
+tar -tf .release/expn-sdk-*.tgz
+tar -tf .release/expn-cli-*.tgz
 ```
 
 The CLI tarball should contain `bin/exponential`, `dist/`, and `README.md`.
-Its package manifest should expose both `exo` and `exponential` binaries.
+Its package manifest should expose both `expn` and `exponential` binaries.
 
 ## Local manual publish
 
