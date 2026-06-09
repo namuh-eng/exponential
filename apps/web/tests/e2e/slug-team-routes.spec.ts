@@ -30,7 +30,7 @@ test.describe("Slug-prefixed team issue routes", () => {
     await expectNoMainPane404(page);
 
     await page.getByRole("button", { name: "Display options" }).click();
-    await page.getByRole("button", { name: "Board" }).click();
+    await page.getByRole("button", { name: "Board", exact: true }).click();
     await expect(page).toHaveURL(/\/foreverbrowsing\/team\/ENG\/board$/);
     await expect(
       page.getByRole("heading", { name: "Engineering" }),

@@ -36,7 +36,7 @@ test.describe("Team project creation", () => {
     await expect(page.getByText(projectName)).toBeVisible();
 
     await page.getByRole("link", { name: new RegExp(projectName) }).click();
-    await expect(page.getByText("Teams")).toBeVisible();
+    await expect(page.getByText("Teams", { exact: true })).toBeVisible();
     await expect(page.getByText(teamName).nth(1)).toBeVisible();
   });
 });

@@ -1,10 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { expandAppSidebar } from "./sidebar-helpers";
 
 test.describe("Sidebar More menu", () => {
   test("exposes Agent, directory links, and persisted sidebar customization", async ({
     page,
   }) => {
     await page.goto("/foreverbrowsing/my-issues/assigned");
+    await expandAppSidebar(page);
 
     await page.getByRole("button", { name: "More" }).click();
 

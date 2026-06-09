@@ -22,9 +22,10 @@ test.describe("account notification settings", () => {
     await expect(
       page.getByRole("link", { name: /Inbox notification settings/ }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: /Email notification settings/ }),
-    ).toBeVisible();
+    const emailLink = page.getByRole("link", {
+      name: /Email notification settings/,
+    });
+    await expect(emailLink).toBeVisible();
     await expect(
       page.getByRole("link", { name: /Desktop notification settings/ }),
     ).toBeVisible();
@@ -35,7 +36,10 @@ test.describe("account notification settings", () => {
       page.getByRole("link", { name: /Mobile notification settings/ }),
     ).toHaveCount(0);
 
-    await page.goto("/settings/account/notifications/email");
+    await emailLink.click();
+    await expect(page).toHaveURL(
+      /\/foreverbrowsing\/settings\/account\/notifications\/email$/,
+    );
     await expect(
       page.getByRole("heading", { name: "Email", exact: true }),
     ).toBeVisible();

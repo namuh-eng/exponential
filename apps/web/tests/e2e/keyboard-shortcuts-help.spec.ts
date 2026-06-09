@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { expandAppSidebar } from "./sidebar-helpers";
 
 async function openKeyboardShortcuts(page: import("@playwright/test").Page) {
   await page.goto("/foreverbrowsing/inbox");
+  await expandAppSidebar(page);
   await page.getByRole("button", { name: "Help" }).evaluate((button) => {
     if (button instanceof HTMLElement) {
       button.click();

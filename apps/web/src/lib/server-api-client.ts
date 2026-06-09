@@ -63,7 +63,8 @@ function forwardedRequestHeaders(headerList: Headers) {
   ];
   if (
     process.env.PLAYWRIGHT_TEST === "true" ||
-    process.env.NODE_ENV === "test"
+    process.env.NODE_ENV === "test" ||
+    process.env.NODE_ENV !== "production"
   ) {
     forwardedNames.push("x-test-client-ip");
   }

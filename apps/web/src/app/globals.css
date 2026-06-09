@@ -181,20 +181,16 @@
 @layer components {
   .tty-shell-frame {
     border: 1px solid var(--editorial-line-strong);
-    border-radius: var(--editorial-radius-lg);
-    background: linear-gradient(
-        90deg,
-        color-mix(in oklab, var(--editorial-accent) 8%, transparent),
-        transparent 28rem
-      ), var(--editorial-bg);
-    box-shadow: inset 0 0 0 1px var(--editorial-line-soft);
+    border-radius: 0;
+    background: var(--editorial-bg);
+    box-shadow: none;
   }
 
   .tty-panel {
     border: 1px solid var(--editorial-line-strong);
-    border-radius: var(--editorial-radius-lg);
+    border-radius: 0;
     background: var(--editorial-surface);
-    box-shadow: inset 0 0 0 1px var(--editorial-line-soft);
+    box-shadow: none;
   }
 
   .tty-status-bar {
@@ -222,7 +218,7 @@
 
   .tty-row {
     border: 1px solid transparent;
-    border-radius: var(--editorial-radius);
+    border-radius: 0;
     color: var(--editorial-ink-2);
     font-family: var(--editorial-mono);
     transition: background 120ms, border-color 120ms, color 120ms;
@@ -245,7 +241,7 @@
     align-items: center;
     gap: 5px;
     border: 1px solid var(--editorial-line-strong);
-    border-radius: var(--editorial-radius);
+    border-radius: 0;
     background: var(--editorial-surface);
     color: var(--editorial-ink-3);
     font-family: var(--editorial-mono);
@@ -257,7 +253,7 @@
 
   .tty-kbd {
     border: 1px solid var(--editorial-line-strong);
-    border-radius: var(--editorial-radius);
+    border-radius: 0;
     background: var(--editorial-surface-2);
     color: var(--editorial-ink-2);
     font-family: var(--editorial-mono);
@@ -307,11 +303,7 @@
         var(--editorial-line-strong)
       )
       transparent;
-    background: radial-gradient(
-        circle at top left,
-        color-mix(in oklab, var(--color-accent-soft) 48%, transparent),
-        transparent 34rem
-      ), var(--color-content-bg);
+    background: var(--color-content-bg);
   }
 
   .editorial-page-surface * {
@@ -358,21 +350,21 @@
 
   .editorial-card {
     border: 1px solid var(--color-border);
-    border-radius: var(--editorial-radius-lg);
+    border-radius: 0;
     background: var(--color-surface);
-    box-shadow: var(--editorial-shadow-sm);
+    box-shadow: none;
   }
 
   .editorial-chip {
     border: 1px solid var(--color-border-strong);
-    border-radius: 999px;
+    border-radius: 0;
     background: var(--color-surface);
     color: var(--color-text-secondary);
   }
 
   .editorial-input {
     border: 1px solid var(--color-border-strong);
-    border-radius: var(--editorial-radius);
+    border-radius: 0;
     background: var(--color-surface);
     color: var(--color-text-primary);
     transition: border-color 120ms, box-shadow 120ms, background 120ms;
@@ -381,8 +373,80 @@
   .editorial-input:focus,
   .editorial-input:focus-within {
     border-color: var(--color-text-primary);
-    box-shadow: 0 0 0 3px var(--color-accent-soft);
+    box-shadow: 0 0 0 1px var(--color-accent);
     outline: none;
+  }
+
+  [data-editorial-theme="product"]
+    .editorial-page-surface
+    :where(
+      .rounded-md,
+      .rounded-lg,
+      .rounded-xl,
+      .rounded-2xl,
+      .rounded-full,
+      .rounded-\[6px\],
+      .rounded-\[14px\]
+    ) {
+    border-radius: 0 !important;
+  }
+
+  [data-editorial-theme="product"]
+    .editorial-page-surface
+    :where(
+      .shadow,
+      .shadow-sm,
+      .shadow-md,
+      .shadow-lg,
+      .shadow-xl,
+      .shadow-2xl
+    ) {
+    box-shadow: none !important;
+  }
+
+  [data-editorial-theme="product"]
+    .editorial-page-surface
+    :where(
+      .bg-white,
+      .bg-gray-50,
+      .bg-gray-100,
+      .bg-slate-50,
+      .bg-slate-100,
+      .bg-zinc-50,
+      .bg-zinc-100
+    ) {
+    background-color: var(--editorial-surface) !important;
+  }
+
+  [data-editorial-theme="product"]
+    .editorial-page-surface
+    :where(.bg-black, .bg-gray-900, .bg-slate-900, .bg-zinc-900) {
+    background-color: var(--editorial-surface-2) !important;
+  }
+
+  [data-editorial-theme="product"]
+    .editorial-page-surface
+    :where(.text-black, .text-gray-900, .text-slate-900, .text-zinc-900) {
+    color: var(--editorial-ink-1) !important;
+  }
+
+  [data-editorial-theme="product"]
+    .editorial-page-surface
+    :where(.text-white, .text-gray-100, .text-slate-100, .text-zinc-100) {
+    color: var(--editorial-ink-1) !important;
+  }
+
+  [data-editorial-theme="product"]
+    .editorial-page-surface
+    :where(
+      .border-gray-200,
+      .border-gray-300,
+      .border-slate-200,
+      .border-slate-300,
+      .border-zinc-200,
+      .border-zinc-300
+    ) {
+    border-color: var(--editorial-line) !important;
   }
 }
 

@@ -3,6 +3,7 @@
 import { AskAssistant } from "@/components/ask-assistant";
 import { CommandPalette } from "@/components/command-palette";
 import { CreateIssueModal } from "@/components/create-issue-modal";
+import { ExponentialMark } from "@/components/exponential-mark";
 import { Sidebar, type SidebarTeam } from "@/components/sidebar";
 import {
   ACCOUNT_PREFERENCES_CHANGE_EVENT,
@@ -11,6 +12,7 @@ import {
   mergeAccountPreferences,
 } from "@/lib/account-preferences";
 import {
+  OPEN_COMMAND_PALETTE_EVENT,
   OPEN_CREATE_ISSUE_EVENT,
   OPEN_CREATE_ISSUE_FULLSCREEN_EVENT,
 } from "@/lib/command-palette";
@@ -56,6 +58,46 @@ interface ShellContext {
 const AppShellContext = createContext<ShellContext | null>(null);
 type CreateIssueMode = "modal" | "fullscreen";
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "exponential:sidebar-collapsed";
+const TTY_BUFFERS = [
+  { id: "triage", key: "gt", label: "triage" },
+  { id: "board", key: "gb", label: "board" },
+  { id: "road", key: "gr", label: "road" },
+  { id: "prj", key: "gp", label: "prj" },
+  { id: "inbox", key: "gi", label: "inbox" },
+  { id: "cli", key: "g!", label: "cli" },
+] as const;
+
+type TtyBufferId = (typeof TTY_BUFFERS)[number]["id"];
+
+function normalizeBuildValue(value: string | undefined, fallback: string) {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed === "undefined" || trimmed === "null") {
+    return fallback;
+  }
+
+  return trimmed;
+}
+
+function formatVersion(value: string | undefined) {
+  const version = normalizeBuildValue(value, "version:unknown");
+  if (version === "version:unknown" || version.startsWith("v")) {
+    return version;
+  }
+
+  return `v${version}`;
+}
+
+const shellBuildMetadata = {
+  version: formatVersion(process.env.NEXT_PUBLIC_EXPONENTIAL_VERSION),
+  branch: normalizeBuildValue(
+    process.env.NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH,
+    "branch:unknown",
+  ),
+  sha: normalizeBuildValue(
+    process.env.NEXT_PUBLIC_EXPONENTIAL_GIT_SHA,
+    "sha:unknown",
+  ),
+};
 
 export function useAppShellContext() {
   return useContext(AppShellContext);
@@ -93,21 +135,20 @@ function getBufferLabel(pathname: string) {
     .join("/");
 }
 
-function getRouteStatus(pathname: string, teamKey: string) {
+function getRouteStatus(pathname: string) {
+  const segments = pathname.split("/").filter(Boolean);
+
   if (pathname.startsWith("/settings")) {
     return "settings";
   }
 
-  if (pathname.startsWith(`/team/${teamKey}/board`)) {
+  if (segments[0] === "team" && segments[2] === "board") {
     return "board";
   }
 
-  const teamIssuesPrefix = `/team/${teamKey}/`;
   if (
-    pathname.startsWith(teamIssuesPrefix) &&
-    ["all", "active", "backlog"].includes(
-      pathname.slice(teamIssuesPrefix.length),
-    )
+    segments[0] === "team" &&
+    ["all", "active", "backlog"].includes(segments[2] ?? "")
   ) {
     return "issues";
   }
@@ -125,6 +166,53 @@ function getRouteStatus(pathname: string, teamKey: string) {
   }
 
   return "workspace";
+}
+
+function getActiveBuffer(pathname: string): TtyBufferId {
+  const segments = pathname.split("/").filter(Boolean);
+
+  if (pathname.startsWith("/settings")) {
+    return "cli";
+  }
+
+  if (pathname.startsWith("/inbox")) {
+    return "inbox";
+  }
+
+  if (pathname.startsWith("/roadmap")) {
+    return "road";
+  }
+
+  if (pathname.startsWith("/projects") || pathname.startsWith("/project/")) {
+    return "prj";
+  }
+
+  if (segments[0] === "team" && segments[2] === "board") {
+    return "board";
+  }
+
+  if (pathname.includes("/issue/") || segments[0] === "team") {
+    return "triage";
+  }
+
+  return "triage";
+}
+
+function getBufferHref(bufferId: TtyBufferId, teamKey: string) {
+  switch (bufferId) {
+    case "board":
+      return `/team/${teamKey}/board`;
+    case "road":
+      return "/roadmap";
+    case "prj":
+      return "/projects";
+    case "inbox":
+      return "/inbox";
+    case "cli":
+      return "/settings";
+    default:
+      return `/team/${teamKey}/all`;
+  }
 }
 
 export function AppShell({
@@ -149,7 +237,7 @@ export function AppShell({
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
   const [accountPreferences, setAccountPreferences] =
     useState<AccountPreferences>(DEFAULT_ACCOUNT_PREFERENCES);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [sidebarPreviewOpen, setSidebarPreviewOpen] = useState(false);
   const [shellContext, setShellContext] = useState<ShellContext>({
     workspaceId,
@@ -185,11 +273,10 @@ export function AppShell({
 
   useEffect(() => {
     try {
-      setSidebarCollapsed(
-        window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true",
-      );
+      const stored = window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY);
+      setSidebarCollapsed(stored === null ? true : stored === "true");
     } catch {
-      setSidebarCollapsed(false);
+      setSidebarCollapsed(true);
     }
   }, []);
 
@@ -476,7 +563,8 @@ export function AppShell({
   ]);
 
   const bufferLabel = getBufferLabel(pathname);
-  const routeStatus = getRouteStatus(pathname, shellContext.teamKey);
+  const routeStatus = getRouteStatus(pathname);
+  const activeBuffer = getActiveBuffer(pathname);
   const sidebar = (
     <Sidebar
       workspaceName={shellContext.workspaceName}
@@ -545,42 +633,111 @@ export function AppShell({
             data-testid="tty-workspace-shell"
           >
             <header
-              className="tty-status-bar shrink-0 flex-wrap border-b px-3 py-1"
+              className="tty-status-bar shrink-0 overflow-x-auto border-b p-0"
               data-testid="tty-route-status-bar"
             >
-              <button
-                type="button"
-                aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
-                title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
-                data-testid="sidebar-toggle-button"
-                onClick={() => updateSidebarCollapsed((current) => !current)}
-                className="tty-row hidden h-6 w-6 items-center justify-center border border-[var(--color-border)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)] md:inline-flex"
+              <div className="flex min-h-[30px] shrink-0 items-center gap-2 border-r border-[var(--color-border)] px-3">
+                <ExponentialMark
+                  size={18}
+                  className="text-[var(--color-accent)]"
+                />
+                <span className="text-[var(--color-text-secondary)]">:</span>
+                <span className="max-w-[132px] truncate text-[var(--color-text-primary)]">
+                  {shellContext.workspaceName}
+                </span>
+                <span className="text-[var(--color-text-tertiary)]">/</span>
+                <span className="max-w-[72px] truncate text-[var(--color-text-primary)]">
+                  {shellContext.teamKey.toLowerCase()}
+                </span>
+              </div>
+              <nav
+                aria-label="TTY buffers"
+                className="flex min-h-[30px] shrink-0 items-stretch"
               >
-                {sidebarCollapsed ? (
-                  <PanelLeftOpen className="h-3.5 w-3.5" aria-hidden="true" />
-                ) : (
-                  <PanelLeftClose className="h-3.5 w-3.5" aria-hidden="true" />
-                )}
-              </button>
-              <span className="text-[var(--color-accent)]">exp</span>
-              <span aria-hidden="true">/</span>
-              <span className="max-w-[180px] truncate">
-                workspace:{shellContext.workspaceName}
-              </span>
-              <span className="hidden sm:inline" aria-hidden="true">
-                /
-              </span>
-              <span className="hidden sm:inline">
-                team:{shellContext.teamKey}
-              </span>
-              <span className="hidden md:inline" aria-hidden="true">
-                ::
-              </span>
-              <span className="hidden max-w-[260px] truncate md:inline">
-                buf:{bufferLabel}
-              </span>
-              <span className="ml-auto tty-chip">status:{routeStatus}</span>
+                {TTY_BUFFERS.map((buffer) => {
+                  const active = activeBuffer === buffer.id;
+                  return (
+                    <button
+                      key={buffer.id}
+                      type="button"
+                      data-testid={`tty-buffer-${buffer.id}`}
+                      aria-current={active ? "page" : undefined}
+                      onClick={() =>
+                        router.push(
+                          withWorkspaceSlug(
+                            getBufferHref(buffer.id, shellContext.teamKey),
+                            shellContext.workspaceSlug,
+                          ),
+                        )
+                      }
+                      className={`relative flex min-h-[30px] items-center gap-2 border-r border-[var(--color-border)] px-3 text-[12px] transition-colors ${
+                        active
+                          ? "bg-[var(--editorial-bg)] text-[var(--color-text-primary)]"
+                          : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                      }`}
+                    >
+                      <span className="text-[10px] text-[var(--color-text-tertiary)]">
+                        {buffer.key}
+                      </span>
+                      <span>{buffer.label}</span>
+                      {active && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute inset-x-0 bottom-[-1px] h-0.5 bg-[var(--color-accent)]"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
+              <div className="min-w-3 flex-1" />
+              <div className="flex min-h-[30px] shrink-0 items-center gap-3 px-3 text-[11px] text-[var(--color-text-secondary)]">
+                <span>
+                  <span className="text-[var(--color-accent)]">●</span> live
+                </span>
+                <span className="hidden sm:inline">self-hosted</span>
+                <span className="hidden md:inline">
+                  <span className="text-[var(--color-text-tertiary)]">
+                    git:
+                  </span>
+                  {shellBuildMetadata.branch}@{shellBuildMetadata.sha}
+                </span>
+                <span className="hidden lg:inline text-[var(--color-text-tertiary)]">
+                  {shellBuildMetadata.version}
+                </span>
+                <button
+                  type="button"
+                  aria-label={
+                    sidebarCollapsed ? "Show sidebar" : "Hide sidebar"
+                  }
+                  title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+                  data-testid="sidebar-toggle-button"
+                  onClick={() => updateSidebarCollapsed((current) => !current)}
+                  className="tty-row hidden h-6 w-6 items-center justify-center border border-[var(--color-border)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)] md:inline-flex"
+                >
+                  {sidebarCollapsed ? (
+                    <PanelLeftOpen className="h-3.5 w-3.5" aria-hidden="true" />
+                  ) : (
+                    <PanelLeftClose
+                      className="h-3.5 w-3.5"
+                      aria-hidden="true"
+                    />
+                  )}
+                </button>
+              </div>
             </header>
+
+            <div className="tty-prompt-line shrink-0 gap-3 px-3 py-1 text-[11px]">
+              <span className="text-[var(--color-accent)]">:</span>
+              <span>{routeStatus}</span>
+              <span className="text-[var(--color-text-tertiary)]">/</span>
+              <span className="min-w-0 max-w-[280px] truncate text-[var(--color-text-primary)]">
+                {bufferLabel}
+              </span>
+              <span className="ml-auto hidden text-[var(--color-text-secondary)] sm:inline">
+                cmd+\ sidebar · cmd+k palette
+              </span>
+            </div>
 
             <section className="min-h-0 flex-1 overflow-hidden bg-[var(--color-content-bg)]">
               {children}
@@ -590,12 +747,44 @@ export function AppShell({
               className="tty-status-bar shrink-0 flex-wrap border-t px-3 py-1"
               data-testid="tty-shortcut-status-bar"
             >
-              <span className="tty-chip">c create</span>
-              <span className="tty-chip">v fullscreen</span>
-              <span className="tty-chip">g i inbox</span>
-              <span className="tty-chip">g p projects</span>
-              <span className="ml-auto hidden sm:inline">
-                cmd+k palette / ? shortcuts
+              <span className="text-[var(--color-accent)]">:</span>
+              <button
+                type="button"
+                aria-label={sidebarCollapsed ? "Search" : undefined}
+                aria-hidden={!sidebarCollapsed}
+                tabIndex={sidebarCollapsed ? 0 : -1}
+                data-testid="tty-command-search"
+                onClick={() =>
+                  window.dispatchEvent(
+                    new CustomEvent(OPEN_COMMAND_PALETTE_EVENT),
+                  )
+                }
+                className="tty-row inline-flex items-center gap-1 border border-transparent text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+              >
+                <kbd className="tty-kbd">/</kbd> search
+              </button>
+              <span>
+                <kbd className="tty-kbd">?</kbd> help
+              </span>
+              <span>
+                <kbd className="tty-kbd">c</kbd> new
+              </span>
+              <span>
+                <kbd className="tty-kbd">x</kbd> archive
+              </span>
+              <span>
+                <kbd className="tty-kbd">e</kbd> edit
+              </span>
+              <span className="hidden sm:inline">
+                <kbd className="tty-kbd">j</kbd>/
+                <kbd className="tty-kbd">k</kbd> move
+              </span>
+              <span className="hidden md:inline">
+                <kbd className="tty-kbd">g</kbd>
+                <kbd className="tty-kbd">t</kbd> triage
+              </span>
+              <span className="ml-auto text-[var(--color-text-tertiary)]">
+                NORMAL
               </span>
             </footer>
           </div>

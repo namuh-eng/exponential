@@ -9,11 +9,11 @@ export function isAppTheme(value: unknown): value is AppTheme {
 
 export function getStoredTheme(): AppTheme {
   if (typeof window === "undefined") {
-    return "system";
+    return "dark";
   }
 
   const storedTheme = window.localStorage.getItem(APP_THEME_STORAGE_KEY);
-  return isAppTheme(storedTheme) ? storedTheme : "system";
+  return isAppTheme(storedTheme) ? storedTheme : "dark";
 }
 
 function prefersDarkMode(): boolean {

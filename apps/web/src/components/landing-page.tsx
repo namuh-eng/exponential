@@ -78,9 +78,12 @@ function TopNav() {
       <div className="mx-auto flex max-w-[1180px] items-center justify-between px-6 py-4 sm:px-10">
         <Link
           href="/"
-          className="flex items-center gap-3 transition-colors hover:text-[var(--editorial-accent)]"
+          className="flex items-center gap-2 transition-colors hover:text-[var(--editorial-accent)]"
         >
-          <ExponentialMark size={20} />
+          <ExponentialMark
+            size={20}
+            className="text-[var(--editorial-accent)]"
+          />
           <span className="text-[13px] font-medium">exponential</span>
         </Link>
         <nav className="hidden items-center gap-6 text-[12px] sm:flex">
@@ -94,9 +97,15 @@ function TopNav() {
             </Link>
           ))}
         </nav>
-        <CommandLink href="/login" variant="ghost" className="min-h-8 px-3">
-          log in
-        </CommandLink>
+        <div className="hidden items-center gap-3 text-[12px] text-[var(--editorial-ink-3)] md:flex">
+          <span aria-label="GitHub stars">★ 14.2k</span>
+          <span className="border border-[var(--editorial-line-strong)] px-2.5 py-1 text-[var(--editorial-ink-1)]">
+            $ npm i -g exponential-cli
+          </span>
+          <CommandLink href="/login" variant="ghost" className="min-h-8 px-3">
+            log in
+          </CommandLink>
+        </div>
       </div>
     </header>
   );
@@ -115,10 +124,15 @@ function Hero() {
         <h1 className="mt-8 text-balance font-mono text-[44px] font-medium leading-[1.05] sm:text-[56px] lg:text-[68px]">
           the issue tracker
           <br />
-          that <span className="italic">compiles</span>
+          that <span className="text-[var(--editorial-accent)]">compiles</span>
           <br />
           on your machine.
         </h1>
+        <p className="mt-6 max-w-[460px] text-[14px] leading-7 text-[var(--editorial-ink-3)]">
+          Exponential is a keyboard-first, terminal-shaped issue tracker.
+          Source-available under ELv2: clone it, run it, ship it inside your
+          company. The one thing you cannot do is resell it as a hosted service.
+        </p>
         <div className="mt-10 flex flex-wrap items-center gap-4">
           <button
             type="button"
@@ -144,32 +158,42 @@ function Hero() {
 
       <TerminalWindow path="~/nimbus/core · exponential">
         <div className="space-y-1 text-[12px] leading-relaxed">
-          <Line c="dim">$ exp issue list --team core --status open</Line>
+          <Line c="dim">$ exponential issue ls --cycle 14 --me</Line>
+          <Line c="dim">
+            ────────────────────────────────────────────────────────────
+          </Line>
           <Line>
-            <span className="text-[var(--editorial-ink-4)]">ENG-142</span> rate
-            limit cache stampede on cold start{" "}
-            <span className="ml-2 border border-[var(--editorial-line)] px-1 text-[10px] text-[var(--editorial-ink-3)]">
-              p1
+            <span className="text-[var(--editorial-ink-4)]">EXP-241</span>{" "}
+            <span className="text-[var(--editorial-warn)]">◐ !!</span> Race in
+            scheduler when cycle ends mid-rollout
+          </Line>
+          <Line>
+            <span className="text-[var(--editorial-ink-4)]">EXP-240</span>{" "}
+            <span className="text-[var(--editorial-ink-3)]">○ !!</span>{" "}
+            Self-host: docker-compose drops postgres volume
+          </Line>
+          <Line>
+            <span className="text-[var(--editorial-ink-4)]">EXP-238</span>{" "}
+            <span className="text-[var(--editorial-ink-3)]">○ !.</span> Roadmap:
+            cycles past 12 weeks render off-canvas
+          </Line>
+          <Line>
+            <span className="text-[var(--editorial-ink-4)]">EXP-233</span>{" "}
+            <span className="text-[var(--editorial-warn)]">◐ !!</span> Webhooks:
+            signing key rotation deletes outbound
+          </Line>
+          <Line c="dim">
+            ────────────────────────────────────────────────────────────
+          </Line>
+          <Line>4 issues · cycle 14 · assignee:you · sorted age↓</Line>
+          <Line c="dim">$ exponential cycle :current</Line>
+          <Line>
+            cycle 14 · May 05 - May 18 · 18/27 done ·{" "}
+            <span className="text-[var(--editorial-warn)]">
+              2 spillover predicted
             </span>
           </Line>
-          <Line>
-            <span className="text-[var(--editorial-ink-4)]">ENG-138</span> sso
-            jit-provisioning fails for nested groups
-          </Line>
-          <Line>
-            <span className="text-[var(--editorial-ink-4)]">ENG-131</span>{" "}
-            editor: paste images into markdown
-          </Line>
-          <Line>
-            <span className="text-[var(--editorial-ink-4)]">ENG-129</span> cli:
-            --json output for `exp issue show`
-          </Line>
-          <Line c="dim">$ exp cycle status</Line>
-          <Line>
-            cycle 24 · 11 / 18 done ·{" "}
-            <span className="text-[var(--editorial-ink-3)]">3 days left</span>
-          </Line>
-          <Line c="dim">$ _</Line>
+          <Line c="dim">$ exponential _</Line>
         </div>
       </TerminalWindow>
     </section>

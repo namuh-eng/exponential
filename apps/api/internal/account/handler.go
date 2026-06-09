@@ -341,7 +341,7 @@ func mergePreferences(current, patch map[string]any) map[string]any {
 	return normalizePreferences(out)
 }
 func defaultPreferences() map[string]any {
-	return map[string]any{"defaultHomeView": "my-issues", "displayNames": "full", "firstDayOfWeek": "sunday", "convertEmoticons": true, "sendCommentShortcut": "cmd-enter", "theme": "system", "fontSize": "default", "pointerCursors": false, "openInDesktopApp": false, "sidebarBadgeStyle": "count", "sidebarVisibility": map[string]any{"inbox": true, "myIssues": true, "projects": true, "views": true, "initiatives": true, "cycles": true}, "inboxDisplay": map[string]any{"showReadItems": true, "showUnreadItemsFirst": false, "showSnoozedItems": false}, "agentPersonalization": map[string]any{"instructions": "", "autoFix": false}, "automations": map[string]any{"autoAssignment": "off", "gitBranchFormat": "team-id-title", "statusTransitions": "manual"}}
+	return map[string]any{"defaultHomeView": "my-issues", "displayNames": "full", "firstDayOfWeek": "sunday", "convertEmoticons": true, "sendCommentShortcut": "cmd-enter", "theme": "dark", "fontSize": "default", "pointerCursors": false, "openInDesktopApp": false, "sidebarBadgeStyle": "count", "sidebarVisibility": map[string]any{"inbox": true, "myIssues": true, "projects": true, "views": true, "initiatives": true, "cycles": true}, "inboxDisplay": map[string]any{"showReadItems": true, "showUnreadItemsFirst": false, "showSnoozedItems": false}, "agentPersonalization": map[string]any{"instructions": "", "autoFix": false}, "automations": map[string]any{"autoAssignment": "off", "gitBranchFormat": "team-id-title", "statusTransitions": "manual"}}
 }
 func normalizePreferences(v map[string]any) map[string]any {
 	d := defaultPreferences()

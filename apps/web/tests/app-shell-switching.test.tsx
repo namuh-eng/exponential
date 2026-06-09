@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { AppShell } from "@/app/(app)/app-shell";
 import { usePathname } from "next/navigation";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock next/navigation
 vi.mock("next/navigation", () => ({
@@ -12,8 +12,13 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("AppShell context switching", () => {
+  beforeEach(() => {
+    window.localStorage.setItem("exponential:sidebar-collapsed", "false");
+  });
+
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
     vi.clearAllMocks();
   });
 
@@ -59,8 +64,10 @@ describe("AppShell context switching", () => {
       </AppShell>,
     );
 
-    // Initial check (from props)
-    expect(screen.getByText("Team A")).toBeInTheDocument();
+    // Initial check (from props after the stored expanded sidebar preference hydrates)
+    await waitFor(() => {
+      expect(screen.getByText("Team A")).toBeInTheDocument();
+    });
 
     // Navigate to Team B
     vi.mocked(usePathname).mockReturnValue("/team/TB/all");
@@ -95,7 +102,9 @@ describe("AppShell context switching", () => {
       </AppShell>,
     );
 
-    expect(screen.getByText("Team A")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Team A")).toBeInTheDocument();
+    });
 
     // Navigate to general settings
     vi.mocked(usePathname).mockReturnValue("/settings/account/preferences");
@@ -105,7 +114,9 @@ describe("AppShell context switching", () => {
       </AppShell>,
     );
 
-    // Sidebar should still be visible in desktop (default state)
-    expect(screen.getByTestId("app-sidebar-shell")).toBeVisible();
+    // Sidebar should remain visible when the expanded preference is stored.
+    await waitFor(() => {
+      expect(screen.getByTestId("app-sidebar-shell")).toBeVisible();
+    });
   });
 });

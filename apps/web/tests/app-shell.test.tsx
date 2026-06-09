@@ -456,7 +456,7 @@ describe("AppShell", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders sidebar and content area", async () => {
+  it("renders collapsed TTY shell and content area by default", () => {
     render(
       <AppShell
         workspaceName="Test"
@@ -471,9 +471,10 @@ describe("AppShell", () => {
     );
     expect(screen.getByText("Test")).toBeDefined();
     expect(screen.getByText("Content")).toBeDefined();
-    await waitFor(() => {
-      expect(screen.getByText("2")).toBeInTheDocument();
-    });
+    expect(screen.getByTestId("app-sidebar-hover-zone")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Workspace switcher" }),
+    ).toBeNull();
   });
 
   it("renders children in the content area", () => {
@@ -512,7 +513,7 @@ describe("AppShell", () => {
     expect(screen.getByTestId("tty-shortcut-status-bar")).toBeInTheDocument();
   });
 
-  it("collapses the desktop sidebar and reveals it from the left edge on hover", () => {
+  it("reveals the collapsed desktop sidebar from the left edge on hover", () => {
     render(
       <AppShell
         workspaceName="WS"
@@ -526,14 +527,6 @@ describe("AppShell", () => {
       </AppShell>,
     );
 
-    expect(
-      screen.getByRole("button", { name: "Workspace switcher" }),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId("sidebar-toggle-button"));
-
-    expect(window.localStorage.getItem("exponential:sidebar-collapsed")).toBe(
-      "true",
-    );
     expect(
       screen.queryByRole("button", { name: "Workspace switcher" }),
     ).toBeNull();
@@ -571,19 +564,22 @@ describe("AppShell", () => {
     fireEvent.keyDown(document, { key: "\\", metaKey: true });
 
     expect(window.localStorage.getItem("exponential:sidebar-collapsed")).toBe(
-      "true",
-    );
-    expect(screen.getByTestId("sidebar-toggle-button")).toHaveAccessibleName(
-      "Show sidebar",
-    );
-
-    fireEvent.keyDown(document, { key: "\\", metaKey: true });
-
-    expect(window.localStorage.getItem("exponential:sidebar-collapsed")).toBe(
       "false",
     );
     expect(screen.getByTestId("sidebar-toggle-button")).toHaveAccessibleName(
       "Hide sidebar",
+    );
+    expect(
+      screen.getByRole("button", { name: "Workspace switcher" }),
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "\\", metaKey: true });
+
+    expect(window.localStorage.getItem("exponential:sidebar-collapsed")).toBe(
+      "true",
+    );
+    expect(screen.getByTestId("sidebar-toggle-button")).toHaveAccessibleName(
+      "Show sidebar",
     );
   });
 

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expandAppSidebar } from "./sidebar-helpers";
 
 test.describe("Members directory", () => {
   test("searches members, shows no-results, and opens profile details", async ({
@@ -16,8 +17,9 @@ test.describe("Members directory", () => {
 
     await expect(page.getByRole("heading", { name: "Members" })).toBeVisible();
     await expect(page.getByText(/\d+ members?/)).toBeVisible();
+    await expandAppSidebar(page);
     await expect(
-      page.getByRole("link", { name: /Inbox/ }).first(),
+      page.getByRole("link", { name: /My Issues/ }).first(),
     ).toBeVisible();
 
     const search = page.getByLabel("Search members");
