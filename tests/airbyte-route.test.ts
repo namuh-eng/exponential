@@ -166,6 +166,41 @@ describe("Airbyte source routes", () => {
   it("rejects unsupported streams and malformed cursors", async () => {
     const { GET } = await import("@/app/api/airbyte/streams/[stream]/route");
 
+    const unauthenticatedUnsupported = await GET(
+      new Request("http://localhost/api/airbyte/streams/users"),
+      { params: { stream: "users" } },
+    );
+    expect(unauthenticatedUnsupported.status).toBe(401);
+
+    const unauthenticatedMalformedCursor = await GET(
+      new Request("http://localhost/api/airbyte/streams/issues?cursor=nope"),
+      { params: { stream: "issues" } },
+    );
+    expect(unauthenticatedMalformedCursor.status).toBe(401);
+
+    queueSelect(
+      [
+        {
+          tokenId: "token-1",
+          workspaceId: "workspace-1",
+          workspaceSlug: "foreverbrowsing",
+          settings: {},
+          userId: "user-1",
+          memberRole: "admin",
+        },
+      ],
+      [
+        {
+          tokenId: "token-1",
+          workspaceId: "workspace-1",
+          workspaceSlug: "foreverbrowsing",
+          settings: {},
+          userId: "user-1",
+          memberRole: "admin",
+        },
+      ],
+    );
+
     const unsupported = await GET(
       new Request("http://localhost/api/airbyte/streams/users", {
         headers: { authorization: "Bearer lin_airbyte_secret" },

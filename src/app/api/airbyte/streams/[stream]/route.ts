@@ -12,6 +12,11 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ stream: string }> | { stream: string } },
 ) {
+  const { response, auth } = await authenticateAirbyteRequest(request);
+  if (response || !auth) {
+    return response;
+  }
+
   const { stream } = await params;
   if (!isAirbyteStreamName(stream)) {
     return NextResponse.json(
@@ -23,11 +28,6 @@ export async function GET(
   const cursorResult = readAirbyteCursor(request);
   if (!cursorResult.ok) {
     return NextResponse.json({ error: cursorResult.error }, { status: 400 });
-  }
-
-  const { response, auth } = await authenticateAirbyteRequest(request);
-  if (response || !auth) {
-    return response;
   }
 
   const limit = readAirbyteLimit(request);
