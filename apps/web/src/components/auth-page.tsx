@@ -330,14 +330,14 @@ function FooterLinks({ mode }: { mode: AuthMode }) {
         <p className="mt-8 text-center text-[12px] leading-5 text-[var(--auth-muted)]">
           By signing up, you agree to our{" "}
           <a
-            href="https://linear.app/terms"
+            href="/terms"
             className="text-[var(--auth-link)] transition-opacity hover:opacity-80"
           >
             Terms of Service
           </a>{" "}
           and{" "}
           <a
-            href="https://linear.app/dpa"
+            href="/dpa"
             className="text-[var(--auth-link)] transition-opacity hover:opacity-80"
           >
             Data Processing Agreement
