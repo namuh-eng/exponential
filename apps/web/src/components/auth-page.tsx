@@ -1,5 +1,6 @@
 "use client";
 
+import { ExponentialMark } from "@/components/exponential-mark";
 import {
   browserSupportsPasskeys,
   signIn,
@@ -253,23 +254,8 @@ function getSafeRedirectTarget(
   return fallbackPath;
 }
 
-function LinearLogo() {
-  return (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 32 32"
-      fill="none"
-      role="img"
-      aria-label="Linear logo"
-      className="mb-7 text-[var(--auth-logo)]"
-    >
-      <path
-        d="M.392 19.687c-.071-.303.29-.494.511-.274l11.684 11.684c.22.22.03.582-.274.51a16.04 16.04 0 0 1-11.92-11.92ZM0 15.005c-.005.09.029.179.093.243l16.66 16.659a.317.317 0 0 0 .242.092 16.02 16.02 0 0 0 2.229-.296c.244-.05.33-.35.152-.527L.825 12.624a.311.311 0 0 0-.527.152c-.15.726-.25 1.47-.296 2.229ZM1.347 9.506a.316.316 0 0 0 .067.352l20.728 20.728c.093.093.233.12.352.067a15.961 15.961 0 0 0 1.66-.86.314.314 0 0 0 .058-.492L2.7 7.788a.314.314 0 0 0-.493.058 15.965 15.965 0 0 0-.859 1.66ZM4.05 5.784a.315.315 0 0 1-.013-.434A15.976 15.976 0 0 1 15.985 0C24.83 0 32 7.17 32 16.015c0 4.75-2.067 9.015-5.35 11.948a.315.315 0 0 1-.434-.014L4.051 5.784Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
+function AuthLogo() {
+  return <ExponentialMark size={32} className="mb-7 text-[var(--auth-logo)]" />;
 }
 
 function TurnstileField() {
@@ -544,7 +530,7 @@ function SignupWizard() {
   return (
     <div className="w-full max-w-[360px] px-6 py-8 sm:px-0">
       <div className="flex flex-col items-center">
-        <LinearLogo />
+        <AuthLogo />
         <div className="mb-5 flex gap-2 text-[12px] text-[var(--auth-muted)]">
           {steps.map((step) => (
             <span
@@ -1072,15 +1058,15 @@ export function AuthPage({
       : step === "email-input" || step === "sso-input"
         ? "What’s your email address?"
         : mode === "signup"
-          ? "Create your workspace"
-          : "Log in to Linear";
+          ? "Create your account"
+          : "Log in to exponential";
   const backLabel = mode === "signup" ? "Back to signup" : "Back to login";
 
   return (
     <div className="flex w-full max-w-5xl flex-col items-center justify-center gap-8 px-6 py-8 lg:flex-row lg:items-start">
       <div className="w-full max-w-[320px] sm:px-0">
         <div className="flex flex-col items-center">
-          <LinearLogo />
+          <AuthLogo />
           <h1 className="text-center text-[32px] font-[510] tracking-[-0.035em] text-[var(--auth-text)]">
             {title}
           </h1>
