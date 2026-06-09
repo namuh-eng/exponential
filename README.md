@@ -153,6 +153,39 @@ exponential/
 
 ---
 
+## Remote MCP Server
+
+exponential exposes a PAT-backed remote MCP endpoint at `/api/mcp`.
+Create a personal API key from workspace API/security settings, then configure
+MCP clients to send it as a bearer token:
+
+```json
+{
+  "mcpServers": {
+    "exponential": {
+      "url": "https://your-exponential-host.example/api/mcp",
+      "headers": {
+        "Authorization": "Bearer lin_api_your_personal_api_key"
+      }
+    }
+  }
+}
+```
+
+Use the same URL and bearer header in Codex, Claude, Cursor, or any generic
+Streamable HTTP MCP client. The server supports `initialize`, `tools/list`, and
+`tools/call` for read tools covering visible issues, comments, projects, teams,
+views, and customer request settings. Private-team data is only returned when
+the API key owner can see that team. Deleting the personal API key immediately
+stops access because every MCP request revalidates the live key hash.
+
+MCP tool calls are recorded in `workspace.settings.api.mcpAuditLog` for
+workspace admin review. Create and update MCP tools are not enabled yet; use the
+existing REST API for write workflows until scoped OAuth/PAT write tools are
+implemented.
+
+---
+
 ## Environment Setup
 
 ### Prerequisites
