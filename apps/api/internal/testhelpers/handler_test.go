@@ -42,6 +42,34 @@ func TestAllowedDisabledInProduction(t *testing.T) {
 	}
 }
 
+func TestAllowedDisabledWhenNodeEnvIsProduction(t *testing.T) {
+	t.Setenv("NODE_ENV", "production")
+	t.Setenv("PLAYWRIGHT_TEST", "true")
+	if allowed() {
+		t.Fatal("test helpers must be disabled when NODE_ENV is production")
+	}
+}
+
+func TestAllowedInLocalDevelopment(t *testing.T) {
+	if !allowed() {
+		t.Fatal("test helpers should be available with local development defaults")
+	}
+}
+
+func TestAllowedInExplicitDevelopment(t *testing.T) {
+	t.Setenv("EXPONENTIAL_API_ENVIRONMENT", "development")
+	if !allowed() {
+		t.Fatal("test helpers should be available in explicit development")
+	}
+}
+
+func TestAllowedDisabledInStagingWithoutPlaywright(t *testing.T) {
+	t.Setenv("EXPONENTIAL_API_ENVIRONMENT", "staging")
+	if allowed() {
+		t.Fatal("test helpers should require Playwright mode outside local development")
+	}
+}
+
 func TestAllowedInPlaywrightOutsideProduction(t *testing.T) {
 	t.Setenv("EXPONENTIAL_API_ENVIRONMENT", "staging")
 	t.Setenv("PLAYWRIGHT_TEST", "true")
