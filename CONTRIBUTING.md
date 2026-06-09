@@ -1,400 +1,287 @@
 # Contributing to exponential
 
-Thank you for your interest in contributing! We appreciate all contributions — whether it's bug reports, feature requests, code improvements, or documentation updates.
+Thanks for helping improve exponential. This repo is a split monorepo: a Go
+headless API, a Next.js UI, a generated TypeScript SDK, and a CLI. The
+contribution path below is written for the current architecture, not the older
+single-app prototype.
 
-## Table of Contents
+## Start Here
 
-- [Code of Conduct](#code-of-conduct)
-- [Getting Started](#getting-started)
-- [Development Workflow](#development-workflow)
-- [Commit Guidelines](#commit-guidelines)
-- [Pull Request Process](#pull-request-process)
-- [Testing Requirements](#testing-requirements)
-- [Code Style](#code-style)
+Before making changes, skim:
 
----
+- [README.md](README.md) for product scope and local setup options.
+- [CLAUDE.md](CLAUDE.md) for architecture, auth, and quality guardrails.
+- [docs/self-hosting.md](docs/self-hosting.md) for Docker and ECS deployment.
+- [docs/secrets.md](docs/secrets.md) for the optional 1Password workflow.
+- [apps/web/tests/README.md](apps/web/tests/README.md) for test conventions.
 
-## Code of Conduct
+## Project Shape
 
-Be respectful, inclusive, and constructive. We're all here to make this project better.
+- `apps/api/` - Go API, auth, handlers, OpenAPI strict server stubs, sqlc
+  queries, and migration runner.
+- `apps/web/` - Next.js 16 App Router UI. Runtime business endpoints should
+  not be added under `apps/web/src/app/api/`; the Go API owns `/api/*` and
+  `/v1/*`.
+- `apps/cli/` - CLI that consumes the generated SDK.
+- `packages/proto/` - OpenAPI contract and SQL migrations.
+- `packages/sdk/` - generated TypeScript SDK plus small hand-written helpers.
+- `infra/` and `scripts/` - Docker, ECS, validation, smoke, and deploy helpers.
 
----
+## Prerequisites
 
-## Getting Started
-
-### 1. Fork the Repository
-
-Click the "Fork" button on [GitHub](https://github.com/namuh-eng/exponential) to create your own copy.
-
-### 2. Clone Your Fork
-
-```bash
-git clone https://github.com/YOUR_USERNAME/exponential.git
-cd exponential
-
-# Optional: track the original repo for updates
-git remote add upstream https://github.com/namuh-eng/exponential.git
-```
-
-### 3. Install Dependencies
+- Node.js 20+
+- pnpm 10.24.0, via Corepack or your package manager
+- Go, for `apps/api`
+- Docker Desktop, for the local Postgres/Redis/API/web stack
+- Playwright Chromium, for E2E tests
 
 ```bash
-npm install
-npx playwright install chromium
+corepack enable
+pnpm install
+pnpm exec playwright install chromium
 ```
 
-### 4. Set Up Environment
+## Local Development
+
+The default local ports are:
+
+- Web: `http://localhost:7015`
+- API: `http://localhost:7016`
+
+### Full Docker Dev Stack
+
+This starts Postgres, Redis, the Go API, the Next.js web app, and Mailhog.
 
 ```bash
 cp .env.example .env
-# Edit .env with your credentials
+docker compose -f docker-compose.dev.yml up --build
 ```
 
-### 5. Start Infrastructure
+### Host Dev Server With Docker Services
+
+Use this when you want faster web/API iteration from your shell.
 
 ```bash
-# Terminal 1: PostgreSQL + Redis
+cp .env.example .env
 make dev-services
-# If Docker/socket access is denied, start/use host Postgres and Redis,
-# set DATABASE_URL/REDIS_URL in .env.local, then run:
-# EXPONENTIAL_API_DATABASE_URL=$DATABASE_URL go run ./apps/api/cmd/migrate
-
-# Terminal 2: Next.js dev server
-# Dev startup preflights Postgres and exits before binding on setup failure.
-npm run dev
+EXPONENTIAL_API_DATABASE_URL=$DATABASE_URL go run ./apps/api/cmd/migrate
+pnpm dev
 ```
 
-The app is now running at `http://localhost:3000`.
+`pnpm dev` starts the web app on port `7015` and preflights the database before
+binding. Only set `SKIP_DB_PREFLIGHT=true` when intentionally debugging a
+route that does not need the database.
 
----
+### Optional 1Password Flow
+
+If you have access to the Exponential vault, you can run commands through
+`.env.1password` instead of maintaining local secret values:
+
+```bash
+make op-doctor
+make dev-op
+```
+
+See [docs/secrets.md](docs/secrets.md) for details.
 
 ## Development Workflow
 
-### Create a Feature Branch
+1. Create a focused branch:
 
 ```bash
-git checkout -b fix/issue-title
-# or for features:
-git checkout -b feat/feature-name
+git switch -c fix/short-description
 ```
 
-Branch naming:
-- `fix/` — bug fixes
-- `feat/` — new features
-- `docs/` — documentation
-- `refactor/` — code improvements
-- `test/` — tests
+2. Make one logical change.
+3. Update source, generated artifacts, tests, and docs together.
+4. Run the relevant focused tests while iterating.
+5. Run the merge gates before opening a PR.
 
-### Make Changes
+Use these branch prefixes when they fit: `feat/`, `fix/`, `docs/`,
+`refactor/`, `test/`, or `chore/`.
 
-1. Write or update tests first (TDD approach)
-2. Implement the feature or fix
-3. Run checks locally
-4. Commit with clear messages
+## Architecture Rules
 
-### Run Quality Checks
+### API and SDK
 
-Before committing, ensure everything passes:
+- OpenAPI is the contract for Go business endpoints. Update
+  `packages/proto/openapi.yaml` when adding or changing public API behavior.
+- Regenerate and commit generated SDK/stub/sqlc changes when the contract or
+  SQL queries change.
+- Keep Go handlers small, use context-aware DB calls, and return RFC
+  7807-style JSON problems for API errors.
+- Browser traffic is proxied to the Go API through `/api/*`; SDK/CLI clients
+  use `/v1/*`.
+
+### Web App
+
+- Keep `apps/web` UI-only for runtime business endpoints.
+- Use the generated SDK for migrated runtime slices instead of hand-written
+  endpoint fetches.
+- Preserve the terminal/editorial redesign and existing theme tokens.
+- Reuse Radix primitives and Tailwind tokens before introducing new UI
+  dependencies or hard-coded colors.
+- Keep interactions keyboard-accessible, especially command-palette and issue
+  management flows.
+
+### Auth
+
+Authentication is first-party Go auth. Do not reintroduce Kratos, Better Auth,
+NextAuth, or password auth without an explicit new plan. Current auth surfaces
+include Google OAuth, magic links, sessions, and workspace invitations.
+
+### Out of Scope
+
+Do not add paywalls, billing, subscription management, or payment processing
+unless there is an explicit approved plan for that work.
+
+## Verification
+
+Run these before committing code changes:
 
 ```bash
-# Type check + lint
 make check
-
-# Unit tests
 make test
+```
 
-# E2E tests (requires dev server running)
+Before declaring UI/runtime flows verified, also run:
+
+```bash
 make test-e2e
-
-# Run all
-make all
 ```
 
-All tests must pass before committing.
+`make all` runs `make check` and `make test`. It does not run Playwright E2E.
 
----
-
-## Commit Guidelines
-
-Keep commits **small and focused** — one logical change per commit.
-
-### Commit Message Format
-
-```
-<type>: <subject>
-
-<body (optional)>
-```
-
-**Types:**
-- `feat` — new feature
-- `fix` — bug fix
-- `test` — test updates
-- `refactor` — code improvements
-- `docs` — documentation
-- `chore` — build, dependencies, CI
-
-**Example:**
-
-```
-feat: add burndown chart to cycles page
-
-- Add ChartJS for visualization
-- Fetch cycle velocity from API
-- Display completed vs planned issues
-- Add unit tests with Vitest
-```
-
-**Keep commits clean:**
+For UI changes, manually open the affected page at `http://localhost:7015` and
+exercise the golden path plus at least one edge case. For deployment changes,
+run the deploy path with production smoke enabled:
 
 ```bash
-# Before committing, ensure all checks pass
-make check && make test
-
-# Make small, logical commits
-git commit -m "feat: add issue priority filter"
-
-# Avoid commits like:
-# - "fix stuff" ❌
-# - "refactor everything" ❌
-# - "multiple unrelated changes" ❌
+RUN_PROD_SMOKE=true scripts/deploy-ecs.sh
 ```
 
----
+Then verify ECS, ALB, and smoke-test output. A pushed commit is not the same
+thing as a deployed and live-verified change.
 
-## Pull Request Process
+## Test Guide
 
-### Before Opening a PR
+- Go API tests: `cd apps/api && go test ./...` or `make test`.
+- Vitest unit/component tests: `pnpm test` or `make test`.
+- SDK tests: `pnpm --filter @exponential/sdk test`.
+- CLI tests: `pnpm --filter @exponential/cli test`.
+- Playwright E2E: `make test-e2e`, with the dev stack running.
 
-1. **Rebase on main** to ensure your branch is up to date:
+Run a single E2E file from the web package when iterating:
 
 ```bash
-git fetch upstream
-git rebase upstream/main
+pnpm --filter @exponential/web test:e2e -- tests/e2e/smoke.spec.ts
 ```
 
-2. **Run all checks one more time:**
+Use Playwright debug or headed mode when a browser interaction is unclear:
 
 ```bash
-make all
+pnpm --filter @exponential/web exec playwright test --debug
+pnpm --filter @exponential/web exec playwright test --headed
 ```
-
-3. **Test manually** — use the dev server to verify your changes work
-
-### Opening a PR
-
-1. Go to your fork on GitHub
-2. Click "New Pull Request"
-3. Set base branch to `upstream/main` (or `namuh-eng/main`)
-4. Fill in the PR template:
-
-```markdown
-## Description
-Brief summary of changes
-
-## Type of Change
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Documentation
-- [ ] Refactor
-
-## Testing
-How was this tested? Include steps to verify.
-
-## Checklist
-- [ ] Code follows style guidelines (ran `make check`)
-- [ ] Tests pass (`make test` and `make test-e2e`)
-- [ ] Documentation updated (if needed)
-- [ ] Commits are clear and focused
-```
-
-### Review Process
-
-- Maintainers will review within 3-5 business days
-- Feedback comes as comments on the PR
-- Update your branch with requested changes
-- Force push if needed: `git push -f origin fix/issue-title`
-
-Once approved, we'll merge your PR!
-
----
-
-## Testing Requirements
-
-**Every feature must have tests.** No exceptions.
-
-### Unit Tests (Vitest)
-
-Test business logic, utilities, and components in isolation:
-
-```bash
-npm run test
-```
-
-**Location:** `tests/unit/` or `tests/`.
-
-**Example:**
-
-```typescript
-// tests/lib/priority.test.ts
-import { getPriorityColor } from '@/lib/priority';
-import { expect, it } from 'vitest';
-
-it('should return red for urgent priority', () => {
-  expect(getPriorityColor('urgent')).toBe('text-red-600');
-});
-```
-
-### E2E Tests (Playwright)
-
-Test full user workflows against a running dev server:
-
-```bash
-# In Terminal 2, start the dev server
-npm run dev
-
-# In Terminal 1 (or another), run E2E tests
-npm run test:e2e
-```
-
-**Location:** `tests/e2e/`.
-
-**Example:**
-
-```typescript
-// tests/e2e/issue-create.spec.ts
-import { test, expect } from '@playwright/test';
-
-test('should create a new issue', async ({ page }) => {
-  await page.goto('http://localhost:3000/team/eng');
-  await page.click('button:has-text("New issue")');
-  await page.fill('input[placeholder="Issue title"]', 'Fix login bug');
-  await page.click('button:has-text("Create")');
-  await expect(page.locator('text=Fix login bug')).toBeVisible();
-});
-```
-
-### Debugging Tests
-
-```bash
-# Run tests in debug mode with browser visible
-npx playwright test --debug
-
-# Run a single test file
-npx playwright test tests/e2e/issue-create.spec.ts
-
-# Run tests with headed mode to see browser
-npx playwright test --headed
-```
-
----
 
 ## Code Style
 
-### TypeScript
+- TypeScript strict mode: no `any` and no `as unknown as` shortcuts.
+- Prefer real types and narrow helpers over type assertions.
+- Biome owns formatting and linting.
+- Keep Go code idiomatic, small, and explicit.
+- Do not weaken or delete tests to make a change pass.
 
-- **Strict mode** — no `any` types
-- Use explicit return types on functions
-- Prefer interfaces over types for objects
-
-```typescript
-// Good
-function createIssue(title: string, priority: IssuePriority): Promise<Issue> {
-  // ...
-}
-
-interface Issue {
-  id: string;
-  title: string;
-  priority: IssuePriority;
-}
-
-// Bad
-function createIssue(title: any) {
-  // ...
-}
-```
-
-### Components
-
-- Use React 19 functional components with hooks
-- Keep components focused and small
-- Use Radix UI primitives
-- Style with Tailwind CSS
-
-```typescript
-// Good
-export function IssueCard({ issue }: { issue: Issue }) {
-  return (
-    <div className="border rounded-lg p-4">
-      <h3 className="font-semibold">{issue.title}</h3>
-      <p className="text-sm text-gray-500">{issue.description}</p>
-    </div>
-  );
-}
-
-// Bad
-export function IssueCard(props: any) {
-  return <div>{props.issue}</div>;
-}
-```
-
-### Formatting
-
-Biome handles all formatting automatically:
+Useful commands:
 
 ```bash
-# Check formatting and linting
-npm run lint
-
-# Auto-fix formatting and imports
-npm run lint:fix
+make check
+make fix
+make format
 ```
 
-Don't fight the formatter — just run `npm run lint:fix` and commit.
+## Pull Requests
 
----
+Before opening a PR:
 
-## Common Questions
-
-**Q: I found a bug. How do I report it?**
-
-A: Open an issue on [GitHub Issues](https://github.com/namuh-eng/exponential/issues) with:
-- Clear title
-- Steps to reproduce
-- Expected vs actual behavior
-- Screenshots (if applicable)
-
-**Q: Can I contribute a feature before opening a PR?**
-
-A: Yes! Open an issue first to discuss the feature. This prevents wasted effort if the feature is out of scope.
-
-**Q: My PR has conflicts with main. How do I fix it?**
-
-A:
 ```bash
-git fetch upstream
-git rebase upstream/main
-# Resolve conflicts in your editor
-git add .
-git rebase --continue
-git push -f origin your-branch
+git fetch origin
+git rebase origin/main
+make check
+make test
+make test-e2e
 ```
 
-**Q: How long until my PR is merged?**
+In the PR description, include:
 
-A: We aim to review within 3-5 business days. Complex changes may take longer.
+- What changed.
+- Why it changed.
+- User-visible behavior, if any.
+- Tests and manual verification performed.
+- Screenshots or short clips for visual UI changes.
+- Any deploy or migration steps.
 
-**Q: What if my PR gets rejected?**
+Main is protected, so land changes through a branch and PR. If your branch
+needs updates after review, rebase carefully and force-push with lease:
 
-A: No worries! We'll explain why and suggest improvements. You're welcome to iterate or try a different approach.
+```bash
+git push --force-with-lease origin your-branch
+```
 
----
+## Commit Messages
+
+Keep commits small and focused. Use a short conventional prefix:
+
+```text
+feat: add issue priority filter
+fix: preserve callback URL after auth completion
+docs: refresh local development guide
+test: cover project milestone actions
+```
+
+Avoid vague commits like `fix stuff`, broad mixed changes, or unrelated
+formatting churn.
+
+## Common Troubleshooting
+
+### The Web App Exits Before Starting
+
+The web dev script preflights Postgres. Start the local services and apply
+migrations:
+
+```bash
+make dev-services
+EXPONENTIAL_API_DATABASE_URL=$DATABASE_URL go run ./apps/api/cmd/migrate
+pnpm dev
+```
+
+### E2E Auth Is Failing
+
+Playwright creates test sessions through the test-only helper under
+`/api/test/create-session`. Make sure the local web app is running on `7015`,
+the API is reachable on `7016`, and migrations have been applied.
+
+### `make check` Fails On Generated Or Cache Files
+
+Do not edit generated outputs by hand. Regenerate the relevant SDK, OpenAPI,
+sqlc, or stub artifacts. If the failure points at a stale local cache, clean
+the cache and rerun the check:
+
+```bash
+make clean
+make check
+```
+
+### Docker Is Not Available
+
+Use host Postgres and Redis, then set `DATABASE_URL` and `REDIS_URL` in your
+environment or `.env`. Apply migrations with the Go migration runner before
+starting the app.
 
 ## Need Help?
 
-- **Documentation** — See [README.md](README.md)
-- **Questions** — Open a [GitHub Discussion](https://github.com/namuh-eng/exponential/discussions)
-- **Issues** — Report on [GitHub Issues](https://github.com/namuh-eng/exponential/issues)
+- Open a GitHub issue for bugs or feature requests.
+- Use GitHub Discussions for questions.
+- For deployment and self-hosting, start with [docs/self-hosting.md](docs/self-hosting.md).
 
-Thank you for contributing to exponential!
+Thank you for contributing to exponential.
