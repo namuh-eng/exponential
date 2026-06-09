@@ -22,7 +22,11 @@ export const OAUTH_SCOPE_OPTIONS = [
   "write",
   "issues:read",
   "issues:write",
+  "comments:read",
   "comments:write",
+  "projects:read",
+  "projects:write",
+  "webhooks:read",
   "webhooks:write",
 ] as const;
 

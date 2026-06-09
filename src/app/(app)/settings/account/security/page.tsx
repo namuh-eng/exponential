@@ -114,6 +114,14 @@ const SCOPE_LABELS: Record<string, { group: string; description: string }> = {
     group: "Comments",
     description: "Create and update comments",
   },
+  "projects:read": {
+    group: "Projects",
+    description: "View projects and related metadata",
+  },
+  "projects:write": {
+    group: "Projects",
+    description: "Create and update projects",
+  },
   "webhooks:read": {
     group: "Webhooks",
     description: "View webhook subscriptions",
