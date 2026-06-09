@@ -1,11 +1,11 @@
-# @expn/cli
+# @namuh-eng/expn-cli
 
 Command-line interface for Exponential.
 
 ## Install
 
 ```bash
-npm install -g @expn/cli
+npm install -g @namuh-eng/expn-cli
 ```
 
 The package installs both `expn` and `exponential` binaries. `expn` is the short

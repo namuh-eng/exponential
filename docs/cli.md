@@ -10,14 +10,14 @@ binary for compatibility with existing scripts.
 Published package:
 
 ```bash
-npm install -g @expn/cli
+npm install -g @namuh-eng/expn-cli
 ```
 
 From a source checkout:
 
 ```bash
 pnpm install
-pnpm --filter @expn/cli cli -- --help
+pnpm --filter @namuh-eng/expn-cli cli -- --help
 ```
 
 When the workspace package is linked or installed, the binary name is:

@@ -1,4 +1,4 @@
-import { createExponentialClient } from "@expn/sdk";
+import { createExponentialClient } from "@namuh-eng/expn-sdk";
 import { headers as nextHeaders } from "next/headers";
 
 const noStoreFetch: typeof fetch = (input, init) =>

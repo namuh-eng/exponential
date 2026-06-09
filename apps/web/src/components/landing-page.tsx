@@ -178,7 +178,7 @@ function TopNav() {
         <div className="hidden items-center gap-3 text-[12px] text-[var(--editorial-ink-3)] md:flex">
           <span aria-label="Source availability">source available</span>
           <span className="border border-[var(--editorial-line-strong)] px-2.5 py-1 text-[var(--editorial-ink-1)]">
-            $ npm i -g @expn/cli
+            $ npm i -g @namuh-eng/expn-cli
           </span>
           <CommandLink href="/login" variant="ghost" className="min-h-8 px-3">
             log in
@@ -194,7 +194,7 @@ function Hero({ githubStars }: { githubStars: number | null }) {
     <section className="grid gap-10 pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
       <div>
         <p className="text-[12px] text-[var(--editorial-ink-3)]">
-          $ npm i -g @expn/cli
+          $ npm i -g @namuh-eng/expn-cli
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-[var(--editorial-ink-3)]">
           <span>{"// source-available · ELv2 · self-hostable"}</span>

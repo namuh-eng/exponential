@@ -1,4 +1,4 @@
-import type { components } from "@expn/sdk";
+import type { components } from "@namuh-eng/expn-sdk";
 
 const priorities = new Set(["none", "urgent", "high", "medium", "low"]);
 
