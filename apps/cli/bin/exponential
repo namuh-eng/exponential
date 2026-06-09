@@ -2,4 +2,7 @@
 set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 APP_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+if [ -f "$APP_DIR/dist/index.js" ]; then
+  exec node "$APP_DIR/dist/index.js" "$@"
+fi
 exec "$APP_DIR/node_modules/.bin/tsx" "$APP_DIR/src/index.ts" "$@"

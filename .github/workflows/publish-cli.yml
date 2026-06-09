@@ -1,0 +1,66 @@
+name: Publish CLI packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run npm publish with --dry-run"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish SDK and CLI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify SDK
+        run: |
+          pnpm --filter @exponential/sdk typecheck
+          pnpm --filter @exponential/sdk test
+          pnpm --filter @exponential/sdk build
+
+      - name: Verify CLI
+        run: |
+          pnpm --filter @exponential/cli typecheck
+          pnpm --filter @exponential/cli test
+          pnpm --filter @exponential/cli build
+
+      - name: Pack release tarballs
+        run: |
+          mkdir -p .release
+          pnpm --filter @exponential/sdk pack --pack-destination "$PWD/.release"
+          pnpm --filter @exponential/cli pack --pack-destination "$PWD/.release"
+          ls -la .release
+
+      - name: Publish release tarballs
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -eu
+          publish_args="--access public"
+          if [ "$DRY_RUN" = "true" ]; then
+            publish_args="$publish_args --dry-run"
+          fi
+
+          npm publish .release/exponential-sdk-*.tgz $publish_args
+          npm publish .release/exponential-cli-*.tgz $publish_args

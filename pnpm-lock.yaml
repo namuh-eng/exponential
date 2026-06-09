@@ -23,13 +23,13 @@ importers:
       '@exponential/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
-      tsx:
-        specifier: ^4.22.3
-        version: 4.22.3
     devDependencies:
       '@types/node':
         specifier: ^20.17.0
         version: 20.19.41
+      tsx:
+        specifier: ^4.22.3
+        version: 4.22.3
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
