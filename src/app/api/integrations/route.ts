@@ -2,6 +2,10 @@ import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { workspaceIntegration } from "@/lib/db/schema";
 import {
+  GOOGLE_SHEETS_PROVIDER,
+  serializeGoogleSheetsIntegration,
+} from "@/lib/google-sheets-sync";
+import {
   INTEGRATION_CATALOG,
   canManageIntegrations,
   getWorkspaceAccess,
@@ -47,6 +51,7 @@ export async function GET(request: Request) {
       displayName: workspaceIntegration.displayName,
       externalId: workspaceIntegration.externalId,
       connectedAt: workspaceIntegration.connectedAt,
+      metadata: workspaceIntegration.metadata,
     })
     .from(workspaceIntegration)
     .where(eq(workspaceIntegration.workspaceId, access.workspaceId));
@@ -61,6 +66,13 @@ export async function GET(request: Request) {
       const requirement = connected
         ? null
         : setupRequirement(catalogItem.provider);
+      const googleSheetsDetails =
+        connected?.provider === GOOGLE_SHEETS_PROVIDER
+          ? serializeGoogleSheetsIntegration(connected, {
+              workspaceId: access.workspaceId,
+              workspaceSlug: access.workspaceSlug,
+            }).details
+          : null;
       return {
         ...catalogItem,
         id: connected?.id ?? null,
@@ -72,6 +84,7 @@ export async function GET(request: Request) {
         connectedAt: connected?.connectedAt
           ? new Date(connected.connectedAt).toISOString()
           : null,
+        details: googleSheetsDetails,
         setupRequirement: requirement,
         actions: {
           canConnect: canManage && !connected && !requirement,

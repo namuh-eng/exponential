@@ -1,6 +1,9 @@
 import { resolveActiveWorkspaceId } from "@/lib/active-workspace";
 import type { ApiSession } from "@/lib/api-auth";
-import { getSlackOAuthConfig } from "@/lib/auth-providers";
+import {
+  getGoogleOAuthConfig,
+  getSlackOAuthConfig,
+} from "@/lib/auth-providers";
 import { db } from "@/lib/db";
 import {
   member,
@@ -13,7 +16,11 @@ import { getWorkspaceSlugFromPath } from "@/lib/workspace-paths";
 import { isWorkspaceAdminRole } from "@/lib/workspace-permissions";
 import { and, eq } from "drizzle-orm";
 
-export type IntegrationProvider = "github" | "slack" | "zendesk";
+export type IntegrationProvider =
+  | "github"
+  | "slack"
+  | "zendesk"
+  | "google_sheets";
 
 export type WorkspaceAccess = {
   workspaceId: string;
@@ -63,6 +70,12 @@ export const INTEGRATION_CATALOG: Array<{
     provider: "slack",
     name: "Slack",
     description: "Send issue updates and create issues from Slack messages.",
+  },
+  {
+    provider: "google_sheets",
+    name: "Google Sheets",
+    description:
+      "Create an hourly analytics spreadsheet for issues, projects, and initiatives.",
   },
   {
     provider: "zendesk",
@@ -148,12 +161,64 @@ export async function getWorkspaceAccess(
   return null;
 }
 
+export async function getWorkspaceAccessForSlug(
+  session: ApiSession,
+  workspaceSlug: string,
+): Promise<WorkspaceAccess | null> {
+  const apiWorkspaceId =
+    "apiKey" in session ? session.apiKey.workspaceId : null;
+  const apiMemberRole = "apiKey" in session ? session.apiKey.memberRole : null;
+
+  const [access] = await db
+    .select({
+      workspaceId: workspace.id,
+      workspaceSlug: workspace.urlSlug,
+      role: member.role,
+    })
+    .from(workspace)
+    .innerJoin(
+      member,
+      and(
+        eq(member.workspaceId, workspace.id),
+        eq(member.userId, session.user.id),
+      ),
+    )
+    .where(eq(workspace.urlSlug, workspaceSlug))
+    .limit(1);
+
+  if (access) return access;
+  if (!apiWorkspaceId) return null;
+
+  const [apiWorkspace] = await db
+    .select({ workspaceId: workspace.id, workspaceSlug: workspace.urlSlug })
+    .from(workspace)
+    .where(
+      and(
+        eq(workspace.id, apiWorkspaceId),
+        eq(workspace.urlSlug, workspaceSlug),
+      ),
+    )
+    .limit(1);
+
+  return apiWorkspace
+    ? {
+        workspaceId: apiWorkspace.workspaceId,
+        workspaceSlug: apiWorkspace.workspaceSlug,
+        role: apiMemberRole ?? "member",
+      }
+    : null;
+}
+
 export function canManageIntegrations(role: string | undefined) {
   return isWorkspaceAdminRole(role);
 }
 
 export function isSlackInstallConfigured() {
   return Boolean(getSlackOAuthConfig());
+}
+
+export function isGoogleSheetsInstallConfigured() {
+  return Boolean(getGoogleOAuthConfig());
 }
 
 export function normalizeSlackEvents(value: unknown) {

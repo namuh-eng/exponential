@@ -10,6 +10,26 @@ type Integration = {
   status: "connected" | "not_connected" | "configuration_required" | string;
   displayName: string | null;
   connectedAt: string | null;
+  details?: {
+    spreadsheetUrl?: string;
+    spreadsheetTitle?: string;
+    scopes?: {
+      issues?: boolean;
+      projects?: boolean;
+      initiatives?: boolean;
+    };
+    includePrivateTeams?: boolean;
+    schedule?: string;
+    lastSuccessAt?: string | null;
+    lastErrorAt?: string | null;
+    lastError?: string | null;
+    nextRunAt?: string | null;
+    rowCounts?: {
+      issues?: number;
+      projects?: number;
+      initiatives?: number;
+    };
+  } | null;
   setupRequirement: { type: string; message: string } | null;
   actions: {
     canConnect: boolean;
@@ -24,12 +44,27 @@ type IntegrationsPayload = {
   error?: string;
 };
 
+type SheetsScopeState = {
+  issues: boolean;
+  projects: boolean;
+  initiatives: boolean;
+  includePrivateTeams: boolean;
+};
+
 function statusLabel(integration: Integration) {
   if (integration.status === "connected") return "Connected";
   if (integration.status === "configuration_required") {
     return "Configuration required";
   }
   return "Not connected";
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "Never";
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 export default function IntegrationsSettingsPage() {
@@ -39,6 +74,12 @@ export default function IntegrationsSettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pendingProvider, setPendingProvider] = useState<string | null>(null);
+  const [sheetsScopes, setSheetsScopes] = useState<SheetsScopeState>({
+    issues: true,
+    projects: true,
+    initiatives: true,
+    includePrivateTeams: false,
+  });
 
   const loadIntegrations = useCallback(async () => {
     setLoading(true);
@@ -104,6 +145,80 @@ export default function IntegrationsSettingsPage() {
     }
   }
 
+  async function connectGoogleSheets() {
+    setPendingProvider("google_sheets");
+    setNotice(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/integrations/google-sheets/connect", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          scopes: {
+            issues: sheetsScopes.issues,
+            projects: sheetsScopes.projects,
+            initiatives: sheetsScopes.initiatives,
+          },
+          includePrivateTeams: sheetsScopes.includePrivateTeams,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        integration?: Integration;
+        authorizationUrl?: string;
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(data.error || "Google Sheets setup failed.");
+      }
+      if (data.authorizationUrl) {
+        window.location.assign(data.authorizationUrl);
+        return;
+      }
+      setNotice("Google Sheets analytics sync created.");
+      await loadIntegrations();
+      setCatalogOpen(false);
+    } catch (connectError) {
+      setError(
+        connectError instanceof Error
+          ? connectError.message
+          : "Google Sheets setup failed.",
+      );
+    } finally {
+      setPendingProvider(null);
+    }
+  }
+
+  async function refreshGoogleSheets() {
+    setPendingProvider("google_sheets");
+    setNotice(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/integrations/google-sheets/refresh", {
+        method: "POST",
+        headers: { Accept: "application/json" },
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(data.error || "Google Sheets refresh failed.");
+      }
+      setNotice("Google Sheets analytics sync refreshed.");
+      await loadIntegrations();
+    } catch (refreshError) {
+      setError(
+        refreshError instanceof Error
+          ? refreshError.message
+          : "Google Sheets refresh failed.",
+      );
+    } finally {
+      setPendingProvider(null);
+    }
+  }
+
   async function disconnect(provider: string) {
     setPendingProvider(provider);
     setNotice(null);
@@ -112,9 +227,14 @@ export default function IntegrationsSettingsPage() {
       const endpoint =
         provider === "slack"
           ? "/api/integrations/slack/disconnect"
-          : `/api/integrations?provider=${encodeURIComponent(provider)}`;
+          : provider === "google_sheets"
+            ? "/api/integrations/google-sheets/disconnect"
+            : `/api/integrations?provider=${encodeURIComponent(provider)}`;
       const response = await fetch(endpoint, {
-        method: provider === "slack" ? "POST" : "DELETE",
+        method:
+          provider === "slack" || provider === "google_sheets"
+            ? "POST"
+            : "DELETE",
         headers: { Accept: "application/json" },
       });
       const data = (await response.json().catch(() => ({}))) as {
@@ -175,7 +295,7 @@ export default function IntegrationsSettingsPage() {
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
             {connectedIntegrations.map((integration) => (
               <div
-                className="flex items-center justify-between gap-4 border-b border-[var(--color-border)] p-4 last:border-b-0"
+                className="flex items-start justify-between gap-4 border-b border-[var(--color-border)] p-4 last:border-b-0"
                 key={integration.provider}
               >
                 <div>
@@ -185,15 +305,59 @@ export default function IntegrationsSettingsPage() {
                   <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
                     Connected to {integration.displayName || integration.name}
                   </p>
+                  {integration.provider === "google_sheets" &&
+                  integration.details ? (
+                    <div className="mt-2 space-y-1 text-[12px] text-[var(--color-text-tertiary)]">
+                      {integration.details.spreadsheetUrl ? (
+                        <a
+                          className="text-blue-300 hover:text-blue-200"
+                          href={integration.details.spreadsheetUrl}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          Open analytics sheet
+                        </a>
+                      ) : null}
+                      <p>
+                        Last refresh{" "}
+                        {formatDateTime(integration.details.lastSuccessAt)} ·
+                        Next run {formatDateTime(integration.details.nextRunAt)}
+                      </p>
+                      <p>
+                        Rows: issues{" "}
+                        {integration.details.rowCounts?.issues ?? 0}, projects{" "}
+                        {integration.details.rowCounts?.projects ?? 0},
+                        initiatives{" "}
+                        {integration.details.rowCounts?.initiatives ?? 0}
+                      </p>
+                      {integration.details.lastError ? (
+                        <p className="text-amber-300">
+                          Last error: {integration.details.lastError}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
-                <button
-                  className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-red-300 disabled:opacity-50"
-                  disabled={pendingProvider === integration.provider}
-                  onClick={() => void disconnect(integration.provider)}
-                  type="button"
-                >
-                  Disconnect
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  {integration.provider === "google_sheets" ? (
+                    <button
+                      className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-secondary)] disabled:opacity-50"
+                      disabled={pendingProvider === integration.provider}
+                      onClick={() => void refreshGoogleSheets()}
+                      type="button"
+                    >
+                      Refresh now
+                    </button>
+                  ) : null}
+                  <button
+                    className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-red-300 disabled:opacity-50"
+                    disabled={pendingProvider === integration.provider}
+                    onClick={() => void disconnect(integration.provider)}
+                    type="button"
+                  >
+                    Disconnect
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -293,6 +457,78 @@ export default function IntegrationsSettingsPage() {
                       >
                         {pendingProvider === "slack" ? "Opening..." : "Connect"}
                       </button>
+                    ) : integration.provider === "google_sheets" ? (
+                      <div className="min-w-[180px]">
+                        <fieldset className="mb-3 space-y-2 text-[12px] text-[var(--color-text-secondary)]">
+                          <label className="flex items-center gap-2">
+                            <input
+                              checked={sheetsScopes.issues}
+                              onChange={(event) =>
+                                setSheetsScopes((current) => ({
+                                  ...current,
+                                  issues: event.target.checked,
+                                }))
+                              }
+                              type="checkbox"
+                            />
+                            Issues
+                          </label>
+                          <label className="flex items-center gap-2">
+                            <input
+                              checked={sheetsScopes.projects}
+                              onChange={(event) =>
+                                setSheetsScopes((current) => ({
+                                  ...current,
+                                  projects: event.target.checked,
+                                }))
+                              }
+                              type="checkbox"
+                            />
+                            Projects
+                          </label>
+                          <label className="flex items-center gap-2">
+                            <input
+                              checked={sheetsScopes.initiatives}
+                              onChange={(event) =>
+                                setSheetsScopes((current) => ({
+                                  ...current,
+                                  initiatives: event.target.checked,
+                                }))
+                              }
+                              type="checkbox"
+                            />
+                            Initiatives
+                          </label>
+                          <label className="flex items-center gap-2">
+                            <input
+                              checked={sheetsScopes.includePrivateTeams}
+                              onChange={(event) =>
+                                setSheetsScopes((current) => ({
+                                  ...current,
+                                  includePrivateTeams: event.target.checked,
+                                }))
+                              }
+                              type="checkbox"
+                            />
+                            Include private teams
+                          </label>
+                        </fieldset>
+                        <button
+                          className="w-full rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={
+                            pendingProvider === "google_sheets" ||
+                            (!sheetsScopes.issues &&
+                              !sheetsScopes.projects &&
+                              !sheetsScopes.initiatives)
+                          }
+                          onClick={() => void connectGoogleSheets()}
+                          type="button"
+                        >
+                          {pendingProvider === "google_sheets"
+                            ? "Creating..."
+                            : "Create sheet"}
+                        </button>
+                      </div>
                     ) : (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-tertiary)]"
