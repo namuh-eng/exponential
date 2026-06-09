@@ -21,7 +21,7 @@ COPY --from=deps /workspace/node_modules ./node_modules
 COPY --from=deps /workspace/apps/web/node_modules ./apps/web/node_modules
 COPY --from=deps /workspace/packages/sdk/node_modules ./packages/sdk/node_modules
 COPY . .
-RUN pnpm --filter @namuh-eng/exponential-sdk build && pnpm --filter @exponential/web build
+RUN pnpm --filter @expn/sdk build && pnpm --filter @exponential/web build
 
 FROM node:20-alpine AS runner
 WORKDIR /workspace
