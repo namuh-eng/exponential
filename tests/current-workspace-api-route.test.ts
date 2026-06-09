@@ -4,11 +4,13 @@ const getSessionMock = vi.fn();
 const resolveRequestWorkspaceIdMock = vi.fn();
 const accessLimitMock = vi.fn();
 const apiKeyLimitMock = vi.fn();
+const airbyteTokenLimitMock = vi.fn();
 const webhooksOrderByMock = vi.fn();
 const apiKeysOrderByMock = vi.fn();
 const updateSetMock = vi.fn();
 const updateWhereMock = vi.fn();
 const insertValuesMock = vi.fn();
+const deleteWhereMock = vi.fn();
 let selectCallCount = 0;
 let requestHeaders = new Headers();
 
@@ -26,6 +28,8 @@ vi.mock("@/lib/active-workspace", () => ({
 }));
 
 vi.mock("@/lib/api-settings", () => ({
+  AIRBYTE_DOCS_URL:
+    "https://github.com/namuh-eng/exponential/blob/staging/docs/airbyte.md",
   GRAPHQL_DOCS_URL: "https://docs.test/graphql",
   OAUTH_APPLICATIONS_DOCS_URL: "https://docs.test/oauth",
   WEBHOOKS_DOCS_URL: "https://docs.test/webhooks",
@@ -113,6 +117,16 @@ vi.mock("@/lib/db", () => ({
         };
       }
 
+      if ("keyPrefix" in selection && !("creatorName" in selection)) {
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: airbyteTokenLimitMock,
+            }),
+          }),
+        };
+      }
+
       return {
         from: vi.fn().mockReturnValue({
           innerJoin: vi.fn().mockReturnValue({
@@ -135,6 +149,12 @@ vi.mock("@/lib/db", () => ({
       },
     })),
     insert: vi.fn(() => ({ values: insertValuesMock })),
+    delete: vi.fn(() => ({
+      where: (...whereArgs: unknown[]) => {
+        deleteWhereMock(...whereArgs);
+        return Promise.resolve();
+      },
+    })),
   },
 }));
 
@@ -152,6 +172,7 @@ describe("current workspace api route", () => {
     getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
     resolveRequestWorkspaceIdMock.mockResolvedValue("workspace-1");
     apiKeyLimitMock.mockResolvedValue([]);
+    airbyteTokenLimitMock.mockResolvedValue([]);
     accessLimitMock.mockResolvedValue([
       {
         workspaceId: "workspace-1",
@@ -326,6 +347,8 @@ describe("current workspace api route", () => {
           graphql: "https://docs.test/graphql",
           oauthApplications: "https://docs.test/oauth",
           webhooks: "https://docs.test/webhooks",
+          airbyte:
+            "https://github.com/namuh-eng/exponential/blob/staging/docs/airbyte.md",
         },
         oauthApplications: [],
         webhooks: [
@@ -354,6 +377,7 @@ describe("current workspace api route", () => {
             },
           },
         ],
+        airbyteTokens: [],
       },
     });
   });
@@ -429,6 +453,89 @@ describe("current workspace api route", () => {
         enabled: true,
       }),
     );
+  });
+
+  it("creates read-only Airbyte tokens with a distinct non-member API prefix", async () => {
+    const { POST } = await import("@/app/api/workspaces/current/api/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/workspaces/current/api", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "createAirbyteToken",
+          name: "Airbyte warehouse sync",
+        }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(insertValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Airbyte warehouse sync",
+        keyHash: expect.any(String),
+        keyPrefix: expect.stringMatching(/^lin_airbyte_/),
+        userId: "user-1",
+        workspaceId: "workspace-1",
+      }),
+    );
+    await expect(response.json()).resolves.toMatchObject({
+      createdCredential: {
+        kind: "airbyteToken",
+        label: "Airbyte warehouse sync Airbyte token",
+        secret: expect.stringMatching(/^lin_airbyte_/),
+      },
+    });
+  });
+
+  it("revokes Airbyte tokens without deleting member API keys", async () => {
+    airbyteTokenLimitMock.mockResolvedValue([
+      { id: "airbyte-1", keyPrefix: "lin_airbyte_aaaa…" },
+    ]);
+    const { POST } = await import("@/app/api/workspaces/current/api/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/workspaces/current/api", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "deleteAirbyteToken",
+          id: "airbyte-1",
+        }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(deleteWhereMock).toHaveBeenCalled();
+    await expect(response.json()).resolves.toMatchObject({
+      api: {
+        airbyteTokens: [],
+      },
+    });
+  });
+
+  it("rejects member API key revocation through the Airbyte token action", async () => {
+    airbyteTokenLimitMock.mockResolvedValue([
+      { id: "api-key-1", keyPrefix: "lin_api_aaaa…" },
+    ]);
+    const { POST } = await import("@/app/api/workspaces/current/api/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/workspaces/current/api", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "deleteAirbyteToken",
+          id: "api-key-1",
+        }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    expect(deleteWhereMock).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual({
+      error: "Airbyte token not found.",
+    });
   });
 
   it("forbids permission updates for non-managers", async () => {

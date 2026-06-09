@@ -5,6 +5,7 @@ import {
 } from "@/lib/active-workspace";
 import { createApiKeyHash, requireApiSession } from "@/lib/api-auth";
 import {
+  AIRBYTE_DOCS_URL,
   GRAPHQL_DOCS_URL,
   OAUTH_APPLICATIONS_DOCS_URL,
   type PermissionLevel,
@@ -50,6 +51,10 @@ function createOAuthClientId() {
 
 function createSecret(prefix: string) {
   return `${prefix}_${randomBytes(24).toString("hex")}`;
+}
+
+function isAirbyteKeyPrefix(keyPrefix: string) {
+  return keyPrefix.startsWith("lin_airbyte_");
 }
 
 function createOAuthSecretHash(secret: string) {
@@ -150,6 +155,7 @@ async function buildApiPayload(access: WorkspaceAccess) {
       graphql: GRAPHQL_DOCS_URL,
       oauthApplications: OAUTH_APPLICATIONS_DOCS_URL,
       webhooks: WEBHOOKS_DOCS_URL,
+      airbyte: AIRBYTE_DOCS_URL,
     },
     oauthApplications: workspaceApiSettings.oauthApplications,
     webhooks: webhooks.map((item) => ({
@@ -161,19 +167,43 @@ async function buildApiPayload(access: WorkspaceAccess) {
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
     })),
-    apiKeys: apiKeys.map((item) => ({
-      id: item.id,
-      name: item.name,
-      keyPrefix: item.keyPrefix,
-      accessLevel: "Member" as const,
-      createdAt: item.createdAt.toISOString(),
-      lastUsedAt: item.lastUsedAt ? item.lastUsedAt.toISOString() : null,
-      creator: {
-        name: item.creatorName,
-        email: item.creatorEmail,
-        image: item.creatorImage,
-      },
-    })),
+    apiKeys: apiKeys
+      .filter((item) => !isAirbyteKeyPrefix(item.keyPrefix))
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        keyPrefix: item.keyPrefix,
+        accessLevel: "Member" as const,
+        createdAt: item.createdAt.toISOString(),
+        lastUsedAt: item.lastUsedAt ? item.lastUsedAt.toISOString() : null,
+        creator: {
+          name: item.creatorName,
+          email: item.creatorEmail,
+          image: item.creatorImage,
+        },
+      })),
+    airbyteTokens: apiKeys
+      .filter((item) => isAirbyteKeyPrefix(item.keyPrefix))
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        keyPrefix: item.keyPrefix,
+        scopes: [
+          "issues:read",
+          "projects:read",
+          "comments:read",
+          "cycles:read",
+          "initiatives:read",
+          "customers:read",
+        ],
+        createdAt: item.createdAt.toISOString(),
+        lastUsedAt: item.lastUsedAt ? item.lastUsedAt.toISOString() : null,
+        creator: {
+          name: item.creatorName,
+          email: item.creatorEmail,
+          image: item.creatorImage,
+        },
+      })),
   };
 }
 
@@ -341,6 +371,14 @@ export async function POST(request: Request) {
       }
     | {
         action?: "deleteApiKey";
+        id?: unknown;
+      }
+    | {
+        action?: "createAirbyteToken";
+        name?: unknown;
+      }
+    | {
+        action?: "deleteAirbyteToken";
         id?: unknown;
       }
     | null;
@@ -789,6 +827,76 @@ export async function POST(request: Request) {
         { status: 404 },
       );
     }
+
+    return NextResponse.json({ api: await buildApiPayload(access) });
+  }
+
+  if (body.action === "createAirbyteToken") {
+    if (!canManageWorkspaceApi(access.memberRole)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name) {
+      return NextResponse.json(
+        { error: "Airbyte token name is required." },
+        { status: 400 },
+      );
+    }
+
+    const secret = createSecret("lin_airbyte");
+    await db.insert(apiKey).values({
+      name,
+      keyHash: createApiKeyHash(secret),
+      keyPrefix: `${secret.slice(0, 16)}…`,
+      userId: access.userId,
+      workspaceId: access.workspaceId,
+    });
+
+    return NextResponse.json({
+      api: await buildApiPayload(access),
+      createdCredential: {
+        kind: "airbyteToken",
+        label: `${name} Airbyte token`,
+        secret,
+      },
+    });
+  }
+
+  if (body.action === "deleteAirbyteToken") {
+    if (!canManageWorkspaceApi(access.memberRole)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const id = typeof body.id === "string" ? body.id : "";
+    if (!id) {
+      return NextResponse.json(
+        { error: "Airbyte token id is required." },
+        { status: 400 },
+      );
+    }
+
+    const [existing] = await db
+      .select({ id: apiKey.id, keyPrefix: apiKey.keyPrefix })
+      .from(apiKey)
+      .where(and(eq(apiKey.id, id), eq(apiKey.workspaceId, access.workspaceId)))
+      .limit(1);
+
+    if (!existing || !isAirbyteKeyPrefix(existing.keyPrefix)) {
+      return NextResponse.json(
+        { error: "Airbyte token not found." },
+        { status: 404 },
+      );
+    }
+
+    await db
+      .delete(apiKey)
+      .where(
+        and(
+          eq(apiKey.id, existing.id),
+          eq(apiKey.workspaceId, access.workspaceId),
+        ),
+      );
 
     return NextResponse.json({ api: await buildApiPayload(access) });
   }

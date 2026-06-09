@@ -93,6 +93,20 @@ export type WorkspaceApiKeyRecord = {
   };
 };
 
+export type WorkspaceAirbyteTokenRecord = {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  scopes: string[];
+  createdAt: string;
+  lastUsedAt: string | null;
+  creator: {
+    name: string;
+    email: string;
+    image: string | null;
+  };
+};
+
 export type ApiSettingsPayload = {
   permissionLevel: PermissionLevel;
   viewerRole: WorkspaceMemberRole;
@@ -102,16 +116,20 @@ export type ApiSettingsPayload = {
     graphql: string;
     oauthApplications: string;
     webhooks: string;
+    airbyte: string;
   };
   oauthApplications: OAuthApplicationRecord[];
   webhooks: WorkspaceWebhookRecord[];
   apiKeys: WorkspaceApiKeyRecord[];
+  airbyteTokens: WorkspaceAirbyteTokenRecord[];
 };
 
 export const GRAPHQL_DOCS_URL = "https://linear.app/developers/graphql";
 export const OAUTH_APPLICATIONS_DOCS_URL =
   "https://linear.app/developers/oauth-2-0-authentication";
 export const WEBHOOKS_DOCS_URL = "https://linear.app/developers/webhooks";
+export const AIRBYTE_DOCS_URL =
+  "https://github.com/namuh-eng/exponential/blob/staging/docs/airbyte.md";
 
 const WEBHOOK_EVENT_TYPES = new Set<WebhookEventType>([
   "created",

@@ -38,6 +38,8 @@ vi.mock("@/lib/active-workspace", () => ({
 }));
 
 vi.mock("@/lib/api-settings", () => ({
+  AIRBYTE_DOCS_URL:
+    "https://github.com/namuh-eng/exponential/blob/staging/docs/airbyte.md",
   GRAPHQL_DOCS_URL: "https://docs.test/graphql",
   OAUTH_APPLICATIONS_DOCS_URL: "https://docs.test/oauth",
   WEBHOOKS_DOCS_URL: "https://docs.test/webhooks",
