@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expandAppSidebar } from "./sidebar-helpers";
 
 type EditorialFlow = {
   name: string;
@@ -167,6 +168,7 @@ test.describe("Editorial theme visual QA smoke", () => {
 
     await page.keyboard.press("Escape");
     await expect(palette).not.toBeVisible();
+    await expandAppSidebar(page);
     await page
       .getByRole("button", { name: /Create issue|New issue/ })
       .first()

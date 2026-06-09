@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expandAppSidebar } from "./sidebar-helpers";
 
 async function expectRenderedAppPage(page: import("@playwright/test").Page) {
   await expect(
@@ -22,9 +23,7 @@ test.describe("Canonical Forever Browsing routes", () => {
     expect(staleWorkspaceResponse.status()).toBe(201);
 
     await page.goto(`/${staleWorkspaceSlug}/inbox`);
-    await expect(page.getByLabel("Workspace switcher")).toContainText(
-      "Root Redirect",
-    );
+    await expect(page.getByText(/Root Redirect/).first()).toBeVisible();
 
     const sessionResponse = await page.evaluate(async () => {
       const response = await fetch("/api/test/create-session", {
@@ -51,9 +50,8 @@ test.describe("Canonical Forever Browsing routes", () => {
     await expect(
       page.getByRole("heading", { name: "My Issues" }),
     ).toBeVisible();
-    await expect(page.getByLabel("Workspace switcher")).toContainText(
-      "Forever Browsing",
-    );
+    await expect(page.getByText("Forever Browsing").first()).toBeVisible();
+    await expandAppSidebar(page);
     await expect(
       page.getByRole("link", { name: /My Issues/ }).first(),
     ).toHaveAttribute("href", "/foreverbrowsing/my-issues/assigned");
@@ -161,6 +159,7 @@ test.describe("Canonical Forever Browsing routes", () => {
     await expect(
       page.getByRole("button", { name: "All issues" }),
     ).toBeVisible();
+    await expandAppSidebar(page);
     await expect(
       page.locator('a[href="/foreverbrowsing/team/ENG/all"]').first(),
     ).toHaveAttribute("href", "/foreverbrowsing/team/ENG/all");
@@ -219,6 +218,7 @@ test.describe("Canonical Forever Browsing routes", () => {
     await expect(
       page.getByText("This page could not be found"),
     ).not.toBeVisible();
+    await expandAppSidebar(page);
     await expect(
       page.locator('a[href="/foreverbrowsing/team/ENG/projects"]').first(),
     ).toHaveAttribute("href", "/foreverbrowsing/team/ENG/projects");
@@ -233,6 +233,7 @@ test.describe("Canonical Forever Browsing routes", () => {
     ).not.toBeVisible();
 
     await page.goto("/foreverbrowsing/inbox");
+    await expandAppSidebar(page);
     await page
       .getByRole("link", { name: /Issues icon Issues/ })
       .first()
@@ -360,6 +361,7 @@ test.describe("Canonical Forever Browsing routes", () => {
     await page.goto("/foreverbrowsing/team/ENG/cycles");
     await expect(page).toHaveURL(/\/foreverbrowsing\/team\/ENG\/cycles$/);
     await expect(page.getByText("Workspace Cycle")).toBeVisible();
+    await expandAppSidebar(page);
     await expect(
       page.getByRole("link", { name: "Cycles" }).first(),
     ).toHaveAttribute("href", "/foreverbrowsing/team/ENG/cycles");

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expandAppSidebar } from "./sidebar-helpers";
 
 test("favorites a project into the workspace sidebar and supports manage removal", async ({
   page,
@@ -22,6 +23,7 @@ test("favorites a project into the workspace sidebar and supports manage removal
   await page
     .getByRole("button", { name: `Add to favorites: ${projectName}` })
     .click();
+  await expandAppSidebar(page);
 
   await expect(
     page.getByRole("button", { name: "Favorites", exact: true }),

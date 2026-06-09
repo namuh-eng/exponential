@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expandAppSidebar } from "./sidebar-helpers";
 
 async function fillEditable(
   page: import("@playwright/test").Page,
@@ -73,6 +74,7 @@ test.describe("Create issue composer metadata", () => {
     expect(parentResponse.status()).toBe(201);
 
     await page.goto(`/${workspaceSlug}/team/${teamKey}/all`);
+    await expandAppSidebar(page);
     await page.getByRole("button", { name: "Create issue" }).click();
     await expect(page.getByTestId("create-issue-composer")).toBeVisible();
 

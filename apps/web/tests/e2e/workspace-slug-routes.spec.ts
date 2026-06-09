@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expandAppSidebar } from "./sidebar-helpers";
 
 test.describe("Workspace slug routes", () => {
   test("renders slug-prefixed inbox, settings, team routes and emits slug links", async ({
@@ -26,6 +27,7 @@ test.describe("Workspace slug routes", () => {
     await expect(
       page.getByText("This page could not be found"),
     ).not.toBeVisible();
+    await expandAppSidebar(page);
 
     await expect(
       page.getByRole("link", { name: "Projects" }).first(),
@@ -73,7 +75,7 @@ test.describe("Workspace slug routes", () => {
       page.getByText("This page could not be found"),
     ).not.toBeVisible();
 
-    await page.getByRole("link", { name: "Inbox" }).click();
+    await page.getByTestId("tty-buffer-inbox").click();
     await expect(page).toHaveURL(new RegExp(`/${workspaceSlug}/inbox$`));
 
     await page.getByLabel("Search").click();

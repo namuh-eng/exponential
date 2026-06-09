@@ -5,7 +5,10 @@ test.describe("Workspace security IP restrictions", () => {
     browser,
     page,
   }) => {
-    await page.setExtraHTTPHeaders({ "x-test-client-ip": "198.51.100.10" });
+    await page.setExtraHTTPHeaders({
+      "x-test-client-ip": "198.51.100.10",
+      "x-forwarded-for": "198.51.100.10",
+    });
     const suffix = Date.now().toString(36);
     const workspaceSlug = `security-ip-${suffix}`;
     const workspaceResponse = await page.request.post("/api/workspaces", {
@@ -55,16 +58,45 @@ test.describe("Workspace security IP restrictions", () => {
       })
       .toContain("198.51.100.10/32");
 
-    await page.reload();
-    await expect(page.getByText("198.51.100.10/32")).toBeVisible();
-    await expect(page.getByText("VPN gateway")).toBeVisible();
+    const allowedContext = await browser.newContext({
+      baseURL: page.url().startsWith("http")
+        ? new URL(page.url()).origin
+        : undefined,
+      storageState: await page.context().storageState(),
+      extraHTTPHeaders: {
+        "x-test-client-ip": "198.51.100.10",
+        "x-forwarded-for": "198.51.100.10",
+      },
+    });
+    await allowedContext.addCookies([
+      {
+        name: "activeWorkspaceId",
+        value: workspacePayload.workspace.id,
+        domain: new URL(page.url()).hostname,
+        path: "/",
+      },
+      {
+        name: "activeWorkspaceSlug",
+        value: workspaceSlug,
+        domain: new URL(page.url()).hostname,
+        path: "/",
+      },
+    ]);
+    const allowedPage = await allowedContext.newPage();
+    await allowedPage.goto(`/${workspaceSlug}/settings/security`);
+    await expect(allowedPage.getByText("198.51.100.10/32")).toBeVisible();
+    await expect(allowedPage.getByText("VPN gateway")).toBeVisible();
+    await allowedContext.close();
 
     const deniedContext = await browser.newContext({
       baseURL: page.url().startsWith("http")
         ? new URL(page.url()).origin
         : undefined,
       storageState: await page.context().storageState(),
-      extraHTTPHeaders: { "x-test-client-ip": "203.0.113.99" },
+      extraHTTPHeaders: {
+        "x-test-client-ip": "203.0.113.99",
+        "x-forwarded-for": "203.0.113.99",
+      },
     });
 
     await deniedContext.addCookies([

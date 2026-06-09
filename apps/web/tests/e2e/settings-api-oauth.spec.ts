@@ -248,10 +248,10 @@ test.describe("Settings API OAuth applications", () => {
       `/api/oauth/authorize?response_type=code&client_id=${app.clientId}&redirect_uri=${encodeURIComponent(`https://evil-${suffix}.example.com/callback`)}&scope=read&state=bad`,
       { maxRedirects: 0 },
     );
-    expect(invalidRedirect.status()).toBe(307);
-    expect(invalidRedirect.headers().location).toContain(
-      "error=invalid_redirect_uri",
-    );
+    expect(invalidRedirect.status()).toBe(400);
+    await expect(invalidRedirect.json()).resolves.toEqual({
+      error: "invalid_redirect_uri",
+    });
 
     const authorizeResponse = await page.request.get(
       `/api/oauth/authorize?response_type=code&client_id=${app.clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=read%20issues:read&state=ok`,

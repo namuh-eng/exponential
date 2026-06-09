@@ -124,27 +124,24 @@ test.describe("Canonical inbox notifications", () => {
     page,
   }) => {
     await page.goto("/foreverbrowsing/inbox");
+    await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
 
-    const payload = await page.evaluate(async () => {
-      const listResponse = await fetch("/api/notifications", {
-        credentials: "include",
-      });
-      const list = (await listResponse.json()) as {
-        notifications: Array<{
-          id: string;
-          type: string;
-          issueIdentifier: string;
-        }>;
-      };
-      const target =
-        list.notifications.find((item) => item.issueIdentifier === "ENG-179") ??
-        list.notifications[0];
-      await fetch(`/api/notifications/${target.id}/read`, {
-        method: "PATCH",
-        credentials: "include",
-      });
-      return target;
-    });
+    const listResponse = await page.request.get("/api/notifications");
+    expect(listResponse.status()).toBe(200);
+    const list = (await listResponse.json()) as {
+      notifications: Array<{
+        id: string;
+        type: string;
+        issueIdentifier: string;
+      }>;
+    };
+    const payload =
+      list.notifications.find((item) => item.issueIdentifier === "ENG-179") ??
+      list.notifications[0];
+    const readResponse = await page.request.patch(
+      `/api/notifications/${payload.id}/read`,
+    );
+    expect(readResponse.ok()).toBeTruthy();
 
     await page.goto(`/foreverbrowsing/inbox/notification/${payload.id}`);
     await expect(page.getByText(payload.issueIdentifier).first()).toBeVisible();

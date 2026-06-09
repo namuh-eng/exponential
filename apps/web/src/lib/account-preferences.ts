@@ -74,7 +74,7 @@ export const DEFAULT_ACCOUNT_PREFERENCES: AccountPreferences = {
   firstDayOfWeek: "sunday",
   convertEmoticons: true,
   sendCommentShortcut: "cmd-enter",
-  theme: "system",
+  theme: "dark",
   fontSize: "default",
   pointerCursors: false,
   openInDesktopApp: false,

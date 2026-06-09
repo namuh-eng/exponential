@@ -56,6 +56,7 @@
   /* Legacy app aliases consume Editorial tokens so existing features keep behavior with refreshed styling. */
   --color-sidebar-bg: var(--editorial-bg);
   --color-content-bg: var(--editorial-bg);
+  --color-background: var(--editorial-bg);
   --color-border: var(--editorial-line);
   --color-text-primary: var(--editorial-ink-1);
   --color-text-secondary: var(--editorial-ink-3);
@@ -74,6 +75,7 @@
     var(--editorial-accent) 58%,
     var(--editorial-line)
   );
+  --color-danger: var(--editorial-err);
 }
 
 .dark {

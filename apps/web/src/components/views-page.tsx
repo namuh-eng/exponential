@@ -1021,22 +1021,27 @@ export function ViewsPage({
 
   const handleOpenView = (view: ViewSummary) => {
     if (view.entityType === "issues") {
-      if (!view.teamKey) {
+      const viewTeamKey =
+        view.teamKey ??
+        teams.find((team) => team.id === view.teamId)?.key ??
+        activeTeamKey;
+
+      if (!viewTeamKey) {
         return;
       }
 
-      writeStoredIssueFilters(view.teamKey, view.filterState.issueFilters);
+      writeStoredIssueFilters(viewTeamKey, view.filterState.issueFilters);
       writeStoredIssueDisplayOptions(
-        view.teamKey,
+        viewTeamKey,
         view.filterState.issueDisplayOptions,
       );
       router.push(
         withWorkspaceSlug(
           view.layout === "board"
-            ? `/team/${view.teamKey}/board`
+            ? `/team/${viewTeamKey}/board`
             : view.layout === "timeline"
-              ? `/team/${view.teamKey}/timeline`
-              : `/team/${view.teamKey}/all`,
+              ? `/team/${viewTeamKey}/timeline`
+              : `/team/${viewTeamKey}/all`,
           workspaceSlug,
         ),
       );

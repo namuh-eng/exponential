@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expandAppSidebar } from "./sidebar-helpers";
 
 async function expectProjectsListRendered(
   page: import("@playwright/test").Page,
@@ -65,6 +66,7 @@ test.describe("Workspace Projects routes", () => {
     expect(projectResponse.status()).toBe(201);
 
     await page.goto("/foreverbrowsing/inbox");
+    await expandAppSidebar(page);
     const projectsLink = page.getByRole("link", { name: /Projects/ }).first();
     await expect(projectsLink).toHaveAttribute(
       "href",

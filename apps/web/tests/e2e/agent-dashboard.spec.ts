@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expandAppSidebar } from "./sidebar-helpers";
 
 test.describe("Agent dashboard", () => {
   test("opens from sidebar More, creates a mock run, and reviews suggestions", async ({
@@ -7,6 +8,7 @@ test.describe("Agent dashboard", () => {
     const runTitle = `Audit agent sidebar route ${Date.now().toString(36)}`;
 
     await page.goto("/foreverbrowsing/my-issues/assigned");
+    await expandAppSidebar(page);
 
     await page.getByRole("button", { name: "More" }).click();
     await page.getByRole("link", { name: "Agent" }).click();
