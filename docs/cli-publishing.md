@@ -13,11 +13,10 @@ second. The publish workflow does this ordering automatically.
 The workflow uses npm trusted publishing from GitHub Actions. In npm, configure
 trusted publishing for both packages with:
 
-- Owner/repository: `namuh-eng/exponential`
+- Organization/user: `namuh-eng`
+- Repository: `exponential`
 - Workflow file: `publish-cli.yml`
-- Package root directories:
-  - `packages/sdk`
-  - `apps/cli`
+- Allowed action: `npm publish`
 
 The package `repository.url` fields must continue to point at
 `https://github.com/namuh-eng/exponential.git`.
@@ -60,3 +59,22 @@ tar -tf .release/exponential-cli-*.tgz
 ```
 
 The CLI tarball should contain `bin/exponential`, `dist/`, and `README.md`.
+
+## Local manual publish
+
+If publishing from a local checkout instead of GitHub Actions, authenticate with
+npm first:
+
+```bash
+npm login
+```
+
+Then run the same verification, pack, and publish flow:
+
+```bash
+DRY_RUN=true scripts/publish-npm-local.sh
+DRY_RUN=false scripts/publish-npm-local.sh
+```
+
+The script publishes the packed tarballs instead of the workspace directories so
+the CLI package depends on the published SDK version instead of `workspace:*`.
