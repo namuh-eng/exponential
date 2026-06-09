@@ -100,6 +100,27 @@ Note: direct operational health and RED metrics checks use the API port in the
 plain Compose stack. In AWS ECS, the ALB routes public `/api/healthz` and
 `/api/metrics/red` directly to the Go API before requests reach the web service.
 
+## Headless clients
+
+The CLI and local MCP server use the Go API base URL and a personal access token:
+
+```bash
+export EXPONENTIAL_TOKEN=pat_your_token
+export EXPONENTIAL_API_URL=http://localhost:7016/v1
+
+exponential doctor --json
+exponential issue ls --json
+```
+
+For MCP v0, configure clients to spawn the local stdio command. It exposes only
+read-only tools and does not run an HTTP listener:
+
+```bash
+pnpm --filter @exponential/mcp exec exponential-mcp
+```
+
+See [CLI usage](cli.md) and [MCP v0](mcp.md).
+
 ## Data, backups, and upgrades
 
 Compose stores durable data in named volumes:

@@ -33,6 +33,7 @@ Core capabilities:
 - **Authentication** — Google OAuth and magic link login
 - **Real-time Sync** — Live updates via Redis
 - **File Attachments** — Upload and store files on AWS S3
+- **Headless workflows** — CLI and local read-only MCP surfaces over the Go API
 
 ---
 
@@ -74,6 +75,21 @@ docker compose -f docker-compose.dev.yml up --build
 ```
 
 The development stack runs on `http://localhost:7015` and includes Mailhog.
+
+### Headless CLI and MCP
+
+After creating a personal access token, use the CLI and local MCP server against
+the same Go API:
+
+```bash
+export EXPONENTIAL_TOKEN=pat_your_token
+export EXPONENTIAL_API_URL=http://localhost:7016/v1
+
+pnpm --filter @exponential/cli cli -- issue ls --json
+pnpm --filter @exponential/mcp exec exponential-mcp
+```
+
+See [docs/cli.md](docs/cli.md) and [docs/mcp.md](docs/mcp.md).
 
 ### Option 3: AWS ECS Deployment
 
@@ -145,7 +161,10 @@ EXPONENTIAL_API_DATABASE_URL=$DATABASE_URL go run ./apps/api/cmd/migrate
 ```
 exponential/
 ├── apps/api/             # Go headless API and migration binary
+├── apps/cli/             # TypeScript CLI over the generated SDK
+├── apps/mcp/             # Local stdio MCP runtime
 ├── apps/web/             # Next.js UI-only app
+├── packages/mcp-server/  # Read-only MCP tool package
 ├── packages/proto/       # OpenAPI contract and SQL migrations
 ├── packages/sdk/         # Generated TypeScript SDK
 ├── infra/                # Dockerfiles and ECS task definitions
