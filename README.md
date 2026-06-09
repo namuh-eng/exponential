@@ -11,7 +11,7 @@ cycles, initiatives, and workspace administration without giving up control of
 their data. It is a split production app: a Go headless API, a Next.js web UI,
 an OpenAPI contract, a generated TypeScript SDK, Postgres, and Redis.
 
-![exponential issue dashboard](docs/assets/exponential-tty-dashboard.png)
+![exponential issues view](docs/assets/exponential-tty-issues.png)
 
 ## Current State
 
@@ -44,6 +44,12 @@ prototype into a headless architecture:
 - **Self-hosting controls**: Compose defaults, bind-address controls, optional
   Google OAuth, Slack OAuth, S3 attachments, SES or Opensend email, metrics
   token, and ECS deployment scripts.
+
+## Screenshots
+
+![exponential board view](docs/assets/exponential-tty-board.png)
+
+![exponential inbox view](docs/assets/exponential-tty-inbox.png)
 
 ![exponential roadmap view](docs/assets/exponential-tty-roadmap.png)
 
