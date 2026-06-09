@@ -234,6 +234,7 @@ func TestClientIPIgnoresXFFWhenPeerNotTrusted(t *testing.T) {
 
 func TestVerifySignedSessionToken(t *testing.T) {
 	t.Setenv("EXPONENTIAL_DEV_SESSION_SECRET", "test-secret")
+	t.Setenv("EXPONENTIAL_SESSION_SECRET", "test-secret")
 	raw := "session-token"
 	mac := hmac.New(sha256.New, []byte("test-secret"))
 	mac.Write([]byte(raw))

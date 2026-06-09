@@ -22,6 +22,8 @@ func TestRouterServesPublicAPIHealthAndMetricsAliases(t *testing.T) {
 }
 
 func TestRouterServesFirstPartyAuthRoutes(t *testing.T) {
+	t.Setenv("AUTH_GOOGLE_ID", "")
+	t.Setenv("AUTH_GOOGLE_SECRET", "")
 	router := NewRouter(zap.NewNop(), nil)
 
 	recorder := httptest.NewRecorder()
