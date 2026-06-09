@@ -38,6 +38,10 @@ export default function IntegrationsSettingsPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [notionSetup, setNotionSetup] = useState<{
+    previewEndpoint: string;
+    previewToken: string;
+  } | null>(null);
   const [pendingProvider, setPendingProvider] = useState<string | null>(null);
 
   const loadIntegrations = useCallback(async () => {
@@ -74,6 +78,7 @@ export default function IntegrationsSettingsPage() {
   async function connectSlack() {
     setPendingProvider("slack");
     setNotice(null);
+    setNotionSetup(null);
     setError(null);
     try {
       const response = await fetch("/api/integrations/slack/connect", {
@@ -104,17 +109,64 @@ export default function IntegrationsSettingsPage() {
     }
   }
 
+  async function connectNotion() {
+    setPendingProvider("notion");
+    setNotice(null);
+    setNotionSetup(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/integrations/notion/connect", {
+        method: "POST",
+        headers: { Accept: "application/json" },
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        authorizationUrl?: string;
+        previewEndpoint?: string;
+        previewToken?: string;
+        error?: string;
+        message?: string;
+      };
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Notion setup failed.");
+      }
+      if (data.authorizationUrl) {
+        window.location.assign(data.authorizationUrl);
+        return;
+      }
+      if (data.previewEndpoint && data.previewToken) {
+        setNotionSetup({
+          previewEndpoint: data.previewEndpoint,
+          previewToken: data.previewToken,
+        });
+      }
+      setNotice("Notion rich previews connected.");
+      await loadIntegrations();
+    } catch (connectError) {
+      setError(
+        connectError instanceof Error
+          ? connectError.message
+          : "Notion setup failed.",
+      );
+    } finally {
+      setPendingProvider(null);
+    }
+  }
+
   async function disconnect(provider: string) {
     setPendingProvider(provider);
     setNotice(null);
+    setNotionSetup(null);
     setError(null);
     try {
       const endpoint =
         provider === "slack"
           ? "/api/integrations/slack/disconnect"
-          : `/api/integrations?provider=${encodeURIComponent(provider)}`;
+          : provider === "notion"
+            ? "/api/integrations/notion/disconnect"
+            : `/api/integrations?provider=${encodeURIComponent(provider)}`;
       const response = await fetch(endpoint, {
-        method: provider === "slack" ? "POST" : "DELETE",
+        method:
+          provider === "slack" || provider === "notion" ? "POST" : "DELETE",
         headers: { Accept: "application/json" },
       });
       const data = (await response.json().catch(() => ({}))) as {
@@ -186,14 +238,16 @@ export default function IntegrationsSettingsPage() {
                     Connected to {integration.displayName || integration.name}
                   </p>
                 </div>
-                <button
-                  className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-red-300 disabled:opacity-50"
-                  disabled={pendingProvider === integration.provider}
-                  onClick={() => void disconnect(integration.provider)}
-                  type="button"
-                >
-                  Disconnect
-                </button>
+                {integration.actions.canDisconnect ? (
+                  <button
+                    className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-red-300 disabled:opacity-50"
+                    disabled={pendingProvider === integration.provider}
+                    onClick={() => void disconnect(integration.provider)}
+                    type="button"
+                  >
+                    Disconnect
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>
@@ -217,6 +271,32 @@ export default function IntegrationsSettingsPage() {
         >
           Explore integrations
         </button>
+      ) : null}
+
+      {notionSetup ? (
+        <div className="mt-6 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
+          <h2 className="text-[14px] font-medium text-[var(--color-text-primary)]">
+            Notion rich preview setup
+          </h2>
+          <dl className="mt-3 space-y-3 text-[12px]">
+            <div>
+              <dt className="text-[var(--color-text-tertiary)]">
+                Callback URL
+              </dt>
+              <dd className="mt-1 break-all rounded-md bg-[var(--color-surface)] px-3 py-2 font-mono text-[var(--color-text-secondary)]">
+                {notionSetup.previewEndpoint}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[var(--color-text-tertiary)]">
+                Bearer token
+              </dt>
+              <dd className="mt-1 break-all rounded-md bg-[var(--color-surface)] px-3 py-2 font-mono text-[var(--color-text-secondary)]">
+                {notionSetup.previewToken}
+              </dd>
+            </div>
+          </dl>
+        </div>
       ) : null}
 
       {catalogOpen ? (
@@ -276,22 +356,31 @@ export default function IntegrationsSettingsPage() {
                       ) : null}
                     </div>
                     {integration.status === "connected" ? (
-                      <button
-                        className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-red-300 disabled:opacity-50"
-                        disabled={pendingProvider === integration.provider}
-                        onClick={() => void disconnect(integration.provider)}
-                        type="button"
-                      >
-                        Disconnect
-                      </button>
-                    ) : integration.provider === "slack" ? (
+                      integration.actions.canDisconnect ? (
+                        <button
+                          className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-red-300 disabled:opacity-50"
+                          disabled={pendingProvider === integration.provider}
+                          onClick={() => void disconnect(integration.provider)}
+                          type="button"
+                        >
+                          Disconnect
+                        </button>
+                      ) : null
+                    ) : integration.provider === "slack" ||
+                      integration.provider === "notion" ? (
                       <button
                         className="rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={pendingProvider === "slack"}
-                        onClick={() => void connectSlack()}
+                        disabled={pendingProvider === integration.provider}
+                        onClick={() =>
+                          integration.provider === "slack"
+                            ? void connectSlack()
+                            : void connectNotion()
+                        }
                         type="button"
                       >
-                        {pendingProvider === "slack" ? "Opening..." : "Connect"}
+                        {pendingProvider === integration.provider
+                          ? "Opening..."
+                          : "Connect"}
                       </button>
                     ) : (
                       <button

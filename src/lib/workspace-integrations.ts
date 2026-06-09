@@ -13,7 +13,7 @@ import { getWorkspaceSlugFromPath } from "@/lib/workspace-paths";
 import { isWorkspaceAdminRole } from "@/lib/workspace-permissions";
 import { and, eq } from "drizzle-orm";
 
-export type IntegrationProvider = "github" | "slack" | "zendesk";
+export type IntegrationProvider = "github" | "notion" | "slack" | "zendesk";
 
 export type WorkspaceAccess = {
   workspaceId: string;
@@ -63,6 +63,12 @@ export const INTEGRATION_CATALOG: Array<{
     provider: "slack",
     name: "Slack",
     description: "Send issue updates and create issues from Slack messages.",
+  },
+  {
+    provider: "notion",
+    name: "Notion",
+    description:
+      "Show private-safe rich previews when Exponential links are pasted in Notion.",
   },
   {
     provider: "zendesk",

@@ -24,7 +24,12 @@ test.describe("Integrations and Slack notification settings", () => {
     await expect(
       page.getByText("Setup unavailable in this workspace"),
     ).toHaveCount(0);
-    await page.getByRole("button", { name: "Connect" }).click();
+    await page
+      .getByRole("dialog", { name: "Explore integrations" })
+      .locator("div.rounded-lg")
+      .filter({ hasText: "Slack" })
+      .getByRole("button", { name: "Connect" })
+      .click();
     await expect(
       page.getByText(/Slack OAuth|AUTH_SLACK/).first(),
     ).toBeVisible();

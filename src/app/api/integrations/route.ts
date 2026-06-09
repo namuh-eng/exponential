@@ -1,6 +1,7 @@
 import { requireApiSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { workspaceIntegration } from "@/lib/db/schema";
+import { hasActiveNotionPreviewUser } from "@/lib/notion-rich-previews";
 import {
   INTEGRATION_CATALOG,
   canManageIntegrations,
@@ -47,6 +48,7 @@ export async function GET(request: Request) {
       displayName: workspaceIntegration.displayName,
       externalId: workspaceIntegration.externalId,
       connectedAt: workspaceIntegration.connectedAt,
+      metadata: workspaceIntegration.metadata,
     })
     .from(workspaceIntegration)
     .where(eq(workspaceIntegration.workspaceId, access.workspaceId));
@@ -58,25 +60,44 @@ export async function GET(request: Request) {
     canManageIntegrations: canManage,
     integrations: INTEGRATION_CATALOG.map((catalogItem) => {
       const connected = byProvider.get(catalogItem.provider);
-      const requirement = connected
+      const notionUserConnected =
+        catalogItem.provider === "notion" &&
+        connected?.status === "connected" &&
+        hasActiveNotionPreviewUser(connected.metadata, session.user.id);
+      const visibleConnection =
+        catalogItem.provider === "notion"
+          ? notionUserConnected
+            ? connected
+            : null
+          : connected;
+      const requirement = visibleConnection
         ? null
         : setupRequirement(catalogItem.provider);
       return {
         ...catalogItem,
-        id: connected?.id ?? null,
+        id: visibleConnection?.id ?? null,
         status:
-          connected?.status ??
+          visibleConnection?.status ??
           (requirement ? "configuration_required" : "not_connected"),
-        displayName: connected?.displayName ?? null,
-        externalId: connected?.externalId ?? null,
-        connectedAt: connected?.connectedAt
-          ? new Date(connected.connectedAt).toISOString()
+        displayName: visibleConnection?.displayName ?? null,
+        externalId: visibleConnection?.externalId ?? null,
+        connectedAt: visibleConnection?.connectedAt
+          ? new Date(visibleConnection.connectedAt).toISOString()
           : null,
         setupRequirement: requirement,
         actions: {
-          canConnect: canManage && !connected && !requirement,
-          canManage: canManage && Boolean(connected),
-          canDisconnect: canManage && Boolean(connected),
+          canConnect:
+            catalogItem.provider === "notion"
+              ? !notionUserConnected && !requirement
+              : canManage && !connected && !requirement,
+          canManage:
+            catalogItem.provider === "notion"
+              ? notionUserConnected
+              : canManage && Boolean(connected),
+          canDisconnect:
+            catalogItem.provider === "notion"
+              ? notionUserConnected
+              : canManage && Boolean(connected),
         },
       };
     }),

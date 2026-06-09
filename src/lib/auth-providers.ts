@@ -30,6 +30,13 @@ export function getSlackOAuthConfig() {
   return getOAuthEnvConfig("AUTH_SLACK_ID", "AUTH_SLACK_SECRET");
 }
 
+export function getNotionOAuthConfig() {
+  return (
+    getOAuthEnvConfig("AUTH_NOTION_ID", "AUTH_NOTION_SECRET") ??
+    getOAuthEnvConfig("NOTION_CLIENT_ID", "NOTION_CLIENT_SECRET")
+  );
+}
+
 export function isGoogleOAuthConfigured() {
   return Boolean(getGoogleOAuthConfig());
 }
@@ -44,4 +51,8 @@ export function isGitLabOAuthConfigured() {
 
 export function isSlackOAuthConfigured() {
   return Boolean(getSlackOAuthConfig());
+}
+
+export function isNotionOAuthConfigured() {
+  return Boolean(getNotionOAuthConfig());
 }
