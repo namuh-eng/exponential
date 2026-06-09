@@ -1,8 +1,9 @@
 node_modules/
 .next/
 dist/
-.env
+.env*
 !.env.example
+!.env.1password
 *.log
 .omc/
 .omx/
@@ -38,3 +39,13 @@ test.txt
 .cpd-raw-output.txt
 .cpd-report/
 cpd-checklist.md
+
+.pnpm-store/
+apps/web/.turbo/
+apps/web/tests/e2e/.auth/
+.turbo/
+.DS_Store
+/.agents/
+
+# Session handoff scratch — local only
+.handoffs/

@@ -1,0 +1,42 @@
+{
+  "family": "exponential-api-migrate",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "${ECS_EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${ECS_TASK_ROLE_ARN}",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "containerDefinitions": [
+    {
+      "name": "api-migrate",
+      "image": "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/exponential-api:${IMAGE_TAG}",
+      "essential": true,
+      "entryPoint": ["exponential-migrate"],
+      "environment": [
+        {
+          "name": "MIGRATIONS_DIR",
+          "value": "/migrations"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "EXPONENTIAL_API_DATABASE_URL",
+          "valueFrom": "${DATABASE_URL_SECRET_ARN}"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/exponential-api-migrate",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "api-migrate",
+          "awslogs-create-group": "true"
+        }
+      }
+    }
+  ]
+}

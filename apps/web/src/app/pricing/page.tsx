@@ -1,0 +1,88 @@
+import {
+  MarketingCard,
+  MarketingShell,
+} from "@/components/marketing/public-marketing";
+import {
+  CommandLink,
+  StatusChip,
+} from "@/components/marketing/terminal-primitives";
+import { PRICING_PLANS, getPlanCtaHref } from "@/lib/pricing";
+
+const comparisonCapabilities = [
+  "unlimited_issues",
+  "workflow_automations",
+  "priority_support",
+  "saml_sso",
+  "self_hosting",
+] as const;
+
+export const metadata = {
+  title: "Pricing | exponential",
+  description: "Public pricing plans for exponential.",
+};
+
+export default function PricingPage() {
+  return (
+    <MarketingShell eyebrow="Pricing">
+      <div className="py-14">
+        <h1 className="max-w-4xl text-balance text-5xl font-semibold leading-none sm:text-6xl">
+          Plans that scale from first issue to enterprise product operations
+        </h1>
+        <p className="mt-5 max-w-2xl text-lg leading-8 text-[var(--editorial-ink-3)]">
+          Choose a plan for your team. Core self-host/community issue tracking
+          remains free; paid gates focus on managed cloud, scale, admin,
+          security, compliance, and support.
+        </p>
+        <div className="mt-12 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {PRICING_PLANS.map((plan) => (
+            <MarketingCard key={plan.id}>
+              <h2 className="text-2xl font-semibold">{plan.displayName}</h2>
+              <p className="mt-4 text-4xl font-semibold tracking-[-0.04em]">
+                {plan.priceLabel}
+              </p>
+              <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-[var(--editorial-ink-3)]">
+                {plan.billingCadenceLabel}
+              </p>
+              {"billingNote" in plan ? (
+                <p className="mt-2 text-sm font-medium text-[var(--editorial-ink-2)]">
+                  {plan.billingNote}
+                </p>
+              ) : null}
+              <p className="mt-4 min-h-24 text-sm leading-6 text-[var(--editorial-ink-3)]">
+                {plan.description}
+              </p>
+              <CommandLink
+                href={getPlanCtaHref(plan.id)}
+                variant="primary"
+                className="mt-6"
+              >
+                {plan.upgradeCta}
+              </CommandLink>
+            </MarketingCard>
+          ))}
+        </div>
+        <MarketingCard className="mt-8">
+          <h2 className="text-2xl font-semibold">Self-host support boundary</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--editorial-ink-3)]">
+            Community Self-hosted is source-available and self-supported under
+            the repository license, and core self-host/community issue tracking
+            remains free. Enterprise Self-hosted adds commercial license terms,
+            deployment guidance, priority support, compliance support, and
+            enterprise security review workflows without publishing private
+            contact details.
+          </p>
+        </MarketingCard>
+        <MarketingCard className="mt-8">
+          <h2 className="text-2xl font-semibold">Feature comparison</h2>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {comparisonCapabilities.map((capability) => (
+              <StatusChip key={capability} className="justify-center px-4 py-3">
+                {capability.replaceAll("_", " ")}
+              </StatusChip>
+            ))}
+          </div>
+        </MarketingCard>
+      </div>
+    </MarketingShell>
+  );
+}

@@ -1,0 +1,314 @@
+/* Keep this imported stylesheet free of Tailwind layer at-rules.
+   globals.css imports it before @tailwind so CSS @import stays valid; adding
+   a layer at-rule here makes Tailwind see a layer before its matching Tailwind rule.
+   Intentionally not wrapped in @layer: Tailwind layer directives here would break dev compilation. */
+:root {
+  /* TTY theme: warm graphite, bone ink, phosphor-green accent, monospace.
+     Light is the "paper terminal" variant. Canonical source: src/lib/editorial-theme-tokens.ts */
+  --editorial-bg: #f0eee9;
+  --editorial-surface: #faf9f5;
+  --editorial-surface-2: #e8e5dd;
+  --editorial-surface-3: #ddd9cf;
+  --editorial-hover: rgba(20, 30, 20, 0.05);
+  --editorial-pressed: color-mix(
+    in oklab,
+    var(--editorial-accent) 14%,
+    transparent
+  );
+  --editorial-ink-1: #1a1c19;
+  --editorial-ink-2: #33372f;
+  --editorial-ink-3: #5a5e52;
+  --editorial-ink-4: #85897b;
+  --editorial-ink-5: #b3b6a7;
+  --editorial-line: #cdcabd;
+  --editorial-line-strong: #b3afa0;
+  --editorial-line-soft: #e0ddd2;
+  --editorial-accent: #1f7a37;
+  --editorial-accent-hover: #196530;
+  --editorial-accent-soft: #d9ecd9;
+  --editorial-accent-ink: #ffffff;
+  --editorial-ok: #1f7a37;
+  --editorial-ok-soft: #d9ecd9;
+  --editorial-warn: #8a5a16;
+  --editorial-warn-soft: #f0e3c8;
+  --editorial-err: #b3402f;
+  --editorial-err-soft: #f3d8d2;
+  --editorial-info: #1f5f8a;
+  --editorial-info-soft: #d4e4f0;
+  --editorial-display: var(--font-jetbrains-mono), ui-monospace, "SF Mono",
+    Menlo, monospace;
+  --editorial-sans: var(--font-jetbrains-mono), ui-monospace, "SF Mono", Menlo,
+    monospace;
+  --editorial-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", Menlo,
+    monospace;
+  --editorial-radius: 0px;
+  --editorial-radius-lg: 2px;
+  --editorial-radius-pill: 2px;
+  --editorial-shadow-sm: 0 0 0 1px rgba(12, 13, 12, 0.06);
+  --editorial-shadow-md: 0 2px 6px rgba(12, 13, 12, 0.1), 0 0 0 1px
+    rgba(12, 13, 12, 0.06);
+  --editorial-shadow-lg: 0 12px 40px rgba(12, 13, 12, 0.28), 0 0 0 1px
+    rgba(12, 13, 12, 0.08);
+  --shadow-editorial-sm: var(--editorial-shadow-sm);
+  --shadow-editorial-md: var(--editorial-shadow-md);
+  --shadow-editorial-lg: var(--editorial-shadow-lg);
+
+  /* Legacy app aliases consume Editorial tokens so existing features keep behavior with refreshed styling. */
+  --color-sidebar-bg: var(--editorial-bg);
+  --color-bg: var(--editorial-bg);
+  --color-bg-primary: var(--editorial-surface);
+  --color-content-bg: var(--editorial-bg);
+  --color-background: var(--editorial-bg);
+  --color-border: var(--editorial-line);
+  --color-border-primary: var(--editorial-line-strong);
+  --color-bg-tertiary: var(--editorial-surface-3);
+  --color-selected-bg: var(--editorial-pressed);
+  --color-text-primary: var(--editorial-ink-1);
+  --color-text-secondary: var(--editorial-ink-3);
+  --color-text-tertiary: var(--editorial-ink-4);
+  --color-accent: var(--editorial-accent);
+  --color-accent-hover: var(--editorial-accent-hover);
+  --color-surface: var(--editorial-surface);
+  --color-surface-hover: var(--editorial-hover);
+  --color-surface-active: color-mix(
+    in oklab,
+    var(--editorial-accent) 12%,
+    transparent
+  );
+  --color-surface-active-line: color-mix(
+    in oklab,
+    var(--editorial-accent) 58%,
+    var(--editorial-line)
+  );
+  --color-danger: var(--editorial-err);
+}
+
+.dark {
+  --editorial-bg: #0c0d0c;
+  --editorial-surface: #111312;
+  --editorial-surface-2: #16191a;
+  --editorial-surface-3: #1d2120;
+  --editorial-hover: rgba(126, 231, 135, 0.06);
+  --editorial-pressed: color-mix(
+    in oklab,
+    var(--editorial-accent) 20%,
+    transparent
+  );
+  --editorial-ink-1: #f0eadc;
+  --editorial-ink-2: #d0cabd;
+  --editorial-ink-3: #aaa497;
+  --editorial-ink-4: #827d73;
+  --editorial-ink-5: #5c5952;
+  --editorial-line: #343a36;
+  --editorial-line-strong: #48504a;
+  --editorial-line-soft: #1e2120;
+  --editorial-accent: #7ee787;
+  --editorial-accent-hover: #9af0a0;
+  --editorial-accent-soft: #1a2a1c;
+  --editorial-accent-ink: #0c0d0c;
+  --editorial-ok: #7ee787;
+  --editorial-ok-soft: #16241a;
+  --editorial-warn: #ffb86c;
+  --editorial-warn-soft: #2a2113;
+  --editorial-err: #ff7b72;
+  --editorial-err-soft: #2a1614;
+  --editorial-info: #79c0ff;
+  --editorial-info-soft: #11202e;
+}
+
+.ui-button {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--editorial-radius);
+  border: 1px solid var(--editorial-line-strong);
+  background: var(--editorial-surface);
+  color: var(--editorial-ink-1);
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  transition: background 120ms, border-color 120ms, transform 80ms;
+  white-space: nowrap;
+}
+.ui-button:hover {
+  background: var(--editorial-surface-2);
+  border-color: var(--editorial-ink-4);
+}
+.ui-button:active {
+  transform: translateY(0.5px);
+  background: var(--editorial-surface-3);
+}
+.ui-button-primary {
+  background: var(--editorial-ink-1);
+  border-color: var(--editorial-ink-1);
+  color: var(--editorial-bg);
+}
+.ui-button-accent {
+  background: var(--editorial-accent);
+  border-color: var(--editorial-accent);
+  color: var(--editorial-accent-ink);
+}
+.ui-button-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.ui-chip {
+  display: inline-flex;
+  height: 22px;
+  align-items: center;
+  gap: 5px;
+  border-radius: var(--editorial-radius-pill);
+  border: 1px solid var(--editorial-line-strong);
+  background: var(--editorial-surface);
+  color: var(--editorial-ink-2);
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ui-chip-accent {
+  background: var(--editorial-accent-soft);
+  border-color: transparent;
+  color: var(--editorial-accent);
+}
+.ui-card,
+.ui-menu-surface {
+  background: var(--editorial-surface);
+  border: 1px solid var(--editorial-line);
+  border-radius: var(--editorial-radius-lg);
+  box-shadow: var(--editorial-shadow-sm);
+}
+.ui-input {
+  display: flex;
+  height: 32px;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--editorial-radius);
+  border: 1px solid var(--editorial-line-strong);
+  background: var(--editorial-surface);
+  color: var(--editorial-ink-1);
+  padding: 0 12px;
+  font-size: 13px;
+  transition: border-color 120ms, box-shadow 120ms;
+}
+.ui-input:focus-within {
+  border-color: var(--editorial-ink-1);
+  box-shadow: 0 0 0 3px var(--editorial-accent-soft);
+}
+.ui-kbd {
+  border-radius: 4px;
+  border: 1px solid var(--editorial-line);
+  background: var(--editorial-surface-2);
+  color: var(--editorial-ink-3);
+  padding: 1px 5px;
+  font-family: var(--editorial-mono);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.ui-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--editorial-line);
+}
+.ui-tab {
+  position: relative;
+  padding: 10px 14px;
+  color: var(--editorial-ink-3);
+  font-size: 13px;
+  font-weight: 500;
+  transition: color 120ms;
+}
+.ui-tab:hover,
+.ui-tab-active {
+  color: var(--editorial-ink-1);
+}
+.ui-tab-active::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  bottom: -1px;
+  left: 14px;
+  height: 2px;
+  background: var(--editorial-ink-1);
+}
+.ui-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--editorial-line-soft);
+  padding: 12px 16px;
+  transition: background 100ms;
+}
+.ui-list-row:hover {
+  background: var(--editorial-hover);
+}
+.ui-palette-surface {
+  overflow: hidden;
+  border-radius: var(--editorial-radius-lg);
+  border: 1px solid var(--editorial-line-strong);
+  background: var(--editorial-surface);
+  box-shadow: var(--editorial-shadow-lg);
+}
+
+/* Editorial app surface hierarchy and overflow discipline.
+   Keep dense product panes readable without default light scrollbars or broad page churn. */
+.editorial-page-surface {
+  overflow: hidden;
+  scrollbar-color: color-mix(
+      in oklab,
+      var(--editorial-accent) 34%,
+      var(--editorial-line)
+    )
+    var(--editorial-surface-2);
+  scrollbar-width: thin;
+}
+.editorial-page-surface * {
+  scrollbar-color: color-mix(
+      in oklab,
+      var(--editorial-accent) 34%,
+      var(--editorial-line)
+    )
+    transparent;
+  scrollbar-width: thin;
+}
+.editorial-page-surface ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.editorial-page-surface ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.editorial-page-surface ::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: var(--editorial-radius-pill);
+  background: color-mix(
+    in oklab,
+    var(--editorial-accent) 34%,
+    var(--editorial-line)
+  );
+  background-clip: content-box;
+}
+.editorial-page-surface ::-webkit-scrollbar-thumb:hover {
+  background: color-mix(
+    in oklab,
+    var(--editorial-accent) 52%,
+    var(--editorial-line-strong)
+  );
+  background-clip: content-box;
+}
+.editorial-page-surface h1,
+.editorial-page-surface h2 {
+  font-family: var(--editorial-display);
+  letter-spacing: -0.01em;
+}
+.editorial-page-surface button,
+.editorial-page-surface input,
+.editorial-page-surface select,
+.editorial-page-surface textarea {
+  font-family: var(--editorial-sans);
+}
+.editorial-page-surface [data-editorial-row-title],
+.editorial-page-surface [data-editorial-control] {
+  letter-spacing: 0.005em;
+}

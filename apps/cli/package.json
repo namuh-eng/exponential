@@ -1,0 +1,44 @@
+{
+  "name": "@namuh-eng/expn-cli",
+  "version": "0.1.0",
+  "description": "Command-line interface for Exponential issue tracking.",
+  "type": "module",
+  "license": "Elastic-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/namuh-eng/exponential.git",
+    "directory": "apps/cli"
+  },
+  "homepage": "https://github.com/namuh-eng/exponential#readme",
+  "bugs": {
+    "url": "https://github.com/namuh-eng/exponential/issues"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["bin", "dist", "README.md"],
+  "bin": {
+    "exponential": "bin/exponential",
+    "expn": "bin/exponential"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "cli": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@namuh-eng/expn-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "tsx": "^4.22.3",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.4"
+  }
+}

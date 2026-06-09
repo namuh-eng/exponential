@@ -1,0 +1,43 @@
+{
+  "name": "@namuh-eng/expn-sdk",
+  "version": "0.1.0",
+  "description": "Generated TypeScript SDK for the Exponential headless API.",
+  "type": "module",
+  "license": "Elastic-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/namuh-eng/exponential.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/namuh-eng/exponential#readme",
+  "bugs": {
+    "url": "https://github.com/namuh-eng/exponential/issues"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "generate": "openapi-typescript ../proto/openapi.yaml -o src/generated.ts && biome format --write src/generated.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.15.0"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.10.1",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.4",
+    "@types/node": "^20.17.0"
+  }
+}
