@@ -43,6 +43,15 @@ curl -X POST https://app.example.com/api/zapier/hooks/subscribe \
   -d '{"trigger":"new_issue","targetUrl":"https://hooks.zapier.com/hooks/catch/..."}'
 ```
 
+Zapier can clean up a webhook-backed trigger with:
+
+```bash
+curl -X POST https://app.example.com/api/zapier/hooks/unsubscribe \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"id":"<subscription id from subscribe>"}'
+```
+
 The response returns a per-hook secret and sample signature headers:
 
 - `x-exponential-webhook-timestamp`
@@ -50,7 +59,7 @@ The response returns a per-hook secret and sample signature headers:
 
 The signature is `HMAC-SHA256(secret, "<timestamp>.<raw payload>")`.
 
-This branch stores Zapier webhook subscriptions and signing metadata. Background reliable delivery is expected to use the shared webhook delivery foundation when that worker is present.
+This branch stores Zapier webhook subscriptions and signing metadata. Issue-backed triggers also store the existing webhook event names used by Exponential delivery: `new_issue` includes `created`, while `updated_issue` and `status_change` include `updated`. Background reliable delivery is expected to use the shared webhook delivery foundation when that worker is present.
 
 ## Actions
 

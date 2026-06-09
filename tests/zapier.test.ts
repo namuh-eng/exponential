@@ -7,6 +7,7 @@ import {
   sampleForTrigger,
   zapierErrorResponse,
   zapierSessionHasScope,
+  zapierWebhookEventsForTrigger,
 } from "@/lib/zapier";
 import { describe, expect, it } from "vitest";
 
@@ -33,6 +34,9 @@ describe("zapier contract helpers", () => {
     expect(manifest.app.authentication.oauthAuthorizeUrl).toBe(
       "https://example.test/api/oauth/authorize",
     );
+    expect(manifest.triggers[0].webhookUnsubscribeUrl).toBe(
+      "https://example.test/api/zapier/hooks/unsubscribe",
+    );
     expect(manifest.app.authentication.scopes).toEqual([
       "read",
       "write",
@@ -47,6 +51,24 @@ describe("zapier contract helpers", () => {
     ]);
     expect(ZAPIER_TRIGGER_KEYS).toHaveLength(5);
     expect(ZAPIER_ACTION_KEYS).toHaveLength(5);
+  });
+
+  it("maps Zapier triggers to stored webhook events for delivery", () => {
+    expect(zapierWebhookEventsForTrigger("new_issue")).toEqual([
+      "new_issue",
+      "created",
+    ]);
+    expect(zapierWebhookEventsForTrigger("updated_issue")).toEqual([
+      "updated_issue",
+      "updated",
+    ]);
+    expect(zapierWebhookEventsForTrigger("status_change")).toEqual([
+      "status_change",
+      "updated",
+    ]);
+    expect(zapierWebhookEventsForTrigger("new_comment")).toEqual([
+      "new_comment",
+    ]);
   });
 
   it("returns sample payloads with stable ids for every trigger", () => {

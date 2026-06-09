@@ -4,6 +4,7 @@ const getZapierContextMock = vi.fn();
 const pollZapierTriggerMock = vi.fn();
 const runZapierActionMock = vi.fn();
 const subscribeZapierHookMock = vi.fn();
+const unsubscribeZapierHookMock = vi.fn();
 
 vi.mock("@/lib/zapier", () => {
   return {
@@ -25,6 +26,7 @@ vi.mock("@/lib/zapier", () => {
     pollZapierTrigger: pollZapierTriggerMock,
     runZapierAction: runZapierActionMock,
     subscribeZapierHook: subscribeZapierHookMock,
+    unsubscribeZapierHook: unsubscribeZapierHookMock,
     zapierErrorResponse: (error: unknown) =>
       Response.json(
         {
@@ -143,5 +145,33 @@ describe("zapier route handlers", () => {
       "webhooks:write",
     );
     await expect(response.json()).resolves.toEqual({ id: "webhook-1" });
+  });
+
+  it("unsubscribes Zapier webhooks with webhook scope", async () => {
+    unsubscribeZapierHookMock.mockResolvedValue({
+      id: "webhook-1",
+      unsubscribed: true,
+    });
+    const { POST } = await import("@/app/api/zapier/hooks/unsubscribe/route");
+
+    const response = await POST(
+      new Request("https://example.test/api/zapier/hooks/unsubscribe", {
+        method: "POST",
+        body: JSON.stringify({ id: "webhook-1" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(getZapierContextMock).toHaveBeenCalledWith(
+      expect.any(Request),
+      "webhooks:write",
+    );
+    expect(unsubscribeZapierHookMock).toHaveBeenCalledWith(expect.any(Object), {
+      id: "webhook-1",
+    });
+    await expect(response.json()).resolves.toEqual({
+      id: "webhook-1",
+      unsubscribed: true,
+    });
   });
 });

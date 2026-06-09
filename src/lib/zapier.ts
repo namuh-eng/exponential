@@ -39,6 +39,7 @@ export const ZAPIER_ACTION_KEYS = [
 
 export type ZapierTriggerKey = (typeof ZAPIER_TRIGGER_KEYS)[number];
 export type ZapierActionKey = (typeof ZAPIER_ACTION_KEYS)[number];
+type ZapierWebhookEvent = ZapierTriggerKey | "created" | "updated";
 type IssuePriority = "none" | "urgent" | "high" | "medium" | "low";
 type ProjectStatus =
   | "planned"
@@ -143,7 +144,14 @@ function readSince(request: Request) {
   }
 
   const parsed = new Date(raw);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  if (Number.isNaN(parsed.getTime())) {
+    throw new ZapierActionError("since must be an ISO timestamp.", {
+      code: "invalid_cursor",
+      field: "since",
+    });
+  }
+
+  return parsed;
 }
 
 function slugify(value: string) {
@@ -321,6 +329,8 @@ export function getZapierManifest(request: Request) {
       key,
       pollingUrl: `${baseUrl}/api/zapier/triggers/${key}`,
       webhookSubscribeUrl: `${baseUrl}/api/zapier/hooks/subscribe`,
+      webhookUnsubscribeUrl: `${baseUrl}/api/zapier/hooks/unsubscribe`,
+      webhookEvents: zapierWebhookEventsForTrigger(key),
       sample: sampleForTrigger(key),
     })),
     actions: ZAPIER_ACTION_KEYS.map((key) => ({
@@ -328,6 +338,20 @@ export function getZapierManifest(request: Request) {
       url: `${baseUrl}/api/zapier/actions/${key}`,
     })),
   };
+}
+
+export function zapierWebhookEventsForTrigger(
+  trigger: ZapierTriggerKey,
+): ZapierWebhookEvent[] {
+  if (trigger === "new_issue") {
+    return ["new_issue", "created"];
+  }
+
+  if (trigger === "updated_issue" || trigger === "status_change") {
+    return [trigger, "updated"];
+  }
+
+  return [trigger];
 }
 
 export function sampleForTrigger(trigger: ZapierTriggerKey) {
@@ -1098,7 +1122,7 @@ export async function subscribeZapierHook(
       workspaceId: context.workspaceId,
       secret,
       enabled: true,
-      events: [trigger],
+      events: zapierWebhookEventsForTrigger(trigger as ZapierTriggerKey),
     })
     .returning({
       id: webhook.id,
@@ -1116,6 +1140,7 @@ export async function subscribeZapierHook(
     id: created.id,
     targetUrl: created.url,
     trigger,
+    events: created.events,
     secret,
     signatureHeaders: {
       "x-exponential-webhook-timestamp": timestamp,
@@ -1127,4 +1152,46 @@ export async function subscribeZapierHook(
     },
     samplePayload: JSON.parse(samplePayload) as unknown,
   };
+}
+
+export async function unsubscribeZapierHook(
+  context: ZapierContext,
+  body: Record<string, unknown>,
+) {
+  if (!zapierSessionHasScope(context.session, "webhooks:write")) {
+    throw new ZapierActionError("Zapier requires the webhooks:write scope.", {
+      status: 403,
+      code: "insufficient_scope",
+    });
+  }
+
+  const id =
+    readString(body.id) ||
+    readString(body.hookId) ||
+    readString(body.subscriptionId);
+  if (!id) {
+    throw new ZapierActionError("Webhook subscription id is required.", {
+      field: "id",
+    });
+  }
+
+  const [deleted] = await db
+    .delete(webhook)
+    .where(
+      and(eq(webhook.id, id), eq(webhook.workspaceId, context.workspaceId)),
+    )
+    .returning({ id: webhook.id });
+
+  if (!deleted) {
+    throw new ZapierActionError(
+      "Webhook subscription was not found in this workspace.",
+      {
+        status: 404,
+        code: "webhook_not_found",
+        field: "id",
+      },
+    );
+  }
+
+  return { id: deleted.id, unsubscribed: true };
 }
