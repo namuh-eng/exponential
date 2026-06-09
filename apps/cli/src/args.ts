@@ -1,4 +1,4 @@
-import type { components } from "@exponential/sdk";
+import type { components } from "@namuh-eng/exponential-sdk";
 
 const priorities = new Set(["none", "urgent", "high", "medium", "low"]);
 

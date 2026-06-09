@@ -69,12 +69,12 @@ curl http://localhost:7015/api/healthz
 
 SDK:
 ```bash
-pnpm --filter @exponential/sdk test
+pnpm --filter @namuh-eng/exponential-sdk test
 ```
 
 CLI:
 ```bash
-pnpm --filter @exponential/cli test
+pnpm --filter @namuh-eng/exponential-cli test
 ```
 
 ## Environment

@@ -9,14 +9,14 @@ and scriptable issue/project workflows.
 Published package:
 
 ```bash
-npm install -g @exponential/cli
+npm install -g @namuh-eng/exponential-cli
 ```
 
 From a source checkout:
 
 ```bash
 pnpm install
-pnpm --filter @exponential/cli cli -- --help
+pnpm --filter @namuh-eng/exponential-cli cli -- --help
 ```
 
 When the workspace package is linked or installed, the binary name is:
