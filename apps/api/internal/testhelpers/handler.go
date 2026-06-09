@@ -29,10 +29,15 @@ func (h Handler) Routes() chi.Router {
 }
 
 func allowed() bool {
-	if strings.EqualFold(os.Getenv("EXPONENTIAL_API_ENVIRONMENT"), "production") {
+	apiEnv := strings.ToLower(strings.TrimSpace(os.Getenv("EXPONENTIAL_API_ENVIRONMENT")))
+	nodeEnv := strings.ToLower(strings.TrimSpace(os.Getenv("NODE_ENV")))
+	if apiEnv == "production" || nodeEnv == "production" {
 		return false
 	}
-	return os.Getenv("NODE_ENV") == "test" || os.Getenv("PLAYWRIGHT_TEST") == "true"
+	if nodeEnv == "test" || os.Getenv("PLAYWRIGHT_TEST") == "true" {
+		return true
+	}
+	return apiEnv == "" || apiEnv == "development" || apiEnv == "local"
 }
 
 func (h Handler) CreateAuthorizedApplication(w http.ResponseWriter, r *http.Request) {

@@ -296,8 +296,8 @@ func loadTrustedProxies() []*net.IPNet {
 }
 
 func clientIP(r *http.Request) string {
-	// X-Test-Client-IP is only used in tests.
-	if TestMode() {
+	// X-Test-Client-IP is only used in tests and local E2E development.
+	if testClientIPMode() {
 		if testIP := strings.TrimSpace(strings.Split(r.Header.Get("X-Test-Client-IP"), ",")[0]); testIP != "" {
 			return testIP
 		}
@@ -386,6 +386,18 @@ func (m Middleware) authenticate(ctx context.Context, r *http.Request) (Principa
 
 func TestMode() bool {
 	return os.Getenv("NODE_ENV") == "test" || os.Getenv("PLAYWRIGHT_TEST") == "true"
+}
+
+func testClientIPMode() bool {
+	apiEnv := strings.ToLower(strings.TrimSpace(os.Getenv("EXPONENTIAL_API_ENVIRONMENT")))
+	nodeEnv := strings.ToLower(strings.TrimSpace(os.Getenv("NODE_ENV")))
+	if apiEnv == "production" || nodeEnv == "production" {
+		return false
+	}
+	if TestMode() {
+		return true
+	}
+	return apiEnv == "" || apiEnv == "development" || apiEnv == "local"
 }
 
 func DevSessionSecret() string {

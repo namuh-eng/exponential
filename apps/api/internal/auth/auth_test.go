@@ -187,6 +187,21 @@ func TestClientIPIgnoresTestHeaderOutsideTestMode(t *testing.T) {
 	trustedProxyNetworks = nil
 }
 
+func TestClientIPUsesTestHeaderInLocalDevelopment(t *testing.T) {
+	trustedProxyOnce = sync.Once{}
+	trustedProxyNetworks = nil
+	t.Setenv("EXPONENTIAL_API_ENVIRONMENT", "development")
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Test-Client-IP", "198.51.100.10")
+	req.RemoteAddr = "10.0.0.1:9999"
+	got := clientIP(req)
+	if got != "198.51.100.10" {
+		t.Fatalf("expected test header IP 198.51.100.10, got %q", got)
+	}
+	trustedProxyOnce = sync.Once{}
+	trustedProxyNetworks = nil
+}
+
 func TestClientIPUsesTestHeaderInTestMode(t *testing.T) {
 	trustedProxyOnce = sync.Once{}
 	trustedProxyNetworks = nil
