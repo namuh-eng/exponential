@@ -22,19 +22,19 @@ mkdir -p .release
 
 pnpm install --frozen-lockfile
 
-pnpm --filter @expn/sdk typecheck
-pnpm --filter @expn/sdk test
-pnpm --filter @expn/sdk build
+pnpm --filter @namuh-eng/expn-sdk typecheck
+pnpm --filter @namuh-eng/expn-sdk test
+pnpm --filter @namuh-eng/expn-sdk build
 
-pnpm --filter @expn/cli typecheck
-pnpm --filter @expn/cli test
-pnpm --filter @expn/cli build
+pnpm --filter @namuh-eng/expn-cli typecheck
+pnpm --filter @namuh-eng/expn-cli test
+pnpm --filter @namuh-eng/expn-cli build
 
-pnpm --filter @expn/sdk pack --pack-destination "$PWD/.release"
-pnpm --filter @expn/cli pack --pack-destination "$PWD/.release"
+pnpm --filter @namuh-eng/expn-sdk pack --pack-destination "$PWD/.release"
+pnpm --filter @namuh-eng/expn-cli pack --pack-destination "$PWD/.release"
 
-sdk_tarballs=(.release/expn-sdk-*.tgz)
-cli_tarballs=(.release/expn-cli-*.tgz)
+sdk_tarballs=(.release/namuh-eng-expn-sdk-*.tgz)
+cli_tarballs=(.release/namuh-eng-expn-cli-*.tgz)
 
 if [[ "${#sdk_tarballs[@]}" -ne 1 || "${#cli_tarballs[@]}" -ne 1 ]]; then
   echo "Expected exactly one SDK tarball and one CLI tarball in .release." >&2
@@ -54,6 +54,6 @@ echo "Publishing ${cli_tarballs[0]} with DRY_RUN=$dry_run"
 npm publish "${cli_tarballs[0]}" "${publish_args[@]}"
 
 if [[ "$dry_run" == "false" ]]; then
-  npm view @expn/sdk version
-  npm view @expn/cli version
+  npm view @namuh-eng/expn-sdk version
+  npm view @namuh-eng/expn-cli version
 fi

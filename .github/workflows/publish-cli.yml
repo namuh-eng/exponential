@@ -35,21 +35,21 @@ jobs:
 
       - name: Verify SDK
         run: |
-          pnpm --filter @expn/sdk typecheck
-          pnpm --filter @expn/sdk test
-          pnpm --filter @expn/sdk build
+          pnpm --filter @namuh-eng/expn-sdk typecheck
+          pnpm --filter @namuh-eng/expn-sdk test
+          pnpm --filter @namuh-eng/expn-sdk build
 
       - name: Verify CLI
         run: |
-          pnpm --filter @expn/cli typecheck
-          pnpm --filter @expn/cli test
-          pnpm --filter @expn/cli build
+          pnpm --filter @namuh-eng/expn-cli typecheck
+          pnpm --filter @namuh-eng/expn-cli test
+          pnpm --filter @namuh-eng/expn-cli build
 
       - name: Pack release tarballs
         run: |
           mkdir -p .release
-          pnpm --filter @expn/sdk pack --pack-destination "$PWD/.release"
-          pnpm --filter @expn/cli pack --pack-destination "$PWD/.release"
+          pnpm --filter @namuh-eng/expn-sdk pack --pack-destination "$PWD/.release"
+          pnpm --filter @namuh-eng/expn-cli pack --pack-destination "$PWD/.release"
           ls -la .release
 
       - name: Publish release tarballs
@@ -62,5 +62,5 @@ jobs:
             publish_args="$publish_args --dry-run"
           fi
 
-          npm publish .release/expn-sdk-*.tgz $publish_args
-          npm publish .release/expn-cli-*.tgz $publish_args
+          npm publish .release/namuh-eng-expn-sdk-*.tgz $publish_args
+          npm publish .release/namuh-eng-expn-cli-*.tgz $publish_args

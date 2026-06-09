@@ -20,7 +20,7 @@ importers:
 
   apps/cli:
     dependencies:
-      '@expn/sdk':
+      '@namuh-eng/expn-sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
     devDependencies:
@@ -70,7 +70,7 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.1024.0
         version: 3.1053.0
-      '@expn/sdk':
+      '@namuh-eng/expn-sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
       '@radix-ui/react-avatar':
@@ -191,12 +191,12 @@ importers:
 
   packages/mcp-server:
     dependencies:
-      '@expn/sdk':
-        specifier: workspace:*
-        version: link:../sdk
       '@modelcontextprotocol/sdk':
         specifier: 1.29.0
         version: 1.29.0(zod@4.4.3)
+      '@namuh-eng/expn-sdk':
+        specifier: workspace:*
+        version: link:../sdk
       zod:
         specifier: ^4.1.13
         version: 4.4.3

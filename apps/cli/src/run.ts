@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
-import { createExponentialClient, syncWebSocketUrl } from "@expn/sdk";
-import type { ExponentialClient } from "@expn/sdk";
+import { createExponentialClient, syncWebSocketUrl } from "@namuh-eng/expn-sdk";
+import type { ExponentialClient } from "@namuh-eng/expn-sdk";
 import { parseIssueBody, readFlag, readOption, requireOption } from "./args.js";
 import {
   assertPatToken,

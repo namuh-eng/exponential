@@ -1,6 +1,6 @@
 "use client";
 
-import { createExponentialClient } from "@expn/sdk";
+import { createExponentialClient } from "@namuh-eng/expn-sdk";
 
 function browserApiBaseUrl() {
   if (typeof window !== "undefined" && window.location?.origin) {

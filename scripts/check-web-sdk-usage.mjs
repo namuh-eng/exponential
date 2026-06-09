@@ -5,8 +5,8 @@ const browserClient = readFileSync(
   "apps/web/src/lib/browser-api-client.ts",
   "utf8",
 );
-if (!browserClient.includes('from "@expn/sdk"')) {
-  throw new Error("apps/web browser API client must use @expn/sdk");
+if (!browserClient.includes('from "@namuh-eng/expn-sdk"')) {
+  throw new Error("apps/web browser API client must use @namuh-eng/expn-sdk");
 }
 if (
   !browserClient.includes("baseUrl: browserApiBaseUrl()") ||

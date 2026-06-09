@@ -1,5 +1,5 @@
 {
-  "name": "@expn/cli",
+  "name": "@namuh-eng/expn-cli",
   "version": "0.1.0",
   "description": "Command-line interface for Exponential issue tracking.",
   "type": "module",
@@ -33,7 +33,7 @@
     "cli": "tsx src/index.ts"
   },
   "dependencies": {
-    "@expn/sdk": "workspace:*"
+    "@namuh-eng/expn-sdk": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",
