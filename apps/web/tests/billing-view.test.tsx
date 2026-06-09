@@ -11,16 +11,16 @@ describe("BillingSettingsPage component", () => {
         ok: true,
         json: async () => ({
           workspace: { id: "ws_1", name: "Acme", role: "admin" },
-          currentPlan: "free",
+          currentPlan: "cloud_free",
           canManage: true,
           usage: { seatsUsed: 1, issuesUsed: 2, issueLimit: 250 },
           plans: [
             {
-              id: "free",
-              name: "Free",
-              price: "$0",
+              id: "cloud_free",
+              displayName: "Cloud Free",
+              priceLabel: "$0",
               description: "For individuals and small trials.",
-              features: ["3 members"],
+              capabilities: ["core_issues"],
             },
           ],
           paymentMethods: [],
