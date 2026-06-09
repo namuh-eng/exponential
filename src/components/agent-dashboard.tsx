@@ -35,6 +35,18 @@ const suggestionActionLabels: Record<AgentSuggestionStatus, string> = {
   declined: "Declined",
 };
 
+function providerLabel(provider: string) {
+  const labels: Record<string, string> = {
+    slack: "Slack",
+    teams: "Microsoft Teams",
+    zendesk: "Zendesk",
+    intercom: "Intercom",
+    front: "Front",
+  };
+
+  return labels[provider] ?? provider;
+}
+
 function formatTimestamp(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -419,6 +431,16 @@ export function AgentDashboard() {
                       {selectedRun.owner} · {selectedRun.teamKey} · Created{" "}
                       {formatTimestamp(selectedRun.createdAt)}
                     </p>
+                    {selectedRun.source && (
+                      <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+                        {providerLabel(selectedRun.source.provider)} source ·{" "}
+                        {selectedRun.source.channelName ??
+                          selectedRun.source.conversationId}
+                        {selectedRun.actor?.mappedUserId
+                          ? " · mapped workspace actor"
+                          : ""}
+                      </p>
+                    )}
                   </div>
                   <span
                     className={`rounded-full border px-2.5 py-1 text-[12px] ${statusClassName(selectedRun.status)}`}
@@ -436,6 +458,13 @@ export function AgentDashboard() {
                   <p className="mt-2 text-[13px] leading-5 text-[var(--color-text-secondary)]">
                     {selectedRun.output}
                   </p>
+                  {selectedRun.reviewGate && (
+                    <p className="mt-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-[12px] leading-5 text-[var(--color-text-secondary)]">
+                      {selectedRun.reviewGate.required
+                        ? "Review gate: explicit approval is required before applying this external action."
+                        : "Review gate: read-only external action, no workspace mutation."}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -463,6 +492,11 @@ export function AgentDashboard() {
                             {suggestionActionLabels[suggestion.status]}
                           </span>
                         </div>
+                        {suggestion.requiresApproval && (
+                          <p className="mt-2 text-[12px] font-medium text-amber-700 dark:text-amber-300">
+                            Explicit approval required
+                          </p>
+                        )}
                         <p className="mt-2 text-[13px] leading-5 text-[var(--color-text-secondary)]">
                           {suggestion.summary}
                         </p>

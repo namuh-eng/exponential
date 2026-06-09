@@ -2,7 +2,14 @@ import { db } from "@/lib/db";
 import { account } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 
-export type IntegrationProviderId = "github" | "gitlab" | "slack";
+export type IntegrationProviderId =
+  | "github"
+  | "gitlab"
+  | "slack"
+  | "teams"
+  | "zendesk"
+  | "intercom"
+  | "front";
 
 export type IntegrationActor = {
   provider: IntegrationProviderId;
