@@ -550,7 +550,7 @@ export default function InitiativesPage() {
           type="button"
           onClick={openCreateForm}
           disabled={!initiativesEnabled}
-          className="inline-flex items-center gap-2 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-[var(--editorial-accent-ink)] transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <span>
             {initiativesEnabled ? "New initiative" : "Initiatives disabled"}
@@ -771,7 +771,7 @@ export default function InitiativesPage() {
             <div className="flex items-center gap-2">
               <button
                 type="submit"
-                className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:opacity-90"
+                className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-[var(--editorial-accent-ink)] transition-colors hover:opacity-90"
               >
                 Create initiative
               </button>

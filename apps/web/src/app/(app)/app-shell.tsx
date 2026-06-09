@@ -21,7 +21,7 @@ import {
   isPlainKeyShortcut,
 } from "@/lib/keyboard-shortcuts";
 import { stripWorkspaceSlug, withWorkspaceSlug } from "@/lib/workspace-paths";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { GripVertical, PanelLeftOpen } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   createContext,
@@ -58,6 +58,11 @@ interface ShellContext {
 const AppShellContext = createContext<ShellContext | null>(null);
 type CreateIssueMode = "modal" | "fullscreen";
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "exponential:sidebar-collapsed";
+const SIDEBAR_WIDTH_STORAGE_KEY = "exponential:sidebar-width";
+const SIDEBAR_DEFAULT_WIDTH = 264;
+const SIDEBAR_MIN_WIDTH = 224;
+const SIDEBAR_MAX_WIDTH = 360;
+const SIDEBAR_DRAG_THRESHOLD = 4;
 const TTY_BUFFERS = [
   { id: "triage", key: "gt", label: "triage" },
   { id: "board", key: "gb", label: "board" },
@@ -98,6 +103,14 @@ const shellBuildMetadata = {
     "sha:unknown",
   ),
 };
+
+function clampSidebarWidth(width: number) {
+  if (!Number.isFinite(width)) {
+    return SIDEBAR_DEFAULT_WIDTH;
+  }
+
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width));
+}
 
 export function useAppShellContext() {
   return useContext(AppShellContext);
@@ -239,6 +252,10 @@ export function AppShell({
     useState<AccountPreferences>(DEFAULT_ACCOUNT_PREFERENCES);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [sidebarPreviewOpen, setSidebarPreviewOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+  const sidebarWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH);
+  const sidebarDragMovedRef = useRef(false);
+  const sidebarRevealTimeoutRef = useRef<number | null>(null);
   const [shellContext, setShellContext] = useState<ShellContext>({
     workspaceId,
     workspaceSlug,
@@ -271,6 +288,25 @@ export function AppShell({
     [],
   );
 
+  const clearSidebarRevealTimeout = useCallback(() => {
+    if (sidebarRevealTimeoutRef.current !== null) {
+      window.clearTimeout(sidebarRevealTimeoutRef.current);
+      sidebarRevealTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleSidebarPreview = useCallback(() => {
+    clearSidebarRevealTimeout();
+    sidebarRevealTimeoutRef.current = window.setTimeout(() => {
+      setSidebarPreviewOpen(true);
+      sidebarRevealTimeoutRef.current = null;
+    }, 160);
+  }, [clearSidebarRevealTimeout]);
+
+  useEffect(() => {
+    return () => clearSidebarRevealTimeout();
+  }, [clearSidebarRevealTimeout]);
+
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY);
@@ -278,7 +314,85 @@ export function AppShell({
     } catch {
       setSidebarCollapsed(true);
     }
+
+    try {
+      const storedWidth = window.localStorage.getItem(
+        SIDEBAR_WIDTH_STORAGE_KEY,
+      );
+      const parsedWidth =
+        storedWidth === null ? Number.NaN : Number(storedWidth);
+      const resolvedWidth = clampSidebarWidth(parsedWidth);
+      sidebarWidthRef.current = resolvedWidth;
+      setSidebarWidth(resolvedWidth);
+    } catch {
+      sidebarWidthRef.current = SIDEBAR_DEFAULT_WIDTH;
+      setSidebarWidth(SIDEBAR_DEFAULT_WIDTH);
+    }
   }, []);
+
+  const updateSidebarWidth = useCallback(
+    (nextWidth: number, persist = false) => {
+      const resolvedWidth = clampSidebarWidth(nextWidth);
+      sidebarWidthRef.current = resolvedWidth;
+      setSidebarWidth(resolvedWidth);
+
+      if (!persist) {
+        return;
+      }
+
+      try {
+        window.localStorage.setItem(
+          SIDEBAR_WIDTH_STORAGE_KEY,
+          String(Math.round(resolvedWidth)),
+        );
+      } catch {
+        // Width persistence is optional; the live layout can keep operating.
+      }
+    },
+    [],
+  );
+
+  const handleSidebarResizeMouseDown = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (event.button > 0) {
+        return;
+      }
+
+      event.preventDefault();
+      const startX = event.clientX;
+      const startWidth = sidebarWidthRef.current;
+      sidebarDragMovedRef.current = false;
+
+      function handleMouseMove(mouseEvent: MouseEvent) {
+        const delta = mouseEvent.clientX - startX;
+        if (Math.abs(delta) > SIDEBAR_DRAG_THRESHOLD) {
+          sidebarDragMovedRef.current = true;
+        }
+        updateSidebarWidth(startWidth + delta);
+      }
+
+      function handleMouseUp() {
+        updateSidebarWidth(sidebarWidthRef.current, true);
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+        window.setTimeout(() => {
+          sidebarDragMovedRef.current = false;
+        }, 0);
+      }
+
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp, { once: true });
+    },
+    [updateSidebarWidth],
+  );
+
+  const collapseSidebarFromDivider = useCallback(() => {
+    if (sidebarDragMovedRef.current) {
+      return;
+    }
+
+    updateSidebarCollapsed(true);
+  }, [updateSidebarCollapsed]);
 
   useEffect(() => {
     const fallbackContext = {
@@ -581,6 +695,7 @@ export function AppShell({
       }
       accountPreferences={accountPreferences}
       workspaceSlug={shellContext.workspaceSlug}
+      width={sidebarWidth}
     />
   );
 
@@ -591,18 +706,42 @@ export function AppShell({
         data-editorial-theme="product"
       >
         {sidebarCollapsed && (
-          <div
-            data-testid="app-sidebar-hover-zone"
-            aria-hidden="true"
-            className="fixed inset-y-0 left-0 z-40 hidden w-3 bg-transparent md:block"
-            onMouseEnter={() => setSidebarPreviewOpen(true)}
-          />
+          <>
+            <button
+              type="button"
+              data-testid="app-sidebar-hover-zone"
+              aria-label="Show sidebar"
+              title="Show sidebar"
+              className="fixed inset-y-0 left-0 z-[60] hidden w-3 border-r border-[var(--color-border-strong)] bg-[var(--color-sidebar-bg)] text-[var(--color-text-secondary)] md:flex md:items-center md:justify-center"
+              onClick={() => {
+                clearSidebarRevealTimeout();
+                updateSidebarCollapsed(false);
+              }}
+            >
+              <PanelLeftOpen
+                className="h-3 w-3 opacity-70"
+                aria-hidden="true"
+              />
+            </button>
+            <div
+              data-testid="app-sidebar-preview-zone"
+              aria-hidden="true"
+              className="fixed inset-y-0 left-3 z-40 hidden w-5 bg-transparent md:block"
+              onMouseEnter={scheduleSidebarPreview}
+              onMouseLeave={clearSidebarRevealTimeout}
+            />
+          </>
         )}
         <div
           data-testid="app-sidebar-shell"
-          className={`hidden md:block ${
+          className={`hidden shrink-0 md:block ${
             sidebarCollapsed ? "fixed inset-y-0 left-0 z-50" : ""
           }`}
+          style={
+            sidebarCollapsed
+              ? undefined
+              : { width: `${Math.round(sidebarWidth)}px` }
+          }
           onMouseLeave={
             sidebarCollapsed ? () => setSidebarPreviewOpen(false) : undefined
           }
@@ -612,14 +751,44 @@ export function AppShell({
               data-testid={
                 sidebarCollapsed ? "app-sidebar-reveal-panel" : undefined
               }
-              className={
+              className={`relative ${
                 sidebarCollapsed ? "shadow-[12px_0_34px_rgba(0,0,0,0.34)]" : ""
-              }
+              }`}
               onFocus={
                 sidebarCollapsed ? () => setSidebarPreviewOpen(true) : undefined
               }
             >
               {sidebar}
+              {!sidebarCollapsed && (
+                <button
+                  type="button"
+                  data-testid="sidebar-resize-handle"
+                  aria-label="Resize sidebar. Click to hide sidebar"
+                  title="Drag to resize. Click to collapse."
+                  onMouseDown={handleSidebarResizeMouseDown}
+                  onClick={collapseSidebarFromDivider}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      updateSidebarCollapsed(true);
+                    }
+                  }}
+                  className="group/sidebar-resizer absolute inset-y-0 right-[-5px] z-30 hidden w-[10px] cursor-col-resize items-center justify-center border-x border-transparent text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] hover:text-[var(--color-text-primary)] focus-visible:border-[var(--color-accent)] focus-visible:bg-[var(--color-surface-hover)] md:flex"
+                >
+                  <GripVertical
+                    className="h-4 w-4 opacity-0 transition-opacity group-hover/sidebar-resizer:opacity-100 group-focus-visible/sidebar-resizer:opacity-100"
+                    aria-hidden="true"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-4 top-1/2 z-40 hidden min-w-[196px] -translate-y-1/2 border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-left font-mono text-[12px] leading-6 text-[var(--color-text-primary)] opacity-0 shadow-[var(--shadow-editorial-md)] transition-opacity group-hover/sidebar-resizer:block group-hover/sidebar-resizer:opacity-100"
+                  >
+                    Drag to resize
+                    <br />
+                    Click to collapse <kbd className="tty-kbd ml-2">\</kbd>
+                  </span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -705,25 +874,6 @@ export function AppShell({
                 <span className="hidden lg:inline text-[var(--color-text-tertiary)]">
                   {shellBuildMetadata.version}
                 </span>
-                <button
-                  type="button"
-                  aria-label={
-                    sidebarCollapsed ? "Show sidebar" : "Hide sidebar"
-                  }
-                  title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
-                  data-testid="sidebar-toggle-button"
-                  onClick={() => updateSidebarCollapsed((current) => !current)}
-                  className="tty-row hidden h-6 w-6 items-center justify-center border border-[var(--color-border)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)] md:inline-flex"
-                >
-                  {sidebarCollapsed ? (
-                    <PanelLeftOpen className="h-3.5 w-3.5" aria-hidden="true" />
-                  ) : (
-                    <PanelLeftClose
-                      className="h-3.5 w-3.5"
-                      aria-hidden="true"
-                    />
-                  )}
-                </button>
               </div>
             </header>
 

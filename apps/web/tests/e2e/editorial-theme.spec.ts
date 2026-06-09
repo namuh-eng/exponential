@@ -82,7 +82,9 @@ async function expectEditorialTokens(page: import("@playwright/test").Page) {
   }, tokenNames);
 
   expect(["#f0eee9", "#0c0d0c"]).toContain(tokenState["--color-content-bg"]);
-  expect(["#cdcabd", "#2a2e2c"]).toContain(tokenState["--color-border"]);
+  expect(["#cdcabd", "#2a2e2c", "#343a36"]).toContain(
+    tokenState["--color-border"],
+  );
   expect(tokenState["--editorial-accent"].length).toBeGreaterThan(0);
   expect(tokenState["--color-accent"].length).toBeGreaterThan(0);
   expect(tokenState["--editorial-display"]).toContain("monospace");

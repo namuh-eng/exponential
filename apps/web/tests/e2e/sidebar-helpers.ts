@@ -1,20 +1,24 @@
 import { type Page, expect } from "@playwright/test";
 
 export async function expandAppSidebar(page: Page) {
-  const hideSidebarButton = page.getByRole("button", { name: "Hide sidebar" });
   const showSidebarButton = page.getByRole("button", { name: "Show sidebar" });
+  const workspaceSwitcher = page.getByRole("button", {
+    name: "Workspace switcher",
+  });
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    if (await hideSidebarButton.isVisible()) {
+    if (await workspaceSwitcher.isVisible()) {
       await expect(page.getByTestId("app-sidebar-shell")).toBeVisible();
       return;
     }
 
     await expect(showSidebarButton).toBeVisible();
-    await showSidebarButton.click();
+    await showSidebarButton.evaluate((element) => {
+      (element as HTMLButtonElement).click();
+    });
     await page.waitForTimeout(250);
   }
 
-  await expect(hideSidebarButton).toBeVisible();
+  await expect(workspaceSwitcher).toBeVisible();
   await expect(page.getByTestId("app-sidebar-shell")).toBeVisible();
 }

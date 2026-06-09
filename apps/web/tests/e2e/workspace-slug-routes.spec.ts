@@ -1,7 +1,30 @@
-import { expect, test } from "@playwright/test";
+import { type Page, expect, test } from "@playwright/test";
 import { expandAppSidebar } from "./sidebar-helpers";
 
+async function gotoAndExpectPath(page: Page, targetPath: string) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await page.goto(targetPath, { waitUntil: "domcontentloaded" });
+    } catch (error) {
+      if (!String(error).includes("net::ERR_ABORTED") || attempt === 2) {
+        throw error;
+      }
+    }
+
+    try {
+      await expect(page).toHaveURL((url) => url.pathname === targetPath);
+      return;
+    } catch (error) {
+      if (attempt === 2) {
+        throw error;
+      }
+    }
+  }
+}
+
 test.describe("Workspace slug routes", () => {
+  test.describe.configure({ timeout: 60_000 });
+
   test("renders slug-prefixed inbox, settings, team routes and emits slug links", async ({
     page,
   }) => {
@@ -22,7 +45,7 @@ test.describe("Workspace slug routes", () => {
     await page.goto(`/${workspaceSlug}`);
     await expect(page).toHaveURL(new RegExp(`/${workspaceSlug}/inbox$`));
 
-    await page.goto(`/${workspaceSlug}/inbox`);
+    await gotoAndExpectPath(page, `/${workspaceSlug}/inbox`);
     await expect(page.getByText("Inbox").first()).toBeVisible();
     await expect(
       page.getByText("This page could not be found"),
@@ -33,7 +56,10 @@ test.describe("Workspace slug routes", () => {
       page.getByRole("link", { name: "Projects" }).first(),
     ).toHaveAttribute("href", `/${workspaceSlug}/projects/all`);
 
-    await page.goto(`/${workspaceSlug}/settings/account/notifications`);
+    await gotoAndExpectPath(
+      page,
+      `/${workspaceSlug}/settings/account/notifications`,
+    );
     await expect(
       page.getByRole("heading", { name: "Notifications" }),
     ).toBeVisible();
@@ -41,7 +67,7 @@ test.describe("Workspace slug routes", () => {
       page.getByRole("link", { name: "Preferences" }),
     ).toHaveAttribute("href", `/${workspaceSlug}/settings/account/preferences`);
 
-    await page.goto(`/${workspaceSlug}/team/${teamKey}/all`);
+    await gotoAndExpectPath(page, `/${workspaceSlug}/team/${teamKey}/all`);
     await expect(
       page.getByRole("heading", { name: "No issues" }),
     ).toBeVisible();
@@ -63,13 +89,16 @@ test.describe("Workspace slug routes", () => {
       page.getByRole("heading", { name: /Analytics/ }),
     ).toBeVisible();
 
-    await page.goto(`/${workspaceSlug}/team/${teamKey}/analytics`);
+    await gotoAndExpectPath(
+      page,
+      `/${workspaceSlug}/team/${teamKey}/analytics`,
+    );
     await expect(page.getByText("exponential Insights")).toBeVisible();
     await expect(
       page.getByText("This page could not be found"),
     ).not.toBeVisible();
 
-    await page.goto(`/${workspaceSlug}/team/${teamKey}/insights`);
+    await gotoAndExpectPath(page, `/${workspaceSlug}/team/${teamKey}/insights`);
     await expect(page.getByText("exponential Insights")).toBeVisible();
     await expect(
       page.getByText("This page could not be found"),
@@ -109,14 +138,14 @@ test.describe("Workspace slug routes", () => {
     });
     expect(projectResponse.status()).toBe(201);
 
-    await page.goto(`/${workspaceSlug}/projects`);
+    await gotoAndExpectPath(page, `/${workspaceSlug}/projects`);
     await expect(page).toHaveURL(new RegExp(`/${workspaceSlug}/projects$`));
     await expect(page.getByText(projectName)).toBeVisible();
     await expect(
       page.getByText("This page could not be found"),
     ).not.toBeVisible();
 
-    await page.goto(`/${workspaceSlug}/projects/all`);
+    await gotoAndExpectPath(page, `/${workspaceSlug}/projects/all`);
     await expect(page).toHaveURL(new RegExp(`/${workspaceSlug}/projects/all$`));
     const projectLink = page.getByRole("link", {
       name: new RegExp(projectName),

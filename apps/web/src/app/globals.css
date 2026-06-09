@@ -261,6 +261,15 @@
     line-height: 1.2;
     padding: 2px 5px;
   }
+
+  .dark [class*="bg-[var(--color-accent)]"][class*="text-white"],
+  .dark [class*="bg-[var(--editorial-accent)]"][class*="text-white"],
+  [data-editorial-theme="product"]
+    [class*="bg-[var(--color-accent)]"][class*="text-white"],
+  [data-editorial-theme="product"]
+    [class*="bg-[var(--editorial-accent)]"][class*="text-white"] {
+    color: var(--editorial-accent-ink);
+  }
 }
 
 @layer base {
