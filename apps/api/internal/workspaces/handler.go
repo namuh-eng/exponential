@@ -12,6 +12,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -24,6 +25,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
+	"github.com/stripe/stripe-go/v82"
+	"github.com/stripe/stripe-go/v82/client"
 )
 
 type Handler struct{ DB *pgxpool.Pool }
@@ -180,6 +183,8 @@ func (h Handler) Routes() chi.Router {
 	r.Patch("/current/security", h.UpdateCurrentSecurity)
 	r.Get("/current/billing", h.GetBilling)
 	r.Patch("/current/billing", h.UpdateBilling)
+	r.Post("/current/billing/checkout", h.CreateBillingCheckout)
+	r.Post("/current/billing/portal", h.CreateBillingPortal)
 	r.Delete("/current", h.DeleteCurrent)
 	r.Get("/members", h.ListMembers)
 	r.Patch("/members", h.UpdateMemberOrInvitation)
@@ -601,6 +606,19 @@ type billingPlan struct {
 
 type billingPatchRequest struct {
 	Plan any `json:"plan"`
+}
+
+type billingCheckoutRequest struct {
+	Plan any `json:"plan"`
+}
+
+type billingCheckoutResponse struct {
+	URL       string `json:"url"`
+	SessionID string `json:"sessionId"`
+}
+
+type billingPortalResponse struct {
+	URL string `json:"url"`
 }
 
 type billingWorkspace struct {
@@ -1486,6 +1504,127 @@ func (h Handler) UpdateBilling(w http.ResponseWriter, r *http.Request) {
 	problem.JSON(w, 200, response)
 }
 
+func (h Handler) CreateBillingCheckout(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	if !isManager(p.Role) {
+		problem.Write(w, 403, "Only workspace admins can manage billing", "")
+		return
+	}
+	var input billingCheckoutRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		problem.Write(w, 400, "Invalid JSON", err.Error())
+		return
+	}
+	plan, priceID := stripeCheckoutPlan(input.Plan)
+	if plan == "" {
+		problem.Write(w, 400, "Unsupported self-serve billing plan", "")
+		return
+	}
+	if priceID == "" {
+		problem.Write(w, 503, "Stripe billing is not configured", "missing Stripe price ID")
+		return
+	}
+	secretKey := strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY"))
+	if secretKey == "" {
+		problem.Write(w, 503, "Stripe billing is not configured", "missing STRIPE_SECRET_KEY")
+		return
+	}
+
+	workspace, err := h.billingWorkspaceForPrincipal(r.Context(), p)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "No active workspace found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Create billing checkout failed", err.Error())
+		return
+	}
+	customerID := stripeCustomerID(workspace.Settings)
+	stripeClient := client.New(secretKey, nil)
+	if customerID == "" {
+		customer, err := stripeClient.Customers.New(&stripe.CustomerParams{
+			Name:     stripe.String(workspace.Name),
+			Metadata: map[string]string{"workspace_id": workspace.ID, "workspaceId": workspace.ID},
+		})
+		if err != nil {
+			problem.Write(w, 502, "Create Stripe customer failed", err.Error())
+			return
+		}
+		customerID = customer.ID
+		if err := h.saveStripeCustomerID(r.Context(), workspace.ID, customerID); err != nil {
+			problem.Write(w, 500, "Save Stripe customer failed", err.Error())
+			return
+		}
+	}
+
+	successURL, cancelURL, err := billingCheckoutURLs(r)
+	if err != nil {
+		problem.Write(w, 500, "Create billing checkout failed", err.Error())
+		return
+	}
+	session, err := stripeClient.CheckoutSessions.New(&stripe.CheckoutSessionParams{
+		Mode:              stripe.String(string(stripe.CheckoutSessionModeSubscription)),
+		Customer:          stripe.String(customerID),
+		ClientReferenceID: stripe.String(workspace.ID),
+		LineItems: []*stripe.CheckoutSessionLineItemParams{{
+			Price:    stripe.String(priceID),
+			Quantity: stripe.Int64(1),
+		}},
+		SuccessURL: successURL,
+		CancelURL:  cancelURL,
+		Metadata:   map[string]string{"workspace_id": workspace.ID, "workspaceId": workspace.ID, "plan": plan},
+		SubscriptionData: &stripe.CheckoutSessionSubscriptionDataParams{
+			Metadata: map[string]string{"workspace_id": workspace.ID, "workspaceId": workspace.ID, "plan": plan},
+		},
+	})
+	if err != nil {
+		problem.Write(w, 502, "Create Stripe checkout failed", err.Error())
+		return
+	}
+	problem.JSON(w, 200, billingCheckoutResponse{URL: session.URL, SessionID: session.ID})
+}
+
+func (h Handler) CreateBillingPortal(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	if !isManager(p.Role) {
+		problem.Write(w, 403, "Only workspace admins can manage billing", "")
+		return
+	}
+	secretKey := strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY"))
+	if secretKey == "" {
+		problem.Write(w, 503, "Stripe billing is not configured", "missing STRIPE_SECRET_KEY")
+		return
+	}
+	workspace, err := h.billingWorkspaceForPrincipal(r.Context(), p)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "No active workspace found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Create billing portal failed", err.Error())
+		return
+	}
+	customerID := stripeCustomerID(workspace.Settings)
+	if customerID == "" {
+		problem.Write(w, 409, "No Stripe customer is linked to this workspace", "")
+		return
+	}
+	returnURL, err := billingPortalReturnURL(r)
+	if err != nil {
+		problem.Write(w, 500, "Create billing portal failed", err.Error())
+		return
+	}
+	portal, err := client.New(secretKey, nil).BillingPortalSessions.New(&stripe.BillingPortalSessionParams{
+		Customer:  stripe.String(customerID),
+		ReturnURL: returnURL,
+	})
+	if err != nil {
+		problem.Write(w, 502, "Create Stripe billing portal failed", err.Error())
+		return
+	}
+	problem.JSON(w, 200, billingPortalResponse{URL: portal.URL})
+}
+
 func (h Handler) GetCurrent(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
 	ws, _, err := h.currentWorkspace(r.Context(), p)
@@ -2330,6 +2469,47 @@ func (h Handler) billingResponse(ctx context.Context, p auth.Principal) (billing
 	return billingResponse{Workspace: ws, CurrentPlan: state.plan, CanManage: isManager(ws.Role), Usage: billingUsage{SeatsUsed: state.seatsUsed, IssuesUsed: state.issuesUsed, IssueLimit: state.usageLimit}, Plans: billingPlans(), PaymentMethods: state.paymentMethods, Invoices: state.invoices}, nil
 }
 
+type stripeBillingWorkspace struct {
+	ID       string
+	Name     string
+	Settings map[string]any
+}
+
+func (h Handler) billingWorkspaceForPrincipal(ctx context.Context, p auth.Principal) (stripeBillingWorkspace, error) {
+	var ws stripeBillingWorkspace
+	var raw []byte
+	err := h.DB.QueryRow(ctx, `
+		select id::text, name, coalesce(settings,'{}'::jsonb)
+		from workspace
+		where id=$1::uuid
+		limit 1`, p.WorkspaceID).Scan(&ws.ID, &ws.Name, &raw)
+	if err != nil {
+		return stripeBillingWorkspace{}, err
+	}
+	ws.Settings = mapFromJSON(raw)
+	return ws, nil
+}
+
+func (h Handler) saveStripeCustomerID(ctx context.Context, workspaceID string, customerID string) error {
+	tx, err := h.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	settings, err := workspaceSettingsForUpdate(ctx, tx, workspaceID)
+	if err != nil {
+		return err
+	}
+	billing := recordFromAny(settings["billing"])
+	billing["stripeCustomerId"] = customerID
+	settings["billing"] = billing
+	body, _ := json.Marshal(settings)
+	if _, err := tx.Exec(ctx, `update workspace set settings=$1::jsonb, updated_at=now() where id=$2::uuid`, body, workspaceID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func (h Handler) workspaceSettings(ctx context.Context, workspaceID string) (map[string]any, error) {
 	var raw []byte
 	err := h.DB.QueryRow(ctx, `select coalesce(settings,'{}'::jsonb) from workspace where id=$1::uuid`, workspaceID).Scan(&raw)
@@ -2363,20 +2543,87 @@ func readBillingState(settings map[string]any) billingState {
 }
 
 func normalizeBillingPlan(value any) string {
-	if value == "standard" || value == "plus" {
-		return "business"
-	}
 	if s, ok := value.(string); ok {
 		switch s {
-		case "free", "basic", "business", "enterprise":
+		case "cloud_free", "cloud_team", "cloud_business", "enterprise_cloud":
 			return s
+		case "free":
+			return "cloud_free"
+		case "basic":
+			return "cloud_team"
+		case "standard", "plus", "business":
+			return "cloud_business"
+		case "enterprise":
+			return "enterprise_cloud"
 		}
 	}
-	return "free"
+	return "cloud_free"
 }
 
 func billingPlans() []billingPlan {
-	return []billingPlan{{ID: "free", Name: "Free", Price: "$0", Description: "For individuals and small trials.", Features: []string{"3 members", "250 issues", "Basic workspace settings"}}, {ID: "basic", Name: "Basic", Price: "$8/user/month", Description: "Core issue tracking for focused teams.", Features: []string{"Unlimited issues", "5 teams", "Basic automations"}}, {ID: "business", Name: "Business", Price: "$14/user/month", Description: "Advanced controls for growing organizations.", Features: []string{"Unlimited teams", "Admin controls", "Priority support"}}, {ID: "enterprise", Name: "Enterprise", Price: "Custom", Description: "Security, scale, and support for large companies.", Features: []string{"SAML/SCIM", "Audit exports", "Dedicated support"}}}
+	return []billingPlan{
+		{ID: "cloud_free", Name: "Cloud Free", Price: "$0", Description: "For individuals and small trials.", Features: []string{"3 members", "250 issues", "Basic workspace settings"}},
+		{ID: "cloud_team", Name: "Cloud Team", Price: "$7/user/month", Description: "Core issue tracking for focused teams.", Features: []string{"Unlimited issues", "5 teams", "Basic automations"}},
+		{ID: "cloud_business", Name: "Cloud Business", Price: "$12/user/month", Description: "Advanced controls for growing organizations.", Features: []string{"Unlimited teams", "Admin controls", "Priority support"}},
+		{ID: "enterprise_cloud", Name: "Enterprise Cloud", Price: "Custom", Description: "Security, scale, and support for large companies.", Features: []string{"SAML/SCIM", "Audit exports", "Dedicated support"}},
+	}
+}
+
+func stripeCheckoutPlan(value any) (string, string) {
+	switch value {
+	case "cloud_team", "basic":
+		return "basic", strings.TrimSpace(os.Getenv("STRIPE_CLOUD_TEAM_PRICE_ID"))
+	case "cloud_business", "business":
+		return "business", strings.TrimSpace(os.Getenv("STRIPE_CLOUD_BUSINESS_PRICE_ID"))
+	default:
+		return "", ""
+	}
+}
+
+func stripeCustomerID(settings map[string]any) string {
+	billing := recordFromAny(settings["billing"])
+	if customerID, ok := billing["stripeCustomerId"].(string); ok {
+		return strings.TrimSpace(customerID)
+	}
+	return ""
+}
+
+func billingCheckoutURLs(r *http.Request) (*string, *string, error) {
+	origin, err := billingRequestOrigin(r)
+	if err != nil {
+		return nil, nil, err
+	}
+	return stripe.String(origin + "/settings/billing?checkout=success"), stripe.String(origin + "/settings/billing?checkout=cancelled"), nil
+}
+
+func billingPortalReturnURL(r *http.Request) (*string, error) {
+	origin, err := billingRequestOrigin(r)
+	if err != nil {
+		return nil, err
+	}
+	return stripe.String(origin + "/settings/billing"), nil
+}
+
+func billingRequestOrigin(r *http.Request) (string, error) {
+	if publicBaseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL")), "/"); publicBaseURL != "" {
+		return publicBaseURL, nil
+	}
+	proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto"))
+	if proto == "" {
+		if r.TLS != nil {
+			proto = "https"
+		} else {
+			proto = "http"
+		}
+	}
+	host := strings.TrimSpace(r.Header.Get("X-Forwarded-Host"))
+	if host == "" {
+		host = r.Host
+	}
+	if host == "" {
+		return "", errors.New("request host is required")
+	}
+	return proto + "://" + host, nil
 }
 
 func defaultPaymentMethods() []any {

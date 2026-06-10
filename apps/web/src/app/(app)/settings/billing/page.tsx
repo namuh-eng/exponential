@@ -1,15 +1,17 @@
 "use client";
 
 import {
-  type HostedPricingPlan,
+  BILLING_PRICING_PLANS,
+  type BillingPricingPlan,
   type HostedPricingPlanId,
   getPlanCtaHref,
   isCustomPricingPlan,
+  normalizePricingPlanId,
 } from "@/lib/pricing";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 type BillingPlanId = HostedPricingPlanId;
-type BillingPlan = HostedPricingPlan;
+type BillingPlan = BillingPricingPlan;
 
 interface PaymentMethod {
   id: string;
@@ -63,7 +65,11 @@ export default function BillingSettingsPage() {
         return (await res.json()) as WorkspaceBillingData;
       })
       .then((data) => {
-        setBilling(data);
+        setBilling({
+          ...data,
+          currentPlan: normalizePricingPlanId(data.currentPlan),
+          plans: BILLING_PRICING_PLANS,
+        });
       })
       .catch(() => {
         setErrorMessage("Unable to load billing information.");
@@ -107,7 +113,12 @@ export default function BillingSettingsPage() {
         return;
       }
 
-      setBilling((await response.json()) as WorkspaceBillingData);
+      const data = (await response.json()) as WorkspaceBillingData;
+      setBilling({
+        ...data,
+        currentPlan: normalizePricingPlanId(data.currentPlan),
+        plans: BILLING_PRICING_PLANS,
+      });
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Unable to update plan.",
@@ -228,6 +239,42 @@ export default function BillingSettingsPage() {
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               {billing.plans.map((plan) => {
                 const isCurrentPlan = plan.id === billing.currentPlan;
+                let planAction: ReactNode;
+
+                if (isCustomPricingPlan(plan.id)) {
+                  planAction = (
+                    <a
+                      aria-disabled={!billing.canManage || undefined}
+                      className="mt-4 inline-flex rounded-md border border-[var(--color-border)] px-3 py-2 text-[13px] font-medium text-[var(--color-text-primary)] aria-disabled:pointer-events-none aria-disabled:opacity-50"
+                      href={
+                        billing.canManage ? getPlanCtaHref(plan.id) : undefined
+                      }
+                    >
+                      {plan.upgradeCta}
+                    </a>
+                  );
+                } else {
+                  const planID = plan.id;
+                  planAction = (
+                    <button
+                      className="mt-4 rounded-md border border-[var(--color-border)] px-3 py-2 text-[13px] font-medium text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={
+                        isCurrentPlan ||
+                        !billing.canManage ||
+                        savingPlan !== null
+                      }
+                      onClick={() => updatePlan(planID)}
+                      type="button"
+                    >
+                      {isCurrentPlan
+                        ? "Current plan"
+                        : savingPlan === planID
+                          ? "Saving..."
+                          : plan.upgradeCta}
+                    </button>
+                  );
+                }
+
                 return (
                   <article
                     className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-5"
@@ -253,36 +300,7 @@ export default function BillingSettingsPage() {
                         </li>
                       ))}
                     </ul>
-                    {isCustomPricingPlan(plan.id) ? (
-                      <a
-                        aria-disabled={!billing.canManage || undefined}
-                        className="mt-4 inline-flex rounded-md border border-[var(--color-border)] px-3 py-2 text-[13px] font-medium text-[var(--color-text-primary)] aria-disabled:pointer-events-none aria-disabled:opacity-50"
-                        href={
-                          billing.canManage
-                            ? getPlanCtaHref(plan.id)
-                            : undefined
-                        }
-                      >
-                        {plan.upgradeCta}
-                      </a>
-                    ) : (
-                      <button
-                        className="mt-4 rounded-md border border-[var(--color-border)] px-3 py-2 text-[13px] font-medium text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={
-                          isCurrentPlan ||
-                          !billing.canManage ||
-                          savingPlan !== null
-                        }
-                        onClick={() => updatePlan(plan.id)}
-                        type="button"
-                      >
-                        {isCurrentPlan
-                          ? "Current plan"
-                          : savingPlan === plan.id
-                            ? "Saving..."
-                            : plan.upgradeCta}
-                      </button>
-                    )}
+                    {planAction}
                   </article>
                 );
               })}

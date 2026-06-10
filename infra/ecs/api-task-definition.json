@@ -42,6 +42,14 @@
         {
           "name": "PUBLIC_BASE_URL",
           "value": "${PUBLIC_BASE_URL}"
+        },
+        {
+          "name": "STRIPE_CLOUD_TEAM_PRICE_ID",
+          "value": "${STRIPE_CLOUD_TEAM_PRICE_ID}"
+        },
+        {
+          "name": "STRIPE_CLOUD_BUSINESS_PRICE_ID",
+          "value": "${STRIPE_CLOUD_BUSINESS_PRICE_ID}"
         }
       ],
       "secrets": [
@@ -72,6 +80,10 @@
         {
           "name": "STRIPE_WEBHOOK_SIGNING_SECRET",
           "valueFrom": "${STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN}"
+        },
+        {
+          "name": "STRIPE_SECRET_KEY",
+          "valueFrom": "${STRIPE_SECRET_KEY_SECRET_ARN}"
         }
       ],
       "logConfiguration": {

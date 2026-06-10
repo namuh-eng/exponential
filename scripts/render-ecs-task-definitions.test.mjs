@@ -26,6 +26,10 @@ const env = {
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:metrics",
   STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN:
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:stripe-webhook",
+  STRIPE_SECRET_KEY_SECRET_ARN:
+    "arn:aws:secretsmanager:us-east-1:123456789012:secret:stripe-secret",
+  STRIPE_CLOUD_TEAM_PRICE_ID: "price_team_test",
+  STRIPE_CLOUD_BUSINESS_PRICE_ID: "price_business_test",
   OTEL_EXPORTER_OTLP_ENDPOINT: "collector.example:4318",
   PUBLIC_BASE_URL: "https://app.example",
   WEB_INTERNAL_API_URL: "http://app-alb.example/api",
