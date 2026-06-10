@@ -24,6 +24,7 @@ const publicPaths = [
   "/ssh-challenge",
   ...PUBLIC_ROUTES,
   "/api/auth",
+  "/api/health",
   "/api/workspaces",
   "/api/test",
   "/api/account",

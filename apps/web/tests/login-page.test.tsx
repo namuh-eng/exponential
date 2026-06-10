@@ -29,6 +29,15 @@ function providerCapabilities(
   return { ok: true, json: async () => body };
 }
 
+async function waitForProviderProbe(path = "/api/auth/provider-capabilities") {
+  await waitFor(() => {
+    expect(fetchMock).toHaveBeenCalledWith(
+      path,
+      expect.objectContaining({ cache: "no-store" }),
+    );
+  });
+}
+
 describe("Login page", () => {
   beforeEach(() => {
     fetchMock.mockResolvedValue(providerCapabilities());
@@ -42,30 +51,26 @@ describe("Login page", () => {
     assignMock.mockReset();
   });
 
-  it("renders the first-party Go auth login surface", async () => {
+  it("renders the first-party Go auth login chooser", async () => {
     render(<LoginPage />);
 
     expect(
       screen.getByRole("heading", { name: "Log in to exponential" }),
     ).toBeDefined();
+    expect(screen.getByRole("img", { name: "exponential logo" })).toBeDefined();
     expect(
-      screen.getByText(/Authentication is handled by the headless Go API/),
+      screen.getByRole("button", { name: /Continue with Google/ }),
     ).toBeDefined();
     expect(
-      screen.getByRole("button", { name: "Continue with Google" }),
+      screen.getByRole("button", { name: /Continue with email/ }),
     ).toBeDefined();
-    expect(screen.getByPlaceholderText("Email address")).toBeDefined();
-    expect(screen.getByPlaceholderText("Password")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Log in" })).toBeDefined();
     expect(
-      screen.getByRole("button", { name: "Send magic link instead" }),
+      screen.getByRole("button", { name: /Continue with SAML SSO/ }),
     ).toBeDefined();
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/auth/provider-capabilities?callbackUrl=%2Finbox",
-        expect.objectContaining({ cache: "no-store" }),
-      );
-    });
+    expect(
+      screen.getByRole("button", { name: /Log in with passkey/ }),
+    ).toBeDefined();
+    await waitForProviderProbe();
   });
 
   it("does not leak prototype host/version facts into the login surface", async () => {
@@ -74,57 +79,46 @@ describe("Login page", () => {
     expect(screen.queryByText("v0.4.2")).toBeNull();
     expect(screen.queryByText(/exponential\.local/)).toBeNull();
     expect(screen.queryByText("headless api")).toBeNull();
-    expect(screen.getByText("api check pending")).toBeDefined();
-    expect(screen.getByText("# auth methods")).toBeDefined();
-    expect(screen.getByText("checked on load")).toBeDefined();
-    expect(screen.getByText("opened after sign-in")).toBeDefined();
     expect(screen.queryByText(/live where probed/)).toBeNull();
-    expect(screen.getAllByText("ssh challenge").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("mock").length).toBeGreaterThan(0);
 
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalled();
-    });
+    await waitForProviderProbe();
   });
 
-  it("keeps the top bar neutral when provider capability probing fails", async () => {
+  it("keeps the auth surface neutral when provider capability probing fails", async () => {
     fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({}) });
 
     render(<LoginPage />);
 
-    expect(screen.getByText("api check pending")).toBeDefined();
     expect(screen.queryByText("headless api")).toBeNull();
 
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/auth/provider-capabilities?callbackUrl=%2Finbox",
-        expect.objectContaining({ cache: "no-store" }),
-      );
-    });
+    await waitForProviderProbe();
   });
 
   it("starts Google OAuth through the first-party Go API with the default app callback", async () => {
-    fetchMock.mockResolvedValueOnce(providerCapabilities());
-
     render(<LoginPage />);
+    await waitForProviderProbe();
+
     fireEvent.click(
-      screen.getByRole("button", { name: "Continue with Google" }),
+      screen.getByRole("button", { name: /Continue with Google/ }),
     );
 
     await waitFor(() => {
       expect(assignMock).toHaveBeenCalledWith(
-        "/api/auth/google/start?callback_url=%2Finbox",
+        "/api/auth/google/start?callback_url=%2F",
       );
     });
   });
 
   it("starts Google OAuth through the first-party Go API with a safe callback", async () => {
     mockLocation.search = "?callbackUrl=%2Fteam%2FABC";
-    fetchMock.mockResolvedValueOnce(providerCapabilities());
 
     render(<LoginPage />);
+    await waitForProviderProbe(
+      "/api/auth/provider-capabilities?callbackUrl=%2Fteam%2FABC",
+    );
+
     fireEvent.click(
-      screen.getByRole("button", { name: "Continue with Google" }),
+      screen.getByRole("button", { name: /Continue with Google/ }),
     );
 
     await waitFor(() => {
@@ -134,55 +128,46 @@ describe("Login page", () => {
     });
   });
 
-  it("shows password login as not configured", async () => {
-    fetchMock.mockResolvedValueOnce(providerCapabilities());
-
+  it("opens the email magic-link step from the chooser", async () => {
     render(<LoginPage />);
-    fireEvent.change(screen.getByPlaceholderText("Email address"), {
-      target: { value: "person@example.com" },
-    });
-    fireEvent.change(screen.getByPlaceholderText("Password"), {
-      target: { value: "correct horse battery staple" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
 
-    await waitFor(() => {
-      expect(
-        screen.getByText(
-          "Password login is not configured yet. Use Google or magic link.",
-        ),
-      ).toBeDefined();
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /Continue with email/ }),
+    );
+
+    expect(
+      screen.getByPlaceholderText("Enter your email address…"),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Continue with email" }),
+    ).toBeDefined();
   });
 
   it("requests a first-party magic link and shows the email confirmation", async () => {
-    fetchMock
-      .mockResolvedValueOnce(providerCapabilities())
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
-
     render(<LoginPage />);
-    fireEvent.change(screen.getByPlaceholderText("Email address"), {
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Continue with email/ }),
+    );
+    fireEvent.change(screen.getByPlaceholderText("Enter your email address…"), {
       target: { value: "person@example.com" },
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Send magic link instead" }),
+      screen.getByRole("button", { name: "Continue with email" }),
     );
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenNthCalledWith(
-        2,
+      expect(fetchMock).toHaveBeenCalledWith(
         "/api/auth/magic-link",
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({
             email: "person@example.com",
-            callbackURL: "/inbox",
+            callbackURL: "/",
           }),
         }),
       );
-      expect(
-        screen.getByText("Check your email for the sign-in link."),
-      ).toBeDefined();
+      expect(screen.getByText("Check your email")).toBeDefined();
     });
   });
 
@@ -202,10 +187,16 @@ describe("Login page", () => {
 
     await waitFor(() => {
       expect(
-        screen.queryByRole("button", { name: "Continue with Google" }),
+        screen.queryByRole("button", { name: /Continue with Google/ }),
       ).toBeNull();
       expect(
-        screen.getByRole("button", { name: "Continue with SAML SSO" }),
+        screen.queryByRole("button", { name: /Continue with email/ }),
+      ).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: /Log in with passkey/ }),
+      ).toBeNull();
+      expect(
+        screen.getByRole("button", { name: /Continue with SAML SSO/ }),
       ).toBeDefined();
     });
   });
@@ -224,52 +215,43 @@ describe("Signup page", () => {
     assignMock.mockReset();
   });
 
-  it("renders the first-party Go auth signup surface", () => {
+  it("renders the first-party Go auth signup chooser", () => {
     render(<SignupPage />);
 
     expect(
       screen.getByRole("heading", { name: "Create your account" }),
     ).toBeDefined();
-    expect(screen.getByPlaceholderText("Your name")).toBeDefined();
-    expect(screen.getByPlaceholderText("Email address")).toBeDefined();
-    expect(screen.getByPlaceholderText("Password")).toBeDefined();
+    expect(screen.getByRole("img", { name: "exponential logo" })).toBeDefined();
     expect(
-      screen.getByRole("button", { name: "Create account" }),
+      screen.getByRole("button", { name: /Continue with Google/ }),
     ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: /Continue with email/ }),
+    ).toBeDefined();
+    expect(screen.getByText("Already have an account?")).toBeDefined();
   });
 
-  it("keeps signup truthful about the separate workspace creation step", () => {
+  it("keeps signup free of legacy prototype claims", () => {
     render(<SignupPage />);
 
     expect(screen.queryByText("v0.4.2")).toBeNull();
     expect(screen.queryByText(/exponential\.local/)).toBeNull();
     expect(
-      screen.getByText(/Create-workspace is the next step after signup/),
-    ).toBeDefined();
-    expect(screen.getByText("password path pending")).toBeDefined();
+      screen.queryByText(/Create-workspace is the next step after signup/),
+    ).toBeNull();
+    expect(screen.queryByText("password path pending")).toBeNull();
   });
 
-  it("shows signup password registration as not configured", async () => {
-    fetchMock.mockResolvedValueOnce(providerCapabilities());
-
+  it("keeps signup legal links first-party", () => {
     render(<SignupPage />);
-    fireEvent.change(screen.getByPlaceholderText("Your name"), {
-      target: { value: "Person Example" },
-    });
-    fireEvent.change(screen.getByPlaceholderText("Email address"), {
-      target: { value: "person@example.com" },
-    });
-    fireEvent.change(screen.getByPlaceholderText("Password"), {
-      target: { value: "correct horse battery staple" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
-    await waitFor(() => {
-      expect(
-        screen.getByText(
-          "Password login is not configured yet. Use Google or magic link.",
-        ),
-      ).toBeDefined();
-    });
+    const legalLinks = screen
+      .getByText(/By signing up/)
+      .closest("p")
+      ?.querySelectorAll("a");
+
+    expect(
+      Array.from(legalLinks ?? []).map((link) => link.getAttribute("href")),
+    ).toEqual(["/terms", "/dpa"]);
   });
 });

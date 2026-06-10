@@ -8,6 +8,13 @@ const workspaceDeepLinks = [
   "/foreverbrowsing/roadmap?view=list",
 ];
 
+async function openEmailStep(page: import("@playwright/test").Page) {
+  await page.getByRole("button", { name: "Continue with email" }).click();
+  const emailInput = page.getByPlaceholder("Enter your email address…");
+  await expect(emailInput).toBeVisible();
+  return emailInput;
+}
+
 test.describe("Unauthenticated workspace deep links", () => {
   for (const deepLink of workspaceDeepLinks) {
     test(`renders login in place for ${deepLink}`, async ({ page }) => {
@@ -58,10 +65,10 @@ test.describe("Unauthenticated workspace deep links", () => {
       ),
     ).toHaveCount(0);
 
-    const emailInput = page.getByPlaceholder("Email address");
+    const emailInput = await openEmailStep(page);
     await emailInput.fill("test@example.com");
     await expect(emailInput).toHaveValue("test@example.com");
-    await page.getByRole("button", { name: "Send magic link instead" }).click();
+    await page.getByRole("button", { name: "Continue with email" }).click();
     await expect.poll(() => magicLinkPayload).not.toBeUndefined();
 
     expect(magicLinkPayload).toMatchObject({
@@ -69,7 +76,7 @@ test.describe("Unauthenticated workspace deep links", () => {
       callbackURL: "/foreverbrowsing",
     });
     await expect(
-      page.getByText("Check your email for the sign-in link."),
+      page.getByRole("heading", { name: "Check your email" }),
     ).toBeVisible();
   });
 
@@ -201,7 +208,7 @@ test.describe("Unauthenticated workspace deep links", () => {
     ).toHaveAttribute("href", "/login");
   });
 
-  test("login email empty submit uses native validation for click and Enter", async ({
+  test("login email empty submit stays on the email step for click and Enter", async ({
     page,
   }) => {
     const consoleErrors: string[] = [];
@@ -213,25 +220,31 @@ test.describe("Unauthenticated workspace deep links", () => {
 
     await page.goto("/login");
 
-    const emailInput = page.getByPlaceholder("Email address");
+    const emailInput = await openEmailStep(page);
+    consoleErrors.length = 0;
     const submitButton = page.getByRole("button", {
-      name: "Log in",
+      name: "Continue with email",
     });
     await expect(submitButton).toBeEnabled();
 
     await submitButton.click();
-    await expect(emailInput).toBeFocused();
+    await expect(
+      page.getByText("Please enter an email address for login."),
+    ).toBeVisible();
     expect(
       await emailInput.evaluate(
         (input) => (input as HTMLInputElement).validity.valueMissing,
       ),
     ).toBe(true);
     await expect(
-      page.getByRole("heading", { name: "Log in to exponential" }),
+      page.getByRole("heading", { name: "What’s your email address?" }),
     ).toBeVisible();
 
     await emailInput.focus();
     await page.keyboard.press("Enter");
+    await expect(
+      page.getByText("Please enter an email address for login."),
+    ).toBeVisible();
     expect(
       await emailInput.evaluate(
         (input) => (input as HTMLInputElement).validity.valueMissing,
@@ -245,12 +258,12 @@ test.describe("Unauthenticated workspace deep links", () => {
   }) => {
     await page.goto("/login");
 
-    const emailInput = page.getByPlaceholder("Email address");
+    const emailInput = await openEmailStep(page);
     await emailInput.fill("not-an-email");
-    await page.getByRole("button", { name: "Log in" }).click();
+    await page.getByRole("button", { name: "Continue with email" }).click();
 
     await expect(
-      page.getByRole("heading", { name: "Log in to exponential" }),
+      page.getByRole("heading", { name: "What’s your email address?" }),
     ).toBeVisible();
     expect(
       await emailInput.evaluate(
@@ -260,15 +273,22 @@ test.describe("Unauthenticated workspace deep links", () => {
     await expect(page.getByText("Enter a valid email address.")).toHaveCount(0);
   });
 
-  test("first-party Go auth hides legacy SAML controls", async ({ page }) => {
+  test("first-party Go auth renders the provider chooser", async ({ page }) => {
     await page.goto("/login");
     await expect(
-      page.getByText("Authentication is handled by the headless Go API"),
+      page.getByRole("button", { name: "Continue with Google" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Continue with email" }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Continue with SAML SSO" }),
-    ).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Log in" })).toBeVisible();
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Log in with passkey" }),
+    ).toBeVisible();
+    await expect(page.getByText("Authentication is handled by")).toHaveCount(0);
+    await expect(page.getByText(/password/i)).toHaveCount(0);
   });
 });
 
@@ -280,7 +300,13 @@ test("first-party auth hides legacy workspace provider controls", async ({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        providers: { google: false, email: false, passkey: false },
+        providers: {
+          google: false,
+          googleAllowed: false,
+          email: false,
+          emailPasskey: false,
+          passkey: false,
+        },
         workspace: {
           slug: "foreverbrowsing",
           authentication: { google: false, emailPasskey: false },
@@ -307,9 +333,11 @@ test("first-party auth hides legacy workspace provider controls", async ({
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Continue with SAML SSO" }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await expect(
-    page.getByText("Authentication is handled by the headless Go API"),
+    page.getByText(
+      "Google, email, and passkey login are disabled for this workspace.",
+    ),
   ).toBeVisible();
 });
 
