@@ -7,6 +7,15 @@
 
 ---
 
+> Historical note: this document captures the plan that guided the migration
+> from the original Next.js monolith to the current split Go API + Next.js UI
+> architecture. It is intentionally preserved for decision history, but its
+> "Current state" section is no longer current. For present-day architecture,
+> setup, and contribution guidance, use `README.md`, `CONTRIBUTING.md`,
+> `AGENTS.md`, `CLAUDE.md`, and `docs/README.md`.
+
+---
+
 ## Goal
 
 Turn this codebase from a Next.js monolith into a **headless API-first SaaS** so a CLI, web frontend, and (later) third-party integrations all consume the same backend as equal peers.
@@ -15,9 +24,9 @@ Performance, scalability, and a clean public contract are non-negotiable.
 
 > Current note: this document is retained for architecture context. Do not use
 > its old Next.js-monolith description as implementation guidance. The current
-> source of truth is `AGENTS.md`: `apps/api` owns auth, billing, database access,
-> and `/api/*`; `apps/web` is UI-only and consumes the generated SDK / same-origin
-> Go API.
+> source of truth is `AGENTS.md`, `CLAUDE.md`, and `docs/README.md`:
+> `apps/api` owns auth, billing, database access, and `/api/*`; `apps/web` is
+> UI-only and consumes the generated SDK / same-origin Go API.
 
 ---
 
