@@ -1,7 +1,7 @@
 # Refactor Plan: Headless API + Go Split
 
 **Owner:** jaeyunha
-**Status:** Ready for implementation
+**Status:** Historical migration plan; current repo has already moved to the split Go API / UI-only web shape
 **Branch:** `headless-api-go-split`
 **Date:** 2026-05-24
 
@@ -11,17 +11,30 @@
 
 Turn this codebase from a Next.js monolith into a **headless API-first SaaS** so a CLI, web frontend, and (later) third-party integrations all consume the same backend as equal peers.
 
-Performance, scalability, and a clean public contract are non-negotiable. Production deployment has **not happened yet** — nothing is locked in.
+Performance, scalability, and a clean public contract are non-negotiable.
+
+> Current note: this document is retained for architecture context. Do not use
+> its old Next.js-monolith description as implementation guidance. The current
+> source of truth is `AGENTS.md`: `apps/api` owns auth, billing, database access,
+> and `/api/*`; `apps/web` is UI-only and consumes the generated SDK / same-origin
+> Go API.
 
 ---
 
-## Current state (as of this branch)
+## Historical state (as of the original migration branch)
 
-- **Stack:** Next.js 16 App Router (frontend + API routes in one process), TypeScript strict, Postgres (AWS RDS), Redis (ElastiCache), Better Auth (Google OAuth + magic links), AWS S3/SES.
+- **Stack then:** Next.js 16 App Router (frontend + API routes in one process), TypeScript strict, Postgres (AWS RDS), Redis (ElastiCache), Better Auth (Google OAuth + magic links), AWS S3/SES.
 - **API surface:** ~30+ route folders under `src/app/api/` (account, agent, analytics, auth, comments, custom-emojis, document-folders, document-settings, document-templates, inbound, …).
 - **Deploy target:** AWS ECS Fargate + ALB — provisioning script at `scripts/preflight.sh`, **not yet executed**.
 - **Tests:** Vitest unit tests + Playwright E2E (`tests/`).
 - **`packages/sdk/`** referenced in `CLAUDE.md` but does **not** exist on disk.
+
+## Current enforcement
+
+- `apps/api` is the only runtime owner for auth, billing, database access, and business API behavior.
+- `apps/web/src/app/api` must remain empty.
+- `apps/web/src` must not import Better Auth, Drizzle, or web-owned database/auth helpers.
+- `make check` enforces those boundaries with `web-api-empty`, `web-sdk-usage`, and `web-runtime-boundaries`.
 
 ---
 
@@ -66,7 +79,7 @@ Each phase is independently shippable. Do **not** start phase N+1 until phase N 
 
 - [ ] Create monorepo layout: `apps/`, `packages/`, `infra/`
 - [ ] Set up `pnpm` workspaces (or keep `npm` if simpler — pick one, stick with it)
-- [ ] Move existing Next.js code into `apps/web/` (keep working, no behavior change)
+- [x] Move existing Next.js code into `apps/web/` (keep working, no behavior change)
 - [ ] Initialize `apps/api/` as Go module: `chi`, `pgx`, `sqlc`, `zap` (logging), `viper` (config)
 - [ ] Wire up `docker-compose.dev.yml` with: postgres, redis, api, web
 - [ ] CI: ensure Next.js still builds, Go builds, tests still pass
@@ -88,13 +101,13 @@ Each phase is independently shippable. Do **not** start phase N+1 until phase N 
 ### Phase 2 — First-party Go auth (½–1 day)
 
 - [ ] Implement Google OAuth/OIDC in `apps/api` with `golang.org/x/oauth2` + `go-oidc`
-- [ ] Preserve existing Better Auth-compatible `user`, `account`, `session`, and `verification` records; add idempotent migration only if schema drift requires it
+- [ ] Preserve existing `user`, `account`, `session`, and `verification` records; add idempotent migration only if schema drift requires it
 - [ ] `apps/api` validates opaque HttpOnly session cookies against the `session` table on every request
 - [ ] Implement **Personal Access Tokens (PATs)** in `apps/api` for CLI auth — `pat_` prefix, hashed at rest, scopes, revocation, audit log
-- [ ] `apps/web` swaps Better Auth UI calls for first-party Go auth routes
+- [ ] `apps/web` swaps any remaining legacy UI calls for first-party Go auth routes
 - [ ] Update middleware in `apps/web` to recognize the first-party session cookie for protected pages
 
-**Verification:** Google OAuth login works end-to-end on web. Magic link delivered via SES, login completes. CLI can authenticate with a PAT and call `GET /issues`. Old Better Auth code path deleted.
+**Verification:** Google OAuth login works end-to-end on web. Magic link delivered via the Go API email path, login completes. CLI can authenticate with a PAT and call `GET /issues`. Old Better Auth code path deleted.
 
 ### Phase 3 — Port remaining routes (1–2 days, parallelizable)
 
@@ -149,9 +162,9 @@ For each:
 Codex flagged these. Treat as risk areas:
 
 1. **Auth migration is the highest-risk step.** Preserving existing user/session/account semantics while moving flows into Go is product-critical. Test exhaustively: existing users must log in without password reset, OAuth-linked accounts must stay linked, magic link tokens in flight must work or fail gracefully.
-2. **Authorization boundaries.** Better Auth's session shape leaks into existing handlers. When porting to Go, define a single `Authz` interface in `apps/api/internal/authz/` and force every handler through it. No ad-hoc permission checks.
+2. **Authorization boundaries.** Legacy session shapes can leak into handlers. When porting to Go, define a single `Authz` interface in `apps/api/internal/authz/` and force every handler through it. No ad-hoc permission checks.
 3. **OpenAPI coverage validation.** A route ported without a spec entry is a contract regression. CI must enforce: every Go handler is referenced from `packages/proto/openapi.yaml`, every spec path has a handler. Use `oapi-codegen --generate strict-server` to make this compile-time.
-4. **Dev velocity during dual-stack.** Web team still works on `apps/web` while API team ports routes. Avoid blocking: web keeps using SDK; if SDK doesn't have the endpoint yet, web falls back to remaining Next.js API route (don't delete prematurely).
+4. **Dev velocity after the split.** Web team still works on `apps/web`, but runtime API behavior belongs in `apps/api`. If the SDK does not have an endpoint yet, add the Go/OpenAPI slice rather than creating a new Next.js API route.
 5. **Migration script idempotency.** The auth migration script must be re-runnable. Drift between staging and prod data is real.
 
 ---
