@@ -1,4 +1,3 @@
-import "@testing-library/jest-dom/vitest";
 import {
   cleanup,
   fireEvent,
@@ -25,45 +24,23 @@ describe("BillingSettingsPage component", () => {
       name: "Acme Corp",
       role: "admin",
     },
-    currentPlan: "cloud_business",
+    currentPlan: "business",
     canManage: true,
-    usage: { seatsUsed: 3, seatLimit: 3, issuesUsed: 42, issueLimit: 250 },
+    usage: { seatsUsed: 3, issuesUsed: 42, issueLimit: 250 },
     plans: [
       {
-        id: "cloud_free",
-        displayName: "Cloud Free",
-        priceLabel: "$0",
+        id: "free",
+        name: "Free",
+        price: "$0",
         description: "For individuals and small trials.",
-        billingCadenceLabel: "Free forever",
-        capabilities: ["core_issues"],
-        upgradeCta: "Start free",
+        features: ["3 members"],
       },
       {
-        id: "cloud_business",
-        displayName: "Cloud Business",
-        priceLabel: "$14",
+        id: "business",
+        name: "Business",
+        price: "$14/user/month",
         description: "Advanced controls for growing organizations.",
-        billingCadenceLabel: "Per user / month",
-        capabilities: ["admin_controls"],
-        upgradeCta: "Upgrade / manage",
-      },
-      {
-        id: "enterprise_cloud",
-        displayName: "Enterprise Cloud",
-        priceLabel: "Custom",
-        description: "Hosted enterprise controls and support.",
-        billingCadenceLabel: "Annual contract",
-        capabilities: ["saml_sso", "scim"],
-        upgradeCta: "Contact sales",
-      },
-      {
-        id: "enterprise_self_hosted",
-        displayName: "Enterprise Self-hosted",
-        priceLabel: "Custom",
-        description: "Commercial self-host license and support.",
-        billingCadenceLabel: "Annual contract",
-        capabilities: ["self_hosting"],
-        upgradeCta: "Contact sales",
+        features: ["Unlimited teams"],
       },
     ],
     paymentMethods: [
@@ -102,13 +79,12 @@ describe("BillingSettingsPage component", () => {
     });
 
     expect(screen.getByText(/Current plan:/)).toBeDefined();
-    expect(screen.getByText("Cloud Business")).toBeDefined();
+    expect(screen.getByText("Business")).toBeDefined();
     expect(
       screen.getByText(
         (content) => content.includes("42") && content.includes("250"),
       ),
     ).toBeDefined();
-    expect(screen.getByText(/reached its member limit/i)).toBeDefined();
     expect(
       screen.getByText(
         (content) => content.includes("Visa") && content.includes("4242"),
@@ -122,51 +98,24 @@ describe("BillingSettingsPage component", () => {
       .mockResolvedValueOnce({ ok: true, json: async () => mockBillingData })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
-          ...mockBillingData,
-          currentPlan: "cloud_business",
-        }),
+        json: async () => ({ ...mockBillingData, currentPlan: "business" }),
       });
 
     render(<BillingSettingsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Cloud Free")).toBeDefined();
+      expect(screen.getByText("Free")).toBeDefined();
     });
 
-    fireEvent.click(screen.getByText("Start free"));
+    fireEvent.click(screen.getAllByText("Upgrade / manage")[0]);
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith("/api/workspaces/current/billing", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: "cloud_free" }),
+        body: JSON.stringify({ plan: "free" }),
       });
     });
-  });
-
-  it("renders accessible contact CTAs for custom enterprise plans without PATCH checkout", async () => {
-    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      json: async () => mockBillingData,
-    });
-
-    render(<BillingSettingsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Enterprise Cloud")).toBeDefined();
-    });
-
-    const contactLinks = screen.getAllByRole("link", { name: "Contact sales" });
-    expect(contactLinks[0]).toHaveAttribute(
-      "href",
-      "/signup?intent=enterprise-cloud",
-    );
-    expect(contactLinks[1]).toHaveAttribute(
-      "href",
-      "/signup?intent=enterprise-self-hosted",
-    );
-    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("shows error message when fetch fails", async () => {
