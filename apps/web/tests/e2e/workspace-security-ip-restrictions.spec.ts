@@ -41,25 +41,15 @@ test.describe("Workspace security IP restrictions", () => {
 
     const securityResponse = await page.request.get(
       "/api/workspaces/current/security",
-      {
-        headers: {
-          "x-test-client-ip": "198.51.100.10",
-          "x-forwarded-for": "198.51.100.10",
-          "x-workspace-slug": workspaceSlug,
-        },
-      },
+      { headers: { "x-test-client-ip": "198.51.100.10" } },
     );
-    expect(securityResponse.ok(), await securityResponse.text()).toBeTruthy();
+    expect(securityResponse.ok()).toBeTruthy();
 
     await expect
       .poll(async () => {
         const data = (await (
           await page.request.get("/api/workspaces/current/security", {
-            headers: {
-              "x-test-client-ip": "198.51.100.10",
-              "x-forwarded-for": "198.51.100.10",
-              "x-workspace-slug": workspaceSlug,
-            },
+            headers: { "x-test-client-ip": "198.51.100.10" },
           })
         ).json()) as {
           security?: { ipRestrictions?: Array<{ range: string }> };

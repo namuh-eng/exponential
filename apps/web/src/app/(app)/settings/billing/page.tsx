@@ -1,15 +1,16 @@
 "use client";
 
-import {
-  type HostedPricingPlan,
-  type HostedPricingPlanId,
-  getPlanCtaHref,
-  isCustomPricingPlan,
-} from "@/lib/pricing";
 import { useEffect, useState } from "react";
 
-type BillingPlanId = HostedPricingPlanId;
-type BillingPlan = HostedPricingPlan;
+type BillingPlanId = "free" | "basic" | "business" | "enterprise";
+
+interface BillingPlan {
+  id: BillingPlanId;
+  name: string;
+  price: string;
+  description: string;
+  features: string[];
+}
 
 interface PaymentMethod {
   id: string;
@@ -38,7 +39,6 @@ interface WorkspaceBillingData {
   canManage: boolean;
   usage: {
     seatsUsed: number;
-    seatLimit: number | null;
     issuesUsed: number;
     issueLimit: number;
   };
@@ -50,7 +50,6 @@ interface WorkspaceBillingData {
 export default function BillingSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [savingPlan, setSavingPlan] = useState<BillingPlanId | null>(null);
-  const [openingPortal, setOpeningPortal] = useState(false);
   const [billing, setBilling] = useState<WorkspaceBillingData | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -72,23 +71,12 @@ export default function BillingSettingsPage() {
   }, []);
 
   async function updatePlan(plan: BillingPlanId) {
-    if (plan === "enterprise_cloud") {
-      window.location.href =
-        "mailto:sales@exponential.dev?subject=Enterprise%20Cloud%20plan";
-      return;
-    }
-
     setSavingPlan(plan);
     setErrorMessage(null);
 
     try {
-      const endpoint =
-        plan === "cloud_team" || plan === "cloud_business"
-          ? "/api/workspaces/current/billing/checkout"
-          : "/api/workspaces/current/billing";
-      const response = await fetch(endpoint, {
-        method:
-          plan === "cloud_team" || plan === "cloud_business" ? "POST" : "PATCH",
+      const response = await fetch("/api/workspaces/current/billing", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan }),
       });
@@ -100,13 +88,6 @@ export default function BillingSettingsPage() {
         throw new Error(data.error ?? "Unable to update plan");
       }
 
-      if (plan === "cloud_team" || plan === "cloud_business") {
-        const data = (await response.json()) as { url?: string };
-        if (!data.url) throw new Error("Stripe checkout did not return a URL");
-        window.location.href = data.url;
-        return;
-      }
-
       setBilling((await response.json()) as WorkspaceBillingData);
     } catch (error) {
       setErrorMessage(
@@ -114,32 +95,6 @@ export default function BillingSettingsPage() {
       );
     } finally {
       setSavingPlan(null);
-    }
-  }
-
-  async function openBillingPortal() {
-    setOpeningPortal(true);
-    setErrorMessage(null);
-    try {
-      const response = await fetch("/api/workspaces/current/billing/portal", {
-        method: "POST",
-      });
-      const data = (await response.json().catch(() => ({}))) as {
-        error?: string;
-        url?: string;
-      };
-      if (!response.ok || !data.url) {
-        throw new Error(data.error ?? "Unable to open billing portal");
-      }
-      window.location.href = data.url;
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to open billing portal.",
-      );
-    } finally {
-      setOpeningPortal(false);
     }
   }
 
@@ -172,7 +127,7 @@ export default function BillingSettingsPage() {
               Current plan:{" "}
               {
                 billing.plans.find((plan) => plan.id === billing.currentPlan)
-                  ?.displayName
+                  ?.name
               }
             </h2>
             <div className="mt-4 grid gap-3 text-[13px] text-[var(--color-text-secondary)] sm:grid-cols-3">
@@ -180,10 +135,7 @@ export default function BillingSettingsPage() {
                 <div className="font-medium text-[var(--color-text-primary)]">
                   Seats used
                 </div>
-                <div>
-                  {billing.usage.seatsUsed} /{" "}
-                  {billing.usage.seatLimit ?? "Unlimited"} active members
-                </div>
+                <div>{billing.usage.seatsUsed} active members</div>
               </div>
               <div>
                 <div className="font-medium text-[var(--color-text-primary)]">
@@ -200,25 +152,6 @@ export default function BillingSettingsPage() {
                 <div>{billing.canManage ? "Billing manager" : "View only"}</div>
               </div>
             </div>
-            {billing.canManage && (
-              <button
-                className="mt-4 rounded-md border border-[var(--color-border)] px-3 py-2 text-[13px] font-medium text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={openingPortal}
-                onClick={openBillingPortal}
-                type="button"
-              >
-                {openingPortal
-                  ? "Opening portal..."
-                  : "Manage billing in Stripe"}
-              </button>
-            )}
-            {billing.usage.seatLimit !== null &&
-              billing.usage.seatsUsed >= billing.usage.seatLimit && (
-                <div className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-[13px] text-amber-200">
-                  Your workspace has reached its member limit. Upgrade your plan
-                  to invite more teammates.
-                </div>
-              )}
           </section>
 
           <section className="mt-8">
@@ -236,53 +169,37 @@ export default function BillingSettingsPage() {
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <h3 className="text-[15px] font-semibold text-[var(--color-text-primary)]">
-                          {plan.displayName}
+                          {plan.name}
                         </h3>
                         <p className="mt-1 text-[13px] text-[var(--color-text-tertiary)]">
                           {plan.description}
                         </p>
                       </div>
                       <div className="text-right text-[13px] font-medium text-[var(--color-text-primary)]">
-                        {plan.priceLabel}
+                        {plan.price}
                       </div>
                     </div>
                     <ul className="mt-4 space-y-1 text-[13px] text-[var(--color-text-secondary)]">
-                      {plan.capabilities.slice(0, 4).map((capability) => (
-                        <li key={capability}>
-                          • {capability.replaceAll("_", " ")}
-                        </li>
+                      {plan.features.map((feature) => (
+                        <li key={feature}>• {feature}</li>
                       ))}
                     </ul>
-                    {isCustomPricingPlan(plan.id) ? (
-                      <a
-                        aria-disabled={!billing.canManage || undefined}
-                        className="mt-4 inline-flex rounded-md border border-[var(--color-border)] px-3 py-2 text-[13px] font-medium text-[var(--color-text-primary)] aria-disabled:pointer-events-none aria-disabled:opacity-50"
-                        href={
-                          billing.canManage
-                            ? getPlanCtaHref(plan.id)
-                            : undefined
-                        }
-                      >
-                        {plan.upgradeCta}
-                      </a>
-                    ) : (
-                      <button
-                        className="mt-4 rounded-md border border-[var(--color-border)] px-3 py-2 text-[13px] font-medium text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={
-                          isCurrentPlan ||
-                          !billing.canManage ||
-                          savingPlan !== null
-                        }
-                        onClick={() => updatePlan(plan.id)}
-                        type="button"
-                      >
-                        {isCurrentPlan
-                          ? "Current plan"
-                          : savingPlan === plan.id
-                            ? "Saving..."
-                            : plan.upgradeCta}
-                      </button>
-                    )}
+                    <button
+                      className="mt-4 rounded-md border border-[var(--color-border)] px-3 py-2 text-[13px] font-medium text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={
+                        isCurrentPlan ||
+                        !billing.canManage ||
+                        savingPlan !== null
+                      }
+                      onClick={() => updatePlan(plan.id)}
+                      type="button"
+                    >
+                      {isCurrentPlan
+                        ? "Current plan"
+                        : savingPlan === plan.id
+                          ? "Saving..."
+                          : "Upgrade / manage"}
+                    </button>
                   </article>
                 );
               })}
