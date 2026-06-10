@@ -20,7 +20,7 @@ Project-specific instructions for AI coding agents working in this repo. Read th
 
 ## Repository Layout
 - `apps/api/` — Go API, auth, handlers, OpenAPI strict server stubs, sqlc queries, migrations runner.
-- `apps/web/` — Next.js UI. `apps/web/src/app/api/` should remain empty/nonexistent except test-only legacy fixtures under `apps/web/tests/legacy-api`.
+- `apps/web/` — Next.js UI. `apps/web/src/app/api/` should remain empty/nonexistent; runtime API/auth/billing/database work belongs in `apps/api`.
 - `apps/cli/` — CLI consuming the generated SDK.
 - `packages/proto/openapi.yaml` — public API contract.
 - `packages/proto/migrations/` — SQL migrations.

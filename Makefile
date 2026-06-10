@@ -1,4 +1,4 @@
-.PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd api-build api-test api-dockerfile ecs-task-definitions ecs-render deploy-scripts smoke-script openapi-coverage openapi-strict sqlc-generated web-api-empty web-sdk-usage
+.PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd api-build api-test api-dockerfile ecs-task-definitions ecs-render deploy-scripts smoke-script openapi-coverage openapi-strict sqlc-generated web-api-empty web-sdk-usage web-runtime-boundaries
 .PHONY: check-header test-header check-verbose test-verbose
 .PHONY: dev-services dev-services-down deploy deploy-oauth-secrets
 .PHONY: dev-op build-op start-op op-bootstrap op-doctor
@@ -7,7 +7,7 @@
 all: check test
 
 # Static analysis: typecheck + lint/format
-check: check-header typecheck lint api-build api-dockerfile ecs-task-definitions ecs-render deploy-scripts smoke-script openapi-coverage openapi-strict sqlc-generated web-api-empty web-sdk-usage
+check: check-header typecheck lint api-build api-dockerfile ecs-task-definitions ecs-render deploy-scripts smoke-script openapi-coverage openapi-strict sqlc-generated web-api-empty web-sdk-usage web-runtime-boundaries
 
 # TypeScript type checking
 typecheck:
@@ -79,6 +79,11 @@ web-api-empty:
 web-sdk-usage:
 	@. ./hack/run_silent.sh && \
 	run_silent "Web runtime SDK usage passed" "node scripts/check-web-sdk-usage.mjs"
+
+# Ensure the Next.js app remains UI-only and does not regain server auth/DB.
+web-runtime-boundaries:
+	@. ./hack/run_silent.sh && \
+	run_silent "Web runtime boundary guard passed" "node scripts/check-web-runtime-boundaries.mjs"
 
 # Auto-fix lint and format issues
 fix:

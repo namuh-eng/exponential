@@ -4,10 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
 
-vi.mock("@/lib/auth", () => {
-  throw new Error("public auth pages must not import server auth/session code");
-});
-
 vi.mock("@/lib/auth-client", () => ({
   signIn: {
     social: vi.fn(),
