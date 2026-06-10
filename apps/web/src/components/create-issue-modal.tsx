@@ -1244,7 +1244,7 @@ export function CreateIssueModal({
       >
         <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
           <span className="flex items-center gap-1.5 rounded-md bg-[var(--color-surface)] px-2 py-0.5 text-[12px] font-medium text-[var(--color-text-primary)]">
-            <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-[var(--color-accent)] text-[7px] font-bold text-white">
+            <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-[var(--color-accent)] text-[7px] font-bold text-[var(--editorial-accent-ink)]">
               {teamKey.charAt(0)}
             </span>
             {teamKey}
@@ -1590,7 +1590,7 @@ export function CreateIssueModal({
               type="button"
               disabled={!canSubmit}
               onClick={() => void handleSubmit()}
-              className="rounded-full bg-[var(--color-accent)] px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-full bg-[var(--color-accent)] px-4 py-1.5 text-[13px] font-medium text-[var(--editorial-accent-ink)] transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-content-bg)] disabled:cursor-not-allowed disabled:bg-[color-mix(in_srgb,var(--color-accent)_22%,var(--color-content-bg))] disabled:text-[var(--color-text-primary)] disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_22%,var(--color-content-bg))]"
             >
               {submitting ? "Creating..." : "Create Issue"}
             </button>
