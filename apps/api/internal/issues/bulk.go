@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
@@ -46,6 +47,12 @@ func (h Handler) Bulk(w http.ResponseWriter, r *http.Request) {
 		problem.JSON(w, 400, map[string]string{"error": "Bulk updates are limited to 200 issues"})
 		return
 	}
+	for _, issueID := range issueIDs {
+		if _, err := uuid.Parse(issueID); err != nil {
+			problem.JSON(w, 400, map[string]string{"error": "One or more issues were not found"})
+			return
+		}
+	}
 	selected, err := h.selectedBulkIssues(r, p.WorkspaceID, issueIDs)
 	if err != nil {
 		problem.Write(w, 500, "Load issues failed", err.Error())
@@ -56,21 +63,17 @@ func (h Handler) Bulk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	teamIDs := uniqueIssueTeamIDs(selected)
-	changed, errMsg := h.validateBulkUpdates(r, p.WorkspaceID, teamIDs, input.Updates)
-	if errMsg != "" {
-		problem.JSON(w, 400, map[string]string{"error": errMsg})
-		return
-	}
-	if err != nil {
-		problem.Write(w, 500, "Validate bulk update failed", err.Error())
-		return
-	}
 	tx, err := h.DB.Begin(r.Context())
 	if err != nil {
 		problem.Write(w, 500, "Bulk update failed", err.Error())
 		return
 	}
 	defer func() { _ = tx.Rollback(r.Context()) }()
+	changed, errMsg := h.validateBulkUpdates(r, tx, p.WorkspaceID, teamIDs, &input.Updates)
+	if errMsg != "" {
+		problem.JSON(w, 400, map[string]string{"error": errMsg})
+		return
+	}
 	if input.Updates.Delete {
 		if _, err := tx.Exec(r.Context(), `delete from issue where id = any($1::uuid[])`, issueIDs); err != nil {
 			problem.Write(w, 500, "Bulk delete failed", err.Error())
@@ -117,14 +120,18 @@ func (h Handler) selectedBulkIssues(r *http.Request, workspaceID string, issueID
 	return items, rows.Err()
 }
 
-func (h Handler) validateBulkUpdates(r *http.Request, workspaceID string, teamIDs []string, updates bulkUpdates) ([]string, string) {
+func (h Handler) validateBulkUpdates(r *http.Request, q RelationshipQueryer, workspaceID string, teamIDs []string, updates *bulkUpdates) ([]string, string) {
 	changed := []string{}
 	if updates.StateID != nil {
 		if strings.TrimSpace(*updates.StateID) == "" {
 			return nil, "Status is required"
 		}
+		if _, err := uuid.Parse(strings.TrimSpace(*updates.StateID)); err != nil {
+			return nil, "Workflow state not found for selected issues"
+		}
+		*updates.StateID = strings.TrimSpace(*updates.StateID)
 		var teamID, category string
-		if err := h.DB.QueryRow(r.Context(), `select team_id::text, category from workflow_state where id=$1::uuid`, *updates.StateID).Scan(&teamID, &category); err != nil || !allTeamsEqual(teamIDs, teamID) {
+		if err := q.QueryRow(r.Context(), `select team_id::text, category from workflow_state where id=$1::uuid for share`, *updates.StateID).Scan(&teamID, &category); err != nil || !allTeamsEqual(teamIDs, teamID) {
 			return nil, "Workflow state not found for selected issues"
 		}
 		_ = category
@@ -133,7 +140,7 @@ func (h Handler) validateBulkUpdates(r *http.Request, workspaceID string, teamID
 	if updates.AssigneeID != nil {
 		if *updates.AssigneeID != "" {
 			var one int
-			if err := h.DB.QueryRow(r.Context(), `select 1 from member where workspace_id=$1::uuid and user_id=$2 limit 1`, workspaceID, *updates.AssigneeID).Scan(&one); err != nil {
+			if err := q.QueryRow(r.Context(), `select 1 from member where workspace_id=$1::uuid and user_id=$2 limit 1 for share`, workspaceID, *updates.AssigneeID).Scan(&one); err != nil {
 				return nil, "Assignee is not a workspace member"
 			}
 		}
@@ -150,21 +157,22 @@ func (h Handler) validateBulkUpdates(r *http.Request, workspaceID string, teamID
 		changed = append(changed, "priority")
 	}
 	if updates.ProjectID != nil {
-		if *updates.ProjectID != "" {
-			var one int
-			if err := h.DB.QueryRow(r.Context(), `select 1 from project where id=$1::uuid and workspace_id=$2::uuid limit 1`, *updates.ProjectID, workspaceID).Scan(&one); err != nil {
-				return nil, "Project not found"
-			}
+		projectID := nullableID(updates.ProjectID)
+		if _, err := NormalizeProjectMilestoneRelationship(r.Context(), q, workspaceID, projectID, nil); err != nil {
+			return nil, err.Title()
 		}
+		updates.ProjectID = stringPtrFromNullable(projectID)
 		changed = append(changed, "projectId")
 	}
 	if updates.CycleID != nil {
-		if *updates.CycleID != "" {
+		cycleID := nullableID(updates.CycleID)
+		if cycleID != nil {
 			var teamID string
-			if err := h.DB.QueryRow(r.Context(), `select team_id::text from cycle where id=$1::uuid`, *updates.CycleID).Scan(&teamID); err != nil || !containsString(teamIDs, teamID) {
+			if err := q.QueryRow(r.Context(), `select team_id::text from cycle where id=$1::uuid for share`, *cycleID).Scan(&teamID); err != nil || !allTeamsEqual(teamIDs, teamID) {
 				return nil, "Cycle not found for selected issues"
 			}
 		}
+		updates.CycleID = stringPtrFromNullable(cycleID)
 		changed = append(changed, "cycleId")
 	}
 	if updates.DueDate != nil {
@@ -179,6 +187,10 @@ func (h Handler) validateBulkUpdates(r *http.Request, workspaceID string, teamID
 		changed = append(changed, "archivedAt")
 	}
 	if updates.LabelIDs != nil {
+		updates.LabelIDs = uniqueNonEmpty(updates.LabelIDs)
+		if err := ValidateLabelsForTeams(r.Context(), q, workspaceID, teamIDs, updates.LabelIDs); err != nil {
+			return nil, err.Title()
+		}
 		changed = append(changed, "labelIds")
 	}
 	return changed, ""
@@ -213,11 +225,12 @@ func applyIssueUpdate(r *http.Request, tx pgx.Tx, issueIDs []string, updates bul
 	}
 	if updates.ProjectID != nil {
 		if *updates.ProjectID == "" {
-			sets = append(sets, "project_id=null")
+			sets = append(sets, "project_id=null", "project_milestone_id=null")
 		} else {
 			sets = append(sets, "project_id=$"+itoaSimple(n)+"::uuid")
 			args = append(args, *updates.ProjectID)
 			n++
+			sets = append(sets, "project_milestone_id=null")
 		}
 	}
 	if updates.CycleID != nil {
@@ -306,6 +319,13 @@ func containsString(values []string, expected string) bool {
 		}
 	}
 	return false
+}
+func stringPtrFromNullable(value *string) *string {
+	if value == nil {
+		empty := ""
+		return &empty
+	}
+	return value
 }
 func itoaSimple(v int) string {
 	if v == 0 {
