@@ -152,6 +152,13 @@ const (
 	IntegrationStatusRevoked               IntegrationStatus = "revoked"
 )
 
+// Defines values for IntegrationAuditEventSeverity.
+const (
+	IntegrationAuditEventSeverityError   IntegrationAuditEventSeverity = "error"
+	IntegrationAuditEventSeverityInfo    IntegrationAuditEventSeverity = "info"
+	IntegrationAuditEventSeverityWarning IntegrationAuditEventSeverity = "warning"
+)
+
 // Defines values for InviteResultStatus.
 const (
 	InviteResultStatusFailed InviteResultStatus = "failed"
@@ -1585,15 +1592,27 @@ type IntegrationActions struct {
 	CanReconnect  bool `json:"canReconnect"`
 }
 
+// IntegrationAuditEvent defines model for IntegrationAuditEvent.
+type IntegrationAuditEvent struct {
+	CreatedAt time.Time                     `json:"createdAt"`
+	EventType string                        `json:"eventType"`
+	Message   string                        `json:"message"`
+	Severity  IntegrationAuditEventSeverity `json:"severity"`
+}
+
+// IntegrationAuditEventSeverity defines model for IntegrationAuditEvent.Severity.
+type IntegrationAuditEventSeverity string
+
 // IntegrationHealth defines model for IntegrationHealth.
 type IntegrationHealth struct {
-	FailedJobCount     int        `json:"failedJobCount"`
-	LastEventAt        *time.Time `json:"lastEventAt"`
-	LastFailureAt      *time.Time `json:"lastFailureAt"`
-	LastFailureMessage *string    `json:"lastFailureMessage"`
-	LastSuccessAt      *time.Time `json:"lastSuccessAt"`
-	PendingJobCount    int        `json:"pendingJobCount"`
-	TokenExpiresAt     *time.Time `json:"tokenExpiresAt"`
+	AuditEvents        []IntegrationAuditEvent `json:"auditEvents"`
+	FailedJobCount     int                     `json:"failedJobCount"`
+	LastEventAt        *time.Time              `json:"lastEventAt"`
+	LastFailureAt      *time.Time              `json:"lastFailureAt"`
+	LastFailureMessage *string                 `json:"lastFailureMessage"`
+	LastSuccessAt      *time.Time              `json:"lastSuccessAt"`
+	PendingJobCount    int                     `json:"pendingJobCount"`
+	TokenExpiresAt     *time.Time              `json:"tokenExpiresAt"`
 }
 
 // IntegrationListResponse defines model for IntegrationListResponse.

@@ -2523,6 +2523,14 @@ export interface components {
       canDisconnect: boolean;
       canReconnect: boolean;
     };
+    IntegrationAuditEvent: {
+      eventType: string;
+      /** @enum {string} */
+      severity: "info" | "warning" | "error";
+      message: string;
+      /** Format: date-time */
+      createdAt: string;
+    };
     IntegrationHealth: {
       /** Format: date-time */
       lastEventAt: string | null;
@@ -2535,6 +2543,7 @@ export interface components {
       tokenExpiresAt: string | null;
       pendingJobCount: number;
       failedJobCount: number;
+      auditEvents: components["schemas"]["IntegrationAuditEvent"][];
     };
     Integration: {
       /** @enum {string} */

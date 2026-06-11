@@ -38,14 +38,22 @@ type Actions struct {
 	CanReconnect  bool `json:"canReconnect"`
 }
 
+type AuditEvent struct {
+	EventType string `json:"eventType"`
+	Severity  string `json:"severity"`
+	Message   string `json:"message"`
+	CreatedAt string `json:"createdAt"`
+}
+
 type Health struct {
-	LastEventAt        *string `json:"lastEventAt"`
-	LastSuccessAt      *string `json:"lastSuccessAt"`
-	LastFailureAt      *string `json:"lastFailureAt"`
-	LastFailureMessage *string `json:"lastFailureMessage"`
-	TokenExpiresAt     *string `json:"tokenExpiresAt"`
-	PendingJobCount    int     `json:"pendingJobCount"`
-	FailedJobCount     int     `json:"failedJobCount"`
+	LastEventAt        *string      `json:"lastEventAt"`
+	LastSuccessAt      *string      `json:"lastSuccessAt"`
+	LastFailureAt      *string      `json:"lastFailureAt"`
+	LastFailureMessage *string      `json:"lastFailureMessage"`
+	TokenExpiresAt     *string      `json:"tokenExpiresAt"`
+	PendingJobCount    int          `json:"pendingJobCount"`
+	FailedJobCount     int          `json:"failedJobCount"`
+	AuditEvents        []AuditEvent `json:"auditEvents"`
 }
 
 type Integration struct {
@@ -200,6 +208,7 @@ type row struct {
 	TokenExpiresAt     *time.Time
 	PendingJobCount    int
 	FailedJobCount     int
+	AuditEvents        []AuditEvent
 }
 
 func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error) {
@@ -231,6 +240,11 @@ func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error
 		if err := rows.Scan(&r.ID, &r.Provider, &r.Status, &r.DisplayName, &r.ExternalID, &r.ConnectedAt, &r.LastEventAt, &r.LastSuccessAt, &r.LastFailureAt, &r.LastFailureMessage, &r.TokenExpiresAt, &r.PendingJobCount, &r.FailedJobCount); err != nil {
 			return nil, err
 		}
+		events, err := h.auditEvents(ctx, r.ID)
+		if err != nil {
+			return nil, err
+		}
+		r.AuditEvents = events
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -285,7 +299,32 @@ func (r row) Health() Health {
 		TokenExpiresAt:     formatTime(r.TokenExpiresAt),
 		PendingJobCount:    r.PendingJobCount,
 		FailedJobCount:     r.FailedJobCount,
+		AuditEvents:        r.AuditEvents,
 	}
+}
+
+func (h Handler) auditEvents(ctx context.Context, integrationID string) ([]AuditEvent, error) {
+	rows, err := h.DB.Query(ctx, `
+		select event_type, severity, message, created_at
+		from provider_event
+		where workspace_integration_id=$1::uuid
+		order by created_at desc
+		limit 5`, integrationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	events := []AuditEvent{}
+	for rows.Next() {
+		var event AuditEvent
+		var createdAt time.Time
+		if err := rows.Scan(&event.EventType, &event.Severity, &event.Message, &createdAt); err != nil {
+			return nil, err
+		}
+		event.CreatedAt = createdAt.UTC().Format(time.RFC3339)
+		events = append(events, event)
+	}
+	return events, rows.Err()
 }
 
 func (h Handler) revokeProvider(ctx context.Context, workspaceID string, provider string, userID string) error {
