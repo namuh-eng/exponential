@@ -141,6 +141,17 @@ const (
 	IntegrationProviderZendesk IntegrationProvider = "zendesk"
 )
 
+// Defines values for IntegrationStatus.
+const (
+	IntegrationStatusConfigurationRequired IntegrationStatus = "configuration_required"
+	IntegrationStatusConnected             IntegrationStatus = "connected"
+	IntegrationStatusDegraded              IntegrationStatus = "degraded"
+	IntegrationStatusError                 IntegrationStatus = "error"
+	IntegrationStatusInstalling            IntegrationStatus = "installing"
+	IntegrationStatusNotConnected          IntegrationStatus = "not_connected"
+	IntegrationStatusRevoked               IntegrationStatus = "revoked"
+)
+
 // Defines values for InviteResultStatus.
 const (
 	InviteResultStatusFailed InviteResultStatus = "failed"
@@ -393,10 +404,10 @@ const (
 
 // Defines values for SamlSettingsStatus.
 const (
-	Configured    SamlSettingsStatus = "configured"
-	Error         SamlSettingsStatus = "error"
-	NotConfigured SamlSettingsStatus = "not_configured"
-	Verified      SamlSettingsStatus = "verified"
+	SamlSettingsStatusConfigured    SamlSettingsStatus = "configured"
+	SamlSettingsStatusError         SamlSettingsStatus = "error"
+	SamlSettingsStatusNotConfigured SamlSettingsStatus = "not_configured"
+	SamlSettingsStatusVerified      SamlSettingsStatus = "verified"
 )
 
 // Defines values for SidebarFavoriteObjectType.
@@ -1552,21 +1563,37 @@ type Integration struct {
 	Description      string                       `json:"description"`
 	DisplayName      *string                      `json:"displayName"`
 	ExternalId       *string                      `json:"externalId"`
+	Health           IntegrationHealth            `json:"health"`
 	Id               *openapi_types.UUID          `json:"id"`
 	Name             string                       `json:"name"`
 	Provider         IntegrationProvider          `json:"provider"`
 	SetupRequirement *IntegrationSetupRequirement `json:"setupRequirement"`
-	Status           string                       `json:"status"`
+	Status           IntegrationStatus            `json:"status"`
 }
 
 // IntegrationProvider defines model for Integration.Provider.
 type IntegrationProvider string
+
+// IntegrationStatus defines model for Integration.Status.
+type IntegrationStatus string
 
 // IntegrationActions defines model for IntegrationActions.
 type IntegrationActions struct {
 	CanConnect    bool `json:"canConnect"`
 	CanDisconnect bool `json:"canDisconnect"`
 	CanManage     bool `json:"canManage"`
+	CanReconnect  bool `json:"canReconnect"`
+}
+
+// IntegrationHealth defines model for IntegrationHealth.
+type IntegrationHealth struct {
+	FailedJobCount     int        `json:"failedJobCount"`
+	LastEventAt        *time.Time `json:"lastEventAt"`
+	LastFailureAt      *time.Time `json:"lastFailureAt"`
+	LastFailureMessage *string    `json:"lastFailureMessage"`
+	LastSuccessAt      *time.Time `json:"lastSuccessAt"`
+	PendingJobCount    int        `json:"pendingJobCount"`
+	TokenExpiresAt     *time.Time `json:"tokenExpiresAt"`
 }
 
 // IntegrationListResponse defines model for IntegrationListResponse.

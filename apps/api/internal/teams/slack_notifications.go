@@ -186,7 +186,7 @@ func (h Handler) findSlackTeam(r *http.Request, workspaceID, key string) (slackT
 func (h Handler) findSlackIntegration(r *http.Request, workspaceID string) (*slackWorkspaceIntegration, error) {
 	var integration slackWorkspaceIntegration
 	var connectedAt *time.Time
-	err := h.DB.QueryRow(r.Context(), `select id::text, status, display_name, connected_at from workspace_integration where workspace_id=$1::uuid and provider='slack' limit 1`, workspaceID).Scan(&integration.ID, &integration.Status, &integration.DisplayName, &connectedAt)
+	err := h.DB.QueryRow(r.Context(), `select id::text, status, display_name, connected_at from workspace_integration where workspace_id=$1::uuid and provider='slack' and status in ('connected','degraded') limit 1`, workspaceID).Scan(&integration.ID, &integration.Status, &integration.DisplayName, &connectedAt)
 	if err != nil {
 		return nil, err
 	}
