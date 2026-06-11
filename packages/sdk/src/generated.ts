@@ -2521,6 +2521,20 @@ export interface components {
       canConnect: boolean;
       canManage: boolean;
       canDisconnect: boolean;
+      canReconnect: boolean;
+    };
+    IntegrationHealth: {
+      /** Format: date-time */
+      lastEventAt: string | null;
+      /** Format: date-time */
+      lastSuccessAt: string | null;
+      /** Format: date-time */
+      lastFailureAt: string | null;
+      lastFailureMessage: string | null;
+      /** Format: date-time */
+      tokenExpiresAt: string | null;
+      pendingJobCount: number;
+      failedJobCount: number;
     };
     Integration: {
       /** @enum {string} */
@@ -2529,7 +2543,15 @@ export interface components {
       description: string;
       /** Format: uuid */
       id: string | null;
-      status: string;
+      /** @enum {string} */
+      status:
+        | "not_connected"
+        | "configuration_required"
+        | "installing"
+        | "connected"
+        | "degraded"
+        | "revoked"
+        | "error";
       displayName: string | null;
       externalId: string | null;
       /** Format: date-time */
@@ -2538,6 +2560,7 @@ export interface components {
         | components["schemas"]["IntegrationSetupRequirement"]
         | null;
       actions: components["schemas"]["IntegrationActions"];
+      health: components["schemas"]["IntegrationHealth"];
     };
     SlackConnectResponse: {
       /** Format: uri */

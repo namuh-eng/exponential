@@ -1,6 +1,7 @@
 package integrations
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -25,6 +26,18 @@ func TestSetupRequirement(t *testing.T) {
 func TestCanManage(t *testing.T) {
 	if !canManage("owner") || !canManage("admin") || canManage("member") {
 		t.Fatal("integration role permissions drifted")
+	}
+}
+
+func TestIntegrationActions(t *testing.T) {
+	if got := integrationActions(true, false, "not_connected", nil); !got.CanConnect || got.CanReconnect || got.CanDisconnect {
+		t.Fatalf("not connected actions = %#v", got)
+	}
+	if got := integrationActions(true, true, "revoked", nil); !got.CanReconnect || got.CanDisconnect {
+		t.Fatalf("revoked actions = %#v", got)
+	}
+	if got := integrationActions(false, true, "connected", nil); got.CanManage || got.CanDisconnect {
+		t.Fatalf("member actions = %#v", got)
 	}
 }
 
@@ -58,5 +71,34 @@ func TestSlackOAuthConfig(t *testing.T) {
 	clientID, clientSecret, ok := slackOAuthConfig()
 	if !ok || clientID != "slack-id" || clientSecret != "slack-secret" {
 		t.Fatalf("config = %q %q %v", clientID, clientSecret, ok)
+	}
+}
+
+func TestProviderJobFailureStatus(t *testing.T) {
+	status, nextRunAt := providerJobFailureStatus(2, 5)
+	if status != "failed" || nextRunAt == nil {
+		t.Fatalf("retryable failure = %q %#v", status, nextRunAt)
+	}
+	status, nextRunAt = providerJobFailureStatus(5, 5)
+	if status != "dead" || nextRunAt != nil {
+		t.Fatalf("terminal failure = %q %#v", status, nextRunAt)
+	}
+}
+
+func TestIntegrationJSONOmitsCredentialFields(t *testing.T) {
+	payload, err := json.Marshal(Integration{
+		CatalogItem: CatalogItem{Provider: "slack", Name: "Slack", Description: "Slack"},
+		Status:      "connected",
+		Actions:     integrationActions(true, true, "connected", nil),
+		Health:      Health{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(payload)
+	for _, forbidden := range []string{"clientSecret", "accessToken", "refreshToken", "secretRef", "encryptedPayload", "credentialRef"} {
+		if strings.Contains(strings.ToLower(body), strings.ToLower(forbidden)) {
+			t.Fatalf("integration response leaked %q in %s", forbidden, body)
+		}
 	}
 }

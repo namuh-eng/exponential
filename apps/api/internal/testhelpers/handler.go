@@ -95,7 +95,7 @@ func (h Handler) CreateSlackIntegration(w http.ResponseWriter, r *http.Request) 
 	p, _ := auth.FromContext(r.Context())
 	now := time.Now().UTC()
 	var id string
-	err := h.DB.QueryRow(r.Context(), `insert into workspace_integration (workspace_id,provider,status,display_name,external_id,metadata,connected_by_user_id,connected_at,updated_at) values ($1::uuid,'slack','connected','E2E Slack Workspace',$2,$3::jsonb,$4,$5,$5) on conflict (workspace_id,provider) do update set status='connected', display_name='E2E Slack Workspace', connected_by_user_id=excluded.connected_by_user_id, connected_at=excluded.connected_at, updated_at=excluded.updated_at returning id::text`, p.WorkspaceID, "T_"+p.WorkspaceID, []byte(`{"createdBy":"playwright"}`), p.UserID, now).Scan(&id)
+	err := h.DB.QueryRow(r.Context(), `insert into workspace_integration (workspace_id,provider,status,display_name,external_id,metadata,connected_by_user_id,connected_at,last_event_at,last_success_at,credentials_revoked_at,revoked_at,revoked_by_user_id,updated_at) values ($1::uuid,'slack','connected','E2E Slack Workspace',$2,$3::jsonb,$4,$5,$5,$5,null,null,null,$5) on conflict (workspace_id,provider) do update set status='connected', display_name='E2E Slack Workspace', connected_by_user_id=excluded.connected_by_user_id, connected_at=excluded.connected_at, last_event_at=excluded.last_event_at, last_success_at=excluded.last_success_at, credentials_revoked_at=null, revoked_at=null, revoked_by_user_id=null, updated_at=excluded.updated_at returning id::text`, p.WorkspaceID, "T_"+p.WorkspaceID, []byte(`{"createdBy":"playwright"}`), p.UserID, now).Scan(&id)
 	if err != nil {
 		problem.Write(w, 500, "Create Slack integration failed", err.Error())
 		return

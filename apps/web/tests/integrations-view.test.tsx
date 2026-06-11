@@ -24,7 +24,21 @@ const integrations = [
       type: "configuration_required",
       message: "GitHub setup is not configured in this environment yet.",
     },
-    actions: { canConnect: false, canManage: false, canDisconnect: false },
+    actions: {
+      canConnect: false,
+      canManage: false,
+      canDisconnect: false,
+      canReconnect: false,
+    },
+    health: {
+      lastEventAt: null,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      lastFailureMessage: null,
+      tokenExpiresAt: null,
+      pendingJobCount: 0,
+      failedJobCount: 0,
+    },
   },
   {
     provider: "slack",
@@ -37,9 +51,45 @@ const integrations = [
       type: "configuration_required",
       message: "Slack OAuth credentials are not configured.",
     },
-    actions: { canConnect: false, canManage: false, canDisconnect: false },
+    actions: {
+      canConnect: false,
+      canManage: false,
+      canDisconnect: false,
+      canReconnect: false,
+    },
+    health: {
+      lastEventAt: null,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      lastFailureMessage: null,
+      tokenExpiresAt: null,
+      pendingJobCount: 0,
+      failedJobCount: 0,
+    },
   },
 ];
+
+const degradedSlack = {
+  ...integrations[1],
+  status: "degraded",
+  displayName: "Design Ops",
+  setupRequirement: null,
+  actions: {
+    canConnect: false,
+    canManage: true,
+    canDisconnect: true,
+    canReconnect: true,
+  },
+  health: {
+    lastEventAt: "2026-06-10T12:00:00Z",
+    lastSuccessAt: "2026-06-10T11:00:00Z",
+    lastFailureAt: "2026-06-10T12:00:00Z",
+    lastFailureMessage: "Slack token expired. Reconnect this workspace.",
+    tokenExpiresAt: "2026-06-10T12:30:00Z",
+    pendingJobCount: 2,
+    failedJobCount: 1,
+  },
+};
 
 describe("IntegrationsSettingsPage component", () => {
   beforeEach(() => {
@@ -111,5 +161,26 @@ describe("IntegrationsSettingsPage component", () => {
       "/api/integrations/slack/connect",
       expect.objectContaining({ method: "POST" }),
     );
+  });
+
+  it("shows admin health and reconnect state for installed providers", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        integrations: [integrations[0], degradedSlack],
+        canManageIntegrations: true,
+      }),
+    });
+
+    render(<IntegrationsSettingsPage />);
+
+    expect(await screen.findByText("Degraded")).toBeInTheDocument();
+    expect(screen.getByText("2 pending / 1 failed")).toBeInTheDocument();
+    expect(
+      screen.getByText("Slack token expired. Reconnect this workspace."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reconnect" }),
+    ).toBeInTheDocument();
   });
 });

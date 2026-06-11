@@ -7,7 +7,14 @@ type Integration = {
   provider: string;
   name: string;
   description: string;
-  status: "connected" | "not_connected" | "configuration_required" | string;
+  status:
+    | "configuration_required"
+    | "installing"
+    | "connected"
+    | "degraded"
+    | "revoked"
+    | "error"
+    | "not_connected";
   displayName: string | null;
   connectedAt: string | null;
   setupRequirement: { type: string; message: string } | null;
@@ -15,6 +22,16 @@ type Integration = {
     canConnect: boolean;
     canManage: boolean;
     canDisconnect: boolean;
+    canReconnect: boolean;
+  };
+  health: {
+    lastEventAt: string | null;
+    lastSuccessAt: string | null;
+    lastFailureAt: string | null;
+    lastFailureMessage: string | null;
+    tokenExpiresAt: string | null;
+    pendingJobCount: number;
+    failedJobCount: number;
   };
 };
 
@@ -26,10 +43,37 @@ type IntegrationsPayload = {
 
 function statusLabel(integration: Integration) {
   if (integration.status === "connected") return "Connected";
+  if (integration.status === "installing") return "Installing";
+  if (integration.status === "degraded") return "Degraded";
+  if (integration.status === "revoked") return "Revoked";
+  if (integration.status === "error") return "Error";
   if (integration.status === "configuration_required") {
     return "Configuration required";
   }
   return "Not connected";
+}
+
+function formatTimestamp(value: string | null) {
+  if (!value) return "Never";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function statusClassName(status: Integration["status"]) {
+  if (status === "connected") {
+    return "border-green-500/30 bg-green-500/10 text-green-300";
+  }
+  if (status === "degraded" || status === "error") {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-200";
+  }
+  if (status === "revoked") {
+    return "border-red-500/30 bg-red-500/10 text-red-200";
+  }
+  return "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-tertiary)]";
 }
 
 export default function IntegrationsSettingsPage() {
@@ -142,8 +186,10 @@ export default function IntegrationsSettingsPage() {
     );
   }
 
-  const connectedIntegrations = integrations.filter(
-    (integration) => integration.status === "connected",
+  const installedIntegrations = integrations.filter(
+    (integration) =>
+      integration.status !== "not_connected" &&
+      integration.status !== "configuration_required",
   );
 
   return (
@@ -171,29 +217,99 @@ export default function IntegrationsSettingsPage() {
       ) : null}
 
       <div className="mt-8">
-        {connectedIntegrations.length ? (
+        {installedIntegrations.length ? (
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
-            {connectedIntegrations.map((integration) => (
+            {installedIntegrations.map((integration) => (
               <div
-                className="flex items-center justify-between gap-4 border-b border-[var(--color-border)] p-4 last:border-b-0"
+                className="border-b border-[var(--color-border)] p-4 last:border-b-0"
                 key={integration.provider}
               >
-                <div>
-                  <h2 className="text-[15px] font-medium text-[var(--color-text-primary)]">
-                    {integration.name}
-                  </h2>
-                  <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
-                    Connected to {integration.displayName || integration.name}
-                  </p>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-[15px] font-medium text-[var(--color-text-primary)]">
+                        {integration.name}
+                      </h2>
+                      <span
+                        className={`rounded-md border px-2 py-0.5 text-[11px] ${statusClassName(integration.status)}`}
+                      >
+                        {statusLabel(integration)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
+                      {integration.status === "revoked"
+                        ? "Disconnected locally; historical links are preserved."
+                        : `Connected to ${integration.displayName || integration.name}`}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    {integration.actions.canReconnect ? (
+                      <button
+                        className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
+                        disabled={pendingProvider === integration.provider}
+                        onClick={() =>
+                          integration.provider === "slack"
+                            ? void connectSlack()
+                            : undefined
+                        }
+                        type="button"
+                      >
+                        Reconnect
+                      </button>
+                    ) : null}
+                    {integration.actions.canDisconnect ? (
+                      <button
+                        className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-red-300 disabled:opacity-50"
+                        disabled={pendingProvider === integration.provider}
+                        onClick={() => void disconnect(integration.provider)}
+                        type="button"
+                      >
+                        Disconnect
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
-                <button
-                  className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-red-300 disabled:opacity-50"
-                  disabled={pendingProvider === integration.provider}
-                  onClick={() => void disconnect(integration.provider)}
-                  type="button"
-                >
-                  Disconnect
-                </button>
+                <div className="mt-4 grid gap-3 text-[12px] text-[var(--color-text-tertiary)] sm:grid-cols-3">
+                  <div>
+                    <span className="block text-[var(--color-text-secondary)]">
+                      Last event
+                    </span>
+                    {formatTimestamp(integration.health.lastEventAt)}
+                  </div>
+                  <div>
+                    <span className="block text-[var(--color-text-secondary)]">
+                      Last success
+                    </span>
+                    {formatTimestamp(integration.health.lastSuccessAt)}
+                  </div>
+                  <div>
+                    <span className="block text-[var(--color-text-secondary)]">
+                      Last failure
+                    </span>
+                    {formatTimestamp(integration.health.lastFailureAt)}
+                  </div>
+                  <div>
+                    <span className="block text-[var(--color-text-secondary)]">
+                      Token expiry
+                    </span>
+                    {formatTimestamp(integration.health.tokenExpiresAt)}
+                  </div>
+                  <div>
+                    <span className="block text-[var(--color-text-secondary)]">
+                      Jobs
+                    </span>
+                    {integration.health.pendingJobCount} pending /{" "}
+                    {integration.health.failedJobCount} failed
+                  </div>
+                  {integration.health.lastFailureMessage ? (
+                    <div className="sm:col-span-3">
+                      <span className="block text-[var(--color-text-secondary)]">
+                        Action needed
+                      </span>
+                      {integration.health.lastFailureMessage}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>
@@ -209,7 +325,7 @@ export default function IntegrationsSettingsPage() {
         )}
       </div>
 
-      {connectedIntegrations.length ? (
+      {installedIntegrations.length ? (
         <button
           className="mt-4 rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]"
           onClick={() => setCatalogOpen(true)}
@@ -275,7 +391,7 @@ export default function IntegrationsSettingsPage() {
                         </p>
                       ) : null}
                     </div>
-                    {integration.status === "connected" ? (
+                    {integration.actions.canDisconnect ? (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-red-300 disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
@@ -283,6 +399,19 @@ export default function IntegrationsSettingsPage() {
                         type="button"
                       >
                         Disconnect
+                      </button>
+                    ) : integration.actions.canReconnect ? (
+                      <button
+                        className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
+                        disabled={pendingProvider === integration.provider}
+                        onClick={() =>
+                          integration.provider === "slack"
+                            ? void connectSlack()
+                            : undefined
+                        }
+                        type="button"
+                      >
+                        Reconnect
                       </button>
                     ) : integration.provider === "slack" ? (
                       <button
