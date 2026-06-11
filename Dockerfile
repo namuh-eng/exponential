@@ -1,4 +1,7 @@
-# Root Dockerfile kept for existing deploy tooling; builds the web app image.
+# Root Dockerfile kept for existing deploy tooling; builds the web app image
+# ONLY. This is NOT what `docker compose up` or the ECS deploy use — those
+# build infra/docker/web.Dockerfile and infra/docker/api.Dockerfile. Do not
+# use `docker build .` from the repo root expecting a runnable full stack.
 FROM node:20-alpine AS deps
 RUN corepack enable
 WORKDIR /workspace
