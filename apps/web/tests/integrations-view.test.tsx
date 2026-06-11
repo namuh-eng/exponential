@@ -38,6 +38,7 @@ const integrations = [
       tokenExpiresAt: null,
       pendingJobCount: 0,
       failedJobCount: 0,
+      auditEvents: [],
     },
   },
   {
@@ -65,6 +66,7 @@ const integrations = [
       tokenExpiresAt: null,
       pendingJobCount: 0,
       failedJobCount: 0,
+      auditEvents: [],
     },
   },
 ];
@@ -88,6 +90,14 @@ const degradedSlack = {
     tokenExpiresAt: "2026-06-10T12:30:00Z",
     pendingJobCount: 2,
     failedJobCount: 1,
+    auditEvents: [
+      {
+        eventType: "job_failed",
+        severity: "error",
+        message: "Slack delivery failed after token expiry.",
+        createdAt: "2026-06-10T12:00:00Z",
+      },
+    ],
   },
 };
 
@@ -178,6 +188,10 @@ describe("IntegrationsSettingsPage component", () => {
     expect(screen.getByText("2 pending / 1 failed")).toBeInTheDocument();
     expect(
       screen.getByText("Slack token expired. Reconnect this workspace."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Audit trail")).toBeInTheDocument();
+    expect(
+      screen.getByText("Slack delivery failed after token expiry."),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Reconnect" }),

@@ -3898,9 +3898,17 @@ components:
         canManage: { type: boolean }
         canDisconnect: { type: boolean }
         canReconnect: { type: boolean }
+    IntegrationAuditEvent:
+      type: object
+      required: [eventType, severity, message, createdAt]
+      properties:
+        eventType: { type: string }
+        severity: { type: string, enum: [info, warning, error] }
+        message: { type: string }
+        createdAt: { type: string, format: date-time }
     IntegrationHealth:
       type: object
-      required: [lastEventAt, lastSuccessAt, lastFailureAt, lastFailureMessage, tokenExpiresAt, pendingJobCount, failedJobCount]
+      required: [lastEventAt, lastSuccessAt, lastFailureAt, lastFailureMessage, tokenExpiresAt, pendingJobCount, failedJobCount, auditEvents]
       properties:
         lastEventAt: { type: [string, 'null'], format: date-time }
         lastSuccessAt: { type: [string, 'null'], format: date-time }
@@ -3909,6 +3917,9 @@ components:
         tokenExpiresAt: { type: [string, 'null'], format: date-time }
         pendingJobCount: { type: integer, minimum: 0 }
         failedJobCount: { type: integer, minimum: 0 }
+        auditEvents:
+          type: array
+          items: { $ref: '#/components/schemas/IntegrationAuditEvent' }
     Integration:
       type: object
       required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions, health]

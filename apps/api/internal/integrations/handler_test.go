@@ -85,12 +85,35 @@ func TestProviderJobFailureStatus(t *testing.T) {
 	}
 }
 
+func TestRowHealthIncludesAuditEvents(t *testing.T) {
+	health := row{
+		AuditEvents: []AuditEvent{
+			{
+				EventType: "job_failed",
+				Severity:  "error",
+				Message:   "Slack delivery failed after token expiry.",
+				CreatedAt: "2026-06-10T12:00:00Z",
+			},
+		},
+	}.Health()
+	if len(health.AuditEvents) != 1 {
+		t.Fatalf("audit events = %#v", health.AuditEvents)
+	}
+	if health.AuditEvents[0].Message != "Slack delivery failed after token expiry." {
+		t.Fatalf("audit event message = %#v", health.AuditEvents[0])
+	}
+}
+
 func TestIntegrationJSONOmitsCredentialFields(t *testing.T) {
 	payload, err := json.Marshal(Integration{
 		CatalogItem: CatalogItem{Provider: "slack", Name: "Slack", Description: "Slack"},
 		Status:      "connected",
 		Actions:     integrationActions(true, true, "connected", nil),
-		Health:      Health{},
+		Health: Health{
+			AuditEvents: []AuditEvent{
+				{EventType: "job_failed", Severity: "error", Message: "retry failed", CreatedAt: "2026-06-10T12:00:00Z"},
+			},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)

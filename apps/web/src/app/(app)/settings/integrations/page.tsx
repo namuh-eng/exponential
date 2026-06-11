@@ -32,6 +32,12 @@ type Integration = {
     tokenExpiresAt: string | null;
     pendingJobCount: number;
     failedJobCount: number;
+    auditEvents: {
+      eventType: string;
+      severity: "info" | "warning" | "error";
+      message: string;
+      createdAt: string;
+    }[];
   };
 };
 
@@ -310,6 +316,27 @@ export default function IntegrationsSettingsPage() {
                     </div>
                   ) : null}
                 </div>
+                {integration.health.auditEvents.length ? (
+                  <div className="mt-4 border-t border-[var(--color-border)] pt-4">
+                    <h3 className="text-[12px] font-medium text-[var(--color-text-secondary)]">
+                      Audit trail
+                    </h3>
+                    <div className="mt-2 flex flex-col gap-2">
+                      {integration.health.auditEvents.map((event) => (
+                        <div
+                          className="grid gap-1 text-[12px] text-[var(--color-text-tertiary)] sm:grid-cols-[120px_80px_1fr]"
+                          key={`${event.createdAt}-${event.eventType}-${event.message}`}
+                        >
+                          <span>{formatTimestamp(event.createdAt)}</span>
+                          <span className="capitalize">{event.severity}</span>
+                          <span className="text-[var(--color-text-secondary)]">
+                            {event.message}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>
