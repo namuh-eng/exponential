@@ -137,6 +137,7 @@ const (
 // Defines values for IntegrationProvider.
 const (
 	IntegrationProviderGithub  IntegrationProvider = "github"
+	IntegrationProviderJira    IntegrationProvider = "jira"
 	IntegrationProviderSlack   IntegrationProvider = "slack"
 	IntegrationProviderZendesk IntegrationProvider = "zendesk"
 )
