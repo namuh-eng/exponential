@@ -37,6 +37,17 @@ type Actions struct {
 	CanDisconnect bool `json:"canDisconnect"`
 }
 
+// HealthInfo carries lifecycle and health telemetry for an integration.
+// No secret or credential data is included in this struct.
+type HealthInfo struct {
+	LifecycleState     string  `json:"lifecycleState"`
+	LastEventAt        *string `json:"lastEventAt"`
+	LastSuccessAt      *string `json:"lastSuccessAt"`
+	LastFailureAt      *string `json:"lastFailureAt"`
+	LastFailureMessage *string `json:"lastFailureMessage"`
+	HealthSummary      *string `json:"healthSummary"`
+}
+
 type Integration struct {
 	CatalogItem
 	ID               *string           `json:"id"`
@@ -46,6 +57,7 @@ type Integration struct {
 	ConnectedAt      *string           `json:"connectedAt"`
 	SetupRequirement *SetupRequirement `json:"setupRequirement"`
 	Actions          Actions           `json:"actions"`
+	Health           *HealthInfo       `json:"health"`
 }
 
 type response struct {
@@ -95,16 +107,43 @@ func (h Handler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		status := "not_connected"
 		var id, displayName, externalID, connectedAt *string
+		var health *HealthInfo
 		if ok {
-			status = connected.Status
+			status = connected.LifecycleState
+			if status == "" {
+				status = connected.Status
+			}
 			id = &connected.ID
 			displayName = connected.DisplayName
 			externalID = connected.ExternalID
 			connectedAt = formatTime(connected.ConnectedAt)
+			health = &HealthInfo{
+				LifecycleState:     connected.LifecycleState,
+				LastEventAt:        formatTime(connected.LastEventAt),
+				LastSuccessAt:      formatTime(connected.LastSuccessAt),
+				LastFailureAt:      formatTime(connected.LastFailureAt),
+				LastFailureMessage: connected.LastFailureMessage,
+				HealthSummary:      connected.HealthSummary,
+			}
 		} else if requirement != nil {
 			status = "configuration_required"
 		}
-		out = append(out, Integration{CatalogItem: item, ID: id, Status: status, DisplayName: displayName, ExternalID: externalID, ConnectedAt: connectedAt, SetupRequirement: requirement, Actions: Actions{CanConnect: canManage && !ok && requirement == nil, CanManage: canManage && ok, CanDisconnect: canManage && ok}})
+		isActivelyConnected := ok && status != "revoked"
+		out = append(out, Integration{
+			CatalogItem:      item,
+			ID:               id,
+			Status:           status,
+			DisplayName:      displayName,
+			ExternalID:       externalID,
+			ConnectedAt:      connectedAt,
+			SetupRequirement: requirement,
+			Actions: Actions{
+				CanConnect:    canManage && !ok && requirement == nil,
+				CanManage:     canManage && isActivelyConnected,
+				CanDisconnect: canManage && isActivelyConnected,
+			},
+			Health: health,
+		})
 	}
 	problem.JSON(w, 200, response{CanManageIntegrations: canManage, Integrations: out})
 }
@@ -144,7 +183,7 @@ func (h Handler) SlackDisconnect(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 403, "Forbidden", "")
 		return
 	}
-	if err := h.deleteProvider(r.Context(), p.WorkspaceID, "slack"); err != nil {
+	if err := h.disconnectProvider(r.Context(), p.WorkspaceID, p.UserID, "slack"); err != nil {
 		problem.Write(w, 500, "Disconnect Slack failed", err.Error())
 		return
 	}
@@ -162,7 +201,7 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 400, "Provider is required", "")
 		return
 	}
-	err := h.deleteProvider(r.Context(), p.WorkspaceID, provider)
+	err := h.disconnectProvider(r.Context(), p.WorkspaceID, p.UserID, provider)
 	if err != nil {
 		problem.Write(w, 500, "Delete integration failed", err.Error())
 		return
@@ -171,16 +210,27 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 type row struct {
-	ID          string
-	Provider    string
-	Status      string
-	DisplayName *string
-	ExternalID  *string
-	ConnectedAt *time.Time
+	ID                 string
+	Provider           string
+	Status             string
+	DisplayName        *string
+	ExternalID         *string
+	ConnectedAt        *time.Time
+	LifecycleState     string
+	LastEventAt        *time.Time
+	LastSuccessAt      *time.Time
+	LastFailureAt      *time.Time
+	LastFailureMessage *string
+	HealthSummary      *string
 }
 
 func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error) {
-	rows, err := h.DB.Query(ctx, `select id::text, provider, status, display_name, external_id, connected_at from workspace_integration where workspace_id=$1::uuid`, workspaceID)
+	rows, err := h.DB.Query(ctx, `
+		SELECT id::text, provider, status, display_name, external_id, connected_at,
+		       lifecycle_state, last_event_at, last_success_at,
+		       last_failure_at, last_failure_message, health_summary
+		FROM workspace_integration
+		WHERE workspace_id=$1::uuid`, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +238,11 @@ func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error
 	out := []row{}
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.ID, &r.Provider, &r.Status, &r.DisplayName, &r.ExternalID, &r.ConnectedAt); err != nil {
+		if err := rows.Scan(
+			&r.ID, &r.Provider, &r.Status, &r.DisplayName, &r.ExternalID, &r.ConnectedAt,
+			&r.LifecycleState, &r.LastEventAt, &r.LastSuccessAt,
+			&r.LastFailureAt, &r.LastFailureMessage, &r.HealthSummary,
+		); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -226,20 +280,60 @@ func formatTime(value *time.Time) *string {
 
 func isNotFound(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 
-func (h Handler) deleteProvider(ctx context.Context, workspaceID string, provider string) error {
+// disconnectProvider revokes an integration by:
+//  1. Marking the lifecycle state as 'revoked', clearing active credentials,
+//     disabling pending jobs, and recording disconnected_by_user_id.
+//  2. Disabling team notification integrations (but not deleting them) so
+//     historical issue links are preserved.
+//
+// This replaces the old hard-delete behavior.
+func (h Handler) disconnectProvider(ctx context.Context, workspaceID, userID, provider string) error {
 	var integrationID string
-	err := h.DB.QueryRow(ctx, `select id::text from workspace_integration where workspace_id=$1::uuid and provider=$2 limit 1`, workspaceID, provider).Scan(&integrationID)
+	err := h.DB.QueryRow(ctx,
+		`SELECT id::text FROM workspace_integration WHERE workspace_id=$1::uuid AND provider=$2 LIMIT 1`,
+		workspaceID, provider).Scan(&integrationID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	if _, err := h.DB.Exec(ctx, `delete from team_notification_integration where workspace_integration_id=$1::uuid`, integrationID); err != nil {
+	// Revoke the integration row, clear credentials, record who disconnected.
+	if _, err := h.DB.Exec(ctx, `
+		UPDATE workspace_integration
+		SET lifecycle_state = 'revoked',
+		    credential_ref = NULL,
+		    credential_revoked_at = now(),
+		    disconnected_at = now(),
+		    disconnected_by_user_id = $2,
+		    health_summary = 'Disconnected by workspace admin.',
+		    updated_at = now()
+		WHERE id = $1::uuid`, integrationID, userID); err != nil {
 		return err
 	}
-	_, err = h.DB.Exec(ctx, `delete from workspace_integration where id=$1::uuid`, integrationID)
+	// Cancel pending/running jobs for this integration.
+	if _, err := h.DB.Exec(ctx, `
+		UPDATE integration_job
+		SET status = 'terminal',
+		    error_message = 'Integration disconnected.',
+		    updated_at = now()
+		WHERE workspace_integration_id = $1::uuid
+		  AND status IN ('pending', 'running')`, integrationID); err != nil {
+		return err
+	}
+	// Disable (but preserve) team notification integrations so historical links remain.
+	_, err = h.DB.Exec(ctx, `
+		UPDATE team_notification_integration
+		SET enabled = false,
+		    updated_at = now()
+		WHERE workspace_integration_id = $1::uuid`, integrationID)
 	return err
+}
+
+// deleteProvider is kept for backward compatibility with existing tests.
+// It delegates to disconnectProvider with an empty userID.
+func (h Handler) deleteProvider(ctx context.Context, workspaceID string, provider string) error {
+	return h.disconnectProvider(ctx, workspaceID, "", provider)
 }
 
 func (h Handler) workspaceSlug(ctx context.Context, workspaceID string) (string, error) {
