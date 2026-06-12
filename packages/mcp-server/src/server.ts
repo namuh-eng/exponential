@@ -300,12 +300,7 @@ const toolDefinitions: ToolDefinition[] = [
     description:
       "Accept or decline a single issue in a team's triage queue. Provide teamKey (e.g. ENG), issueId (UUID), and action (accept or decline). When accepting, supply destinationStateId (workflow state UUID) to move the issue out of triage. Optional: priority, assigneeId, reason, comment. Gated by the PAT's workspace authorization.",
     schema: triageIssueInputSchema,
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: false,
-      openWorldHint: false,
-    },
+    annotations: WRITE_ANNOTATIONS,
     handler: (client, input) =>
       client.PATCH("/teams/{key}/triage/{issueID}", {
         params: {
@@ -315,23 +310,13 @@ const toolDefinitions: ToolDefinition[] = [
           },
         },
         body: {
-          action: optionalStringField(input, "action") as
-            | "accept"
-            | "decline"
-            | undefined,
+          action: stringField(input, "action") as "accept" | "decline",
           destinationStateId: optionalStringField(
             input,
             "destinationStateId",
           ),
           reason: optionalNullableStringField(input, "reason"),
-          priority: optionalNullableStringField(input, "priority") as
-            | "none"
-            | "urgent"
-            | "high"
-            | "medium"
-            | "low"
-            | null
-            | undefined,
+          priority: optionalNullableIssuePriority(input),
           assigneeId: optionalNullableStringField(input, "assigneeId"),
           comment: optionalNullableStringField(input, "comment"),
         },
@@ -540,4 +525,16 @@ function optionalIssuePriority(
     return value;
   }
   return undefined;
+}
+
+function optionalNullableIssuePriority(
+  input: unknown,
+): "none" | "urgent" | "high" | "medium" | "low" | null | undefined {
+  if (!isRecord(input) || !("priority" in input)) {
+    return undefined;
+  }
+  if (input["priority"] === null) {
+    return null;
+  }
+  return optionalIssuePriority(input);
 }

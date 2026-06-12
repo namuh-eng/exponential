@@ -12,6 +12,7 @@ type CapturedRequest = {
   url: string;
   method: string;
   headers: Headers;
+  body: unknown;
 };
 
 describe("exponential MCP server", () => {
@@ -161,6 +162,12 @@ describe("exponential MCP server", () => {
     expect(requests[0].method).toBe("POST");
     expect(requests[0].url).toContain("/v1/issues");
     expect(requests[0].headers.get("authorization")).toBe("Bearer pat_mcp");
+    expect(requests[0].body).toMatchObject({
+      title: "Agent-filed bug",
+      team_id: "team-uuid-1",
+      priority: "high",
+      description: "Found by the AI agent",
+    });
   });
 
   it("update_issue sends PATCH to /issues/{id}", async () => {
@@ -180,6 +187,10 @@ describe("exponential MCP server", () => {
     expect(requests).toHaveLength(1);
     expect(requests[0].method).toBe("PATCH");
     expect(requests[0].url).toContain("/v1/issues/EXP-1");
+    expect(requests[0].body).toMatchObject({
+      priority: "urgent",
+      state_id: "state-uuid-1",
+    });
   });
 
   it("add_comment sends POST to /issues/{id}/comments", async () => {
@@ -199,6 +210,9 @@ describe("exponential MCP server", () => {
     expect(requests).toHaveLength(1);
     expect(requests[0].method).toBe("POST");
     expect(requests[0].url).toContain("/v1/issues/EXP-1/comments");
+    expect(requests[0].body).toMatchObject({
+      body: "This is a comment from the AI agent",
+    });
   });
 
   it("triage_issue sends PATCH to /teams/{key}/triage/{issueID}", async () => {
@@ -223,6 +237,10 @@ describe("exponential MCP server", () => {
     expect(requests).toHaveLength(1);
     expect(requests[0].method).toBe("PATCH");
     expect(requests[0].url).toContain("/v1/teams/ENG/triage/issue-uuid-1");
+    expect(requests[0].body).toMatchObject({
+      action: "accept",
+      destinationStateId: "state-uuid-1",
+    });
   });
 
   it("rejects create_issue with missing required field", async () => {
@@ -255,6 +273,23 @@ describe("exponential MCP server", () => {
     );
 
     expect(result.isError).toBe(true);
+    expect(requests).toHaveLength(0);
+  });
+
+  it("rejects triage_issue with missing required action field", async () => {
+    const requests: CapturedRequest[] = [];
+    const result = await invokeExponentialMcpTool(
+      {
+        token: "pat_mcp",
+        baseUrl: "https://api.example/v1",
+        fetch: fetchFor(requests),
+      },
+      "triage_issue",
+      { teamKey: "ENG", issueId: "issue-uuid-1" },
+    );
+
+    expect(result.isError).toBe(true);
+    expect(textContent(result)).toContain("action");
     expect(requests).toHaveLength(0);
   });
 
@@ -297,10 +332,20 @@ async function connectedClient() {
 function fetchFor(requests: CapturedRequest[]): typeof fetch {
   return async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
+    let body: unknown = undefined;
+    const contentType = request.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json") && request.body) {
+      try {
+        body = await request.clone().json();
+      } catch {
+        body = undefined;
+      }
+    }
     requests.push({
       url: request.url,
       method: request.method,
       headers: request.headers,
+      body,
     });
 
     return responseFor(request);
