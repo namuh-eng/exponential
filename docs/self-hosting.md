@@ -14,16 +14,47 @@ Use Docker Compose for a single-host install. Use the AWS ECS scripts when you
 want managed RDS, ElastiCache, S3, SES, ECR, ALB routing, and task-level
 Secrets Manager wiring.
 
+Pre-built multi-arch images (`linux/amd64` and `linux/arm64`) are published to
+the GitHub Container Registry on every release:
+
+- `ghcr.io/namuh-eng/exponential-api:latest`
+- `ghcr.io/namuh-eng/exponential-web:latest`
+
 ## Requirements
 
 - Docker Engine with the Compose plugin.
-- Git.
-- 4 GiB RAM minimum; 8 GiB is more comfortable while building Next.js and Go
-  images.
+- 2 GiB RAM minimum (image-based path); 8 GiB if building from source.
 - Optional AWS or S3-compatible credentials for attachments.
 - Optional SES or Opensend credentials for production email.
 
-## Quick Start
+## Quick Start (pre-built images — recommended)
+
+The image-based path pulls pre-built images from GHCR and is ready in under
+five minutes on any machine with Docker. No compiler or Node.js required.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/namuh-eng/exponential/main/.env.example -o .env
+
+# Fill in the required secrets (see Required Environment below)
+openssl rand -hex 32  # paste as EXPONENTIAL_SESSION_SECRET
+openssl rand -hex 32  # paste as EXPONENTIAL_METRICS_TOKEN
+$EDITOR .env
+
+docker compose -f docker-compose.images.yml up
+```
+
+Open `http://localhost:7015`.
+
+To pin a specific release tag instead of `latest`, set `IMAGE_TAG` in `.env`:
+
+```
+IMAGE_TAG=v1.2.3
+```
+
+## Quick Start (build from source)
+
+If you prefer to build the images locally from the full source tree (requires
+Git, ~8 GiB RAM, and 10–20 minutes):
 
 ```bash
 git clone https://github.com/namuh-eng/exponential.git
@@ -36,8 +67,6 @@ $EDITOR .env
 
 docker compose up --build
 ```
-
-Open `http://localhost:7015`.
 
 The default Compose stack publishes the web app to all interfaces. Postgres,
 Redis, and the direct API port bind to `127.0.0.1` by default for local admin
@@ -174,6 +203,18 @@ docker compose exec -T postgres psql -U postgres exponential < exponential.sql
 
 ## Upgrades
 
+Image-based path (pull the new `latest` or a specific tag):
+
+```bash
+# Optional: pin a new release
+# IMAGE_TAG=v1.2.3  # in .env
+
+docker compose -f docker-compose.images.yml pull
+docker compose -f docker-compose.images.yml up -d
+```
+
+Source-based path:
+
 ```bash
 git pull --ff-only
 docker compose build --pull
@@ -221,7 +262,8 @@ is not the recommended public self-hosting path.
 - Attachment storage is S3-oriented; local disk attachment storage is not
   implemented.
 - Production email requires SES or Opensend configuration.
-- Compose builds local images from source. If you publish your own registry
-  images, keep the split `web`, `api`, and migration tasks.
+- The pre-built GHCR images bundle the SDK/UI at the commit they were built
+  from. If you modify the source, build your own images or use
+  `docker-compose.yml` (source build path).
 - ELv2 permits self-hosting and internal modification, but it does not permit
   offering exponential as a hosted service to third parties.
