@@ -1,0 +1,178 @@
+# ABOUTME: Versioned release workflow. Triggers on semver tags (v*.*.*).
+# Creates a GitHub Release with auto-generated changelog notes and publishes
+# @namuh-eng/expn-sdk and @namuh-eng/expn-cli to the npm registry.
+#
+# Required repository secrets:
+#   NPM_TOKEN  — npm automation token with publish access for @namuh-eng
+#
+# Tag scheme: v<major>.<minor>.<patch>  (e.g. v0.1.0, v1.0.0)
+# Use scripts/tag-release.sh to create and push a release tag.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+
+permissions:
+  contents: write  # needed to create GitHub Releases
+  id-token: write  # needed for npm provenance
+
+jobs:
+  release:
+    name: Build, publish, and release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch full history so changelog generation can walk all commits
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Derive version from tag
+        id: version
+        run: |
+          # Strip leading "v" from the tag name
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate package versions match tag
+        run: |
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          SDK_VERSION="$(node -p "require('./packages/sdk/package.json').version")"
+          CLI_VERSION="$(node -p "require('./apps/cli/package.json').version")"
+          if [[ "$SDK_VERSION" != "$TAG_VERSION" ]]; then
+            echo "Error: packages/sdk version ($SDK_VERSION) does not match tag ($TAG_VERSION)" >&2
+            exit 1
+          fi
+          if [[ "$CLI_VERSION" != "$TAG_VERSION" ]]; then
+            echo "Error: apps/cli version ($CLI_VERSION) does not match tag ($TAG_VERSION)" >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify SDK
+        run: |
+          pnpm --filter @namuh-eng/expn-sdk typecheck
+          pnpm --filter @namuh-eng/expn-sdk test
+          pnpm --filter @namuh-eng/expn-sdk build
+
+      - name: Verify CLI
+        run: |
+          pnpm --filter @namuh-eng/expn-cli typecheck
+          pnpm --filter @namuh-eng/expn-cli test
+          pnpm --filter @namuh-eng/expn-cli build
+
+      - name: Smoke-test expn --version
+        run: |
+          EXPECTED="${{ steps.version.outputs.version }}"
+          ACTUAL="$(node apps/cli/dist/index.js --version)"
+          if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+            echo "Error: expn --version reported '$ACTUAL', expected '$EXPECTED'" >&2
+            exit 1
+          fi
+          echo "expn --version: $ACTUAL"
+
+      - name: Pack release tarballs
+        run: |
+          mkdir -p .release
+          pnpm --filter @namuh-eng/expn-sdk pack --pack-destination "$PWD/.release"
+          pnpm --filter @namuh-eng/expn-cli pack --pack-destination "$PWD/.release"
+          ls -la .release
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm publish .release/namuh-eng-expn-sdk-*.tgz --access public --provenance
+          npm publish .release/namuh-eng-expn-cli-*.tgz --access public --provenance
+
+      - name: Generate changelog notes
+        id: changelog
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          # Find the previous semver tag to bound the range
+          PREV_TAG="$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' | grep -v "^${TAG}$" | head -n1 || true)"
+          if [[ -n "$PREV_TAG" ]]; then
+            RANGE="${PREV_TAG}..${TAG}"
+            echo "Generating notes for range: $RANGE"
+          else
+            RANGE="${TAG}"
+            echo "First release — no previous tag found, listing all commits up to $TAG"
+          fi
+
+          {
+            echo "## What's Changed"
+            echo ""
+            if [[ -n "$PREV_TAG" ]]; then
+              git log "${PREV_TAG}..${TAG}" --pretty=format:"- %s (%h)" --no-merges
+            else
+              git log "${TAG}" --pretty=format:"- %s (%h)" --no-merges
+            fi
+            echo ""
+            echo ""
+            echo "## Packages"
+            echo ""
+            echo "| Package | Version |"
+            echo "|---------|---------|"
+            echo "| \`@namuh-eng/expn-sdk\` | \`${{ steps.version.outputs.version }}\` |"
+            echo "| \`@namuh-eng/expn-cli\` | \`${{ steps.version.outputs.version }}\` |"
+            echo ""
+            echo "## Install"
+            echo ""
+            echo "\`\`\`sh"
+            echo "npm install -g @namuh-eng/expn-cli@${{ steps.version.outputs.version }}"
+            echo "\`\`\`"
+          } > release-notes.md
+
+          cat release-notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          # Determine if this is a pre-release (contains a hyphen, e.g. v1.0.0-beta.1)
+          if [[ "$TAG" == *"-"* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          else
+            PRERELEASE_FLAG=""
+          fi
+          gh release create "$TAG" \
+            --title "Release $TAG" \
+            --notes-file release-notes.md \
+            $PRERELEASE_FLAG \
+            .release/namuh-eng-expn-sdk-*.tgz \
+            .release/namuh-eng-expn-cli-*.tgz
+
+      - name: Verify published versions
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          # Allow up to 60s for npm registry propagation
+          for i in $(seq 1 6); do
+            SDK_PUB="$(npm view "@namuh-eng/expn-sdk@${VERSION}" version 2>/dev/null || true)"
+            CLI_PUB="$(npm view "@namuh-eng/expn-cli@${VERSION}" version 2>/dev/null || true)"
+            if [[ "$SDK_PUB" == "$VERSION" && "$CLI_PUB" == "$VERSION" ]]; then
+              echo "SDK $VERSION and CLI $VERSION are live on npm."
+              exit 0
+            fi
+            echo "Waiting for npm registry propagation (attempt $i/6)..."
+            sleep 10
+          done
+          echo "Warning: registry propagation check timed out. Versions may still be propagating." >&2
