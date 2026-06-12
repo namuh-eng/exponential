@@ -228,6 +228,34 @@ if [ -n "${STRIPE_CLOUD_BUSINESS_PRICE_ID:-}" ]; then
   set_env STRIPE_CLOUD_BUSINESS_PRICE_ID "$STRIPE_CLOUD_BUSINESS_PRICE_ID"
 fi
 
+# SNS alarm topic: auto-create when ALARM_EMAIL is set so CloudWatch alarms
+# have a delivery target. The topic and subscription are idempotent — safe to
+# rerun on every prepare call. ALARM_TOPIC_ARN is stored in .env and exported
+# for configure-ecs-autoscaling.sh via deploy-ecs.sh.
+if [ -n "${ALARM_EMAIL:-}" ]; then
+  ALARM_TOPIC_NAME="${APP_NAME}-alarms"
+  ALARM_TOPIC_ARN_RESOLVED=$(aws sns create-topic \
+    --name "$ALARM_TOPIC_NAME" \
+    --region "$REGION" \
+    --query TopicArn \
+    --output text)
+  # Subscribe the operator email. SNS deduplicates identical subscriptions, so
+  # this is safe to call on every run without accumulating duplicates.
+  aws sns subscribe \
+    --topic-arn "$ALARM_TOPIC_ARN_RESOLVED" \
+    --protocol email \
+    --notification-endpoint "$ALARM_EMAIL" \
+    --region "$REGION" >/dev/null
+  set_env ALARM_TOPIC_ARN "$ALARM_TOPIC_ARN_RESOLVED"
+  echo "SNS alarm topic ready: $ALARM_TOPIC_ARN_RESOLVED (subscriber: $ALARM_EMAIL)"
+  echo "NOTE: $ALARM_EMAIL must confirm the SNS subscription email before alarms are delivered."
+elif [ -n "${ALARM_TOPIC_ARN:-}" ]; then
+  set_env ALARM_TOPIC_ARN "$ALARM_TOPIC_ARN"
+  echo "Using existing ALARM_TOPIC_ARN: $ALARM_TOPIC_ARN"
+else
+  echo "No ALARM_EMAIL or ALARM_TOPIC_ARN set — CloudWatch alarms will fire silently. Set ALARM_EMAIL in .env to enable notifications."
+fi
+
 cat <<MSG
 Prepared ECS deploy environment in ${ENV_FILE}.
 
@@ -235,4 +263,12 @@ Next steps:
 1. If this is the first AWS run, run: DB_PASSWORD=\$DB_PASSWORD scripts/preflight.sh
 2. Re-run this script after preflight so DATABASE_URL/REDIS_URL/ALB_DNS are converted into secret ARNs and public/internal URLs.
 3. Deploy with: set -a; . ${ENV_FILE}; set +a; RUN_PROD_SMOKE=true scripts/deploy-ecs.sh
+
+Alarm notifications:
+- Set ALARM_EMAIL=ops@example.com in .env before running this script to create
+  an SNS topic and subscribe an operator email to CloudWatch alarm actions.
+- After the first run, confirm the subscription from the email AWS sends to
+  \$ALARM_EMAIL; alarms will not deliver until the subscription is confirmed.
+- ALARM_TOPIC_ARN is written to ${ENV_FILE} and picked up automatically by
+  scripts/configure-ecs-autoscaling.sh on every deploy.
 MSG
