@@ -81,6 +81,7 @@ type slackConnectResponse struct {
 
 var catalog = []CatalogItem{
 	{Provider: "github", Name: "GitHub", Description: "Sync pull requests, commits, and issue links with Linear."},
+	{Provider: "jira", Name: "Jira", Description: "Sync issue status, ownership, and cross-links with Jira projects."},
 	{Provider: "slack", Name: "Slack", Description: "Send issue updates and create issues from Slack messages."},
 	{Provider: "zendesk", Name: "Zendesk", Description: "Connect support tickets to product work and customer requests."},
 }
@@ -266,8 +267,11 @@ func setupRequirement(provider string) *SetupRequirement {
 	if provider == "slack" && !slackConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Slack OAuth credentials are not configured. Add AUTH_SLACK_ID and AUTH_SLACK_SECRET to enable installation."}
 	}
-	if provider == "github" || provider == "zendesk" {
+	if provider == "github" || provider == "jira" || provider == "zendesk" {
 		name := "GitHub"
+		if provider == "jira" {
+			name = "Jira"
+		}
 		if provider == "zendesk" {
 			name = "Zendesk"
 		}
