@@ -377,8 +377,14 @@ function responseFor(request: Request) {
   if (url.pathname === "/v1/issues/EXP-1") {
     return json({ id: "issue-1", identifier: "EXP-1", title: "Headless" });
   }
-  if (url.pathname === "/v1/issues/EXP-1/comments" && request.method === "POST") {
-    return json({ id: "comment-1", body: "This is a comment from the AI agent" }, 201);
+  if (
+    url.pathname === "/v1/issues/EXP-1/comments" &&
+    request.method === "POST"
+  ) {
+    return json(
+      { id: "comment-1", body: "This is a comment from the AI agent" },
+      201,
+    );
   }
   if (url.pathname === "/v1/my-issues") {
     return json({ groups: [], filterOptions: {} });
