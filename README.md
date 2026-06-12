@@ -3,29 +3,57 @@
 [![GitHub stars](https://img.shields.io/github/stars/namuh-eng/exponential?style=flat-square)](https://github.com/namuh-eng/exponential)
 [![License: ELv2](https://img.shields.io/badge/License-Elastic%202.0-blue.svg?style=flat-square)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.0-7ee787?style=flat-square)](package.json)
+[![Self-hostable](https://img.shields.io/badge/self--host-Docker%20Compose-0ea5e9?style=flat-square)](docs/self-hosting.md)
+[![MCP](https://img.shields.io/badge/MCP-local%20stdio-8b5cf6?style=flat-square)](docs/mcp.md)
 
 **A source-available, self-hostable Linear-style issue tracker with a terminal-shaped soul.**
 
-exponential is built for teams that want fast issue tracking, project planning,
-cycles, initiatives, and workspace administration without giving up control of
-their data. It is a split production app: a Go headless API, a Next.js web UI,
-an OpenAPI contract, a generated TypeScript SDK, Postgres, and Redis.
+Create issues, plan cycles, triage inbox — entirely under your control.
 
+---
+
+<!-- WORKFLOW GIF PLACEHOLDER
+     Replace the line below with a real recording once captured.
+     Suggested tool: vhs (https://github.com/charmbracelet/vhs) or Kap (macOS).
+     Capture: issue create → assign to cycle → triage inbox → resolve.
+     Target: 30–60 s, 1280×720, < 5 MB.
+-->
 ![exponential issues view](docs/assets/exponential-tty-issues.png)
 
-## Current State
+## Quickstart
 
-`v0.1.0` is the active repo version. The app has moved beyond a pure Next.js
-prototype into a headless architecture:
+One command to run the full stack locally (web + API + Postgres + Redis):
 
-- Go API owns business endpoints, auth, OpenAPI strict stubs, sqlc queries, SQL
-  migrations, RED metrics, and Stripe webhook processing.
-- Next.js 16 web is UI-only and talks to the Go API through the generated SDK
-  and same-origin `/api/*` rewrites.
-- Docker Compose runs web, API, migrations, Postgres, and Redis as the default
-  self-hosting path.
-- AWS ECS scripts can provision and deploy split web/API services with RDS,
-  ElastiCache, S3, SES, ECR, ALB routing, smoke tests, and Secrets Manager.
+```bash
+git clone https://github.com/namuh-eng/exponential.git && cd exponential && cp .env.example .env && docker compose up --build
+```
+
+Open **http://localhost:7015** — done.
+
+> **Before sharing the instance** edit `.env` and set:
+> `EXPONENTIAL_SESSION_SECRET`, `EXPONENTIAL_METRICS_TOKEN`, `DB_PASSWORD`.
+> Run `openssl rand -hex 32` twice to generate safe values.
+
+Full self-hosting guide: [docs/self-hosting.md](docs/self-hosting.md)
+
+---
+
+## Why exponential?
+
+| Feature | exponential | Linear | Jira | Plane |
+|---|---|---|---|---|
+| **Self-hostable** | Yes — Docker Compose or ECS | No (Cloud only) | Server edition (EOL) | Yes |
+| **Open / source-available** | Yes (ELv2) | No | No | Yes (AGPL) |
+| **Go headless API** | Yes — OpenAPI contract + SDK | No | No | No |
+| **MCP server (local)** | Yes — stdio, read-only | No | No | No |
+| **Keyboard-first UI** | Yes — command palette + shortcuts | Yes | Limited | Limited |
+| **Cycles (sprints)** | Yes | Yes | Yes (Scrum) | Yes |
+| **Initiatives / roadmap** | Yes | Yes | Roadmap plugin | Yes |
+| **AI integrations** | OpenAI summaries, MCP | Yes (Ask Linear) | Atlassian Intelligence | Limited |
+| **CLI** | Yes (TypeScript, npm) | Limited | Limited | No |
+| **License** | Elastic 2.0 — use + modify, no resale | Proprietary | Proprietary | AGPL |
+
+---
 
 ## What You Get
 
@@ -44,6 +72,8 @@ prototype into a headless architecture:
 - **Self-hosting controls**: Compose defaults, bind-address controls, optional
   Google OAuth, Slack OAuth, S3 attachments, SES or Opensend email, metrics
   token, and ECS deployment scripts.
+- **MCP server**: expose your exponential workspace to AI agents via the local
+  stdio MCP runtime — read issues, projects, cycles, and more.
 
 ## Screenshots
 
@@ -53,26 +83,43 @@ prototype into a headless architecture:
 
 ![exponential roadmap view](docs/assets/exponential-tty-roadmap.png)
 
-## Quick Start
+---
 
-### Self-host with Docker Compose
+## Self-Hosting
+
+### Docker Compose (recommended)
 
 ```bash
 git clone https://github.com/namuh-eng/exponential.git
 cd exponential
 cp .env.example .env
 
-# Required: replace sample secrets before exposing the app.
-openssl rand -hex 32 # copy into EXPONENTIAL_SESSION_SECRET
-openssl rand -hex 32 # copy into EXPONENTIAL_METRICS_TOKEN
-$EDITOR .env
+# Generate secrets — paste each value into .env
+openssl rand -hex 32   # → EXPONENTIAL_SESSION_SECRET
+openssl rand -hex 32   # → EXPONENTIAL_METRICS_TOKEN
 
+$EDITOR .env
 docker compose up --build
 ```
 
-Open `http://localhost:7015`.
+Open `http://localhost:7015`. The stack runs: `web`, `api`, `api-migrate`,
+`postgres`, and `redis`.
 
-Read the full operator guide in [docs/self-hosting.md](docs/self-hosting.md).
+See [docs/self-hosting.md](docs/self-hosting.md) for reverse-proxy headers,
+bind-address controls, backups, upgrades, and optional integrations.
+
+### AWS ECS (production)
+
+```bash
+cp .env.example .env
+bash scripts/prepare-ecs-deploy-env.sh
+DB_PASSWORD=<generated> bash scripts/preflight.sh
+bash scripts/prepare-ecs-deploy-env.sh
+RUN_PROD_SMOKE=true scripts/deploy-ecs.sh
+```
+
+Deploys separate API and web services behind an ALB with RDS, ElastiCache,
+S3, SES, ECR, smoke tests, and Secrets Manager.
 
 ### Local Development
 
@@ -84,54 +131,45 @@ cp .env.example .env
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-The local web app runs on `http://localhost:7015`; the Go API runs on
-`http://localhost:7016`.
+Web: `http://localhost:7015` · API: `http://localhost:7016`
 
-### Headless CLI and MCP
+---
 
-After creating a personal access token, use the CLI and local MCP server against
-the same Go API:
+## CLI and MCP
+
+After creating a personal access token in Workspace → Settings → API:
 
 ```bash
 export EXPONENTIAL_TOKEN=pat_your_token
 export EXPONENTIAL_API_URL=http://localhost:7016/v1
 
+# CLI
 pnpm --filter @namuh-eng/expn-cli cli -- issue ls --json
+
+# Local MCP server (read-only, stdio)
 pnpm --filter @exponential/mcp exec exponential-mcp
 ```
 
-See [docs/cli.md](docs/cli.md) and [docs/mcp.md](docs/mcp.md).
-Maintainer release notes for npm publishing live in
-[docs/cli-publishing.md](docs/cli-publishing.md).
+- CLI docs: [docs/cli.md](docs/cli.md)
+- MCP docs: [docs/mcp.md](docs/mcp.md)
+- npm publishing: [docs/cli-publishing.md](docs/cli-publishing.md)
 
-### AWS ECS Deployment
-
-```bash
-cp .env.example .env
-bash scripts/prepare-ecs-deploy-env.sh
-DB_PASSWORD=<generated-or-existing-password> bash scripts/preflight.sh
-bash scripts/prepare-ecs-deploy-env.sh
-RUN_PROD_SMOKE=true scripts/deploy-ecs.sh
-```
-
-The ECS path builds and deploys separate API and web services behind an ALB and
-can run production smoke checks for web, API health, RED metrics, and an
-authenticated API endpoint.
+---
 
 ## Architecture
 
-| Layer | Current implementation |
-| --- | --- |
+| Layer | Implementation |
+|---|---|
 | Web | Next.js 16, React 19, TypeScript, Tailwind, Radix UI |
 | API | Go, chi, pgx, sqlc, OpenAPI strict server stubs |
 | Data | PostgreSQL 15+, SQL migrations, Redis 7+ |
-| Contract | `packages/proto/openapi.yaml` plus generated SDK |
-| Auth | First-party Go auth, Google OAuth, magic links, session cookies |
-| Optional integrations | S3 attachments, SES or Opensend email, Slack OAuth, OpenAI summaries |
-| Deployment | Docker Compose for one host; AWS ECS Fargate for managed infra |
+| Contract | `packages/proto/openapi.yaml` + generated TypeScript SDK |
+| Auth | First-party Go auth, Google OAuth, magic links, session cookies, PATs |
+| Optional integrations | S3 attachments, SES/Opensend email, Slack OAuth, OpenAI summaries |
+| Deployment | Docker Compose (one host) · AWS ECS Fargate (managed) |
 | Validation | `make check`, `make test`, `make test-e2e`, Biome, Vitest, Go tests, Playwright |
 
-## Repository Layout
+### Repository Layout
 
 ```text
 exponential/
@@ -147,6 +185,8 @@ exponential/
 └── docs/                 # Operator docs and architecture notes
 ```
 
+---
+
 ## Development Commands
 
 ```bash
@@ -158,28 +198,20 @@ make dev        # pnpm dev
 make build      # production build
 ```
 
-## Self-Hosting Notes
+---
 
-The default self-hosted install is not a toy single container. It mirrors the
-production boundary: `web`, `api`, `api-migrate`, `postgres`, and `redis`.
+## License
 
-Configure these before sharing the instance:
+[Elastic License 2.0 (ELv2)](LICENSE).
 
-- `EXPONENTIAL_SESSION_SECRET`
-- `EXPONENTIAL_METRICS_TOKEN`
-- `NEXT_PUBLIC_APP_URL`
-- `EXPONENTIAL_APP_URL`
-- `DB_PASSWORD`
-- optional `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`
-- optional email via SES (`SENDER_EMAIL`) or Opensend (`OPENSEND_API_KEY`)
-- optional attachments via `S3_BUCKET` and AWS credentials or an instance role
+You may **use, modify, and self-host** exponential for any internal or personal
+purpose. You may **not** offer it as a managed hosted service to third parties.
 
-See [docs/self-hosting.md](docs/self-hosting.md) for reverse proxy headers,
-bind-address controls, metrics checks, backups, upgrades, and ECS.
+---
 
 ## Contributing
 
-Start with [CONTRIBUTING.md](CONTRIBUTING.md). Before opening a PR, run:
+Start with [CONTRIBUTING.md](CONTRIBUTING.md). Before opening a PR:
 
 ```bash
 make check
@@ -187,11 +219,6 @@ make test
 ```
 
 Run `make test-e2e` before declaring browser-facing flows verified.
-
-## License
-
-[Elastic License 2.0](LICENSE). You may use, modify, and self-host exponential.
-You may not offer it as a hosted service to third parties.
 
 ## Support
 
