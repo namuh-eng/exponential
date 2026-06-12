@@ -242,6 +242,14 @@ configured, target groups, ALB routing, and secret placeholders.
 `deploy-ecs.sh` builds and pushes API/web images, runs migrations, updates ECS
 services, waits for stability, and can run `scripts/smoke-prod.sh`.
 
+**Stripe is optional for ECS deployments.** `STRIPE_WEBHOOK_SIGNING_SECRET` and
+`STRIPE_SECRET_KEY` are only needed when billing features are enabled (hosted
+SaaS mode). Self-hosted deployments can omit both variables entirely.
+`prepare-ecs-deploy-env.sh` skips the Stripe Secrets Manager entries when
+neither the raw secret value nor an existing ARN is present. When Stripe is not
+configured, the webhook route returns 400 and billing-related API calls are
+unavailable, but all other API and UI functionality works normally.
+
 For ECS web-to-API server requests, prefer `WEB_INTERNAL_API_URL` pointing at
 the internal ALB/API route so server-side auth/session checks do not hairpin
 through a public CDN or proxy hostname.
