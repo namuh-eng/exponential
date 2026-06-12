@@ -14,6 +14,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
 	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
+	"github.com/namuh-eng/exponential/apps/api/internal/webhooks"
 )
 
 type Handler struct{ DB *pgxpool.Pool }
@@ -102,6 +103,9 @@ func (h Handler) CreateForIssue(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create comment failed", err.Error())
 		return
 	}
+	go func() {
+		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "comment.created", "", comment)
+	}()
 	problem.JSON(w, 201, comment)
 }
 
@@ -148,6 +152,9 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update comment failed", err.Error())
 		return
 	}
+	go func() {
+		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "comment.updated", "", comment)
+	}()
 	problem.JSON(w, 200, comment)
 }
 
@@ -188,6 +195,9 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete comment failed", err.Error())
 		return
 	}
+	go func() {
+		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "comment.deleted", "", comment)
+	}()
 	problem.JSON(w, 200, map[string]bool{"success": true})
 }
 
