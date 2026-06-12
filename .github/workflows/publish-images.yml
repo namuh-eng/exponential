@@ -1,0 +1,182 @@
+# ABOUTME: Builds and pushes multi-arch container images for exponential-api and
+# ABOUTME: exponential-web to GHCR on GitHub release events and manual dispatch.
+# Produces ghcr.io/namuh-eng/exponential-api and ghcr.io/namuh-eng/exponential-web
+# tagged with the release version and `latest`, for amd64 and arm64.
+
+name: Publish container images
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag (e.g. v1.2.3 or sha-abc1234). Defaults to git SHA."
+        required: false
+        default: ""
+      push:
+        description: "Push images to GHCR (set to false for a dry-run build only)"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+concurrency:
+  group: publish-images
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  API_IMAGE: ghcr.io/namuh-eng/exponential-api
+  WEB_IMAGE: ghcr.io/namuh-eng/exponential-web
+
+jobs:
+  build-api:
+    name: Build API image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU (for cross-platform builds)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: ${{ inputs.push != 'false' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image tags
+        id: tags
+        env:
+          GH_EVENT: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          DISPATCH_TAG: ${{ inputs.tag }}
+          GH_SHA: ${{ github.sha }}
+        run: |
+          # On a release event use the release tag; on dispatch prefer the
+          # explicit input; fall back to the short SHA.
+          if [ "$GH_EVENT" = "release" ] && [ -n "$RELEASE_TAG" ]; then
+            VERSION="${RELEASE_TAG#v}"   # strip leading 'v' for the bare-version tag
+            VTAG="${RELEASE_TAG}"        # keep 'v' for the v-prefixed tag
+          elif [ -n "$DISPATCH_TAG" ]; then
+            VERSION="${DISPATCH_TAG#v}"
+            VTAG="${DISPATCH_TAG}"
+          else
+            SHORT="${GH_SHA:0:7}"
+            VERSION="sha-${SHORT}"
+            VTAG="sha-${SHORT}"
+          fi
+
+          IS_RELEASE="${{ github.event_name == 'release' }}"
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "vtag=${VTAG}"       >> "$GITHUB_OUTPUT"
+          echo "is_release=${IS_RELEASE}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/api.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ inputs.push != 'false' }}
+          tags: |
+            ${{ env.API_IMAGE }}:${{ steps.tags.outputs.vtag }}
+            ${{ steps.tags.outputs.is_release == 'true' && format('{0}:latest', env.API_IMAGE) || '' }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+          labels: |
+            org.opencontainers.image.title=exponential-api
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.tags.outputs.version }}
+
+  build-web:
+    name: Build web image
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU (for cross-platform builds)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: ${{ inputs.push != 'false' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image tags and build args
+        id: tags
+        env:
+          GH_EVENT: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          DISPATCH_TAG: ${{ inputs.tag }}
+          GH_SHA: ${{ github.sha }}
+          GH_REF: ${{ github.ref_name }}
+          GH_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          if [ "$GH_EVENT" = "release" ] && [ -n "$RELEASE_TAG" ]; then
+            VERSION="${RELEASE_TAG#v}"
+            VTAG="${RELEASE_TAG}"
+          elif [ -n "$DISPATCH_TAG" ]; then
+            VERSION="${DISPATCH_TAG#v}"
+            VTAG="${DISPATCH_TAG}"
+          else
+            SHORT="${GH_SHA:0:7}"
+            VERSION="sha-${SHORT}"
+            VTAG="sha-${SHORT}"
+          fi
+
+          IS_RELEASE="${{ github.event_name == 'release' }}"
+
+          echo "version=${VERSION}"   >> "$GITHUB_OUTPUT"
+          echo "vtag=${VTAG}"         >> "$GITHUB_OUTPUT"
+          echo "is_release=${IS_RELEASE}" >> "$GITHUB_OUTPUT"
+          echo "branch=${GH_REF}"     >> "$GITHUB_OUTPUT"
+          echo "sha=${GH_SHA}"        >> "$GITHUB_OUTPUT"
+          echo "github_url=${GH_REPO_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/web.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ inputs.push != 'false' }}
+          build-args: |
+            NEXT_PUBLIC_EXPONENTIAL_VERSION=${{ steps.tags.outputs.version }}
+            NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH=${{ steps.tags.outputs.branch }}
+            NEXT_PUBLIC_EXPONENTIAL_GIT_SHA=${{ steps.tags.outputs.sha }}
+            NEXT_PUBLIC_EXPONENTIAL_GITHUB_URL=${{ steps.tags.outputs.github_url }}
+          tags: |
+            ${{ env.WEB_IMAGE }}:${{ steps.tags.outputs.vtag }}
+            ${{ steps.tags.outputs.is_release == 'true' && format('{0}:latest', env.WEB_IMAGE) || '' }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+          labels: |
+            org.opencontainers.image.title=exponential-web
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.tags.outputs.version }}
