@@ -193,6 +193,39 @@ describe("cli command runner", () => {
       ]),
     });
   });
+
+  it("prints version with --version and exits 0", async () => {
+    const result = await execute({
+      argv: ["--version"],
+      env: env({ EXPONENTIAL_TOKEN: undefined, EXPN_VERSION: "1.2.3" }),
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout.trim()).toBe("1.2.3");
+    expect(result.stderr).toBe("");
+  });
+
+  it("prints version with version subcommand and exits 0", async () => {
+    const result = await execute({
+      argv: ["version"],
+      env: env({ EXPONENTIAL_TOKEN: undefined, EXPN_VERSION: "0.1.0" }),
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout.trim()).toBe("0.1.0");
+    expect(result.stderr).toBe("");
+  });
+
+  it("--version does not require a token", async () => {
+    const result = await execute({
+      argv: ["--version"],
+      env: env({ EXPONENTIAL_TOKEN: undefined }),
+    });
+
+    expect(result.code).toBe(0);
+    // Should output a semver-like string (x.y.z)
+    expect(result.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+  });
 });
 
 function responseFor(request: Request) {

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { createExponentialClient, syncWebSocketUrl } from "@namuh-eng/expn-sdk";
 import type { ExponentialClient } from "@namuh-eng/expn-sdk";
 import { parseIssueBody, readFlag, readOption, requireOption } from "./args.js";
@@ -95,6 +96,11 @@ export async function runCli(options: RunCliOptions = {}) {
   client = state.client;
 
   try {
+    if (rawArgs[0] === "--version" || resource === "version") {
+      writeStdout(`${resolveVersion(options.env)}\n`);
+      return 0;
+    }
+
     if (!resource || readFlag(rawArgs, "help") || resource === "help") {
       usage(0);
     }
@@ -1406,6 +1412,7 @@ function readJSONOption(args: string[], name: string) {
 function usage(code = 1): never {
   const write = code === 0 ? writeStdout : writeStderr;
   write(`Usage:
+  expn --version
   expn login --token pat_<token> [--api-url http://localhost:7016/v1]
   expn --help
   expn whoami [--json]
@@ -1575,6 +1582,20 @@ function firstPositional(values: string[]) {
     }
   }
   return undefined;
+}
+
+function resolveVersion(env?: NodeJS.ProcessEnv): string {
+  // Allow test overrides via EXPN_VERSION env var, then fall back to package.json.
+  if (env?.EXPN_VERSION) {
+    return env.EXPN_VERSION;
+  }
+  try {
+    const require = createRequire(import.meta.url);
+    const pkg = require("../package.json") as { version?: string };
+    return pkg.version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
 }
 
 function redactConfig(

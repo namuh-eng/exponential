@@ -1,4 +1,6 @@
-name: Publish CLI packages
+# ABOUTME: Manual / emergency publish workflow with an explicit dry-run toggle.
+# For normal versioned releases use scripts/tag-release.sh → release.yml instead.
+name: Publish CLI packages (manual)
 
 on:
   workflow_dispatch:
