@@ -25,6 +25,7 @@ const integrations = [
       message: "GitHub setup is not configured in this environment yet.",
     },
     actions: { canConnect: false, canManage: false, canDisconnect: false },
+    health: null,
   },
   {
     provider: "slack",
@@ -37,7 +38,8 @@ const integrations = [
       type: "configuration_required",
       message: "Slack OAuth credentials are not configured.",
     },
-    actions: { canConnect: false, canManage: false, canDisconnect: false },
+    actions: { canConnect: true, canManage: false, canDisconnect: false },
+    health: null,
   },
 ];
 
@@ -64,23 +66,19 @@ describe("IntegrationsSettingsPage component", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Integrations")).toBeInTheDocument();
-      expect(screen.getByText("No active integrations")).toBeInTheDocument();
+      // New UI: configuration_required integrations are shown as active cards,
+      // not hidden behind an empty state. Both providers must appear.
+      expect(screen.getByText("GitHub")).toBeInTheDocument();
+      expect(screen.getByText("Slack")).toBeInTheDocument();
     });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Explore integrations" }),
-    );
-
-    const dialog = screen.getByRole("dialog", {
-      name: "Explore integrations",
-    });
-    expect(dialog).toBeInTheDocument();
-    expect(screen.getByText("GitHub")).toBeInTheDocument();
-    expect(screen.getByText("Slack")).toBeInTheDocument();
+    // Setup requirement messages must be surfaced inline — not replaced by
+    // generic placeholder copy like "Setup unavailable in this workspace".
     expect(
       screen.queryByText(/Setup unavailable in this workspace/),
     ).not.toBeInTheDocument();
     expect(screen.getByText(/Slack OAuth credentials/)).toBeInTheDocument();
+    // Slack has canConnect:true so a Connect button must be rendered.
     expect(screen.getByRole("button", { name: "Connect" })).toBeInTheDocument();
   });
 
@@ -98,10 +96,8 @@ describe("IntegrationsSettingsPage component", () => {
       });
 
     render(<IntegrationsSettingsPage />);
-    await screen.findByText("No active integrations");
-    fireEvent.click(
-      screen.getByRole("button", { name: "Explore integrations" }),
-    );
+    // Wait for integrations to load (new UI shows cards directly, no empty state).
+    await screen.findByText("Slack");
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
