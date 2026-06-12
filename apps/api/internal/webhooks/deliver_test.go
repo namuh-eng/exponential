@@ -86,17 +86,8 @@ func TestBackoffDuration(t *testing.T) {
 // HTTP delivery tests (using httptest server)
 // ---------------------------------------------------------------------------
 
-// setupSSRFBypass enables SSRF-validation bypass for tests that use httptest
-// servers bound to 127.0.0.1, and restores the original value via t.Cleanup.
-func setupSSRFBypass(t *testing.T) {
-	t.Helper()
-	skipSSRFValidation = true
-	t.Cleanup(func() { skipSSRFValidation = false })
-}
-
 func TestSendWebhookRequest_Success(t *testing.T) {
 	t.Parallel()
-	setupSSRFBypass(t)
 	secret := "whsec_abc"
 	payload := []byte(`{"type":"issue.created","data":{"id":"123"}}`)
 
@@ -109,7 +100,7 @@ func TestSendWebhookRequest_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	statusCode, _, err := sendWebhookRequest(context.Background(), srv.URL, payload, &secret)
+	statusCode, _, err := sendWebhookRequest(context.Background(), srv.URL, payload, &secret, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -126,7 +117,6 @@ func TestSendWebhookRequest_Success(t *testing.T) {
 
 func TestSendWebhookRequest_NoSecret(t *testing.T) {
 	t.Parallel()
-	setupSSRFBypass(t)
 	payload := []byte(`{"type":"issue.updated"}`)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -137,7 +127,7 @@ func TestSendWebhookRequest_NoSecret(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	statusCode, _, err := sendWebhookRequest(context.Background(), srv.URL, payload, nil)
+	statusCode, _, err := sendWebhookRequest(context.Background(), srv.URL, payload, nil, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -148,7 +138,6 @@ func TestSendWebhookRequest_NoSecret(t *testing.T) {
 
 func TestSendWebhookRequest_ServerError(t *testing.T) {
 	t.Parallel()
-	setupSSRFBypass(t)
 	payload := []byte(`{"type":"issue.created"}`)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(503)
@@ -156,7 +145,7 @@ func TestSendWebhookRequest_ServerError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	statusCode, body, err := sendWebhookRequest(context.Background(), srv.URL, payload, nil)
+	statusCode, body, err := sendWebhookRequest(context.Background(), srv.URL, payload, nil, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -170,10 +159,9 @@ func TestSendWebhookRequest_ServerError(t *testing.T) {
 
 func TestSendWebhookRequest_NetworkError(t *testing.T) {
 	t.Parallel()
-	setupSSRFBypass(t)
 	payload := []byte(`{}`)
 	// Use an invalid target that will fail immediately (port 1 is never open).
-	_, _, err := sendWebhookRequest(context.Background(), "http://127.0.0.1:1", payload, nil)
+	_, _, err := sendWebhookRequest(context.Background(), "http://127.0.0.1:1", payload, nil, true)
 	if err == nil {
 		t.Fatal("expected network error, got nil")
 	}

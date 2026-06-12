@@ -30,6 +30,27 @@ var deliveryClient = &http.Client{Timeout: 15 * time.Second}
 // Deliverer handles outbound webhook delivery and retry scheduling.
 type Deliverer struct {
 	DB *pgxpool.Pool
+	// skipSSRFCheck disables SSRF URL validation. Must only be set to true in
+	// tests; never in production code.
+	skipSSRFCheck bool
+}
+
+// DelivererOption configures a Deliverer.
+type DelivererOption func(*Deliverer)
+
+// WithSSRFCheckDisabled returns a DelivererOption that disables SSRF URL
+// validation. Use only in tests.
+func WithSSRFCheckDisabled() DelivererOption {
+	return func(d *Deliverer) { d.skipSSRFCheck = true }
+}
+
+// NewDeliverer constructs a Deliverer with the given options.
+func NewDeliverer(db *pgxpool.Pool, opts ...DelivererOption) *Deliverer {
+	d := &Deliverer{DB: db}
+	for _, o := range opts {
+		o(d)
+	}
+	return d
 }
 
 // EventPayload is the envelope sent to webhook endpoints.
@@ -206,7 +227,7 @@ func (d *Deliverer) attemptDelivery(ctx context.Context, deliveryID, eventType s
 		return
 	}
 
-	statusCode, respBody, deliveryErr := sendWebhookRequest(ctx, targetURL, body, secret)
+	statusCode, respBody, deliveryErr := sendWebhookRequest(ctx, targetURL, body, secret, d.skipSSRFCheck)
 
 	switch {
 	case deliveryErr == nil && statusCode >= 200 && statusCode < 300:
@@ -277,10 +298,6 @@ func backoffDuration(attempt int) time.Duration {
 	}
 }
 
-// skipSSRFValidation disables URL validation in unit tests.  It must never be
-// set to true in production code.
-var skipSSRFValidation bool
-
 // privateRanges lists CIDRs that must not be reachable from outbound webhooks.
 var privateRanges []*net.IPNet
 
@@ -338,8 +355,9 @@ func validateWebhookURL(rawURL string) error {
 }
 
 // sendWebhookRequest performs the HTTP POST to the target URL.
-func sendWebhookRequest(ctx context.Context, targetURL string, payload []byte, secret *string) (int, string, error) {
-	if !skipSSRFValidation {
+// skipSSRFCheck disables SSRF validation; set to true only in tests.
+func sendWebhookRequest(ctx context.Context, targetURL string, payload []byte, secret *string, skipSSRFCheck bool) (int, string, error) {
+	if !skipSSRFCheck {
 		if err := validateWebhookURL(targetURL); err != nil {
 			return 0, "", err
 		}
