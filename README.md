@@ -22,17 +22,23 @@ Create issues, plan cycles, triage inbox — entirely under your control.
 
 ## Quickstart
 
-One command to run the full stack locally (web + API + Postgres + Redis):
+> **Security:** `.env.example` ships with placeholder secrets. Set real values
+> for `EXPONENTIAL_SESSION_SECRET`, `EXPONENTIAL_METRICS_TOKEN`, and
+> `DB_PASSWORD` (`openssl rand -hex 32`) **before the instance accepts any
+> network connections** — not only before sharing it.
+
+Run the full stack locally (web + API + Postgres + Redis):
 
 ```bash
-git clone https://github.com/namuh-eng/exponential.git && cd exponential && cp .env.example .env && docker compose up --build
+# Required: replace sample secrets in .env before exposing the app
+git clone https://github.com/namuh-eng/exponential.git && cd exponential && cp .env.example .env && $EDITOR .env && docker compose up --build
 ```
 
-Open **http://localhost:7015** — done.
+> **Build time:** this compiles the full Go + Node.js stack from source
+> (~15 min and ~8 GiB RAM on a typical machine). A faster image-based path
+> is coming in [#634](https://github.com/namuh-eng/exponential/issues/634).
 
-> **Before sharing the instance** edit `.env` and set:
-> `EXPONENTIAL_SESSION_SECRET`, `EXPONENTIAL_METRICS_TOKEN`, `DB_PASSWORD`.
-> Run `openssl rand -hex 32` twice to generate safe values.
+Open **http://localhost:7015** — done.
 
 Full self-hosting guide: [docs/self-hosting.md](docs/self-hosting.md)
 
@@ -115,7 +121,7 @@ cp .env.example .env
 bash scripts/prepare-ecs-deploy-env.sh
 DB_PASSWORD=<generated> bash scripts/preflight.sh
 bash scripts/prepare-ecs-deploy-env.sh
-RUN_PROD_SMOKE=true scripts/deploy-ecs.sh
+RUN_PROD_SMOKE=true bash scripts/deploy-ecs.sh
 ```
 
 Deploys separate API and web services behind an ALB with RDS, ElastiCache,
