@@ -205,6 +205,7 @@ if [ "${WAIT_FOR_STABILITY:-true}" != "false" ]; then
 fi
 
 if [ "${CONFIGURE_AUTOSCALING:-true}" != "false" ]; then
+  export ALARM_TOPIC_ARN="${ALARM_TOPIC_ARN:-}"
   scripts/configure-ecs-autoscaling.sh
 fi
 
