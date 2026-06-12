@@ -311,10 +311,7 @@ const toolDefinitions: ToolDefinition[] = [
         },
         body: {
           action: stringField(input, "action") as "accept" | "decline",
-          destinationStateId: optionalStringField(
-            input,
-            "destinationStateId",
-          ),
+          destinationStateId: optionalStringField(input, "destinationStateId"),
           reason: optionalNullableStringField(input, "reason"),
           priority: optionalNullableIssuePriority(input),
           assigneeId: optionalNullableStringField(input, "assigneeId"),
@@ -533,7 +530,7 @@ function optionalNullableIssuePriority(
   if (!isRecord(input) || !("priority" in input)) {
     return undefined;
   }
-  if (input["priority"] === null) {
+  if (input.priority === null) {
     return null;
   }
   return optionalIssuePriority(input);
