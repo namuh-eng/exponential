@@ -23,6 +23,10 @@ on:
           - "true"
           - "false"
 
+concurrency:
+  group: publish-images
+  cancel-in-progress: false
+
 permissions:
   contents: read
   packages: write
@@ -93,8 +97,8 @@ jobs:
           tags: |
             ${{ env.API_IMAGE }}:${{ steps.tags.outputs.vtag }}
             ${{ steps.tags.outputs.is_release == 'true' && format('{0}:latest', env.API_IMAGE) || '' }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
           labels: |
             org.opencontainers.image.title=exponential-api
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
@@ -169,8 +173,8 @@ jobs:
           tags: |
             ${{ env.WEB_IMAGE }}:${{ steps.tags.outputs.vtag }}
             ${{ steps.tags.outputs.is_release == 'true' && format('{0}:latest', env.WEB_IMAGE) || '' }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
           labels: |
             org.opencontainers.image.title=exponential-web
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}

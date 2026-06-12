@@ -33,7 +33,10 @@ The image-based path pulls pre-built images from GHCR and is ready in under
 five minutes on any machine with Docker. No compiler or Node.js required.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/namuh-eng/exponential/main/.env.example -o .env
+# Replace v1.2.3 with the release tag you want to run (see Releases on GitHub).
+# Using the matching tag ensures the .env variables align with the image you pull.
+IMAGE_TAG=v1.2.3
+curl -fsSL "https://raw.githubusercontent.com/namuh-eng/exponential/${IMAGE_TAG}/.env.example" -o .env
 
 # Fill in the required secrets (see Required Environment below)
 openssl rand -hex 32  # paste as EXPONENTIAL_SESSION_SECRET
@@ -45,11 +48,8 @@ docker compose -f docker-compose.images.yml up
 
 Open `http://localhost:7015`.
 
-To pin a specific release tag instead of `latest`, set `IMAGE_TAG` in `.env`:
-
-```
-IMAGE_TAG=v1.2.3
-```
+To change the release tag, update `IMAGE_TAG` in `.env` and run
+`docker compose -f docker-compose.images.yml pull && docker compose -f docker-compose.images.yml up -d`.
 
 ## Quick Start (build from source)
 
