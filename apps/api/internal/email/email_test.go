@@ -1,6 +1,7 @@
 package email
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"net/smtp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 )
@@ -264,17 +266,50 @@ func TestNewSMTPExplicitProviderOverride(t *testing.T) {
 	}
 }
 
+// TestNewSMTPExplicitMissingHostReturnsError verifies that EMAIL_PROVIDER=smtp
+// with no SMTP_HOST returns an error rather than silently returning Disabled.
+func TestNewSMTPExplicitMissingHostReturnsError(t *testing.T) {
+	resetEnv(t)
+	t.Setenv("SENDER_EMAIL", "no-reply@example.com")
+	t.Setenv("EMAIL_PROVIDER", "smtp")
+	// SMTP_HOST intentionally omitted
+
+	_, err := New(context.Background())
+	if err == nil {
+		t.Fatal("expected error when EMAIL_PROVIDER=smtp but SMTP_HOST is empty")
+	}
+	if !strings.Contains(err.Error(), "SMTP_HOST") {
+		t.Errorf("error should mention SMTP_HOST, got: %v", err)
+	}
+}
+
+// TestNewSMTPExplicitMissingFromReturnsError verifies that EMAIL_PROVIDER=smtp
+// with no SENDER_EMAIL returns an error rather than silently returning Disabled.
+func TestNewSMTPExplicitMissingFromReturnsError(t *testing.T) {
+	resetEnv(t)
+	t.Setenv("SMTP_HOST", "mail.example.com")
+	t.Setenv("EMAIL_PROVIDER", "smtp")
+	// SENDER_EMAIL intentionally omitted
+
+	_, err := New(context.Background())
+	if err == nil {
+		t.Fatal("expected error when EMAIL_PROVIDER=smtp but SENDER_EMAIL is empty")
+	}
+	if !strings.Contains(err.Error(), "SENDER_EMAIL") {
+		t.Errorf("error should mention SENDER_EMAIL, got: %v", err)
+	}
+}
+
 func TestNewSMTPDisabledWhenFromMissing(t *testing.T) {
+	// Auto-selection: SMTP_HOST triggers smtp choice, but SENDER_EMAIL is
+	// missing — this is caught by the smtp case returning an error.
 	resetEnv(t)
 	t.Setenv("SMTP_HOST", "mail.example.com")
 	// SENDER_EMAIL intentionally omitted
 
-	sender, err := New(context.Background())
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	if sender.Enabled() {
-		t.Fatalf("expected Disabled when SENDER_EMAIL is empty, got %T", sender)
+	_, err := New(context.Background())
+	if err == nil {
+		t.Fatalf("expected error when SMTP_HOST is set but SENDER_EMAIL is missing")
 	}
 }
 
@@ -354,6 +389,7 @@ func TestSMTPSendAgainstMailhog(t *testing.T) {
 		subject string
 		body    string
 	}
+	// Buffered so the goroutine never blocks on send.
 	delivered := make(chan delivery, 1)
 
 	go func() {
@@ -364,8 +400,10 @@ func TestSMTPSendAgainstMailhog(t *testing.T) {
 		defer conn.Close()
 
 		var d delivery
-		// Use net/smtp server protocol manually via bufio-style line reading.
-		buf := make([]byte, 4096)
+		// Use a bufio.Scanner to read one SMTP command per line, avoiding the
+		// TCP-coalescing hazard of a single large conn.Read that could return
+		// multiple commands concatenated.
+		scanner := bufio.NewScanner(conn)
 
 		send := func(line string) {
 			conn.Write([]byte(line + "\r\n"))
@@ -373,12 +411,8 @@ func TestSMTPSendAgainstMailhog(t *testing.T) {
 
 		send("220 mailhog.local ESMTP")
 
-		for {
-			n, err := conn.Read(buf)
-			if err != nil || n == 0 {
-				break
-			}
-			line := strings.TrimRight(string(buf[:n]), "\r\n")
+		for scanner.Scan() {
+			line := strings.TrimRight(scanner.Text(), "\r\n")
 			upper := strings.ToUpper(line)
 
 			switch {
@@ -393,34 +427,30 @@ func TestSMTPSendAgainstMailhog(t *testing.T) {
 				send("250 OK")
 			case upper == "DATA":
 				send("354 End with <CRLF>.<CRLF>")
-				// Read until ".\r\n"
-				var bodyBuf strings.Builder
-				smallBuf := make([]byte, 1)
-				var prev3 [3]byte
-				for {
-					nn, rerr := conn.Read(smallBuf)
-					if rerr != nil || nn == 0 {
+				// Read body lines until the bare "." terminator.
+				var bodyLines []string
+				for scanner.Scan() {
+					bodyLine := scanner.Text()
+					if bodyLine == "." {
 						break
 					}
-					bodyBuf.WriteByte(smallBuf[0])
-					prev3[0], prev3[1], prev3[2] = prev3[1], prev3[2], smallBuf[0]
-					if prev3[0] == '\r' && prev3[1] == '\n' && prev3[2] == '.' {
-						// consume trailing \r\n after the dot
-						conn.Read(make([]byte, 2))
-						break
-					}
+					bodyLines = append(bodyLines, bodyLine)
 				}
-				d.body = bodyBuf.String()
-				// Extract subject from headers
-				for _, hdrLine := range strings.Split(d.body, "\n") {
+				d.body = strings.Join(bodyLines, "\n")
+				// Extract subject from headers.
+				for _, hdrLine := range bodyLines {
 					if strings.HasPrefix(strings.ToLower(hdrLine), "subject:") {
 						d.subject = strings.TrimSpace(hdrLine[8:])
 					}
 				}
 				send("250 OK")
 			case upper == "QUIT":
-				send("221 Bye")
+				// Record the delivery before acknowledging QUIT so that the
+				// channel is populated before smtp.Client.Quit() returns to
+				// the caller — eliminating the scheduler-preemption race
+				// between Send() returning and the select below.
 				delivered <- d
+				send("221 Bye")
 				return
 			default:
 				send("500 unrecognised")
@@ -456,8 +486,8 @@ func TestSMTPSendAgainstMailhog(t *testing.T) {
 		if !strings.Contains(d.to, "user@example.com") {
 			t.Errorf("RCPT TO = %q, want user@example.com", d.to)
 		}
-	default:
-		t.Fatal("no delivery received")
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for delivery")
 	}
 }
 
@@ -465,12 +495,15 @@ func TestSMTPSendAgainstMailhog(t *testing.T) {
 // headers and both body parts when Text is non-empty.
 func TestSMTPBuildRawMessage(t *testing.T) {
 	s := &smtpSender{from: "from@example.com"}
-	raw := s.buildRawMessage(Message{
+	raw, err := s.buildRawMessage(Message{
 		To:      "to@example.com",
 		Subject: "Hello",
 		HTML:    "<p>Hi</p>",
 		Text:    "Hi",
 	})
+	if err != nil {
+		t.Fatalf("buildRawMessage: %v", err)
+	}
 	body := string(raw)
 
 	for _, want := range []string{
@@ -480,23 +513,32 @@ func TestSMTPBuildRawMessage(t *testing.T) {
 		"multipart/alternative",
 		"text/plain",
 		"text/html",
-		"Hi",
-		"<p>Hi</p>",
+		"Content-Transfer-Encoding: quoted-printable",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("raw message missing %q", want)
 		}
+	}
+	// Quoted-printable encodes "Hi" unchanged (pure ASCII, short line).
+	if !strings.Contains(body, "Hi") {
+		t.Errorf("raw message missing plain text content")
+	}
+	if !strings.Contains(body, "<p>Hi</p>") {
+		t.Errorf("raw message missing HTML content")
 	}
 }
 
 // TestSMTPBuildRawMessageHTMLOnly checks the single-part path when Text is empty.
 func TestSMTPBuildRawMessageHTMLOnly(t *testing.T) {
 	s := &smtpSender{from: "from@example.com"}
-	raw := s.buildRawMessage(Message{
+	raw, err := s.buildRawMessage(Message{
 		To:      "to@example.com",
 		Subject: "Hello",
 		HTML:    "<p>Hi</p>",
 	})
+	if err != nil {
+		t.Fatalf("buildRawMessage: %v", err)
+	}
 	body := string(raw)
 
 	if strings.Contains(body, "multipart") {
@@ -504,6 +546,36 @@ func TestSMTPBuildRawMessageHTMLOnly(t *testing.T) {
 	}
 	if !strings.Contains(body, "text/html") {
 		t.Errorf("missing text/html content-type")
+	}
+	if !strings.Contains(body, "Content-Transfer-Encoding: quoted-printable") {
+		t.Errorf("missing quoted-printable transfer encoding")
+	}
+}
+
+// TestSMTPBuildRawMessageNonASCII verifies that non-ASCII content is properly
+// quoted-printable encoded (the bug fixed: raw unencoded bytes are no longer
+// written when Content-Transfer-Encoding: quoted-printable is declared).
+func TestSMTPBuildRawMessageNonASCII(t *testing.T) {
+	s := &smtpSender{from: "from@example.com"}
+	raw, err := s.buildRawMessage(Message{
+		To:      "to@example.com",
+		Subject: "Test",
+		HTML:    "<p>Héllo wörld</p>",
+		Text:    "Héllo wörld",
+	})
+	if err != nil {
+		t.Fatalf("buildRawMessage: %v", err)
+	}
+	body := string(raw)
+
+	// Non-ASCII bytes must be QP-escaped (e.g. é → =C3=A9), not raw UTF-8.
+	// The raw UTF-8 bytes for é are 0xC3 0xA9; they must not appear verbatim.
+	if strings.Contains(body, "é") {
+		t.Errorf("raw non-ASCII bytes found in quoted-printable body; encoder not applied")
+	}
+	// QP encoding of é (UTF-8 0xC3 0xA9) must be present.
+	if !strings.Contains(body, "=C3=A9") {
+		t.Errorf("expected QP-encoded =C3=A9 for é, not found in:\n%s", body)
 	}
 }
 
