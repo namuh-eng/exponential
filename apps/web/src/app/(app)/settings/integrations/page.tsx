@@ -125,9 +125,7 @@ function HealthDetail({ health }: { health: IntegrationHealth }) {
       {lastFailure ? (
         <p className="text-red-400/70">
           Last failure: {lastFailure}
-          {health.lastFailureMessage
-            ? ` — ${health.lastFailureMessage}`
-            : null}
+          {health.lastFailureMessage ? ` — ${health.lastFailureMessage}` : null}
         </p>
       ) : null}
     </div>
@@ -426,9 +424,7 @@ export default function IntegrationsSettingsPage() {
                         {integration.actions.canDisconnect ? (
                           <button
                             className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-red-300 disabled:opacity-50"
-                            disabled={
-                              pendingProvider === integration.provider
-                            }
+                            disabled={pendingProvider === integration.provider}
                             onClick={() =>
                               void disconnect(integration.provider)
                             }
