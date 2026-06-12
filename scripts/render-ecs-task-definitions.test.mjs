@@ -77,11 +77,13 @@ assert.throws(
 
 // Fully absent (undefined) Stripe ARNs must also be tolerated.
 {
-  const envNoStripe = { ...env };
-  delete envNoStripe.STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN;
-  delete envNoStripe.STRIPE_SECRET_KEY_SECRET_ARN;
-  delete envNoStripe.STRIPE_CLOUD_TEAM_PRICE_ID;
-  delete envNoStripe.STRIPE_CLOUD_BUSINESS_PRICE_ID;
+  const {
+    STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN: _w,
+    STRIPE_SECRET_KEY_SECRET_ARN: _k,
+    STRIPE_CLOUD_TEAM_PRICE_ID: _t,
+    STRIPE_CLOUD_BUSINESS_PRICE_ID: _b,
+    ...envNoStripe
+  } = env;
   const rendered = renderTaskDefinitionFile(
     "infra/ecs/api-task-definition.json",
     envNoStripe,
@@ -95,6 +97,19 @@ assert.throws(
   assert.ok(
     !secretNames.includes("STRIPE_SECRET_KEY"),
     "STRIPE_SECRET_KEY must be absent when ARN is undefined",
+  );
+  // STRIPE_CLOUD_*_PRICE_ID are plain environment vars (OPTIONAL_ENV_VARS_BY_KEY
+  // path), not secrets — they must also be pruned from environment when absent.
+  const envNames = (parsed.containerDefinitions[0].environment ?? []).map(
+    (e) => e.name,
+  );
+  assert.ok(
+    !envNames.includes("STRIPE_CLOUD_TEAM_PRICE_ID"),
+    "STRIPE_CLOUD_TEAM_PRICE_ID must be absent from environment when undefined",
+  );
+  assert.ok(
+    !envNames.includes("STRIPE_CLOUD_BUSINESS_PRICE_ID"),
+    "STRIPE_CLOUD_BUSINESS_PRICE_ID must be absent from environment when undefined",
   );
 }
 
@@ -116,7 +131,10 @@ for (const file of [
 
 // api task with Stripe present: secrets must include Stripe entries.
 {
-  const rendered = renderTaskDefinitionFile("infra/ecs/api-task-definition.json", env);
+  const rendered = renderTaskDefinitionFile(
+    "infra/ecs/api-task-definition.json",
+    env,
+  );
   const parsed = JSON.parse(rendered);
   const secretNames = parsed.containerDefinitions[0].secrets.map((s) => s.name);
   assert.ok(

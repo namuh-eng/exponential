@@ -63,6 +63,12 @@ existing_or_synced_secret_arn() {
     printf '%s\n' "$existing_arn"
     return
   fi
+  # Never overwrite an existing secret with an empty value; just return the
+  # existing ARN so a stale .env entry cannot silently wipe a live secret.
+  if [ -n "$existing_arn" ] && [ -z "$value" ]; then
+    printf '%s\n' "$existing_arn"
+    return
+  fi
   secret_arn "$name" "$value"
 }
 
