@@ -149,7 +149,7 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 			protected.Mount("/views", views.Handler{DB: db}.Routes())
 			protected.Post("/workspaces/accept-invite", workspacesHandler.AcceptInvite)
 			protected.Mount("/workspaces", workspacesHandler.Routes())
-			protected.Mount("/webhook-deliveries", webhooks.Handler{DB: db}.Routes())
+			protected.Mount("/workspaces/current/webhook-deliveries", webhooks.Handler{DB: db}.Routes())
 			protected.Get("/sync/ws", syncapi.Handler{DB: db}.WebSocket)
 		})
 	})

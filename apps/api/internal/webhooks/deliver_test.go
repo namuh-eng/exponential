@@ -86,8 +86,17 @@ func TestBackoffDuration(t *testing.T) {
 // HTTP delivery tests (using httptest server)
 // ---------------------------------------------------------------------------
 
+// setupSSRFBypass enables SSRF-validation bypass for tests that use httptest
+// servers bound to 127.0.0.1, and restores the original value via t.Cleanup.
+func setupSSRFBypass(t *testing.T) {
+	t.Helper()
+	skipSSRFValidation = true
+	t.Cleanup(func() { skipSSRFValidation = false })
+}
+
 func TestSendWebhookRequest_Success(t *testing.T) {
 	t.Parallel()
+	setupSSRFBypass(t)
 	secret := "whsec_abc"
 	payload := []byte(`{"type":"issue.created","data":{"id":"123"}}`)
 
@@ -117,6 +126,7 @@ func TestSendWebhookRequest_Success(t *testing.T) {
 
 func TestSendWebhookRequest_NoSecret(t *testing.T) {
 	t.Parallel()
+	setupSSRFBypass(t)
 	payload := []byte(`{"type":"issue.updated"}`)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -138,6 +148,7 @@ func TestSendWebhookRequest_NoSecret(t *testing.T) {
 
 func TestSendWebhookRequest_ServerError(t *testing.T) {
 	t.Parallel()
+	setupSSRFBypass(t)
 	payload := []byte(`{"type":"issue.created"}`)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(503)
@@ -159,11 +170,32 @@ func TestSendWebhookRequest_ServerError(t *testing.T) {
 
 func TestSendWebhookRequest_NetworkError(t *testing.T) {
 	t.Parallel()
+	setupSSRFBypass(t)
 	payload := []byte(`{}`)
-	// Use an invalid target that will fail immediately.
+	// Use an invalid target that will fail immediately (port 1 is never open).
 	_, _, err := sendWebhookRequest(context.Background(), "http://127.0.0.1:1", payload, nil)
 	if err == nil {
 		t.Fatal("expected network error, got nil")
+	}
+}
+
+// TestValidateWebhookURL_BlocksPrivate verifies that the SSRF guard rejects
+// private/loopback addresses when skipSSRFValidation is false (production mode).
+func TestValidateWebhookURL_BlocksPrivate(t *testing.T) {
+	t.Parallel()
+	cases := []string{
+		"http://localhost/hook",
+		"http://127.0.0.1/hook",
+		"http://192.168.1.1/hook",
+		"http://10.0.0.1/hook",
+		"http://172.16.0.1/hook",
+		"http://169.254.169.254/latest/meta-data/",
+	}
+	for _, u := range cases {
+		err := validateWebhookURL(u)
+		if err == nil {
+			t.Errorf("validateWebhookURL(%q) should have returned an error but did not", u)
+		}
 	}
 }
 

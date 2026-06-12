@@ -2329,7 +2329,7 @@ func teamKeyBase(name string) string {
 	return key
 }
 
-func isManager(role string) bool { return role == "owner" || role == "admin" }
+func isManager(role string) bool { return auth.IsManager(role) }
 func canInvite(role string) bool { return isManager(role) }
 func validRole(role string) bool {
 	return role == "owner" || role == "admin" || role == "member" || role == "guest"

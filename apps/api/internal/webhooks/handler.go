@@ -46,7 +46,7 @@ type deliveryRow struct {
 // Optional query params: webhook_id, status, limit (max 100).
 func (h Handler) ListDeliveries(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
-	if !isManager(p.Role) {
+	if !auth.IsManager(p.Role) {
 		problem.Write(w, 403, "Forbidden", "")
 		return
 	}
@@ -123,7 +123,7 @@ func (h Handler) ListDeliveries(w http.ResponseWriter, r *http.Request) {
 // re-attempted on the next processing cycle.
 func (h Handler) RetryDelivery(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
-	if !isManager(p.Role) {
+	if !auth.IsManager(p.Role) {
 		problem.Write(w, 403, "Forbidden", "")
 		return
 	}
@@ -160,11 +160,6 @@ func (h Handler) RetryDelivery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	problem.JSON(w, 200, map[string]string{"status": "pending"})
-}
-
-// isManager returns true if the principal role can manage workspace settings.
-func isManager(role string) bool {
-	return role == "owner" || role == "admin"
 }
 
 func parseInt(s string) int {

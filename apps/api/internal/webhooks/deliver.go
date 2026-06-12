@@ -11,7 +11,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -107,12 +109,24 @@ func jsonArray(s string) string {
 // ProcessPending picks up to batchSize pending/retrying delivery rows and
 // dispatches them.  Designed to be called from a background goroutine or
 // scheduled ticker.
+//
+// The SELECT … FOR UPDATE SKIP LOCKED and the status transition to 'delivering'
+// are performed inside a single explicit transaction so that row locks are held
+// across both statements.  Without the transaction the implicit per-statement
+// transaction in pgx commits and releases locks before the UPDATE runs, making
+// the skip-locked protection completely ineffective.
 func (d *Deliverer) ProcessPending(ctx context.Context, batchSize int) error {
 	if batchSize <= 0 {
 		batchSize = 50
 	}
 
-	rows, err := d.DB.Query(ctx,
+	tx, err := d.DB.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("webhook delivery begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	rows, err := tx.Query(ctx,
 		`select wd.id::text, wd.event_type, wd.payload, wd.attempts,
 		        w.url, w.secret, wd.workspace_id::text
 		 from webhook_delivery wd
@@ -151,13 +165,21 @@ func (d *Deliverer) ProcessPending(ctx context.Context, batchSize int) error {
 		return err
 	}
 
-	// Mark as delivering immediately so concurrent workers skip them.
+	// Mark as delivering while we still hold the row locks inside the transaction.
 	for _, pr := range pending {
-		_, _ = d.DB.Exec(ctx,
+		if _, err := tx.Exec(ctx,
 			`update webhook_delivery set status='delivering', updated_at=now()
 			 where id=$1::uuid and status in ('pending','delivering')`,
 			pr.id,
-		)
+		); err != nil {
+			return fmt.Errorf("webhook delivery mark delivering: %w", err)
+		}
+	}
+
+	// Commit before dispatching HTTP requests so the status update is durable
+	// and the row locks are released even if delivery takes a while.
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("webhook delivery commit: %w", err)
 	}
 
 	for _, pr := range pending {
@@ -255,8 +277,73 @@ func backoffDuration(attempt int) time.Duration {
 	}
 }
 
+// skipSSRFValidation disables URL validation in unit tests.  It must never be
+// set to true in production code.
+var skipSSRFValidation bool
+
+// privateRanges lists CIDRs that must not be reachable from outbound webhooks.
+var privateRanges []*net.IPNet
+
+func init() {
+	for _, cidr := range []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"127.0.0.0/8",
+		"::1/128",
+		"fc00::/7",
+		"169.254.0.0/16", // link-local / AWS IMDS
+		"fe80::/10",       // IPv6 link-local
+		"0.0.0.0/8",
+		"100.64.0.0/10", // shared address space (RFC 6598)
+	} {
+		_, network, err := net.ParseCIDR(cidr)
+		if err == nil {
+			privateRanges = append(privateRanges, network)
+		}
+	}
+}
+
+// validateWebhookURL returns an error if targetURL targets a private/loopback/
+// link-local address, preventing SSRF attacks against internal infrastructure.
+func validateWebhookURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid webhook URL: %w", err)
+	}
+	if u.Scheme != "https" && u.Scheme != "http" {
+		return fmt.Errorf("webhook URL must use http or https scheme")
+	}
+	hostname := u.Hostname()
+	ips, err := net.LookupHost(hostname)
+	if err != nil {
+		// If DNS resolution fails we reject rather than allow blindly.
+		return fmt.Errorf("webhook URL hostname cannot be resolved: %w", err)
+	}
+	for _, ipStr := range ips {
+		ip := net.ParseIP(ipStr)
+		if ip == nil {
+			continue
+		}
+		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			return fmt.Errorf("webhook URL resolves to a disallowed address: %s", ipStr)
+		}
+		for _, block := range privateRanges {
+			if block.Contains(ip) {
+				return fmt.Errorf("webhook URL resolves to a private/reserved address: %s", ipStr)
+			}
+		}
+	}
+	return nil
+}
+
 // sendWebhookRequest performs the HTTP POST to the target URL.
 func sendWebhookRequest(ctx context.Context, targetURL string, payload []byte, secret *string) (int, string, error) {
+	if !skipSSRFValidation {
+		if err := validateWebhookURL(targetURL); err != nil {
+			return 0, "", err
+		}
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(payload))
 	if err != nil {
 		return 0, "", err

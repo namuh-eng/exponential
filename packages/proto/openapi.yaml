@@ -3411,6 +3411,60 @@ paths:
                 $ref: '#/components/schemas/InviteWorkspaceMembersResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /workspaces/current/webhook-deliveries:
+    get:
+      operationId: listWebhookDeliveries
+      summary: List recent webhook delivery attempts for the current workspace
+      parameters:
+        - name: webhook_id
+          in: query
+          schema: { type: string }
+          description: Filter by webhook ID
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, delivering, delivered, failed, dead] }
+          description: Filter by delivery status
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Webhook delivery list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deliveries]
+                properties:
+                  deliveries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WebhookDelivery'
+        default:
+          $ref: '#/components/responses/Problem'
+  /workspaces/current/webhook-deliveries/{id}/retry:
+    post:
+      operationId: retryWebhookDelivery
+      summary: Re-queue a failed or dead webhook delivery for immediate retry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Delivery reset to pending
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: pending
+        default:
+          $ref: '#/components/responses/Problem'
   /sync/ws:
     get:
       operationId: watchSync
@@ -3455,6 +3509,21 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
+    WebhookDelivery:
+      type: object
+      required: [id, webhookId, eventType, status, attempts, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        webhookId: { type: string, format: uuid }
+        eventType: { type: string }
+        status: { type: string, enum: [pending, delivering, delivered, failed, dead] }
+        attempts: { type: integer }
+        responseCode: { type: integer, nullable: true }
+        responseBody: { type: string, nullable: true }
+        lastAttemptedAt: { type: string, format: date-time, nullable: true }
+        nextAttemptAt: { type: string, format: date-time, nullable: true }
+        sourceOperationId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
     Problem:
       type: object
       required: [type, title, status]
