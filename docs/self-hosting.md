@@ -287,10 +287,16 @@ echo "Certificate validated."
 
 **3. Run preflight with the cert ARN**
 
-Add `ACM_CERT_ARN` to `.env` and re-run preflight:
+Set `ACM_CERT_ARN` in `.env` (edit in place so the key is not duplicated if it
+already exists) and re-run preflight:
 
 ```bash
-echo "ACM_CERT_ARN=arn:aws:acm:us-east-1:123456789012:certificate/..." >> .env
+# Set or update ACM_CERT_ARN in .env — grep+sed edits in place; appends if absent.
+if grep -q '^ACM_CERT_ARN=' .env 2>/dev/null; then
+  sed -i.bak 's|^ACM_CERT_ARN=.*|ACM_CERT_ARN=arn:aws:acm:us-east-1:123456789012:certificate/...|' .env && rm -f .env.bak
+else
+  echo "ACM_CERT_ARN=arn:aws:acm:us-east-1:123456789012:certificate/..." >> .env
+fi
 DB_PASSWORD=<password> bash scripts/preflight.sh
 ```
 

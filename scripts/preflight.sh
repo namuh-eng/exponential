@@ -364,13 +364,22 @@ if [ -n "${ACM_CERT_ARN:-}" ]; then
   echo "--- HTTPS Listener (ACM cert: $ACM_CERT_ARN) ---"
 
   # Validate the certificate is ISSUED before wiring it to the ALB.
+  # A non-ISSUED cert (e.g. PENDING_VALIDATION) cannot serve TLS traffic.
+  # If preflight continued it would also convert the HTTP:80 listener to a
+  # permanent 301 redirect to HTTPS, making the site completely unreachable
+  # until the cert is validated.  Abort early so HTTP keeps working.
   CERT_STATUS=$(aws acm describe-certificate --certificate-arn "$ACM_CERT_ARN" \
     --region $REGION --query 'Certificate.Status' --output text 2>/dev/null || true)
   if [ "$CERT_STATUS" != "ISSUED" ]; then
-    echo "WARNING: Certificate status is '$CERT_STATUS' (expected ISSUED)." >&2
-    echo "         The HTTPS listener will be created but will not serve traffic" >&2
-    echo "         until the certificate is validated. See docs/self-hosting.md" >&2
-    echo "         for ACM DNS validation instructions." >&2
+    echo "ERROR: Certificate status is '$CERT_STATUS' (expected ISSUED)." >&2
+    echo "       ACM_CERT_ARN=$ACM_CERT_ARN" >&2
+    echo "       The certificate must be fully validated before preflight can" >&2
+    echo "       wire it to the ALB.  Proceeding would also convert the HTTP:80" >&2
+    echo "       listener to a permanent 301 redirect, making the site completely" >&2
+    echo "       unreachable until validation completes.  Complete DNS/email" >&2
+    echo "       validation first, then re-run preflight." >&2
+    echo "       See docs/self-hosting.md for ACM DNS validation instructions." >&2
+    exit 1
   fi
 
   HTTPS_LISTENER_ARN=$(aws elbv2 describe-listeners --load-balancer-arn $ALB_ARN --region $REGION \
@@ -383,6 +392,15 @@ if [ -n "${ACM_CERT_ARN:-}" ]; then
       --default-actions "Type=forward,TargetGroupArn=$WEB_TG_ARN" \
       --region $REGION \
       --query 'Listeners[0].ListenerArn' --output text)
+    # Guard against a degenerate 'None' return (e.g. mis-scoped --query).
+    # Failing here is safer than passing 'None' as a listener ARN to
+    # ensure_listener_rule after HTTP:80 has already been converted to a
+    # redirect, which would leave the stack in a broken partial state.
+    if [ "$HTTPS_LISTENER_ARN" = "None" ] || [ -z "$HTTPS_LISTENER_ARN" ]; then
+      echo "ERROR: create-listener returned an invalid ARN ('$HTTPS_LISTENER_ARN')." >&2
+      echo "       Aborting before HTTP:80 is modified to avoid a redirect loop." >&2
+      exit 1
+    fi
     echo "HTTPS listener created: $HTTPS_LISTENER_ARN"
   else
     # Update cert and default action in case either changed.
@@ -437,6 +455,17 @@ else
     aws elbv2 modify-listener --listener-arn "$LISTENER_ARN" \
       --default-actions "Type=forward,TargetGroupArn=$WEB_TG_ARN" \
       --region $REGION >/dev/null
+  fi
+
+  # HTTP-only mode: clean up any orphaned HTTPS:443 listener left over from a
+  # previous run that had ACM_CERT_ARN set.  Leaving it in place would mean
+  # ALB accepts port-443 connections without a certificate, and a stale
+  # ALB_HTTPS_LISTENER_ARN in .env would make the downgrade look incomplete.
+  STALE_HTTPS_ARN=$(aws elbv2 describe-listeners --load-balancer-arn $ALB_ARN --region $REGION \
+    --query 'Listeners[?Port==`443`].ListenerArn | [0]' --output text 2>/dev/null || true)
+  if [ -n "$STALE_HTTPS_ARN" ] && [ "$STALE_HTTPS_ARN" != "None" ]; then
+    aws elbv2 delete-listener --listener-arn "$STALE_HTTPS_ARN" --region $REGION >/dev/null
+    echo "Deleted orphaned HTTPS:443 listener (HTTP-only mode): $STALE_HTTPS_ARN"
   fi
 fi
 
@@ -511,6 +540,22 @@ path.write_text("\n".join(lines) + "\n")
 PY
 }
 
+del_env_file() {
+  local key="$1"
+  KEY="$key" python3 - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(".env")
+key = os.environ["KEY"]
+if not path.exists():
+    exit(0)
+lines = path.read_text().splitlines()
+lines = [l for l in lines if not l.startswith(f"{key}=")]
+path.write_text("\n".join(lines) + "\n" if lines else "")
+PY
+}
+
 ALB_DNS=$(aws elbv2 describe-load-balancers --load-balancer-arns $ALB_ARN --region $REGION \
   --query 'LoadBalancers[0].DNSName' --output text)
 set_env_file ALB_DNS "$ALB_DNS"
@@ -520,6 +565,10 @@ set_env_file WEB_TG_ARN "$WEB_TG_ARN"
 set_env_file API_TG_ARN "$API_TG_ARN"
 if [ -n "${HTTPS_LISTENER_ARN:-}" ]; then
   set_env_file ALB_HTTPS_LISTENER_ARN "$HTTPS_LISTENER_ARN"
+else
+  # HTTP-only mode: remove any stale ALB_HTTPS_LISTENER_ARN entry so the .env
+  # accurately reflects the current stack state after a downgrade run.
+  del_env_file ALB_HTTPS_LISTENER_ARN
 fi
 
 PRIVATE_DNS_ZONE="${PRIVATE_DNS_ZONE:-${APP_NAME}.internal}"
