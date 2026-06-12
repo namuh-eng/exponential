@@ -3996,6 +3996,21 @@ components:
         canConnect: { type: boolean }
         canManage: { type: boolean }
         canDisconnect: { type: boolean }
+    IntegrationHealth:
+      type: object
+      description: >
+        Lifecycle and health telemetry for a connected integration.
+        No secrets or raw credential metadata are included.
+      required: [lifecycleState]
+      properties:
+        lifecycleState:
+          type: string
+          enum: [configuration_required, installing, connected, degraded, revoked, error, not_connected]
+        lastEventAt: { type: [string, 'null'], format: date-time }
+        lastSuccessAt: { type: [string, 'null'], format: date-time }
+        lastFailureAt: { type: [string, 'null'], format: date-time }
+        lastFailureMessage: { type: [string, 'null'] }
+        healthSummary: { type: [string, 'null'] }
     Integration:
       type: object
       required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions]
@@ -4013,6 +4028,10 @@ components:
             - $ref: '#/components/schemas/IntegrationSetupRequirement'
             - type: 'null'
         actions: { $ref: '#/components/schemas/IntegrationActions' }
+        health:
+          anyOf:
+            - $ref: '#/components/schemas/IntegrationHealth'
+            - type: 'null'
     SlackConnectResponse:
       type: object
       required: [authorizationUrl, state, workspaceSlug]

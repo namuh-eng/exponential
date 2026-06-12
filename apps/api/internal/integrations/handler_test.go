@@ -1,6 +1,7 @@
 package integrations
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -58,5 +59,75 @@ func TestSlackOAuthConfig(t *testing.T) {
 	clientID, clientSecret, ok := slackOAuthConfig()
 	if !ok || clientID != "slack-id" || clientSecret != "slack-secret" {
 		t.Fatalf("config = %q %q %v", clientID, clientSecret, ok)
+	}
+}
+
+// TestIntegrationSerializationNoSecrets verifies that Integration JSON output
+// never includes raw credential fields (secret, token, credential_ref, key).
+func TestIntegrationSerializationNoSecrets(t *testing.T) {
+	summary := "All good"
+	health := &HealthInfo{
+		LifecycleState: string(LifecycleStateConnected),
+		HealthSummary:  &summary,
+	}
+	id := "00000000-0000-0000-0000-000000000001"
+	name := "slack-workspace"
+	externalID := "T12345"
+	connectedAt := "2026-01-01T00:00:00Z"
+	integration := Integration{
+		CatalogItem: CatalogItem{Provider: "slack", Name: "Slack", Description: "desc"},
+		ID:          &id,
+		Status:      string(LifecycleStateConnected),
+		DisplayName: &name,
+		ExternalID:  &externalID,
+		ConnectedAt: &connectedAt,
+		Actions:     Actions{CanConnect: false, CanManage: true, CanDisconnect: true},
+		Health:      health,
+	}
+
+	data, err := json.Marshal(integration)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+	serialized := string(data)
+
+	// Ensure no credential-like keys appear in the JSON output.
+	forbiddenFields := []string{
+		"credential_ref", "credentialRef",
+		"secret", "token", "access_token", "accessToken",
+		"client_secret", "clientSecret",
+	}
+	for _, field := range forbiddenFields {
+		if strings.Contains(serialized, field) {
+			t.Errorf("serialized integration contains forbidden field %q: %s", field, serialized)
+		}
+	}
+
+	// Ensure the health summary and lifecycle state are present.
+	if !strings.Contains(serialized, "lifecycleState") {
+		t.Errorf("serialized integration missing lifecycleState: %s", serialized)
+	}
+	if !strings.Contains(serialized, "connected") {
+		t.Errorf("serialized integration missing connected state: %s", serialized)
+	}
+}
+
+// TestHealthInfoSerializesTimestamps verifies that HealthInfo formats time pointers correctly.
+func TestHealthInfoSerializesTimestamps(t *testing.T) {
+	msg := "connection refused"
+	h := &HealthInfo{
+		LifecycleState:     string(LifecycleStateDegraded),
+		LastFailureMessage: &msg,
+	}
+	data, err := json.Marshal(h)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+	serialized := string(data)
+	if !strings.Contains(serialized, "degraded") {
+		t.Errorf("missing lifecycleState degraded in: %s", serialized)
+	}
+	if !strings.Contains(serialized, "connection refused") {
+		t.Errorf("missing lastFailureMessage in: %s", serialized)
 	}
 }
