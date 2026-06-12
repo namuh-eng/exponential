@@ -14,6 +14,7 @@ import (
 	httpserver "github.com/namuh-eng/exponential/apps/api/internal/http"
 	"github.com/namuh-eng/exponential/apps/api/internal/logging"
 	"github.com/namuh-eng/exponential/apps/api/internal/observability"
+	"github.com/namuh-eng/exponential/apps/api/internal/webhooks"
 	"go.uber.org/zap"
 )
 
@@ -62,6 +63,26 @@ func main() {
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	// Background webhook delivery processor — runs every 10 seconds.
+	deliverer := &webhooks.Deliverer{DB: db}
+	deliveryCtx, deliveryCancel := context.WithCancel(context.Background())
+	defer deliveryCancel()
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-deliveryCtx.Done():
+				return
+			case <-ticker.C:
+				if err := deliverer.ProcessPending(deliveryCtx, 50); err != nil {
+					logger.Warn("webhook delivery processing failed", zap.Error(err))
+				}
+			}
+		}
+	}()
+
 	<-stop
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

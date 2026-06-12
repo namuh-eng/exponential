@@ -22,6 +22,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/sanitizehtml"
 	dbsqlc "github.com/namuh-eng/exponential/apps/api/internal/sqlc/generated"
 	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
+	"github.com/namuh-eng/exponential/apps/api/internal/webhooks"
 )
 
 type Handler struct{ DB *pgxpool.Pool }
@@ -729,6 +730,9 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create issue failed", err.Error())
 		return
 	}
+	go func() {
+		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "issue.created", "", issue)
+	}()
 	h.storeIdempotency(r, p, http.StatusCreated, issue)
 	problem.JSON(w, http.StatusCreated, issue)
 }
@@ -872,6 +876,9 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update issue failed", err.Error())
 		return
 	}
+	go func() {
+		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "issue.updated", "", updated)
+	}()
 	h.storeIdempotency(r, p, http.StatusOK, updated)
 	problem.JSON(w, http.StatusOK, updated)
 }
@@ -909,6 +916,9 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete issue failed", err.Error())
 		return
 	}
+	go func() {
+		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "issue.deleted", "", existing)
+	}()
 	body := map[string]bool{"success": true}
 	h.storeIdempotency(r, p, http.StatusOK, body)
 	problem.JSON(w, http.StatusOK, body)
