@@ -219,8 +219,16 @@ set_env SESSION_SECRET_SECRET_ARN "$(secret_arn "${APP_NAME}/session-secret" "$E
 set_env METRICS_TOKEN_SECRET_ARN "$(secret_arn "${APP_NAME}/metrics-token" "$EXPONENTIAL_METRICS_TOKEN")"
 set_env GOOGLE_CLIENT_ID_SECRET_ARN "$(secret_arn "${APP_NAME}/google-client-id" "${GOOGLE_CLIENT_ID:-${AUTH_GOOGLE_ID:-dev-google-client-id}}")"
 set_env GOOGLE_CLIENT_SECRET_SECRET_ARN "$(secret_arn "${APP_NAME}/google-client-secret" "${GOOGLE_CLIENT_SECRET:-${AUTH_GOOGLE_SECRET:-dev-google-client-secret}}")"
-set_env STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN "$(required_existing_or_synced_secret_arn STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN "${APP_NAME}/stripe-webhook-signing-secret" "${STRIPE_WEBHOOK_SIGNING_SECRET:-}")"
-set_env STRIPE_SECRET_KEY_SECRET_ARN "$(required_existing_or_synced_secret_arn STRIPE_SECRET_KEY_SECRET_ARN "${APP_NAME}/stripe-secret-key" "${STRIPE_SECRET_KEY:-}")"
+# Stripe secrets are optional. Self-hosted deployments that do not use billing
+# can omit STRIPE_WEBHOOK_SIGNING_SECRET and STRIPE_SECRET_KEY entirely.
+# When absent the Stripe webhook route returns 400 and billing features are
+# unavailable, but all other API functionality works normally.
+if [ -n "${STRIPE_WEBHOOK_SIGNING_SECRET:-}${STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN:-}" ]; then
+  set_env STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN "$(existing_or_synced_secret_arn STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN "${APP_NAME}/stripe-webhook-signing-secret" "${STRIPE_WEBHOOK_SIGNING_SECRET:-}")"
+fi
+if [ -n "${STRIPE_SECRET_KEY:-}${STRIPE_SECRET_KEY_SECRET_ARN:-}" ]; then
+  set_env STRIPE_SECRET_KEY_SECRET_ARN "$(existing_or_synced_secret_arn STRIPE_SECRET_KEY_SECRET_ARN "${APP_NAME}/stripe-secret-key" "${STRIPE_SECRET_KEY:-}")"
+fi
 if [ -n "${STRIPE_CLOUD_TEAM_PRICE_ID:-}" ]; then
   set_env STRIPE_CLOUD_TEAM_PRICE_ID "$STRIPE_CLOUD_TEAM_PRICE_ID"
 fi

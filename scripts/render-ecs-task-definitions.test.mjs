@@ -51,20 +51,59 @@ assert.throws(
     }),
   /Missing required environment variables: DATABASE_URL_SECRET_ARN/,
 );
-assert.throws(
-  () =>
-    renderTaskDefinitionFile("infra/ecs/api-task-definition.json", {
+// Stripe ARNs are now optional — omitting them must not throw.
+{
+  const renderedWithoutStripe = renderTaskDefinitionFile(
+    "infra/ecs/api-task-definition.json",
+    {
       ...env,
       STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN: "",
-    }),
-  /Missing required environment variables: STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN/,
-);
+      STRIPE_SECRET_KEY_SECRET_ARN: "",
+    },
+  );
+  const parsedWithoutStripe = JSON.parse(renderedWithoutStripe);
+  const secretNames = parsedWithoutStripe.containerDefinitions[0].secrets.map(
+    (s) => s.name,
+  );
+  assert.ok(
+    !secretNames.includes("STRIPE_WEBHOOK_SIGNING_SECRET"),
+    "STRIPE_WEBHOOK_SIGNING_SECRET must be absent when ARN is empty",
+  );
+  assert.ok(
+    !secretNames.includes("STRIPE_SECRET_KEY"),
+    "STRIPE_SECRET_KEY must be absent when ARN is empty",
+  );
+}
+
+// Fully absent (undefined) Stripe ARNs must also be tolerated.
+{
+  const envNoStripe = { ...env };
+  delete envNoStripe.STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN;
+  delete envNoStripe.STRIPE_SECRET_KEY_SECRET_ARN;
+  delete envNoStripe.STRIPE_CLOUD_TEAM_PRICE_ID;
+  delete envNoStripe.STRIPE_CLOUD_BUSINESS_PRICE_ID;
+  const rendered = renderTaskDefinitionFile(
+    "infra/ecs/api-task-definition.json",
+    envNoStripe,
+  );
+  const parsed = JSON.parse(rendered);
+  const secretNames = parsed.containerDefinitions[0].secrets.map((s) => s.name);
+  assert.ok(
+    !secretNames.includes("STRIPE_WEBHOOK_SIGNING_SECRET"),
+    "STRIPE_WEBHOOK_SIGNING_SECRET must be absent when ARN is undefined",
+  );
+  assert.ok(
+    !secretNames.includes("STRIPE_SECRET_KEY"),
+    "STRIPE_SECRET_KEY must be absent when ARN is undefined",
+  );
+}
 
 for (const file of [
   "infra/ecs/api-task-definition.json",
   "infra/ecs/api-migrate-task-definition.json",
   "infra/ecs/web-task-definition.json",
 ]) {
+  // Full env: all Stripe vars present.
   const rendered = renderTaskDefinitionFile(file, env);
   assert.doesNotMatch(rendered, /\$\{/);
   const parsed = JSON.parse(rendered);
@@ -73,4 +112,19 @@ for (const file of [
     parsed.containerDefinitions[0].logConfiguration.options["awslogs-group"],
   );
   assert.notEqual(rendered, readFileSync(file, "utf8"));
+}
+
+// api task with Stripe present: secrets must include Stripe entries.
+{
+  const rendered = renderTaskDefinitionFile("infra/ecs/api-task-definition.json", env);
+  const parsed = JSON.parse(rendered);
+  const secretNames = parsed.containerDefinitions[0].secrets.map((s) => s.name);
+  assert.ok(
+    secretNames.includes("STRIPE_WEBHOOK_SIGNING_SECRET"),
+    "STRIPE_WEBHOOK_SIGNING_SECRET must be present when ARN is provided",
+  );
+  assert.ok(
+    secretNames.includes("STRIPE_SECRET_KEY"),
+    "STRIPE_SECRET_KEY must be present when ARN is provided",
+  );
 }
