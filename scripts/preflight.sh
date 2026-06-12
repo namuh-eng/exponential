@@ -351,30 +351,105 @@ create_target_group() {
 WEB_TG_ARN=$(create_target_group "${APP_NAME}-web-tg" 3000 "/" "200-399")
 API_TG_ARN=$(create_target_group "${APP_NAME}-api-tg" 7016 "/healthz" "200")
 
-# HTTP listener: default web, /api/* to Go API.
+# HTTPS listener wiring when ACM_CERT_ARN is provided.
+# When set:
+#   - Port 443 HTTPS listener carries forward rules (web default, /api/* to Go API).
+#   - Port 80 HTTP listener becomes a permanent redirect to HTTPS.
+# When not set:
+#   - Port 80 HTTP listener carries all forward rules as before (plain HTTP).
+
+HTTPS_LISTENER_ARN=""
+if [ -n "${ACM_CERT_ARN:-}" ]; then
+  echo ""
+  echo "--- HTTPS Listener (ACM cert: $ACM_CERT_ARN) ---"
+
+  # Validate the certificate is ISSUED before wiring it to the ALB.
+  CERT_STATUS=$(aws acm describe-certificate --certificate-arn "$ACM_CERT_ARN" \
+    --region $REGION --query 'Certificate.Status' --output text 2>/dev/null || true)
+  if [ "$CERT_STATUS" != "ISSUED" ]; then
+    echo "WARNING: Certificate status is '$CERT_STATUS' (expected ISSUED)." >&2
+    echo "         The HTTPS listener will be created but will not serve traffic" >&2
+    echo "         until the certificate is validated. See docs/self-hosting.md" >&2
+    echo "         for ACM DNS validation instructions." >&2
+  fi
+
+  HTTPS_LISTENER_ARN=$(aws elbv2 describe-listeners --load-balancer-arn $ALB_ARN --region $REGION \
+    --query 'Listeners[?Port==`443`].ListenerArn | [0]' --output text 2>/dev/null || true)
+  if [ "$HTTPS_LISTENER_ARN" = "None" ] || [ -z "$HTTPS_LISTENER_ARN" ]; then
+    HTTPS_LISTENER_ARN=$(aws elbv2 create-listener --load-balancer-arn $ALB_ARN \
+      --protocol HTTPS --port 443 \
+      --certificates "CertificateArn=$ACM_CERT_ARN" \
+      --ssl-policy ELBSecurityPolicy-TLS13-1-2-2021-06 \
+      --default-actions "Type=forward,TargetGroupArn=$WEB_TG_ARN" \
+      --region $REGION \
+      --query 'Listeners[0].ListenerArn' --output text)
+    echo "HTTPS listener created: $HTTPS_LISTENER_ARN"
+  else
+    # Update cert and default action in case either changed.
+    aws elbv2 modify-listener --listener-arn "$HTTPS_LISTENER_ARN" \
+      --certificates "CertificateArn=$ACM_CERT_ARN" \
+      --ssl-policy ELBSecurityPolicy-TLS13-1-2-2021-06 \
+      --default-actions "Type=forward,TargetGroupArn=$WEB_TG_ARN" \
+      --region $REGION >/dev/null
+    echo "HTTPS listener updated: $HTTPS_LISTENER_ARN"
+  fi
+fi
+
+# HTTP:80 listener.
+# When HTTPS is configured it becomes a redirect; otherwise it carries the
+# forward rules as before.
 LISTENER_ARN=$(aws elbv2 describe-listeners --load-balancer-arn $ALB_ARN --region $REGION \
   --query 'Listeners[?Port==`80`].ListenerArn | [0]' --output text 2>/dev/null || true)
-if [ "$LISTENER_ARN" = "None" ] || [ -z "$LISTENER_ARN" ]; then
-  LISTENER_ARN=$(aws elbv2 create-listener --load-balancer-arn $ALB_ARN \
-    --protocol HTTP --port 80 \
-    --default-actions "Type=forward,TargetGroupArn=$WEB_TG_ARN" \
-    --region $REGION \
-    --query 'Listeners[0].ListenerArn' --output text)
+if [ -n "${ACM_CERT_ARN:-}" ]; then
+  # HTTP → HTTPS redirect (permanent 301).
+  HTTP_DEFAULT_ACTION='[{"Type":"redirect","RedirectConfig":{"Protocol":"HTTPS","Port":"443","StatusCode":"HTTP_301"}}]'
+  if [ "$LISTENER_ARN" = "None" ] || [ -z "$LISTENER_ARN" ]; then
+    LISTENER_ARN=$(aws elbv2 create-listener --load-balancer-arn $ALB_ARN \
+      --protocol HTTP --port 80 \
+      --default-actions "$HTTP_DEFAULT_ACTION" \
+      --region $REGION \
+      --query 'Listeners[0].ListenerArn' --output text)
+    echo "HTTP redirect listener created: $LISTENER_ARN"
+  else
+    aws elbv2 modify-listener --listener-arn "$LISTENER_ARN" \
+      --default-actions "$HTTP_DEFAULT_ACTION" \
+      --region $REGION >/dev/null
+    echo "HTTP listener updated to redirect → HTTPS"
+    # Remove any existing path-based forward rules from the HTTP listener since
+    # all traffic is now unconditionally redirected at the default action level.
+    EXISTING_RULES=$(aws elbv2 describe-rules --listener-arn "$LISTENER_ARN" --region $REGION \
+      --query 'Rules[?IsDefault==`false`].RuleArn' --output text 2>/dev/null || true)
+    for rule in $EXISTING_RULES; do
+      [ -z "$rule" ] && continue
+      aws elbv2 delete-rule --rule-arn "$rule" --region $REGION >/dev/null
+      echo "Removed forwarding rule from HTTP listener (redirect takes precedence): $rule"
+    done
+  fi
 else
-  aws elbv2 modify-listener --listener-arn "$LISTENER_ARN" \
-    --default-actions "Type=forward,TargetGroupArn=$WEB_TG_ARN" \
-    --region $REGION >/dev/null
+  # Plain HTTP: default action forwards to web, path rules route /api/*.
+  if [ "$LISTENER_ARN" = "None" ] || [ -z "$LISTENER_ARN" ]; then
+    LISTENER_ARN=$(aws elbv2 create-listener --load-balancer-arn $ALB_ARN \
+      --protocol HTTP --port 80 \
+      --default-actions "Type=forward,TargetGroupArn=$WEB_TG_ARN" \
+      --region $REGION \
+      --query 'Listeners[0].ListenerArn' --output text)
+  else
+    aws elbv2 modify-listener --listener-arn "$LISTENER_ARN" \
+      --default-actions "Type=forward,TargetGroupArn=$WEB_TG_ARN" \
+      --region $REGION >/dev/null
+  fi
 fi
 
 ensure_listener_rule() {
-  local priority="$1"
-  local tg_arn="$2"
-  shift 2
+  local listener="$1"
+  local priority="$2"
+  local tg_arn="$3"
+  shift 3
   local existing
-  existing=$(aws elbv2 describe-rules --listener-arn "$LISTENER_ARN" --region $REGION \
+  existing=$(aws elbv2 describe-rules --listener-arn "$listener" --region $REGION \
     --query "Rules[?Priority=='$priority'].RuleArn | [0]" --output text 2>/dev/null || true)
   if [ "$existing" = "None" ] || [ -z "$existing" ]; then
-    aws elbv2 create-rule --listener-arn "$LISTENER_ARN" \
+    aws elbv2 create-rule --listener-arn "$listener" \
       --priority "$priority" \
       --conditions "$@" \
       --actions "Type=forward,TargetGroupArn=$tg_arn" \
@@ -387,7 +462,12 @@ ensure_listener_rule() {
   fi
 }
 
-ensure_listener_rule 10 "$API_TG_ARN" 'Field=path-pattern,Values=/api/*'
+# Route /api/* to the Go API on whichever listener carries forward rules.
+if [ -n "${ACM_CERT_ARN:-}" ] && [ -n "$HTTPS_LISTENER_ARN" ]; then
+  ensure_listener_rule "$HTTPS_LISTENER_ARN" 10 "$API_TG_ARN" 'Field=path-pattern,Values=/api/*'
+else
+  ensure_listener_rule "$LISTENER_ARN" 10 "$API_TG_ARN" 'Field=path-pattern,Values=/api/*'
+fi
 
 remove_legacy_auth_rules() {
   local listener
@@ -438,6 +518,9 @@ set_env_file ALB_ARN "$ALB_ARN"
 set_env_file ALB_LISTENER_ARN "$LISTENER_ARN"
 set_env_file WEB_TG_ARN "$WEB_TG_ARN"
 set_env_file API_TG_ARN "$API_TG_ARN"
+if [ -n "${HTTPS_LISTENER_ARN:-}" ]; then
+  set_env_file ALB_HTTPS_LISTENER_ARN "$HTTPS_LISTENER_ARN"
+fi
 
 PRIVATE_DNS_ZONE="${PRIVATE_DNS_ZONE:-${APP_NAME}.internal}"
 PRIVATE_DNS_ZONE_ID=$(aws route53 list-hosted-zones-by-name --dns-name "${PRIVATE_DNS_ZONE}." \
@@ -480,7 +563,13 @@ echo "=== Pre-flight Complete (team tier) ==="
 echo "VPC: $VPC_ID | App SG: $APP_SG | DB SG: $DB_SG | Redis SG: $REDIS_SG | ALB SG: $ALB_SG"
 echo "Private subnets: $PRIV_SUBNET_A, $PRIV_SUBNET_B"
 echo "ALB DNS: $ALB_DNS"
-echo "Deploy target: ECS Fargate split services + ALB (/api/* → api, default → web)"
+if [ -n "${ACM_CERT_ARN:-}" ]; then
+  echo "TLS: HTTPS:443 listener with ACM cert | HTTP:80 redirects → HTTPS"
+  echo "Deploy target: ECS Fargate split services + ALB (HTTPS /api/* → api, default → web; HTTP redirects to HTTPS)"
+else
+  echo "TLS: none (HTTP only). Set ACM_CERT_ARN in .env to enable HTTPS."
+  echo "Deploy target: ECS Fargate split services + ALB (/api/* → api, default → web)"
+fi
 
 # Store infrastructure IDs in .env
 set_env_file PRIV_SUBNET_A "$PRIV_SUBNET_A"

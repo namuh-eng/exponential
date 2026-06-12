@@ -205,6 +205,124 @@ For ECS web-to-API server requests, prefer `WEB_INTERNAL_API_URL` pointing at
 the internal ALB/API route so server-side auth/session checks do not hairpin
 through a public CDN or proxy hostname.
 
+### HTTPS via ACM (recommended for production)
+
+HTTPS is required for Google OAuth redirect URIs and is strongly recommended
+for all production deployments. `preflight.sh` can wire an HTTPS:443 ALB
+listener and convert HTTP:80 to a permanent redirect when you supply an ACM
+certificate ARN.
+
+**1. Request an ACM certificate**
+
+Open the [AWS Certificate Manager console](https://console.aws.amazon.com/acm/)
+(or use the CLI) in the same region as your ALB and request a public
+certificate for your domain:
+
+```bash
+aws acm request-certificate \
+  --domain-name issues.example.com \
+  --validation-method DNS \
+  --region us-east-1
+```
+
+The command returns a `CertificateArn`. Copy it — you will need it in the next
+step.
+
+**2. Complete DNS validation**
+
+ACM generates CNAME records that must be added to your DNS zone before the
+certificate is issued. Look them up with:
+
+```bash
+aws acm describe-certificate \
+  --certificate-arn arn:aws:acm:us-east-1:123456789012:certificate/... \
+  --region us-east-1 \
+  --query 'Certificate.DomainValidationOptions[].ResourceRecord'
+```
+
+Add the CNAME records to your DNS provider and wait for the status to become
+`ISSUED` (typically a few minutes):
+
+```bash
+aws acm wait certificate-validated \
+  --certificate-arn arn:aws:acm:... \
+  --region us-east-1
+```
+
+**Route 53 — automated DNS validation**
+
+If your domain is hosted in Route 53 you can automate the validation step:
+
+```bash
+CERT_ARN=arn:aws:acm:us-east-1:123456789012:certificate/...
+HOSTED_ZONE_ID=Z1234567890ABC   # your Route 53 hosted zone
+
+# Retrieve the CNAME record from ACM and upsert it into Route 53.
+CNAME=$(aws acm describe-certificate --certificate-arn "$CERT_ARN" \
+  --region us-east-1 \
+  --query 'Certificate.DomainValidationOptions[0].ResourceRecord' \
+  --output json)
+NAME=$(echo "$CNAME" | jq -r '.Name')
+VALUE=$(echo "$CNAME" | jq -r '.Value')
+
+aws route53 change-resource-record-sets \
+  --hosted-zone-id "$HOSTED_ZONE_ID" \
+  --change-batch "{
+    \"Changes\": [{
+      \"Action\": \"UPSERT\",
+      \"ResourceRecordSet\": {
+        \"Name\": \"$NAME\",
+        \"Type\": \"CNAME\",
+        \"TTL\": 300,
+        \"ResourceRecords\": [{\"Value\": \"$VALUE\"}]
+      }
+    }]
+  }"
+
+aws acm wait certificate-validated \
+  --certificate-arn "$CERT_ARN" \
+  --region us-east-1
+echo "Certificate validated."
+```
+
+**3. Run preflight with the cert ARN**
+
+Add `ACM_CERT_ARN` to `.env` and re-run preflight:
+
+```bash
+echo "ACM_CERT_ARN=arn:aws:acm:us-east-1:123456789012:certificate/..." >> .env
+DB_PASSWORD=<password> bash scripts/preflight.sh
+```
+
+Preflight will:
+- Create an HTTPS:443 listener with your certificate and the
+  `ELBSecurityPolicy-TLS13-1-2-2021-06` security policy.
+- Convert the HTTP:80 listener to a permanent (301) redirect to HTTPS.
+- Route `/api/*` to the Go API on the HTTPS listener.
+
+Re-runs are idempotent — existing listeners are detected and updated, not
+duplicated.
+
+**4. Point your domain at the ALB**
+
+Create a DNS ALIAS (Route 53) or CNAME record pointing your domain to the ALB
+DNS name written to `.env` as `ALB_DNS`:
+
+```bash
+grep ALB_DNS .env
+# → ALB_DNS=exponential-alb-1234567890.us-east-1.elb.amazonaws.com
+```
+
+**5. Update app URLs**
+
+Set the public HTTPS origin in `.env` before deploying:
+
+```bash
+NEXT_PUBLIC_APP_URL=https://issues.example.com
+EXPONENTIAL_APP_URL=https://issues.example.com
+PUBLIC_BASE_URL=https://issues.example.com
+```
+
 ## Development Stack
 
 For hot-reload development, use the dev stack:
