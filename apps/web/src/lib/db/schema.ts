@@ -1,6 +1,7 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   boolean,
+  customType,
   index,
   integer,
   jsonb,
@@ -15,6 +16,12 @@ import {
 } from "drizzle-orm/pg-core";
 
 // ─── Enums ───────────────────────────────────────────────────────────
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 export const workflowStateCategory = pgEnum("workflow_state_category", [
   "triage",
@@ -229,6 +236,100 @@ export const teamNotificationIntegration = pgTable(
     uniqueIndex("team_notification_integration_team_provider_idx").on(
       t.teamId,
       t.provider,
+    ),
+  ],
+);
+
+export const providerCredential = pgTable(
+  "provider_credential",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceIntegrationId: uuid("workspace_integration_id")
+      .notNull()
+      .references(() => workspaceIntegration.id, { onDelete: "cascade" }),
+    provider: varchar("provider", { length: 64 }).notNull(),
+    secretRef: text("secret_ref"),
+    encryptedPayload: bytea("encrypted_payload"),
+    metadata: jsonb("metadata").notNull().default({}),
+    version: integer("version").notNull().default(1),
+    active: boolean("active").notNull().default(true),
+    rotatedAt: timestamp("rotated_at"),
+    revokedAt: timestamp("revoked_at"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("provider_credential_integration_idx").on(t.workspaceIntegrationId),
+    uniqueIndex("provider_credential_active_idx")
+      .on(t.workspaceIntegrationId)
+      .where(sql`${t.active}`),
+  ],
+);
+
+export const providerJob = pgTable(
+  "provider_job",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    workspaceIntegrationId: uuid("workspace_integration_id").references(
+      () => workspaceIntegration.id,
+      { onDelete: "set null" },
+    ),
+    provider: varchar("provider", { length: 64 }).notNull(),
+    kind: varchar("kind", { length: 64 }).notNull(),
+    status: varchar("status", { length: 32 }).notNull().default("queued"),
+    payload: jsonb("payload").notNull().default({}),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(5),
+    lastError: text("last_error"),
+    scheduledAt: timestamp("scheduled_at").notNull().defaultNow(),
+    nextRunAt: timestamp("next_run_at"),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("provider_job_workspace_idx").on(t.workspaceId, t.createdAt),
+    index("provider_job_integration_status_idx").on(
+      t.workspaceIntegrationId,
+      t.status,
+    ),
+    index("provider_job_next_run_idx").on(t.status, t.nextRunAt),
+  ],
+);
+
+export const providerEvent = pgTable(
+  "provider_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    workspaceIntegrationId: uuid("workspace_integration_id").references(
+      () => workspaceIntegration.id,
+      { onDelete: "set null" },
+    ),
+    provider: varchar("provider", { length: 64 }).notNull(),
+    jobId: uuid("job_id").references(() => providerJob.id, {
+      onDelete: "set null",
+    }),
+    eventType: varchar("event_type", { length: 64 }).notNull(),
+    severity: varchar("severity", { length: 16 }).notNull().default("info"),
+    message: text("message").notNull(),
+    payload: jsonb("payload").notNull().default({}),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("provider_event_workspace_idx").on(t.workspaceId, t.createdAt),
+    index("provider_event_integration_idx").on(
+      t.workspaceIntegrationId,
+      t.createdAt,
     ),
   ],
 );
@@ -1093,7 +1194,13 @@ export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
   authorizedApplicationGrants: many(authorizedApplicationGrant),
-  connectedWorkspaceIntegrations: many(workspaceIntegration),
+  connectedWorkspaceIntegrations: many(workspaceIntegration, {
+    relationName: "workspaceIntegrationConnectedBy",
+  }),
+  revokedWorkspaceIntegrations: many(workspaceIntegration, {
+    relationName: "workspaceIntegrationRevokedBy",
+  }),
+  createdProviderCredentials: many(providerCredential),
   memberships: many(member),
   workspaceInvitations: many(workspaceInvitation),
   teamMemberships: many(teamMember),
@@ -1128,10 +1235,19 @@ export const workspaceIntegrationRelations = relations(
       references: [workspace.id],
     }),
     connectedBy: one(user, {
+      relationName: "workspaceIntegrationConnectedBy",
       fields: [workspaceIntegration.connectedByUserId],
       references: [user.id],
     }),
+    revokedBy: one(user, {
+      relationName: "workspaceIntegrationRevokedBy",
+      fields: [workspaceIntegration.revokedByUserId],
+      references: [user.id],
+    }),
     teamNotificationIntegrations: many(teamNotificationIntegration),
+    providerCredentials: many(providerCredential),
+    providerJobs: many(providerJob),
+    providerEvents: many(providerEvent),
   }),
 );
 
@@ -1149,9 +1265,52 @@ export const teamNotificationIntegrationRelations = relations(
   }),
 );
 
+export const providerCredentialRelations = relations(
+  providerCredential,
+  ({ one }) => ({
+    workspaceIntegration: one(workspaceIntegration, {
+      fields: [providerCredential.workspaceIntegrationId],
+      references: [workspaceIntegration.id],
+    }),
+    createdBy: one(user, {
+      fields: [providerCredential.createdByUserId],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const providerJobRelations = relations(providerJob, ({ one, many }) => ({
+  workspace: one(workspace, {
+    fields: [providerJob.workspaceId],
+    references: [workspace.id],
+  }),
+  workspaceIntegration: one(workspaceIntegration, {
+    fields: [providerJob.workspaceIntegrationId],
+    references: [workspaceIntegration.id],
+  }),
+  providerEvents: many(providerEvent),
+}));
+
+export const providerEventRelations = relations(providerEvent, ({ one }) => ({
+  workspace: one(workspace, {
+    fields: [providerEvent.workspaceId],
+    references: [workspace.id],
+  }),
+  workspaceIntegration: one(workspaceIntegration, {
+    fields: [providerEvent.workspaceIntegrationId],
+    references: [workspaceIntegration.id],
+  }),
+  providerJob: one(providerJob, {
+    fields: [providerEvent.jobId],
+    references: [providerJob.id],
+  }),
+}));
+
 export const workspaceRelations = relations(workspace, ({ many }) => ({
   members: many(member),
   integrations: many(workspaceIntegration),
+  providerJobs: many(providerJob),
+  providerEvents: many(providerEvent),
   invitations: many(workspaceInvitation),
   teams: many(team),
   labels: many(label),
