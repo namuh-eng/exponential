@@ -96,7 +96,7 @@ export async function runCli(options: RunCliOptions = {}) {
   client = state.client;
 
   try {
-    if (readFlag(rawArgs, "version") || resource === "version") {
+    if (rawArgs[0] === "--version" || resource === "version") {
       writeStdout(`${resolveVersion(options.env)}\n`);
       return 0;
     }

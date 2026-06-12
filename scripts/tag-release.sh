@@ -52,8 +52,8 @@ if [[ "$CURRENT_BRANCH" != "main" ]]; then
   exit 1
 fi
 
-if ! git diff --quiet HEAD; then
-  echo "Error: working tree has uncommitted changes. Commit or stash them first." >&2
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "Error: working tree has uncommitted changes or untracked files. Commit, stash, or remove them first." >&2
   exit 1
 fi
 
