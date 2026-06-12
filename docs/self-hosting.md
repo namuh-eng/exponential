@@ -21,7 +21,7 @@ Secrets Manager wiring.
 - 4 GiB RAM minimum; 8 GiB is more comfortable while building Next.js and Go
   images.
 - Optional AWS or S3-compatible credentials for attachments.
-- Optional SES or Opensend credentials for production email.
+- Optional SMTP relay, SES, or Opensend credentials for production email.
 
 ## Quick Start
 
@@ -63,16 +63,49 @@ at `http://localhost:7015`.
 | Feature | Variables | Behavior when omitted |
 | --- | --- | --- |
 | Google sign-in | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | Google OAuth is unavailable. |
-| Magic-link email | `SENDER_EMAIL` with SES, or `SENDER_EMAIL` + `OPENSEND_API_KEY` for Opensend | Production magic-link email returns unavailable. |
+| Magic-link email (SMTP) | `SENDER_EMAIL`, `SMTP_HOST` (+ optional `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_TLS`) | Use this for any SMTP relay: Mailgun, Postmark, Gmail app password, your own mail server, or Mailhog in dev. |
+| Magic-link email (Opensend) | `SENDER_EMAIL`, `OPENSEND_API_KEY` (+ optional `OPENSEND_BASE_URL`) | — |
+| Magic-link email (SES) | `SENDER_EMAIL` with AWS credentials or instance/task role | — |
 | Attachments | `AWS_REGION`, `S3_BUCKET`, AWS credentials or instance/task role | Attachment endpoints return service unavailable. |
 | Slack integration | `AUTH_SLACK_ID`, `AUTH_SLACK_SECRET` | Slack installation is unavailable. |
 | Inbound email | `INBOUND_EMAIL_WEBHOOK_SECRET`, `EXPONENTIAL_INBOUND_DOMAIN` | Inbound email routes cannot be used. |
 | AI discussion summaries | `OPENAI_API_KEY`, `DISCUSSION_SUMMARY_PROVIDER=openai` | Summaries stay disabled/fallback-only. |
 | Stripe webhooks | `STRIPE_WEBHOOK_SIGNING_SECRET` in API runtime, or ECS secret ARN | Billing webhook events are rejected. |
 
-Email provider selection is automatic: `OPENSEND_API_KEY` selects Opensend,
-`SENDER_EMAIL` alone selects SES, and `EMAIL_PROVIDER=ses|opensend` can force a
-provider.
+If none of the email providers are configured, production magic-link sign-in
+returns 503 (unavailable). There is no fallback sender.
+
+### Email provider selection
+
+The provider is chosen in this order (first match wins):
+
+1. `EMAIL_PROVIDER=smtp|ses|opensend` — explicit override.
+2. `SMTP_HOST` set — generic SMTP relay (recommended for self-hosters).
+3. `OPENSEND_API_KEY` set — Opensend managed relay.
+4. `SENDER_EMAIL` set without the above — AWS SES.
+
+**SMTP quick-start** (works with any relay; Mailhog in dev):
+
+```bash
+SENDER_EMAIL=no-reply@example.com
+SMTP_HOST=smtp.mailgun.org
+SMTP_PORT=587
+SMTP_USERNAME=postmaster@mg.example.com
+SMTP_PASSWORD=your-mailgun-smtp-password
+```
+
+For implicit TLS on port 465, also set `SMTP_TLS=true`.
+
+**Mailhog in the dev stack** — the dev Compose file already runs Mailhog on
+port 1025. Point the API at it with:
+
+```bash
+SENDER_EMAIL=no-reply@example.com
+SMTP_HOST=mailhog
+SMTP_PORT=1025
+```
+
+No `SMTP_USERNAME`, `SMTP_PASSWORD`, or `SMTP_TLS` needed for Mailhog.
 
 ## Ports and Bind Addresses
 
@@ -220,7 +253,8 @@ is not the recommended public self-hosting path.
 
 - Attachment storage is S3-oriented; local disk attachment storage is not
   implemented.
-- Production email requires SES or Opensend configuration.
+- Production magic-link sign-in requires at least one email provider (SMTP,
+  Opensend, or SES). With no provider configured it returns 503.
 - Compose builds local images from source. If you publish your own registry
   images, keep the split `web`, `api`, and migration tasks.
 - ELv2 permits self-hosting and internal modification, but it does not permit

@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/smtp"
 	"strings"
 	"testing"
 
@@ -215,9 +217,306 @@ func TestSESSendWrapsError(t *testing.T) {
 	}
 }
 
+func TestNewAutoSelectsSMTPWhenHostPresent(t *testing.T) {
+	resetEnv(t)
+	t.Setenv("SENDER_EMAIL", "no-reply@example.com")
+	t.Setenv("SMTP_HOST", "localhost")
+
+	sender, err := New(context.Background())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, ok := sender.(*smtpSender); !ok {
+		t.Fatalf("expected *smtpSender, got %T", sender)
+	}
+}
+
+func TestNewSMTPPrecedesOpensendInAutoSelect(t *testing.T) {
+	// When SMTP_HOST is set alongside OPENSEND_API_KEY, SMTP should win
+	// in auto-selection (SMTP is checked first).
+	resetEnv(t)
+	t.Setenv("SENDER_EMAIL", "no-reply@example.com")
+	t.Setenv("SMTP_HOST", "mail.example.com")
+	t.Setenv("OPENSEND_API_KEY", "os_test")
+
+	sender, err := New(context.Background())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, ok := sender.(*smtpSender); !ok {
+		t.Fatalf("expected *smtpSender, got %T", sender)
+	}
+}
+
+func TestNewSMTPExplicitProviderOverride(t *testing.T) {
+	resetEnv(t)
+	t.Setenv("SENDER_EMAIL", "no-reply@example.com")
+	t.Setenv("SMTP_HOST", "mail.example.com")
+	t.Setenv("OPENSEND_API_KEY", "os_test")
+	t.Setenv("EMAIL_PROVIDER", "opensend")
+
+	sender, err := New(context.Background())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, ok := sender.(*opensendSender); !ok {
+		t.Fatalf("expected *opensendSender when EMAIL_PROVIDER=opensend, got %T", sender)
+	}
+}
+
+func TestNewSMTPDisabledWhenFromMissing(t *testing.T) {
+	resetEnv(t)
+	t.Setenv("SMTP_HOST", "mail.example.com")
+	// SENDER_EMAIL intentionally omitted
+
+	sender, err := New(context.Background())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if sender.Enabled() {
+		t.Fatalf("expected Disabled when SENDER_EMAIL is empty, got %T", sender)
+	}
+}
+
+func TestNewSMTPInvalidPort(t *testing.T) {
+	resetEnv(t)
+	t.Setenv("SENDER_EMAIL", "no-reply@example.com")
+	t.Setenv("SMTP_HOST", "mail.example.com")
+	t.Setenv("EMAIL_PROVIDER", "smtp")
+	t.Setenv("SMTP_PORT", "not-a-number")
+
+	_, err := New(context.Background())
+	if err == nil {
+		t.Fatal("expected error for invalid SMTP_PORT")
+	}
+	if !strings.Contains(err.Error(), "SMTP_PORT") {
+		t.Errorf("error should mention SMTP_PORT, got: %v", err)
+	}
+}
+
+func TestNewSMTPDefaultPort(t *testing.T) {
+	resetEnv(t)
+	t.Setenv("SENDER_EMAIL", "no-reply@example.com")
+	t.Setenv("SMTP_HOST", "mail.example.com")
+	t.Setenv("EMAIL_PROVIDER", "smtp")
+
+	sender, err := New(context.Background())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	s, ok := sender.(*smtpSender)
+	if !ok {
+		t.Fatalf("expected *smtpSender, got %T", sender)
+	}
+	if s.port != 587 {
+		t.Errorf("default port = %d, want 587", s.port)
+	}
+}
+
+func TestNewSMTPImplicitTLSFlag(t *testing.T) {
+	for _, val := range []string{"true", "1", "yes"} {
+		t.Run("SMTP_TLS="+val, func(t *testing.T) {
+			resetEnv(t)
+			t.Setenv("SENDER_EMAIL", "no-reply@example.com")
+			t.Setenv("SMTP_HOST", "mail.example.com")
+			t.Setenv("EMAIL_PROVIDER", "smtp")
+			t.Setenv("SMTP_TLS", val)
+
+			sender, err := New(context.Background())
+			if err != nil {
+				t.Fatalf("New: %v", err)
+			}
+			s, ok := sender.(*smtpSender)
+			if !ok {
+				t.Fatalf("expected *smtpSender, got %T", sender)
+			}
+			if !s.implicitTLS {
+				t.Errorf("SMTP_TLS=%q: expected implicitTLS=true", val)
+			}
+		})
+	}
+}
+
+// TestSMTPSendAgainstMailhog spins up a real TCP listener that behaves like a
+// minimal SMTP server (no AUTH, no STARTTLS — identical to Mailhog's dev
+// profile) and verifies that smtpSender can deliver a full message through it.
+func TestSMTPSendAgainstMailhog(t *testing.T) {
+	// Minimal SMTP server: greets, accepts EHLO, accepts MAIL/RCPT/DATA, returns 250.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { ln.Close() })
+
+	type delivery struct {
+		from    string
+		to      string
+		subject string
+		body    string
+	}
+	delivered := make(chan delivery, 1)
+
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		var d delivery
+		// Use net/smtp server protocol manually via bufio-style line reading.
+		buf := make([]byte, 4096)
+
+		send := func(line string) {
+			conn.Write([]byte(line + "\r\n"))
+		}
+
+		send("220 mailhog.local ESMTP")
+
+		for {
+			n, err := conn.Read(buf)
+			if err != nil || n == 0 {
+				break
+			}
+			line := strings.TrimRight(string(buf[:n]), "\r\n")
+			upper := strings.ToUpper(line)
+
+			switch {
+			case strings.HasPrefix(upper, "EHLO"), strings.HasPrefix(upper, "HELO"):
+				send("250-mailhog.local Hello")
+				send("250 OK")
+			case strings.HasPrefix(upper, "MAIL FROM:"):
+				d.from = line
+				send("250 OK")
+			case strings.HasPrefix(upper, "RCPT TO:"):
+				d.to = line
+				send("250 OK")
+			case upper == "DATA":
+				send("354 End with <CRLF>.<CRLF>")
+				// Read until ".\r\n"
+				var bodyBuf strings.Builder
+				smallBuf := make([]byte, 1)
+				var prev3 [3]byte
+				for {
+					nn, rerr := conn.Read(smallBuf)
+					if rerr != nil || nn == 0 {
+						break
+					}
+					bodyBuf.WriteByte(smallBuf[0])
+					prev3[0], prev3[1], prev3[2] = prev3[1], prev3[2], smallBuf[0]
+					if prev3[0] == '\r' && prev3[1] == '\n' && prev3[2] == '.' {
+						// consume trailing \r\n after the dot
+						conn.Read(make([]byte, 2))
+						break
+					}
+				}
+				d.body = bodyBuf.String()
+				// Extract subject from headers
+				for _, hdrLine := range strings.Split(d.body, "\n") {
+					if strings.HasPrefix(strings.ToLower(hdrLine), "subject:") {
+						d.subject = strings.TrimSpace(hdrLine[8:])
+					}
+				}
+				send("250 OK")
+			case upper == "QUIT":
+				send("221 Bye")
+				delivered <- d
+				return
+			default:
+				send("500 unrecognised")
+			}
+		}
+	}()
+
+	host, portStr, _ := net.SplitHostPort(ln.Addr().String())
+	port, _ := net.LookupPort("tcp", portStr)
+
+	sender := &smtpSender{
+		from:        "no-reply@example.com",
+		host:        host,
+		port:        port,
+		implicitTLS: false,
+	}
+
+	err = sender.Send(context.Background(), Message{
+		To:      "user@example.com",
+		Subject: "Magic link test",
+		HTML:    "<p>Click here</p>",
+		Text:    "Click here",
+	})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	select {
+	case d := <-delivered:
+		if !strings.Contains(d.from, "no-reply@example.com") {
+			t.Errorf("MAIL FROM = %q, want no-reply@example.com", d.from)
+		}
+		if !strings.Contains(d.to, "user@example.com") {
+			t.Errorf("RCPT TO = %q, want user@example.com", d.to)
+		}
+	default:
+		t.Fatal("no delivery received")
+	}
+}
+
+// TestSMTPBuildRawMessage verifies that the message builder includes expected
+// headers and both body parts when Text is non-empty.
+func TestSMTPBuildRawMessage(t *testing.T) {
+	s := &smtpSender{from: "from@example.com"}
+	raw := s.buildRawMessage(Message{
+		To:      "to@example.com",
+		Subject: "Hello",
+		HTML:    "<p>Hi</p>",
+		Text:    "Hi",
+	})
+	body := string(raw)
+
+	for _, want := range []string{
+		"From: from@example.com",
+		"To: to@example.com",
+		"MIME-Version: 1.0",
+		"multipart/alternative",
+		"text/plain",
+		"text/html",
+		"Hi",
+		"<p>Hi</p>",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("raw message missing %q", want)
+		}
+	}
+}
+
+// TestSMTPBuildRawMessageHTMLOnly checks the single-part path when Text is empty.
+func TestSMTPBuildRawMessageHTMLOnly(t *testing.T) {
+	s := &smtpSender{from: "from@example.com"}
+	raw := s.buildRawMessage(Message{
+		To:      "to@example.com",
+		Subject: "Hello",
+		HTML:    "<p>Hi</p>",
+	})
+	body := string(raw)
+
+	if strings.Contains(body, "multipart") {
+		t.Errorf("single-part message should not contain multipart boundary, got:\n%s", body)
+	}
+	if !strings.Contains(body, "text/html") {
+		t.Errorf("missing text/html content-type")
+	}
+}
+
+// Compile-time check: smtpSender must satisfy the Sender interface.
+var _ smtp.Auth = nil // ensure net/smtp is used (keeps import live)
+var _ Sender = (*smtpSender)(nil)
+
 func resetEnv(t *testing.T) {
 	t.Helper()
-	for _, key := range []string{"SENDER_EMAIL", "OPENSEND_API_KEY", "OPENSEND_BASE_URL", "EMAIL_PROVIDER"} {
+	for _, key := range []string{
+		"SENDER_EMAIL", "OPENSEND_API_KEY", "OPENSEND_BASE_URL", "EMAIL_PROVIDER",
+		"SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_TLS",
+	} {
 		t.Setenv(key, "")
 	}
 }
