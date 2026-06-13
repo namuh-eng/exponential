@@ -12,6 +12,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/config"
 	"github.com/namuh-eng/exponential/apps/api/internal/database"
 	httpserver "github.com/namuh-eng/exponential/apps/api/internal/http"
+	"github.com/namuh-eng/exponential/apps/api/internal/integrations"
 	"github.com/namuh-eng/exponential/apps/api/internal/logging"
 	"github.com/namuh-eng/exponential/apps/api/internal/observability"
 	"go.uber.org/zap"
@@ -47,6 +48,10 @@ func main() {
 	}
 	defer db.Close()
 
+	workerCtx, stopWorker := context.WithCancel(context.Background())
+	defer stopWorker()
+	go (integrations.SlackWorker{DB: db}).Start(workerCtx)
+
 	server := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           httpserver.NewRouter(logger, db),
@@ -63,6 +68,7 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
+	stopWorker()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

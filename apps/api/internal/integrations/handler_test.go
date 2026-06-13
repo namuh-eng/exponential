@@ -1,7 +1,13 @@
 package integrations
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -75,6 +81,90 @@ func TestSlackOAuthConfig(t *testing.T) {
 	if !ok || clientID != "slack-id" || clientSecret != "slack-secret" {
 		t.Fatalf("config = %q %q %v", clientID, clientSecret, ok)
 	}
+}
+
+func TestSlackSignatureVerification(t *testing.T) {
+	now := time.Date(2026, 6, 13, 12, 0, 0, 0, time.UTC)
+	body := []byte(`{"team_id":"T123","event":{"type":"message"}}`)
+	timestamp := strconv.FormatInt(now.Unix(), 10)
+	signature := slackTestSignature("secret", timestamp, body)
+
+	if !verifySlackSignature("secret", timestamp, signature, body, now) {
+		t.Fatal("valid Slack signature was rejected")
+	}
+	if verifySlackSignature("secret", timestamp, signature, []byte(`{"team_id":"T999"}`), now) {
+		t.Fatal("tampered Slack body was accepted")
+	}
+	stale := strconv.FormatInt(now.Add(-10*time.Minute).Unix(), 10)
+	if verifySlackSignature("secret", stale, slackTestSignature("secret", stale, body), body, now) {
+		t.Fatal("stale Slack timestamp was accepted")
+	}
+}
+
+func TestSlackTeamID(t *testing.T) {
+	if got := slackTeamID(map[string]any{"team_id": "T123"}); got != "T123" {
+		t.Fatalf("top-level team id = %q", got)
+	}
+	if got := slackTeamID(map[string]any{"team": map[string]any{"id": "T456"}}); got != "T456" {
+		t.Fatalf("nested team id = %q", got)
+	}
+}
+
+func TestExchangeSlackOAuthUsesConfiguredEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/oauth.v2.access" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		if r.Form.Get("client_secret") != "client-secret" || r.Form.Get("code") != "code-123" {
+			t.Fatalf("form = %#v", r.Form)
+		}
+		_, _ = w.Write([]byte(`{"ok":true,"access_token":"xoxb-token","scope":"channels:read,chat:write","bot_user_id":"Ubot","team":{"id":"T123","name":"Acme"},"authed_user":{"id":"Uinstaller"}}`))
+	}))
+	defer server.Close()
+	t.Setenv("SLACK_API_BASE_URL", server.URL)
+
+	got, err := exchangeSlackOAuth(t.Context(), server.Client(), "client-secret", "code-123", "https://app.example/callback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AccessToken != "xoxb-token" || got.Team.ID != "T123" || got.BotUserID != "Ubot" {
+		t.Fatalf("oauth response = %#v", got)
+	}
+}
+
+func TestPostSlackMessage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/chat.postMessage" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer xoxb-token" {
+			t.Fatalf("authorization = %q", r.Header.Get("Authorization"))
+		}
+		var body slackPostMessageRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Channel != "C123" || body.Text != "Hello" {
+			t.Fatalf("body = %#v", body)
+		}
+		_, _ = w.Write([]byte(`{"ok":true,"ts":"123.456"}`))
+	}))
+	defer server.Close()
+	t.Setenv("SLACK_API_BASE_URL", server.URL)
+
+	if err := postSlackMessage(t.Context(), server.Client(), "xoxb-token", slackPostMessageRequest{Channel: "C123", Text: "Hello"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func slackTestSignature(secret string, timestamp string, body []byte) string {
+	base := "v0:" + timestamp + ":" + string(body)
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(base))
+	return "v0=" + hex.EncodeToString(mac.Sum(nil))
 }
 
 func TestProviderJobFailureStatus(t *testing.T) {

@@ -2,12 +2,20 @@ package integrations
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -77,6 +85,21 @@ type slackConnectResponse struct {
 	AuthorizationURL string `json:"authorizationUrl"`
 	State            string `json:"state"`
 	WorkspaceSlug    string `json:"workspaceSlug"`
+}
+
+type slackOAuthResponse struct {
+	OK          bool   `json:"ok"`
+	Error       string `json:"error"`
+	AccessToken string `json:"access_token"`
+	Scope       string `json:"scope"`
+	BotUserID   string `json:"bot_user_id"`
+	Team        struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"team"`
+	AuthedUser struct {
+		ID string `json:"id"`
+	} `json:"authed_user"`
 }
 
 var catalog = []CatalogItem{
@@ -159,8 +182,91 @@ func (h Handler) SlackConnect(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create Slack authorization failed", err.Error())
 		return
 	}
+	if err := h.saveSlackOAuthState(r.Context(), p.WorkspaceID, p.UserID, state); err != nil {
+		problem.Write(w, 500, "Create Slack authorization failed", err.Error())
+		return
+	}
 	authorizationURL := slackAuthorizationURL(clientID, configuredAppURL(), state)
 	problem.JSON(w, 200, slackConnectResponse{AuthorizationURL: authorizationURL, State: state, WorkspaceSlug: workspaceSlug})
+}
+
+func (h Handler) SlackOAuthCallback(w http.ResponseWriter, r *http.Request) {
+	code := strings.TrimSpace(r.URL.Query().Get("code"))
+	state := strings.TrimSpace(r.URL.Query().Get("state"))
+	if slackError := strings.TrimSpace(r.URL.Query().Get("error")); slackError != "" {
+		http.Redirect(w, r, slackRedirectURL("error", slackError), http.StatusFound)
+		return
+	}
+	if code == "" || state == "" {
+		problem.Write(w, http.StatusBadRequest, "Slack OAuth callback is missing code or state", "")
+		return
+	}
+	_, clientSecret, ok := slackOAuthConfig()
+	if !ok {
+		problem.Write(w, http.StatusServiceUnavailable, "Slack OAuth is not configured", "")
+		return
+	}
+	install, err := h.findSlackOAuthInstall(r.Context(), state)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, http.StatusBadRequest, "Invalid Slack OAuth state", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Slack OAuth callback failed", err.Error())
+		return
+	}
+	token, err := exchangeSlackOAuth(r.Context(), http.DefaultClient, clientSecret, code, slackRedirectURI(configuredAppURL()))
+	if err != nil {
+		_ = h.recordSlackInstallFailure(r.Context(), install.ID, install.WorkspaceID, err.Error())
+		problem.Write(w, http.StatusBadGateway, "Slack OAuth exchange failed", err.Error())
+		return
+	}
+	if err := h.completeSlackInstall(r.Context(), install, token); err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Slack OAuth callback failed", err.Error())
+		return
+	}
+	http.Redirect(w, r, slackRedirectURL("connected", ""), http.StatusFound)
+}
+
+func (h Handler) SlackEvents(w http.ResponseWriter, r *http.Request) {
+	signingSecret := strings.TrimSpace(os.Getenv("SLACK_SIGNING_SECRET"))
+	if signingSecret == "" {
+		problem.Write(w, http.StatusServiceUnavailable, "Slack signing secret is not configured", "")
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		problem.Write(w, http.StatusBadRequest, "Slack event body could not be read", err.Error())
+		return
+	}
+	if !verifySlackSignature(signingSecret, r.Header.Get("X-Slack-Request-Timestamp"), r.Header.Get("X-Slack-Signature"), body, time.Now()) {
+		problem.Write(w, http.StatusUnauthorized, "Invalid Slack signature", "")
+		return
+	}
+	values, _ := url.ParseQuery(string(body))
+	payload := body
+	if formPayload := strings.TrimSpace(values.Get("payload")); formPayload != "" {
+		payload = []byte(formPayload)
+	}
+	var event map[string]any
+	if err := json.Unmarshal(payload, &event); err != nil {
+		problem.Write(w, http.StatusBadRequest, "Slack event payload is invalid", err.Error())
+		return
+	}
+	if challenge, _ := event["challenge"].(string); challenge != "" && event["type"] == "url_verification" {
+		problem.JSON(w, http.StatusOK, map[string]string{"challenge": challenge})
+		return
+	}
+	teamID := slackTeamID(event)
+	if teamID == "" {
+		problem.Write(w, http.StatusBadRequest, "Slack event is missing team_id", "")
+		return
+	}
+	if err := h.queueSlackInboundEvent(r.Context(), teamID, event); err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Slack event could not be queued", err.Error())
+		return
+	}
+	problem.JSON(w, http.StatusAccepted, map[string]bool{"ok": true})
 }
 
 func (h Handler) SlackDisconnect(w http.ResponseWriter, r *http.Request) {
@@ -347,7 +453,7 @@ func (h Handler) revokeProvider(ctx context.Context, workspaceID string, provide
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `update provider_credential set active=false, revoked_at=coalesce(revoked_at, now()), updated_at=now() where workspace_integration_id=$1::uuid and active`, integrationID); err != nil {
+	if _, err := tx.Exec(ctx, `update provider_credential set active=false, encrypted_payload=null, revoked_at=coalesce(revoked_at, now()), updated_at=now() where workspace_integration_id=$1::uuid and active`, integrationID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `update provider_job set status='canceled', completed_at=coalesce(completed_at, now()), updated_at=now() where workspace_integration_id=$1::uuid and status in ('queued','running','failed')`, integrationID); err != nil {
@@ -366,6 +472,176 @@ func (h Handler) workspaceSlug(ctx context.Context, workspaceID string) (string,
 	var slug string
 	err := h.DB.QueryRow(ctx, `select url_slug from workspace where id=$1::uuid`, workspaceID).Scan(&slug)
 	return slug, err
+}
+
+type slackOAuthInstall struct {
+	ID          string
+	WorkspaceID string
+	UserID      string
+	Metadata    map[string]any
+}
+
+func (h Handler) saveSlackOAuthState(ctx context.Context, workspaceID string, userID string, state string) error {
+	now := time.Now().UTC()
+	metadata := map[string]any{
+		"oauthStateHash":      hashSlackSecret(state),
+		"oauthStateExpiresAt": now.Add(10 * time.Minute).Format(time.RFC3339Nano),
+		"oauthStartedAt":      now.Format(time.RFC3339Nano),
+	}
+	raw, err := json.Marshal(metadata)
+	if err != nil {
+		return err
+	}
+	_, err = h.DB.Exec(ctx, `
+		insert into workspace_integration (workspace_id, provider, status, metadata, connected_by_user_id, connected_at, credentials_revoked_at, revoked_at, revoked_by_user_id, updated_at)
+		values ($1::uuid, 'slack', 'installing', $2::jsonb, $3, null, null, null, null, now())
+		on conflict (workspace_id, provider) do update set
+			status='installing',
+			metadata=excluded.metadata,
+			connected_by_user_id=excluded.connected_by_user_id,
+			credentials_revoked_at=null,
+			revoked_at=null,
+			revoked_by_user_id=null,
+			updated_at=now()`, workspaceID, raw, userID)
+	return err
+}
+
+func (h Handler) findSlackOAuthInstall(ctx context.Context, state string) (slackOAuthInstall, error) {
+	rows, err := h.DB.Query(ctx, `
+		select id::text, workspace_id::text, coalesce(connected_by_user_id,''), coalesce(metadata,'{}'::jsonb)
+		from workspace_integration
+		where provider='slack' and status='installing'`)
+	if err != nil {
+		return slackOAuthInstall{}, err
+	}
+	defer rows.Close()
+	stateHash := hashSlackSecret(state)
+	for rows.Next() {
+		var install slackOAuthInstall
+		var metadataRaw []byte
+		if err := rows.Scan(&install.ID, &install.WorkspaceID, &install.UserID, &metadataRaw); err != nil {
+			return slackOAuthInstall{}, err
+		}
+		install.Metadata = map[string]any{}
+		_ = json.Unmarshal(metadataRaw, &install.Metadata)
+		if stringValue(install.Metadata["oauthStateHash"]) != stateHash {
+			continue
+		}
+		expiresAt, _ := time.Parse(time.RFC3339Nano, stringValue(install.Metadata["oauthStateExpiresAt"]))
+		if expiresAt.IsZero() || expiresAt.Before(time.Now().UTC()) {
+			return slackOAuthInstall{}, pgx.ErrNoRows
+		}
+		return install, nil
+	}
+	if err := rows.Err(); err != nil {
+		return slackOAuthInstall{}, err
+	}
+	return slackOAuthInstall{}, pgx.ErrNoRows
+}
+
+func (h Handler) completeSlackInstall(ctx context.Context, install slackOAuthInstall, token slackOAuthResponse) error {
+	if token.AccessToken == "" || token.Team.ID == "" || token.BotUserID == "" {
+		return fmt.Errorf("Slack OAuth response did not include bot token, team ID, and bot user ID")
+	}
+	tx, err := h.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+	now := time.Now().UTC()
+	scopes := parseSlackScopes(token.Scope)
+	metadata := map[string]any{
+		"teamId":      token.Team.ID,
+		"teamName":    token.Team.Name,
+		"botUserId":   token.BotUserID,
+		"scopes":      scopes,
+		"installedBy": install.UserID,
+		"authedUser":  token.AuthedUser.ID,
+	}
+	metadataRaw, err := json.Marshal(metadata)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		update workspace_integration
+		set status='connected',
+			external_id=$2,
+			display_name=$3,
+			metadata=$4::jsonb,
+			connected_by_user_id=$5,
+			connected_at=coalesce(connected_at, $6),
+			last_event_at=$6,
+			last_success_at=$6,
+			last_failure_at=null,
+			last_failure_message=null,
+			token_expires_at=null,
+			credentials_revoked_at=null,
+			revoked_at=null,
+			revoked_by_user_id=null,
+			updated_at=$6
+		where id=$1::uuid`, install.ID, token.Team.ID, token.Team.Name, metadataRaw, install.UserID, now); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `update provider_credential set active=false, revoked_at=coalesce(revoked_at, $2), updated_at=$2 where workspace_integration_id=$1::uuid and active`, install.ID, now); err != nil {
+		return err
+	}
+	credential := map[string]any{
+		"botToken":  token.AccessToken,
+		"botUserId": token.BotUserID,
+		"teamId":    token.Team.ID,
+		"scopes":    scopes,
+	}
+	credentialRaw, err := json.Marshal(credential)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into provider_credential (workspace_integration_id, provider, encrypted_payload, metadata, created_by_user_id, created_at, updated_at)
+		values ($1::uuid, 'slack', $2, $3::jsonb, $4, $5, $5)`, install.ID, credentialRaw, metadataRaw, install.UserID, now); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into provider_event (workspace_id, workspace_integration_id, provider, event_type, severity, message, payload, created_at)
+		values ($1::uuid, $2::uuid, 'slack', 'oauth_connected', 'info', 'Slack workspace connected.', $3::jsonb, $4)`, install.WorkspaceID, install.ID, metadataRaw, now); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (h Handler) recordSlackInstallFailure(ctx context.Context, integrationID string, workspaceID string, message string) error {
+	_, err := h.DB.Exec(ctx, `
+		update workspace_integration
+		set status='error', last_failure_at=now(), last_failure_message=$2, updated_at=now()
+		where id=$1::uuid`, integrationID, message)
+	if err != nil {
+		return err
+	}
+	_, err = h.DB.Exec(ctx, `
+		insert into provider_event (workspace_id, workspace_integration_id, provider, event_type, severity, message, payload)
+		values ($1::uuid, $2::uuid, 'slack', 'oauth_failed', 'error', $3, '{}'::jsonb)`, workspaceID, integrationID, message)
+	return err
+}
+
+func (h Handler) queueSlackInboundEvent(ctx context.Context, teamID string, event map[string]any) error {
+	var workspaceID, integrationID string
+	err := h.DB.QueryRow(ctx, `
+		select workspace_id::text, id::text
+		from workspace_integration
+		where provider='slack' and external_id=$1 and status in ('connected','degraded')
+		limit 1`, teamID).Scan(&workspaceID, &integrationID)
+	if err != nil {
+		return err
+	}
+	payloadRaw, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	_, err = h.DB.Exec(ctx, `
+		insert into provider_job (workspace_id, workspace_integration_id, provider, kind, status, payload, scheduled_at, updated_at)
+		values ($1::uuid, $2::uuid, 'slack', 'webhook_ingestion', 'queued', $3::jsonb, now(), now())`, workspaceID, integrationID, payloadRaw)
+	return err
 }
 
 func slackOAuthConfig() (clientID string, clientSecret string, ok bool) {
@@ -392,12 +668,133 @@ func configuredAppURL() string {
 	return "http://localhost:7015"
 }
 
+func slackRedirectURI(appURL string) string {
+	return strings.TrimRight(appURL, "/") + "/api/integrations/slack/oauth/callback"
+}
+
 func slackAuthorizationURL(clientID, appURL, state string) string {
 	values := url.Values{}
 	values.Set("client_id", clientID)
 	values.Set("scope", "channels:read,chat:write,commands")
 	values.Set("user_scope", "")
-	values.Set("redirect_uri", strings.TrimRight(appURL, "/")+"/api/integrations/slack/oauth/callback")
+	values.Set("redirect_uri", slackRedirectURI(appURL))
 	values.Set("state", state)
 	return "https://slack.com/oauth/v2/authorize?" + values.Encode()
+}
+
+func slackRedirectURL(status string, message string) string {
+	values := url.Values{}
+	values.Set("slack", status)
+	if strings.TrimSpace(message) != "" {
+		values.Set("message", message)
+	}
+	return strings.TrimRight(configuredAppURL(), "/") + "/settings/integrations?" + values.Encode()
+}
+
+func slackAPIBaseURL() string {
+	if v := strings.TrimSpace(os.Getenv("SLACK_API_BASE_URL")); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	return "https://slack.com/api"
+}
+
+func exchangeSlackOAuth(ctx context.Context, client *http.Client, clientSecret string, code string, redirectURI string) (slackOAuthResponse, error) {
+	values := url.Values{}
+	values.Set("client_secret", clientSecret)
+	values.Set("code", code)
+	values.Set("redirect_uri", redirectURI)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, slackAPIBaseURL()+"/oauth.v2.access", strings.NewReader(values.Encode()))
+	if err != nil {
+		return slackOAuthResponse{}, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := client.Do(req)
+	if err != nil {
+		return slackOAuthResponse{}, err
+	}
+	defer resp.Body.Close()
+	var token slackOAuthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&token); err != nil {
+		return slackOAuthResponse{}, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return slackOAuthResponse{}, fmt.Errorf("Slack OAuth returned HTTP %d", resp.StatusCode)
+	}
+	if !token.OK {
+		if token.Error == "" {
+			token.Error = "unknown_error"
+		}
+		return slackOAuthResponse{}, fmt.Errorf("Slack OAuth rejected installation: %s", token.Error)
+	}
+	return token, nil
+}
+
+func verifySlackSignature(signingSecret string, timestamp string, signature string, body []byte, now time.Time) bool {
+	if signingSecret == "" || timestamp == "" || signature == "" {
+		return false
+	}
+	unixSeconds, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil {
+		return false
+	}
+	requestTime := time.Unix(unixSeconds, 0)
+	if now.Sub(requestTime) > 5*time.Minute || requestTime.Sub(now) > 5*time.Minute {
+		return false
+	}
+	base := "v0:" + timestamp + ":" + string(body)
+	mac := hmac.New(sha256.New, []byte(signingSecret))
+	_, _ = mac.Write([]byte(base))
+	expected := "v0=" + hex.EncodeToString(mac.Sum(nil))
+	return subtle.ConstantTimeCompare([]byte(expected), []byte(signature)) == 1
+}
+
+func hashSlackSecret(secret string) string {
+	sum := sha256.Sum256([]byte(secret))
+	return hex.EncodeToString(sum[:])
+}
+
+func parseSlackScopes(scope string) []string {
+	parts := strings.Split(scope, ",")
+	out := []string{}
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+func slackTeamID(event map[string]any) string {
+	if teamID := stringValue(event["team_id"]); teamID != "" {
+		return teamID
+	}
+	if team := recordValue(event["team"]); team != nil {
+		if teamID := stringValue(team["id"]); teamID != "" {
+			return teamID
+		}
+	}
+	return ""
+}
+
+func recordValue(value any) map[string]any {
+	record, ok := value.(map[string]any)
+	if !ok {
+		return nil
+	}
+	return record
+}
+
+func stringValue(value any) string {
+	if value == nil {
+		return ""
+	}
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case fmt.Stringer:
+		return typed.String()
+	default:
+		return fmt.Sprintf("%v", typed)
+	}
 }
