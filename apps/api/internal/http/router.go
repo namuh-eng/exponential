@@ -91,6 +91,7 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender email.Sender, logger *zap.Logger) {
 	authMiddleware := auth.Middleware{DB: db}
 	authProvidersHandler := authproviders.Handler{DB: db, Email: emailSender}
+	integrationsHandler := integrations.Handler{DB: db}
 	stripeWebhookHandler := billing.NewStripeWebhookHandler(db, logger)
 	commentsHandler := comments.Handler{DB: db}
 	documentsHandler := documents.Handler{DB: db}
@@ -102,6 +103,12 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 		v1.Group(func(publicAuth chi.Router) {
 			publicAuth.Use(ratelimit.PublicMiddleware())
 			publicAuth.Mount("/auth", authProvidersHandler.Routes())
+		})
+		v1.Group(func(publicProvider chi.Router) {
+			publicProvider.Use(ratelimit.PublicMiddleware())
+			publicProvider.Get("/integrations/slack/oauth/callback", integrationsHandler.SlackOAuthCallback)
+			publicProvider.Post("/integrations/slack/events", integrationsHandler.SlackEvents)
+			publicProvider.Post("/integrations/slack/interactivity", integrationsHandler.SlackEvents)
 		})
 		v1.Mount("/inbound", inbound.Handler{DB: db}.Routes())
 		v1.Post("/oauth/token", authProvidersHandler.ExchangeOAuthToken)
@@ -127,7 +134,7 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 			protected.Mount("/document-templates", documentsHandler.TemplateRoutes())
 			protected.Delete("/comments/{id}", commentsHandler.Delete)
 			protected.Post("/comments/{id}/reactions", commentsHandler.ToggleCommentReaction)
-			protected.Mount("/integrations", integrations.Handler{DB: db}.Routes())
+			protected.Mount("/integrations", integrationsHandler.Routes())
 			protected.Mount("/initiatives", initiatives.Handler{DB: db}.Routes())
 			protected.Mount("/issue-templates", issuetemplates.Handler{DB: db}.Routes())
 			protected.Mount("/issues", issues.Handler{DB: db}.Routes())
