@@ -284,8 +284,10 @@ enable replication; keep it until the ECS services have been redeployed and the
 new Redis endpoint has passed smoke checks.
 
 Changing `DATABASE_URL` or `REDIS_URL` in `.env` is not enough for running ECS
-tasks. Re-run `bash scripts/prepare-ecs-deploy-env.sh` so Secrets Manager is
-updated, then deploy with `RUN_PROD_SMOKE=true scripts/deploy-ecs.sh`.
+tasks. When an ARN such as `DATABASE_URL_SECRET_ARN` or `REDIS_URL_SECRET_ARN`
+already exists, re-run `SYNC_DEPLOY_SECRET_VALUES=true bash scripts/prepare-ecs-deploy-env.sh`
+so Secrets Manager receives the new endpoint value, then deploy with
+`RUN_PROD_SMOKE=true scripts/deploy-ecs.sh`.
 
 ### RDS point-in-time restore runbook
 
