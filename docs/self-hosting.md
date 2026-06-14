@@ -115,6 +115,7 @@ After the stack is up:
 ```bash
 curl http://localhost:7015/
 curl http://localhost:7016/healthz
+curl http://localhost:7016/metrics -H "X-Metrics-Token: $EXPONENTIAL_METRICS_TOKEN"
 curl http://localhost:7016/metrics/red -H "X-Metrics-Token: $EXPONENTIAL_METRICS_TOKEN"
 ```
 
@@ -128,6 +129,38 @@ curl "http://localhost:7015/api/issues?limit=1" \
 
 Production metrics are intentionally token-gated. In ECS, `scripts/smoke-prod.sh`
 uses `EXPONENTIAL_METRICS_TOKEN` or reads the token from `METRICS_TOKEN_SECRET_ARN`.
+
+## Metrics Scraping
+
+The Go API exposes Prometheus text metrics at `GET /metrics` and through the
+web/ALB proxy at `GET /api/metrics`. The endpoint includes HTTP request
+counters and latency histograms labeled by low-cardinality method, route
+pattern, and status code. `/metrics/red` remains available as a JSON snapshot
+for quick human checks, but it is in-process only and resets when a task
+restarts.
+
+For self-hosted Prometheus, scrape the API container directly on the private
+network:
+
+```yaml
+scrape_configs:
+  - job_name: exponential-api
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets: ["api:7016"]
+    authorization:
+      type: Bearer
+      credentials: "<EXPONENTIAL_METRICS_TOKEN>"
+```
+
+If you scrape through the web or load balancer, use `metrics_path:
+/api/metrics` and send the same token with either `Authorization: Bearer
+<token>` or `X-Metrics-Token: <token>`. In ECS, run a CloudWatch Agent or OTel
+Collector sidecar/service to scrape `/api/metrics` on each task or target and
+remote-write/export to your metrics backend. The collector, Prometheus, or
+CloudWatch workspace is the durable store that aggregates across task restarts
+and multiple ECS tasks.
 
 ## Headless clients
 

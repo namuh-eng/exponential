@@ -8,9 +8,15 @@ Useful local checks:
 
 ```bash
 curl http://localhost:7016/healthz
+curl http://localhost:7016/metrics
 curl http://localhost:7016/metrics/red
 curl http://localhost:7016/api/healthz
+curl http://localhost:7016/api/metrics
 ```
+
+`/metrics` and `/api/metrics` return Prometheus text metrics for durable
+scraping and aggregation. `/metrics/red` remains a JSON, in-process RED
+snapshot for quick debugging.
 
 Runtime configuration uses `EXPONENTIAL_API_*` variables for process settings
 such as `EXPONENTIAL_API_DATABASE_URL`, `EXPONENTIAL_API_REDIS_URL`, and
