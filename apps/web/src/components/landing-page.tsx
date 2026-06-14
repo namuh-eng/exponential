@@ -8,8 +8,10 @@ import Link from "next/link";
 
 const REPOSITORY_URL = process.env.NEXT_PUBLIC_EXPONENTIAL_GITHUB_URL?.trim();
 const GITHUB_STARS_REVALIDATE_SECONDS = 60 * 60;
+const DEMO_SESSION_URL = "/api/demo/session";
 
 const NAV_LINKS = [
+  { href: DEMO_SESSION_URL, label: "demo" },
   { href: "/docs", label: "docs" },
   { href: "/self-host", label: "self-host" },
   { href: "/changelog", label: "changelog" },
@@ -239,8 +241,14 @@ function Hero({
         </p>
         <div className="mt-10 flex flex-wrap items-center gap-4">
           <Link
-            href={selfHostHref}
+            href={DEMO_SESSION_URL}
             className="inline-flex min-h-10 items-center border border-[var(--editorial-accent)] bg-[var(--editorial-accent)] px-4 py-2.5 text-[13px] font-medium text-[var(--editorial-accent-ink)] transition-colors hover:bg-[var(--editorial-accent-hover)]"
+          >
+            view demo
+          </Link>
+          <Link
+            href={selfHostHref}
+            className="inline-flex min-h-10 items-center border border-[var(--editorial-line-strong)] px-4 py-2.5 text-[13px] font-medium text-[var(--editorial-ink-1)] transition-colors hover:bg-[var(--editorial-hover)]"
           >
             open self-host guide
           </Link>

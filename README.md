@@ -74,6 +74,27 @@ Open `http://localhost:7015`.
 
 Read the full operator guide in [docs/self-hosting.md](docs/self-hosting.md).
 
+### Public Demo Instance
+
+Public demo deployments can enable disposable guest access with
+`EXPONENTIAL_PUBLIC_DEMO_ENABLED=true`. Visitors open `/api/demo/session`, which
+creates a 24-hour guest browser session, seeds the deterministic
+`foreverbrowsing` workspace when needed, and redirects into the Engineering demo
+team.
+
+Reset the demo workspace manually or from a nightly scheduler:
+
+```bash
+EXPONENTIAL_API_DATABASE_URL=<demo-database-url> scripts/reset-demo.sh
+```
+
+The included `Reset public demo` GitHub Action runs nightly at 09:17 UTC and
+uses the `EXPONENTIAL_DEMO_DATABASE_URL` Actions secret.
+
+The demo seed disables high-risk side effects for that workspace: attachment
+uploads, inbound email, outbound integrations, OAuth app/token flows, API/PAT
+creation, and billing mutations.
+
 ### Local Development
 
 ```bash
