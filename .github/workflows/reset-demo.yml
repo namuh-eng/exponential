@@ -1,0 +1,30 @@
+name: Reset public demo
+
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reset-public-demo
+  cancel-in-progress: false
+
+jobs:
+  reset-demo:
+    name: Reset seeded public demo workspace
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EXPONENTIAL_API_DATABASE_URL: ${{ secrets.EXPONENTIAL_DEMO_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+
+      - name: Reset demo workspace
+        run: scripts/reset-demo.sh

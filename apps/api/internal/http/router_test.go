@@ -71,6 +71,19 @@ func TestRouterServesPublicAPICollectionAlias(t *testing.T) {
 	}
 }
 
+func TestRouterServesPublicDemoRouteButKeepsItDisabledByDefaultInProduction(t *testing.T) {
+	t.Setenv("EXPONENTIAL_API_ENVIRONMENT", "production")
+	t.Setenv("EXPONENTIAL_PUBLIC_DEMO_ENABLED", "")
+	router := NewRouter(zap.NewNop(), nil)
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/demo/session", nil))
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestRouterServesStripeWebhookWithoutAuth(t *testing.T) {
 	t.Setenv("STRIPE_WEBHOOK_SIGNING_SECRET", "whsec_test")
 	router := NewRouter(zap.NewNop(), nil)
