@@ -428,6 +428,10 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 			problem.Write(w, 500, "Update project failed", err.Error())
 			return
 		}
+		if err := h.queueSlackProjectUpdate(r.Context(), tx, p.WorkspaceID, updated, body); err != nil {
+			problem.Write(w, 500, "Update project failed", err.Error())
+			return
+		}
 	}
 	updated.Teams = teams
 	updated.Progress = existing.Progress
