@@ -42,4 +42,8 @@ func TestReadAccountNotificationsDefaultsAndPatch(t *testing.T) {
 	if channels["desktop"] == nil || channels["slack"] == nil {
 		t.Fatalf("channels missing defaults = %#v", channels)
 	}
+	slack := got["slack"].(map[string]any)
+	if slack["comments"] != true || slack["updates"] != false {
+		t.Fatalf("slack settings missing personal comment/update defaults = %#v", slack)
+	}
 }

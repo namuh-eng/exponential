@@ -610,6 +610,22 @@ export function NotificationChannelPage({
                 }
               />
               <SettingRow
+                label="Comments"
+                description="Forward comments on issues you follow to Slack."
+                checked={settings.slack.comments}
+                onChange={(value) =>
+                  updateSettings(patchFor("slack", "comments", value))
+                }
+              />
+              <SettingRow
+                label="Issue updates"
+                description="Forward status and priority updates to Slack."
+                checked={settings.slack.updates}
+                onChange={(value) =>
+                  updateSettings(patchFor("slack", "updates", value))
+                }
+              />
+              <SettingRow
                 label="Triage activity"
                 description="Forward new triage items and intake updates."
                 checked={settings.slack.triageActivity}

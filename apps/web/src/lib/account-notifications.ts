@@ -67,6 +67,8 @@ export type SlackNotificationPreferences = {
     | "direct_message";
   mentionsAndReplies: boolean;
   assignedToMe: boolean;
+  comments: boolean;
+  updates: boolean;
   triageActivity: boolean;
   projectUpdates: boolean;
 };
@@ -163,6 +165,8 @@ export const DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS: AccountNotificationSettings 
       destination: "not_connected",
       mentionsAndReplies: true,
       assignedToMe: false,
+      comments: true,
+      updates: false,
       triageActivity: false,
       projectUpdates: false,
     },
@@ -235,6 +239,8 @@ function migrateLegacyChannelEvents(parsed: Record<string, unknown>) {
     slack: {
       mentionsAndReplies: slackEvents.mentions,
       assignedToMe: slackEvents.assignments,
+      comments: slackEvents.comments,
+      updates: slackEvents.statusChanges,
       triageActivity: slackEvents.triage,
       projectUpdates: slackEvents.projectUpdates,
     },
@@ -313,8 +319,12 @@ export function normalizeAccountNotificationSettings(
           DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.mentionsAndReplies,
         ),
         comments: bool(
-          slack.mentionsAndReplies,
-          DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.mentionsAndReplies,
+          slack.comments,
+          DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.comments,
+        ),
+        statusChanges: bool(
+          slack.updates,
+          DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.updates,
         ),
         triage: bool(
           slack.triageActivity,
@@ -406,6 +416,14 @@ export function normalizeAccountNotificationSettings(
       assignedToMe: bool(
         slack.assignedToMe,
         DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.assignedToMe,
+      ),
+      comments: bool(
+        slack.comments,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.comments,
+      ),
+      updates: bool(
+        slack.updates,
+        DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.slack.updates,
       ),
       triageActivity: bool(
         slack.triageActivity,
