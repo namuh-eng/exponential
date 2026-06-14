@@ -252,6 +252,108 @@ configured, target groups, ALB routing, and secret placeholders.
 `deploy-ecs.sh` builds and pushes API/web images, runs migrations, updates ECS
 services, waits for stability, and can run `scripts/smoke-prod.sh`.
 
+### Production sizing
+
+`scripts/preflight.sh` defaults to the lowest-cost data tier so trial stacks keep
+the previous behavior: `db.t3.micro`, single-AZ RDS, `cache.t3.micro`, and a
+single ElastiCache Redis node. For production, set the data-tier options before
+running preflight:
+
+```bash
+DB_INSTANCE_CLASS=db.t4g.small \
+DB_MULTI_AZ=true \
+REDIS_NODE_TYPE=cache.t4g.small \
+REDIS_REPLICATION_ENABLED=true \
+DB_PASSWORD=<generated-or-existing-password> \
+bash scripts/preflight.sh
+```
+
+| Variable | Default | Production guidance |
+| --- | --- | --- |
+| `DB_INSTANCE_CLASS` | `db.t3.micro` | Pick a class with enough memory and CPU for the workload, for example `db.t4g.small` or larger. Existing RDS instances are modified in place when this changes. |
+| `DB_MULTI_AZ` | `false` | Set `true` for a standby in another AZ and automatic RDS failover. This raises cost and may briefly affect the instance while AWS applies the change. |
+| `REDIS_NODE_TYPE` | `cache.t3.micro` | Pick a class large enough for session, cache, and realtime fanout load. Existing standalone clusters or replication groups are modified in place when this changes. |
+| `REDIS_REPLICATION_ENABLED` | `false` | Set `true` to provision an ElastiCache replication group with one primary, one replica, Multi-AZ placement, and automatic failover. |
+
+With `REDIS_REPLICATION_ENABLED=false`, preflight manages the legacy standalone
+cluster named `exponential-redis`. A node restart can evict sessions and realtime
+state. With `REDIS_REPLICATION_ENABLED=true`, preflight manages
+`exponential-redis-rg` and writes `REDIS_URL` to the replication group's primary
+endpoint. Preflight does not delete an existing standalone cluster when you
+enable replication; keep it until the ECS services have been redeployed and the
+new Redis endpoint has passed smoke checks.
+
+Changing `DATABASE_URL` or `REDIS_URL` in `.env` is not enough for running ECS
+tasks. Re-run `bash scripts/prepare-ecs-deploy-env.sh` so Secrets Manager is
+updated, then deploy with `RUN_PROD_SMOKE=true scripts/deploy-ecs.sh`.
+
+### RDS point-in-time restore runbook
+
+RDS backups are retained for seven days by preflight. Exercise this runbook after
+the initial production deployment and after major data-tier changes. Record the
+date, source instance, restore target, validation result, and rollback endpoint
+in your operator notes.
+
+1. Capture the current endpoint and latest restorable time:
+
+   ```bash
+   aws rds describe-db-instances \
+     --db-instance-identifier exponential-db \
+     --region "$AWS_REGION" \
+     --query 'DBInstances[0].[Endpoint.Address,LatestRestorableTime]' \
+     --output table
+   ```
+
+2. Restore to a new private RDS instance. Use `--restore-time` with an ISO 8601
+   timestamp for a specific point, or `--use-latest-restorable-time` for a drill:
+
+   ```bash
+   RESTORE_ID="exponential-db-restore-$(date +%Y%m%d%H%M)"
+   aws rds restore-db-instance-to-point-in-time \
+     --source-db-instance-identifier exponential-db \
+     --target-db-instance-identifier "$RESTORE_ID" \
+     --use-latest-restorable-time \
+     --db-instance-class "${DB_INSTANCE_CLASS:-db.t3.micro}" \
+     --db-subnet-group-name exponential-db-subnet \
+     --vpc-security-group-ids "$DB_SG" \
+     --no-publicly-accessible \
+     --region "$AWS_REGION"
+   aws rds wait db-instance-available \
+     --db-instance-identifier "$RESTORE_ID" \
+     --region "$AWS_REGION"
+   ```
+
+   Add `--multi-az` when the restored instance should immediately match a
+   Multi-AZ production target.
+
+3. Validate the restored database from the VPC, using a bastion, VPN, or one-off
+   ECS task with network access to the private subnets:
+
+   ```bash
+   RESTORE_ENDPOINT=$(aws rds describe-db-instances \
+     --db-instance-identifier "$RESTORE_ID" \
+     --region "$AWS_REGION" \
+     --query 'DBInstances[0].Endpoint.Address' \
+     --output text)
+   psql "postgresql://postgres:${DB_PASSWORD}@${RESTORE_ENDPOINT}:5432/exponential" \
+     -c 'select count(*) from workspaces;'
+   ```
+
+4. Cut over by updating the database secret and redeploying. Keep the old
+   endpoint value for rollback:
+
+   ```bash
+   OLD_DATABASE_URL="$DATABASE_URL"
+   export DATABASE_URL="postgresql://postgres:${DB_PASSWORD}@${RESTORE_ENDPOINT}:5432/exponential"
+   bash scripts/prepare-ecs-deploy-env.sh
+   RUN_PROD_SMOKE=true scripts/deploy-ecs.sh
+   ```
+
+5. Roll back by restoring `OLD_DATABASE_URL`, re-running
+   `scripts/prepare-ecs-deploy-env.sh`, and redeploying. After the restored stack
+   is stable and the backup window has elapsed, delete abandoned restore
+   instances explicitly; preflight never deletes RDS instances.
+
 For ECS web-to-API server requests, prefer `WEB_INTERNAL_API_URL` pointing at
 the internal ALB/API route so server-side auth/session checks do not hairpin
 through a public CDN or proxy hostname.
