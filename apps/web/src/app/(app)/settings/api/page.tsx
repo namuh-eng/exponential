@@ -473,7 +473,7 @@ function buildDefaultWebhookForm(): WebhookFormState {
   return {
     label: "",
     url: "https://example.com/hooks/linear",
-    events: ["created", "updated"],
+    events: ["issue.created", "issue.updated"],
   };
 }
 
@@ -1076,34 +1076,37 @@ export default function ApiSettingsPage() {
                 Subscription scope
               </legend>
               <div className="space-y-2">
-                {(["created", "updated", "deleted"] as WebhookEventType[]).map(
-                  (eventName) => {
-                    const checked = webhookForm.events.includes(eventName);
-                    return (
-                      <label
-                        key={eventName}
-                        className="flex items-center gap-2 text-[13px] text-[var(--color-text-primary)]"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(event) =>
-                            setWebhookForm((current) => ({
-                              ...current,
-                              events: event.target.checked
-                                ? [...current.events, eventName]
-                                : current.events.filter(
-                                    (currentEvent) =>
-                                      currentEvent !== eventName,
-                                  ),
-                            }))
-                          }
-                        />
-                        {WEBHOOK_EVENT_LABELS[eventName]}
-                      </label>
-                    );
-                  },
-                )}
+                {(
+                  [
+                    "issue.created",
+                    "issue.updated",
+                    "issue.deleted",
+                  ] as WebhookEventType[]
+                ).map((eventName) => {
+                  const checked = webhookForm.events.includes(eventName);
+                  return (
+                    <label
+                      key={eventName}
+                      className="flex items-center gap-2 text-[13px] text-[var(--color-text-primary)]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) =>
+                          setWebhookForm((current) => ({
+                            ...current,
+                            events: event.target.checked
+                              ? [...current.events, eventName]
+                              : current.events.filter(
+                                  (currentEvent) => currentEvent !== eventName,
+                                ),
+                          }))
+                        }
+                      />
+                      {WEBHOOK_EVENT_LABELS[eventName]}
+                    </label>
+                  );
+                })}
               </div>
             </fieldset>
 
