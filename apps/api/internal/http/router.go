@@ -109,7 +109,7 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 			publicProvider.Use(ratelimit.PublicMiddleware())
 			publicProvider.Get("/integrations/slack/oauth/callback", integrationsHandler.SlackOAuthCallback)
 			publicProvider.Post("/integrations/slack/events", integrationsHandler.SlackEvents)
-			publicProvider.Post("/integrations/slack/interactivity", integrationsHandler.SlackEvents)
+			publicProvider.Post("/integrations/slack/interactivity", integrationsHandler.SlackInteractivity)
 		})
 		v1.Mount("/inbound", inbound.Handler{DB: db}.Routes())
 		v1.Post("/oauth/token", authProvidersHandler.ExchangeOAuthToken)
