@@ -160,6 +160,139 @@ func TestPostSlackMessage(t *testing.T) {
 	}
 }
 
+func TestSlackIssueCreationEnabledSettings(t *testing.T) {
+	if !slackIssueCreationEnabled(map[string]any{}) {
+		t.Fatal("Slack issue creation should default on")
+	}
+	if slackIssueCreationEnabled(map[string]any{"slackIssueCreationEnabled": false}) {
+		t.Fatal("top-level disabled setting was ignored")
+	}
+	if slackIssueCreationEnabled(map[string]any{"slack": map[string]any{"issueCreationEnabled": false}}) {
+		t.Fatal("nested Slack disabled setting was ignored")
+	}
+	if slackIssueCreationEnabled(map[string]any{"integrations": map[string]any{"slack": map[string]any{"issueCreationEnabled": false}}}) {
+		t.Fatal("workspace integration disabled setting was ignored")
+	}
+}
+
+func TestSlackSourceFromPayloadBuildsFallbackPermalink(t *testing.T) {
+	payload := slackInteractionPayload{}
+	payload.Team.ID = "T123"
+	payload.Channel.ID = "C123"
+	payload.Channel.Name = "requests"
+	payload.Message.TS = "1710000000.000100"
+	payload.Message.User = "Umsg"
+
+	source := slackSourceFromPayload(payload)
+	if source.TeamID != "T123" || source.ChannelID != "C123" || source.ThreadTS != payload.Message.TS {
+		t.Fatalf("source = %#v", source)
+	}
+	if !strings.Contains(source.Permalink, "https://slack.com/app_redirect?") ||
+		!strings.Contains(source.Permalink, "channel=C123") ||
+		!strings.Contains(source.Permalink, "message_ts=1710000000.000100") {
+		t.Fatalf("fallback permalink = %q", source.Permalink)
+	}
+}
+
+func TestBuildSlackIssueModalIncludesCoreFields(t *testing.T) {
+	payload := slackInteractionPayload{}
+	payload.Message.Text = "Fix login redirects\nmore context"
+	metadata := slackIssuePrivateMetadata{
+		WorkspaceID: "workspace-1",
+		TeamID:      "team-1",
+		TeamKey:     "ENG",
+		UserID:      "user-1",
+		SlackUserID: "U123",
+		Source:      slackSourceMetadata{Permalink: "https://slack.example/archives/C/p1"},
+	}
+	view, err := buildSlackIssueModal(payload, metadata, slackIssueModalOptions{
+		Teams:      []slackIssueTeamOption{{ID: "team-1", Key: "ENG", Name: "Engineering", TriageEnabled: true}},
+		Statuses:   []slackIssueFieldOption{{ID: "state-triage", Name: "Triage", Category: "triage"}},
+		Priorities: prioritySlackOptions(),
+		Assignees:  []slackIssueFieldOption{{ID: "user-1", Name: "Ada"}},
+		Labels:     []slackIssueFieldOption{{ID: "label-1", Name: "Bug"}},
+		Projects:   []slackIssueFieldOption{{ID: "project-1", Name: "Website"}},
+		Templates:  []slackIssueTemplateOption{{ID: "template-1", Name: "Bug report"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view["callback_id"] != slackCreateIssueSubmitCallbackID {
+		t.Fatalf("callback = %#v", view["callback_id"])
+	}
+	blocks, ok := view["blocks"].([]map[string]any)
+	if !ok {
+		t.Fatalf("blocks = %#v", view["blocks"])
+	}
+	blockIDs := map[string]bool{}
+	for _, block := range blocks {
+		if id, ok := block["block_id"].(string); ok {
+			blockIDs[id] = true
+		}
+	}
+	for _, id := range []string{"team", "title", "description", "template", "status", "assignee", "priority", "labels", "project", "triage"} {
+		if !blockIDs[id] {
+			t.Fatalf("modal missing block %q in %#v", id, blockIDs)
+		}
+	}
+	rawMetadata, ok := view["private_metadata"].(string)
+	if !ok || !strings.Contains(rawMetadata, `"slackUserId":"U123"`) {
+		t.Fatalf("private metadata = %#v", view["private_metadata"])
+	}
+}
+
+func TestSlackIssueInputFromView(t *testing.T) {
+	metadata := slackIssuePrivateMetadata{
+		WorkspaceID: "workspace-1",
+		TeamID:      "team-default",
+		TeamKey:     "ENG",
+		UserID:      "user-1",
+		SlackUserID: "U123",
+		Source:      slackSourceMetadata{ChannelID: "C123"},
+	}
+	view := slackInteractionView{}
+	view.State.Values = map[string]map[string]slackInteractionStateValue{
+		"team":        {"team": {SelectedOption: &slackOption{Value: "team-2"}}},
+		"title":       {"title": {Value: "  New issue  "}},
+		"description": {"description": {Value: "details"}},
+		"priority":    {"priority": {SelectedOption: &slackOption{Value: "high"}}},
+		"labels":      {"labels": {SelectedOptions: []slackOption{{Value: "label-1"}, {Value: "label-2"}}}},
+		"triage":      {"triage": {SelectedOption: &slackOption{Value: "false"}}},
+	}
+	input := slackIssueInputFromView(view, metadata)
+	if input.TeamID != "team-2" || input.Title != "New issue" || input.Priority != "high" || input.UseTriage {
+		t.Fatalf("input = %#v", input)
+	}
+	if len(input.LabelIDs) != 2 || input.LabelIDs[0] != "label-1" || input.LabelIDs[1] != "label-2" {
+		t.Fatalf("labels = %#v", input.LabelIDs)
+	}
+}
+
+func TestOpenSlackView(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/views.open" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer xoxb-token" {
+			t.Fatalf("authorization = %q", r.Header.Get("Authorization"))
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body["trigger_id"] != "trigger-1" || body["view"] == nil {
+			t.Fatalf("body = %#v", body)
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+	t.Setenv("SLACK_API_BASE_URL", server.URL)
+
+	if err := openSlackView(t.Context(), server.Client(), "xoxb-token", "trigger-1", map[string]any{"type": "modal"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func slackTestSignature(secret string, timestamp string, body []byte) string {
 	base := "v0:" + timestamp + ":" + string(body)
 	mac := hmac.New(sha256.New, []byte(secret))

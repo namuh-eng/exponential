@@ -398,7 +398,12 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
     case "created": {
       const legacySuffix =
         event.metadata.migrationFallback === true ? " from legacy data" : "";
-      return `${actorName} created this issue${legacySuffix}`;
+      const sourceSuffix =
+        event.metadata.source === "slack_message" ||
+        event.metadata.source === "slack_ask"
+          ? " from Slack"
+          : "";
+      return `${actorName} created this issue${legacySuffix}${sourceSuffix}`;
     }
     case "updated":
       return `${actorName} updated ${getChangedFieldsLabel(event.metadata)}`;
@@ -413,6 +418,22 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
       return `${actorName} added a comment${attachmentLabel}`;
     }
   }
+}
+
+function getSlackSourceLink(event: IssueHistoryEvent): string | null {
+  if (
+    event.metadata.source !== "slack_message" &&
+    event.metadata.source !== "slack_ask"
+  ) {
+    return null;
+  }
+  const slack = event.metadata.slack;
+  if (!isRecord(slack)) {
+    return null;
+  }
+  return typeof slack.permalink === "string" && slack.permalink.length > 0
+    ? slack.permalink
+    : null;
 }
 
 function AttachmentChip({
@@ -1904,6 +1925,16 @@ export function IssueDetailView({
                         <div className="mt-1 text-[12px] text-[var(--color-text-secondary)]">
                           {formatFullDate(event.createdAt)}
                         </div>
+                        {getSlackSourceLink(event) ? (
+                          <a
+                            href={getSlackSourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source message in Slack
+                          </a>
+                        ) : null}
                       </div>
                     </div>
                   ))}
