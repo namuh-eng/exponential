@@ -92,4 +92,24 @@ describe("AuthPage preflight panel", () => {
       screen.getByRole("button", { name: /Continue with email/i }),
     ).toBeEnabled();
   });
+
+  it("does not fetch optional diagnostics while Playwright submits empty email", async () => {
+    vi.stubEnv("PLAYWRIGHT_TEST", "true");
+    render(<AuthPage mode="login" />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /Continue with email/i }),
+      ).toBeEnabled();
+    });
+
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^\/api\/auth\/sessions\/recent/),
+      expect.anything(),
+    );
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/health/preflight",
+      expect.anything(),
+    );
+  });
 });
