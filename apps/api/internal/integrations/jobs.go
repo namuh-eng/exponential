@@ -74,6 +74,12 @@ type slackPostMessageResponse struct {
 	TS    string `json:"ts"`
 }
 
+type slackUnfurlRequest struct {
+	Channel   string                           `json:"channel"`
+	MessageTS string                           `json:"ts"`
+	Unfurls   map[string]slackUnfurlAttachment `json:"unfurls"`
+}
+
 func (w SlackWorker) Start(ctx context.Context) {
 	interval := w.Interval
 	if interval <= 0 {
@@ -141,6 +147,20 @@ func (w SlackWorker) deliverSlackJob(ctx context.Context, job slackJob) error {
 	credential, err := w.activeSlackCredential(ctx, job.IntegrationID)
 	if err != nil {
 		return err
+	}
+	if stringValue(job.Payload["type"]) == "unfurl" {
+		unfurls := map[string]slackUnfurlAttachment{}
+		raw, _ := json.Marshal(job.Payload["unfurls"])
+		_ = json.Unmarshal(raw, &unfurls)
+		message := slackUnfurlRequest{
+			Channel:   stringValue(job.Payload["channel"]),
+			MessageTS: stringValue(job.Payload["message_ts"]),
+			Unfurls:   unfurls,
+		}
+		if message.Channel == "" || message.MessageTS == "" || len(message.Unfurls) == 0 {
+			return fmt.Errorf("Slack unfurl delivery requires channel, message_ts, and unfurls")
+		}
+		return postSlackUnfurl(ctx, w.httpClient(), credential.BotToken, message)
 	}
 	message := slackPostMessageRequest{
 		Channel:  stringValue(job.Payload["channel"]),
@@ -261,6 +281,41 @@ func postSlackMessage(ctx context.Context, client *http.Client, botToken string,
 			decoded.Error = "unknown_error"
 		}
 		return fmt.Errorf("Slack chat.postMessage failed: %s", decoded.Error)
+	}
+	return nil
+}
+
+func postSlackUnfurl(ctx context.Context, client *http.Client, botToken string, message slackUnfurlRequest) error {
+	body, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, slackAPIBaseURL()+"/chat.unfurl", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+botToken)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	var decoded struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
+		return err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("Slack chat.unfurl returned HTTP %d", resp.StatusCode)
+	}
+	if !decoded.OK {
+		if decoded.Error == "" {
+			decoded.Error = "unknown_error"
+		}
+		return fmt.Errorf("Slack chat.unfurl failed: %s", decoded.Error)
 	}
 	return nil
 }

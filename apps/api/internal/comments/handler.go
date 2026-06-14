@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -95,6 +98,10 @@ func (h Handler) CreateForIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "comment", comment.ID, "created", comment, p.UserID); err != nil {
+		problem.Write(w, 500, "Create comment failed", err.Error())
+		return
+	}
+	if err := h.queueSlackThreadComment(r.Context(), tx, p.WorkspaceID, comment); err != nil {
 		problem.Write(w, 500, "Create comment failed", err.Error())
 		return
 	}
@@ -386,4 +393,88 @@ func scanReactions(rows pgx.Rows, issueShape bool) ([]ReactionSummary, error) {
 
 func insertOperation(ctx context.Context, tx pgx.Tx, workspaceID, entityType, entityID, opType string, payload any, createdBy string) error {
 	return syncapi.InsertOperation(ctx, tx, workspaceID, entityType, entityID, opType, payload, createdBy)
+}
+
+func (h Handler) queueSlackThreadComment(ctx context.Context, tx pgx.Tx, workspaceID string, comment Comment) error {
+	var integrationID, channelID, threadTS, identifier, issueTitle, teamKey string
+	err := tx.QueryRow(ctx, `
+		select itl.workspace_integration_id::text,
+			itl.external_channel_id,
+			itl.external_thread_ts,
+			i.identifier,
+			i.title,
+			t.key
+		from integration_thread_link itl
+		join issue i on i.id=itl.issue_id
+		join team t on t.id=i.team_id
+		join team_notification_integration tni on tni.team_id=t.id
+			and tni.provider='slack'
+			and tni.enabled
+			and tni.workspace_integration_id=itl.workspace_integration_id
+			and coalesce(tni.events,'[]'::jsonb) ? 'issue_commented'
+		where itl.issue_id=$1::uuid
+			and itl.provider='slack'
+			and itl.comment_id is null
+			and itl.workspace_integration_id is not null
+		order by itl.created_at asc
+		limit 1`, comment.IssueID).Scan(&integrationID, &channelID, &threadTS, &identifier, &issueTitle, &teamKey)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	payload := map[string]any{
+		"channel":   channelID,
+		"thread_ts": threadTS,
+		"text":      slackCommentText(teamKey, identifier, issueTitle, comment.Body),
+	}
+	raw, _ := json.Marshal(payload)
+	if _, err := tx.Exec(ctx, `
+		insert into provider_job (workspace_id, workspace_integration_id, provider, kind, status, payload, scheduled_at, updated_at)
+		values ($1::uuid,$2::uuid,'slack','outbound_delivery','queued',$3::jsonb,now(),now())`, workspaceID, integrationID, raw); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
+		insert into integration_thread_link (workspace_id, workspace_integration_id, provider, issue_id, comment_id, external_channel_id, external_thread_ts, external_message_ts, direction)
+		values ($1::uuid,$2::uuid,'slack',$3::uuid,$4::uuid,$5,$6,$7,'outbound')
+		on conflict do nothing`, workspaceID, integrationID, comment.IssueID, comment.ID, channelID, threadTS, "exponential:"+comment.ID)
+	return err
+}
+
+func slackCommentText(teamKey, identifier, issueTitle, body string) string {
+	body = truncateSlackComment(strings.TrimSpace(body), 1800)
+	title := strings.TrimSpace(identifier)
+	if strings.TrimSpace(issueTitle) != "" {
+		title += " " + strings.TrimSpace(issueTitle)
+	}
+	return fmt.Sprintf("New comment on <%s|%s>:\n%s", commentIssueURL(teamKey, identifier), title, body)
+}
+
+func commentIssueURL(teamKey, identifier string) string {
+	if strings.TrimSpace(teamKey) != "" {
+		return strings.TrimRight(commentAppURL(), "/") + "/team/" + url.PathEscape(teamKey) + "/issue/" + url.PathEscape(identifier)
+	}
+	return strings.TrimRight(commentAppURL(), "/") + "/issue/" + url.PathEscape(identifier)
+}
+
+func commentAppURL() string {
+	if v := strings.TrimSpace(os.Getenv("EXPONENTIAL_APP_URL")); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(os.Getenv("NEXT_PUBLIC_APP_URL")); v != "" {
+		return v
+	}
+	return "http://localhost:7015"
+}
+
+func truncateSlackComment(value string, max int) string {
+	runes := []rune(value)
+	if len(runes) <= max {
+		return value
+	}
+	if max <= 3 {
+		return string(runes[:max])
+	}
+	return string(runes[:max-3]) + "..."
 }
