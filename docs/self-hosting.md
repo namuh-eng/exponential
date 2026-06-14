@@ -336,7 +336,7 @@ in your operator notes.
      --query 'DBInstances[0].Endpoint.Address' \
      --output text)
    psql "postgresql://postgres:${DB_PASSWORD}@${RESTORE_ENDPOINT}:5432/exponential" \
-     -c 'select count(*) from workspaces;'
+     -c 'select count(*) from workspace;'
    ```
 
 4. Cut over by updating the database secret and redeploying. Keep the old
