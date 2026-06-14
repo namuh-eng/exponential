@@ -42,6 +42,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/testhelpers"
 	"github.com/namuh-eng/exponential/apps/api/internal/tokens"
 	"github.com/namuh-eng/exponential/apps/api/internal/views"
+	"github.com/namuh-eng/exponential/apps/api/internal/webhooks"
 	"github.com/namuh-eng/exponential/apps/api/internal/workspaces"
 	"go.uber.org/zap"
 )
@@ -155,6 +156,7 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 			protected.Mount("/views", views.Handler{DB: db}.Routes())
 			protected.Post("/workspaces/accept-invite", workspacesHandler.AcceptInvite)
 			protected.Mount("/workspaces", workspacesHandler.Routes())
+			protected.Mount("/workspaces/current/webhook-deliveries", webhooks.Handler{DB: db}.Routes())
 			protected.Get("/sync/ws", syncapi.Handler{DB: db}.WebSocket)
 		})
 	})

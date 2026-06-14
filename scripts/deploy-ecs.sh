@@ -36,10 +36,31 @@ require_env() {
 for name in \
   ECS_EXECUTION_ROLE_ARN ECS_TASK_ROLE_ARN DATABASE_URL_SECRET_ARN REDIS_URL_SECRET_ARN \
   SESSION_SECRET_SECRET_ARN GOOGLE_CLIENT_ID_SECRET_ARN GOOGLE_CLIENT_SECRET_SECRET_ARN PUBLIC_BASE_URL \
-  METRICS_TOKEN_SECRET_ARN STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN \
+  METRICS_TOKEN_SECRET_ARN \
   PRIV_SUBNET_A PRIV_SUBNET_B APP_SG ALB_SG API_TG_ARN WEB_TG_ARN; do
   require_env "$name"
 done
+
+# Stripe vars are optional. A non-billing operator may omit them entirely.
+# However, they are all-or-none: if any one is set the full coherent set is
+# required so the task definition renders correctly.
+# Treat empty strings (e.g. unset GitHub repo vars) the same as absent.
+_stripe_webhook_arn="${STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN:-}"
+_stripe_key_arn="${STRIPE_SECRET_KEY_SECRET_ARN:-}"
+_stripe_team_price="${STRIPE_CLOUD_TEAM_PRICE_ID:-}"
+_stripe_biz_price="${STRIPE_CLOUD_BUSINESS_PRICE_ID:-}"
+if [ -n "$_stripe_webhook_arn" ] || [ -n "$_stripe_key_arn" ] || \
+   [ -n "$_stripe_team_price" ] || [ -n "$_stripe_biz_price" ]; then
+  for name in \
+    STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN STRIPE_SECRET_KEY_SECRET_ARN \
+    STRIPE_CLOUD_TEAM_PRICE_ID STRIPE_CLOUD_BUSINESS_PRICE_ID; do
+    require_env "$name"
+  done
+  echo "Deploying with Stripe billing enabled."
+else
+  echo "Deploying without Stripe billing (non-billing mode)."
+fi
+unset _stripe_webhook_arn _stripe_key_arn _stripe_team_price _stripe_biz_price
 
 export AWS_ACCOUNT_ID REGION AWS_REGION="$REGION" IMAGE_TAG
 export NEXT_PUBLIC_EXPONENTIAL_VERSION NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH NEXT_PUBLIC_EXPONENTIAL_GIT_SHA NEXT_PUBLIC_EXPONENTIAL_GITHUB_URL
@@ -204,6 +225,7 @@ if [ "${WAIT_FOR_STABILITY:-true}" != "false" ]; then
 fi
 
 if [ "${CONFIGURE_AUTOSCALING:-true}" != "false" ]; then
+  export ALARM_TOPIC_ARN="${ALARM_TOPIC_ARN:-}"
   scripts/configure-ecs-autoscaling.sh
 fi
 

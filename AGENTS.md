@@ -1,6 +1,6 @@
 # Agent Guide
 
-Project-specific instructions for AI coding agents working in this repo. Read this before making changes. See `CLAUDE.md` and `docs/refactor-plan.md` for the canonical project overview and architecture decisions.
+Project-specific instructions for AI coding agents working in this repo. Read this before making changes. See `CLAUDE.md`, `README.md`, `CONTRIBUTING.md`, and `docs/README.md` for the current project overview and architecture decisions. `docs/refactor-plan.md` is historical context for the completed Go split, not current-state guidance.
 
 ## Project at a Glance
 - **What it is**: exponential — a Linear-style issue tracker (issues, projects, cycles, initiatives, triage, inbox).
@@ -20,7 +20,7 @@ Project-specific instructions for AI coding agents working in this repo. Read th
 
 ## Repository Layout
 - `apps/api/` — Go API, auth, handlers, OpenAPI strict server stubs, sqlc queries, migrations runner.
-- `apps/web/` — Next.js UI. `apps/web/src/app/api/` should remain empty/nonexistent except test-only legacy fixtures under `apps/web/tests/legacy-api`.
+- `apps/web/` — Next.js UI. `apps/web/src/app/api/` should remain empty/nonexistent; runtime API/auth/billing/database work belongs in `apps/api`.
 - `apps/cli/` — CLI consuming the generated SDK.
 - `packages/proto/openapi.yaml` — public API contract.
 - `packages/proto/migrations/` — SQL migrations.
@@ -36,7 +36,7 @@ Project-specific instructions for AI coding agents working in this repo. Read th
 - **Never weaken or delete tests to make them pass.** Fix the code, not the test.
 - **Run `make check && make test` before every commit.**
 - **Run `make test-e2e` before declaring UI/runtime flows verified.**
-- **Out of scope**: paywalls, billing, subscription management, payment processing. Do not add these.
+- **Out of scope**: paywalls, subscription checkout, payment collection, and hosted SaaS billing flows. Do not add these without an explicit approved plan. Existing workspace billing/settings and Stripe webhook surfaces are current product/admin code; do not remove or expand them casually.
 
 ## UI / Design Conventions
 - Preserve the terminal/editorial redesign. Do not revert or delete redesign/theme code from the `308371c` lineage.
@@ -69,12 +69,12 @@ curl http://localhost:7015/api/healthz
 
 SDK:
 ```bash
-pnpm --filter @namuh-eng/exponential-sdk test
+pnpm --filter @namuh-eng/expn-sdk test
 ```
 
 CLI:
 ```bash
-pnpm --filter @namuh-eng/exponential-cli test
+pnpm --filter @namuh-eng/expn-cli test
 ```
 
 ## Environment

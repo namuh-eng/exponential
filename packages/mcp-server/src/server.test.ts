@@ -12,22 +12,58 @@ type CapturedRequest = {
   url: string;
   method: string;
   headers: Headers;
+  body: unknown;
 };
 
 describe("exponential MCP server", () => {
-  it("registers exactly the read-only v0 tools over MCP", async () => {
+  it("registers exactly the expected tool names over MCP", async () => {
     const { client, server } = await connectedClient();
     const tools = await client.listTools();
 
     expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
       [...EXPONENTIAL_MCP_TOOL_NAMES].sort(),
     );
-    expect(
-      tools.tools.some((tool) => /^(create|update|delete)_/.test(tool.name)),
-    ).toBe(false);
     for (const tool of tools.tools) {
-      expect(tool.description).toContain("Read-only");
       expect(tool.inputSchema.type).toBe("object");
+    }
+
+    await client.close();
+    await server.close();
+  });
+
+  it("marks read-only tools with readOnlyHint=true and write tools with readOnlyHint=false", async () => {
+    const { client, server } = await connectedClient();
+    const tools = await client.listTools();
+
+    const readOnlyNames = [
+      "search_issues",
+      "get_issue",
+      "list_my_issues",
+      "list_projects",
+      "get_project",
+      "list_team_cycles",
+    ];
+    const writeNames = [
+      "create_issue",
+      "update_issue",
+      "add_comment",
+      "triage_issue",
+    ];
+
+    for (const tool of tools.tools) {
+      if (readOnlyNames.includes(tool.name)) {
+        expect(
+          tool.annotations?.readOnlyHint,
+          `${tool.name} should be readOnly`,
+        ).toBe(true);
+        expect(tool.description).toContain("Read-only");
+      }
+      if (writeNames.includes(tool.name)) {
+        expect(
+          tool.annotations?.readOnlyHint,
+          `${tool.name} should not be readOnly`,
+        ).toBe(false);
+      }
     }
 
     await client.close();
@@ -103,6 +139,160 @@ describe("exponential MCP server", () => {
     expect(textContent(result)).not.toContain("authorization");
   });
 
+  it("create_issue sends POST to /issues with required and optional fields", async () => {
+    const requests: CapturedRequest[] = [];
+    const result = await invokeExponentialMcpTool(
+      {
+        token: "pat_mcp",
+        baseUrl: "https://api.example/v1",
+        fetch: fetchFor(requests),
+      },
+      "create_issue",
+      {
+        title: "Agent-filed bug",
+        team_id: "team-uuid-1",
+        priority: "high",
+        description: "Found by the AI agent",
+      },
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(textContent(result)).toContain("EXP-99");
+    expect(requests).toHaveLength(1);
+    expect(requests[0].method).toBe("POST");
+    expect(requests[0].url).toContain("/v1/issues");
+    expect(requests[0].headers.get("authorization")).toBe("Bearer pat_mcp");
+    expect(requests[0].body).toMatchObject({
+      title: "Agent-filed bug",
+      team_id: "team-uuid-1",
+      priority: "high",
+      description: "Found by the AI agent",
+    });
+  });
+
+  it("update_issue sends PATCH to /issues/{id}", async () => {
+    const requests: CapturedRequest[] = [];
+    const result = await invokeExponentialMcpTool(
+      {
+        token: "pat_mcp",
+        baseUrl: "https://api.example/v1",
+        fetch: fetchFor(requests),
+      },
+      "update_issue",
+      { id: "EXP-1", priority: "urgent", state_id: "state-uuid-1" },
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(textContent(result)).toContain("EXP-1");
+    expect(requests).toHaveLength(1);
+    expect(requests[0].method).toBe("PATCH");
+    expect(requests[0].url).toContain("/v1/issues/EXP-1");
+    expect(requests[0].body).toMatchObject({
+      priority: "urgent",
+      state_id: "state-uuid-1",
+    });
+  });
+
+  it("add_comment sends POST to /issues/{id}/comments", async () => {
+    const requests: CapturedRequest[] = [];
+    const result = await invokeExponentialMcpTool(
+      {
+        token: "pat_mcp",
+        baseUrl: "https://api.example/v1",
+        fetch: fetchFor(requests),
+      },
+      "add_comment",
+      { issueId: "EXP-1", body: "This is a comment from the AI agent" },
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(textContent(result)).toContain("comment-1");
+    expect(requests).toHaveLength(1);
+    expect(requests[0].method).toBe("POST");
+    expect(requests[0].url).toContain("/v1/issues/EXP-1/comments");
+    expect(requests[0].body).toMatchObject({
+      body: "This is a comment from the AI agent",
+    });
+  });
+
+  it("triage_issue sends PATCH to /teams/{key}/triage/{issueID}", async () => {
+    const requests: CapturedRequest[] = [];
+    const result = await invokeExponentialMcpTool(
+      {
+        token: "pat_mcp",
+        baseUrl: "https://api.example/v1",
+        fetch: fetchFor(requests),
+      },
+      "triage_issue",
+      {
+        teamKey: "ENG",
+        issueId: "issue-uuid-1",
+        action: "accept",
+        destinationStateId: "state-uuid-1",
+      },
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(textContent(result)).toContain("success");
+    expect(requests).toHaveLength(1);
+    expect(requests[0].method).toBe("PATCH");
+    expect(requests[0].url).toContain("/v1/teams/ENG/triage/issue-uuid-1");
+    expect(requests[0].body).toMatchObject({
+      action: "accept",
+      destinationStateId: "state-uuid-1",
+    });
+  });
+
+  it("rejects create_issue with missing required field", async () => {
+    const requests: CapturedRequest[] = [];
+    const result = await invokeExponentialMcpTool(
+      {
+        token: "pat_mcp",
+        baseUrl: "https://api.example/v1",
+        fetch: fetchFor(requests),
+      },
+      "create_issue",
+      { title: "Missing team_id" },
+    );
+
+    expect(result.isError).toBe(true);
+    expect(textContent(result)).toContain("team_id");
+    expect(requests).toHaveLength(0);
+  });
+
+  it("rejects update_issue with extra fields (strict schema)", async () => {
+    const requests: CapturedRequest[] = [];
+    const result = await invokeExponentialMcpTool(
+      {
+        token: "pat_mcp",
+        baseUrl: "https://api.example/v1",
+        fetch: fetchFor(requests),
+      },
+      "update_issue",
+      { id: "EXP-1", unknownField: "not-allowed" },
+    );
+
+    expect(result.isError).toBe(true);
+    expect(requests).toHaveLength(0);
+  });
+
+  it("rejects triage_issue with missing required action field", async () => {
+    const requests: CapturedRequest[] = [];
+    const result = await invokeExponentialMcpTool(
+      {
+        token: "pat_mcp",
+        baseUrl: "https://api.example/v1",
+        fetch: fetchFor(requests),
+      },
+      "triage_issue",
+      { teamKey: "ENG", issueId: "issue-uuid-1" },
+    );
+
+    expect(result.isError).toBe(true);
+    expect(textContent(result)).toContain("action");
+    expect(requests).toHaveLength(0);
+  });
+
   it("keeps package and app boundaries free of write transports and CLI/DB imports", () => {
     const serverSource = readFileSync(
       new URL("./server.ts", import.meta.url),
@@ -142,10 +332,20 @@ async function connectedClient() {
 function fetchFor(requests: CapturedRequest[]): typeof fetch {
   return async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
+    let body: unknown = undefined;
+    const contentType = request.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json") && request.body) {
+      try {
+        body = await request.clone().json();
+      } catch {
+        body = undefined;
+      }
+    }
     requests.push({
       url: request.url,
       method: request.method,
       headers: request.headers,
+      body,
     });
 
     return responseFor(request);
@@ -165,8 +365,26 @@ function responseFor(request: Request) {
       issues: [{ id: "issue-1", identifier: "EXP-1", title: "Headless" }],
     });
   }
+  if (url.pathname === "/v1/issues" && request.method === "POST") {
+    return json(
+      { id: "issue-99", identifier: "EXP-99", title: "Agent-filed bug" },
+      201,
+    );
+  }
+  if (url.pathname === "/v1/issues/EXP-1" && request.method === "PATCH") {
+    return json({ id: "issue-1", identifier: "EXP-1", title: "Headless" });
+  }
   if (url.pathname === "/v1/issues/EXP-1") {
     return json({ id: "issue-1", identifier: "EXP-1", title: "Headless" });
+  }
+  if (
+    url.pathname === "/v1/issues/EXP-1/comments" &&
+    request.method === "POST"
+  ) {
+    return json(
+      { id: "comment-1", body: "This is a comment from the AI agent" },
+      201,
+    );
   }
   if (url.pathname === "/v1/my-issues") {
     return json({ groups: [], filterOptions: {} });
@@ -179,6 +397,12 @@ function responseFor(request: Request) {
   }
   if (url.pathname === "/v1/teams/ENG/cycles") {
     return json({ cycles: [] });
+  }
+  if (
+    url.pathname === "/v1/teams/ENG/triage/issue-uuid-1" &&
+    request.method === "PATCH"
+  ) {
+    return json({ success: true, accepted: ["issue-uuid-1"], declined: [] });
   }
   return json({ title: "Not found" }, 404);
 }

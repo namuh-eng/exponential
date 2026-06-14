@@ -13,6 +13,7 @@ import (
 
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
+	webhookspkg "github.com/namuh-eng/exponential/apps/api/internal/webhooks"
 )
 
 type workspaceAPIAction struct {
@@ -140,6 +141,12 @@ func (h Handler) MutateCurrentAPI(w http.ResponseWriter, r *http.Request) {
 			problem.Write(w, 400, "At least one webhook event is required.", "")
 			return
 		}
+		for _, e := range events {
+			if !webhookspkg.ValidEventType(e) {
+				problem.Write(w, 400, "Unknown webhook event type: "+e, "")
+				return
+			}
+		}
 		_, err := h.DB.Exec(r.Context(), `insert into webhook (url,label,workspace_id,secret,enabled,events) values ($1,$2,$3::uuid,$4,true,$5)`, url, nullString(strings.TrimSpace(body.Label)), p.WorkspaceID, "whsec_"+randomHexString(24), events)
 		if err != nil {
 			problem.Write(w, 500, "Create webhook failed", err.Error())
@@ -214,7 +221,7 @@ func (h Handler) workspaceAPIPayload(r *http.Request, p auth.Principal, settings
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"permissionLevel": permission, "viewerRole": p.Role, "canManageWorkspaceApi": isManager(p.Role), "canCreateApiKeys": canAPIKeyRole(p.Role, permission), "docs": map[string]string{"graphql": "/docs/graphql", "oauthApplications": "/docs/oauth-applications", "webhooks": "/docs/webhooks"}, "oauthApplications": readOAuthApplications(settings), "webhooks": webhooks, "apiKeys": keys}, nil
+	return map[string]any{"permissionLevel": permission, "viewerRole": p.Role, "canManageWorkspaceApi": isManager(p.Role), "canCreateApiKeys": canAPIKeyRole(p.Role, permission), "docs": map[string]string{"graphql": "/docs/graphql", "oauthApplications": "/docs/oauth-applications", "webhooks": "/docs/webhooks"}, "oauthApplications": readOAuthApplications(settings), "webhooks": webhooks, "apiKeys": keys, "supportedWebhookEvents": webhookspkg.KnownEventTypes}, nil
 }
 
 func (h Handler) workspaceWebhooks(r *http.Request, workspaceID string) ([]map[string]any, error) {

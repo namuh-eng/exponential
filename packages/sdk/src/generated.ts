@@ -1977,6 +1977,38 @@ export interface paths {
     patch: operations["updateCurrentWorkspaceBilling"];
     trace?: never;
   };
+  "/workspaces/current/billing/checkout": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createCurrentWorkspaceBillingCheckout"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/workspaces/current/billing/portal": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createCurrentWorkspaceBillingPortal"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/workspaces/current": {
     parameters: {
       query?: never;
@@ -4112,7 +4144,7 @@ export interface components {
     };
     BillingPlan: {
       /** @enum {string} */
-      id: "free" | "basic" | "business" | "enterprise";
+      id: "cloud_free" | "cloud_team" | "cloud_business" | "enterprise_cloud";
       name: string;
       price: string;
       description: string;
@@ -4133,7 +4165,11 @@ export interface components {
     WorkspaceBillingResponse: {
       workspace: components["schemas"]["BillingWorkspace"];
       /** @enum {string} */
-      currentPlan: "free" | "basic" | "business" | "enterprise";
+      currentPlan:
+        | "cloud_free"
+        | "cloud_team"
+        | "cloud_business"
+        | "enterprise_cloud";
       canManage: boolean;
       usage: components["schemas"]["BillingUsage"];
       plans: components["schemas"]["BillingPlan"][];
@@ -4142,7 +4178,20 @@ export interface components {
     };
     UpdateWorkspaceBillingRequest: {
       /** @enum {string} */
-      plan: "free" | "basic" | "business" | "enterprise";
+      plan: "cloud_free" | "cloud_team" | "cloud_business" | "enterprise_cloud";
+    };
+    CreateWorkspaceBillingCheckoutRequest: {
+      /** @enum {string} */
+      plan: "cloud_team" | "cloud_business";
+    };
+    CreateWorkspaceBillingCheckoutResponse: {
+      /** Format: uri */
+      url: string;
+      sessionId: string;
+    };
+    CreateWorkspaceBillingPortalResponse: {
+      /** Format: uri */
+      url: string;
     };
     ViewTeam: {
       /** Format: uuid */
@@ -9190,6 +9239,52 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["WorkspaceBillingResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createCurrentWorkspaceBillingCheckout: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateWorkspaceBillingCheckoutRequest"];
+      };
+    };
+    responses: {
+      /** @description Stripe checkout session */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreateWorkspaceBillingCheckoutResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createCurrentWorkspaceBillingPortal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Stripe billing portal session */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreateWorkspaceBillingPortalResponse"];
         };
       };
       default: components["responses"]["Problem"];

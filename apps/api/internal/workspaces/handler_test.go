@@ -107,11 +107,46 @@ func TestParseImportCSV(t *testing.T) {
 
 func TestBillingStateDefaultsAndNormalization(t *testing.T) {
 	state := readBillingState(map[string]any{"billing": map[string]any{"plan": "standard", "issuesUsed": float64(99)}})
-	if state.plan != "business" || state.issuesUsed != 99 || state.usageLimit != 250 {
+	if state.plan != "cloud_business" || state.issuesUsed != 99 || state.usageLimit != 250 {
 		t.Fatalf("state = %#v", state)
 	}
 	if len(state.paymentMethods) != 1 || len(state.invoices) != 1 {
 		t.Fatalf("defaults missing = %#v", state)
+	}
+}
+
+func TestNormalizeBillingPlanAcceptsCloudAndLegacyPlans(t *testing.T) {
+	cases := map[any]string{
+		"cloud_free":     "cloud_free",
+		"cloud_team":     "cloud_team",
+		"cloud_business": "cloud_business",
+		"enterprise":     "enterprise_cloud",
+		"business":       "cloud_business",
+		"basic":          "cloud_team",
+		"unknown":        "cloud_free",
+		nil:              "cloud_free",
+	}
+	for input, want := range cases {
+		if got := normalizeBillingPlan(input); got != want {
+			t.Fatalf("normalizeBillingPlan(%#v) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestStripeCheckoutPlanUsesConfiguredPrices(t *testing.T) {
+	t.Setenv("STRIPE_CLOUD_TEAM_PRICE_ID", "price_team")
+	t.Setenv("STRIPE_CLOUD_BUSINESS_PRICE_ID", "price_business")
+	plan, priceID := stripeCheckoutPlan("cloud_team")
+	if plan != "basic" || priceID != "price_team" {
+		t.Fatalf("cloud team = %q/%q", plan, priceID)
+	}
+	plan, priceID = stripeCheckoutPlan("cloud_business")
+	if plan != "business" || priceID != "price_business" {
+		t.Fatalf("cloud business = %q/%q", plan, priceID)
+	}
+	plan, priceID = stripeCheckoutPlan("enterprise_cloud")
+	if plan != "" || priceID != "" {
+		t.Fatalf("enterprise should not be self-serve checkout: %q/%q", plan, priceID)
 	}
 }
 
