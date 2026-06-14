@@ -27,6 +27,8 @@ const env = {
   STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN:
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:stripe-webhook",
   OTEL_EXPORTER_OTLP_ENDPOINT: "collector.example:4318",
+  S3_BUCKET: "attachments-bucket",
+  S3_ENDPOINT: "https://s3-compatible.example",
   PUBLIC_BASE_URL: "https://app.example",
   WEB_INTERNAL_API_URL: "http://app-alb.example/api",
 };
@@ -39,6 +41,7 @@ assert.throws(
   () => renderTemplate("${MISSING}", env),
   /Missing required environment variables/,
 );
+assert.equal(renderTemplate("${S3_BUCKET}/${S3_ENDPOINT}", {}), "/");
 assert.throws(
   () =>
     renderTemplate("${DATABASE_URL_SECRET_ARN}", {

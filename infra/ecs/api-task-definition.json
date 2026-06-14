@@ -42,6 +42,18 @@
         {
           "name": "PUBLIC_BASE_URL",
           "value": "${PUBLIC_BASE_URL}"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "${AWS_REGION}"
+        },
+        {
+          "name": "S3_BUCKET",
+          "value": "${S3_BUCKET}"
+        },
+        {
+          "name": "S3_ENDPOINT",
+          "value": "${S3_ENDPOINT}"
         }
       ],
       "secrets": [

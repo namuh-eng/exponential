@@ -172,7 +172,8 @@ Configure these before sharing the instance:
 - `DB_PASSWORD`
 - optional `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`
 - optional email via SES (`SENDER_EMAIL`) or Opensend (`OPENSEND_API_KEY`)
-- optional attachments via `S3_BUCKET` and AWS credentials or an instance role
+- optional attachments via `S3_BUCKET` and AWS credentials, an instance/task
+  role, or `S3_ENDPOINT` for S3-compatible storage such as MinIO
 
 See [docs/self-hosting.md](docs/self-hosting.md) for reverse proxy headers,
 bind-address controls, metrics checks, backups, upgrades, and ECS.

@@ -20,15 +20,18 @@ function parseArgs(argv) {
 }
 
 export function renderTemplate(input, env = process.env) {
-  const optionalEmpty = new Set(["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+  const optionalEmpty = new Set([
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "S3_BUCKET",
+    "S3_ENDPOINT",
+  ]);
   const missing = new Set();
   const rendered = input.replace(/\$\{([A-Z0-9_]+)\}/g, (_match, key) => {
     const value = env[key];
-    if (
-      value === undefined ||
-      value === "None" ||
-      (value === "" && !optionalEmpty.has(key))
-    ) {
+    if (optionalEmpty.has(key) && (value === undefined || value === "")) {
+      return "";
+    }
+    if (value === undefined || value === "None" || value === "") {
       missing.add(key);
       return "";
     }
