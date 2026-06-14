@@ -15,9 +15,9 @@ import (
 
 func TestSnapshotReportsEndpointREDMetrics(t *testing.T) {
 	metrics := &Metrics{}
-	metrics.record("GET /v1/issues", 200, 10*time.Millisecond)
-	metrics.record("GET /v1/issues", 503, 20*time.Millisecond)
-	metrics.record("GET /v1/issues", 200, 30*time.Millisecond)
+	metrics.record(http.MethodGet, "/v1/issues", 200, 10*time.Millisecond)
+	metrics.record(http.MethodGet, "/v1/issues", 503, 20*time.Millisecond)
+	metrics.record(http.MethodGet, "/v1/issues", 200, 30*time.Millisecond)
 
 	snapshot := Snapshot(metrics)
 	endpoint := snapshot.Endpoints["GET /v1/issues"]
@@ -26,6 +26,28 @@ func TestSnapshotReportsEndpointREDMetrics(t *testing.T) {
 	}
 	if endpoint.P50MS != 20 || endpoint.P95MS != 30 || endpoint.P99MS != 30 {
 		t.Fatalf("percentiles = %#v", endpoint)
+	}
+}
+
+func TestPrometheusReportsCountersAndHistograms(t *testing.T) {
+	metrics := &Metrics{}
+	metrics.record(http.MethodGet, "/v1/issues/{id}", 200, 12*time.Millisecond)
+	metrics.record(http.MethodGet, "/v1/issues/{id}", 503, 275*time.Millisecond)
+
+	output := Prometheus(metrics)
+	for _, expected := range []string{
+		"# TYPE exponential_http_requests_total counter",
+		`exponential_http_requests_total{method="GET",route="/v1/issues/{id}",status="200"} 1`,
+		`exponential_http_requests_total{method="GET",route="/v1/issues/{id}",status="503"} 1`,
+		"# TYPE exponential_http_request_duration_seconds histogram",
+		`exponential_http_request_duration_seconds_bucket{method="GET",route="/v1/issues/{id}",status="200",le="0.025"} 1`,
+		`exponential_http_request_duration_seconds_bucket{method="GET",route="/v1/issues/{id}",status="503",le="0.25"} 0`,
+		`exponential_http_request_duration_seconds_bucket{method="GET",route="/v1/issues/{id}",status="503",le="0.5"} 1`,
+		`exponential_http_request_duration_seconds_count{method="GET",route="/v1/issues/{id}",status="503"} 1`,
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("Prometheus output missing %q:\n%s", expected, output)
+		}
 	}
 }
 

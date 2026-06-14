@@ -69,7 +69,7 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 	}
 	r.Get("/healthz", healthHandler)
 	r.Get("/api/healthz", healthHandler)
-	metricsHandler := func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	redMetricsHandler := func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		if !metricsAccessAllowed(r) {
 			stdhttp.NotFound(w, r)
 			return
@@ -80,8 +80,21 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 			logger.Error("write metrics response", zap.Error(err))
 		}
 	}
-	r.Get("/metrics/red", metricsHandler)
-	r.Get("/api/metrics/red", metricsHandler)
+	prometheusMetricsHandler := func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		if !metricsAccessAllowed(r) {
+			stdhttp.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		w.WriteHeader(stdhttp.StatusOK)
+		if _, err := w.Write([]byte(observability.Prometheus(metrics))); err != nil {
+			logger.Error("write prometheus metrics response", zap.Error(err))
+		}
+	}
+	r.Get("/metrics", prometheusMetricsHandler)
+	r.Get("/api/metrics", prometheusMetricsHandler)
+	r.Get("/metrics/red", redMetricsHandler)
+	r.Get("/api/metrics/red", redMetricsHandler)
 
 	mountAPIRoutes(r, "/v1", db, emailSender, logger)
 	mountAPIRoutes(r, "/api", db, emailSender, logger)
