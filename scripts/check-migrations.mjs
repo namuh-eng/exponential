@@ -24,10 +24,7 @@ const allowedDuplicatePrefixGroups = new Map([
   ],
   [
     "0008",
-    new Set([
-      "0008_integration_lifecycle.sql",
-      "0008_slack_thread_links.sql",
-    ]),
+    new Set(["0008_integration_lifecycle.sql", "0008_slack_thread_links.sql"]),
   ],
 ]);
 
