@@ -8,8 +8,12 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const region = process.env.AWS_REGION ?? "us-east-1";
 const bucket = process.env.S3_BUCKET;
+const endpoint = process.env.S3_ENDPOINT?.trim();
 
-export const s3 = new S3Client({ region });
+export const s3 = new S3Client({
+  region,
+  ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
+});
 
 function ensureBucket(): string {
   if (!bucket) {

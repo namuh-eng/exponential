@@ -25,6 +25,7 @@ const publicPaths = [
   ...PUBLIC_ROUTES,
   "/api/auth",
   "/api/health",
+  "/api/demo",
   "/api/workspaces",
   "/api/test",
   "/api/account",

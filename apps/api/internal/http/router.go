@@ -18,6 +18,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/authproviders"
 	"github.com/namuh-eng/exponential/apps/api/internal/billing"
 	"github.com/namuh-eng/exponential/apps/api/internal/comments"
+	"github.com/namuh-eng/exponential/apps/api/internal/demo"
 	"github.com/namuh-eng/exponential/apps/api/internal/documents"
 	"github.com/namuh-eng/exponential/apps/api/internal/email"
 	"github.com/namuh-eng/exponential/apps/api/internal/emojis"
@@ -118,6 +119,10 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 			publicAuth.Use(ratelimit.PublicMiddleware())
 			publicAuth.Mount("/auth", authProvidersHandler.Routes())
 		})
+		v1.Group(func(publicDemo chi.Router) {
+			publicDemo.Use(ratelimit.PublicMiddleware())
+			publicDemo.Get("/demo/session", demo.Handler{DB: db}.Session)
+		})
 		v1.Group(func(publicProvider chi.Router) {
 			publicProvider.Use(ratelimit.PublicMiddleware())
 			publicProvider.Get("/integrations/slack/oauth/callback", integrationsHandler.SlackOAuthCallback)
@@ -134,6 +139,7 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 		v1.Group(func(protected chi.Router) {
 			protected.Use(authMiddleware.Require)
 			protected.Use(ratelimit.Middleware())
+			protected.Use(demo.SideEffectGuard{DB: db}.Block)
 			protected.Post("/issues/{id}/comments", commentsHandler.CreateForIssue)
 			protected.Post("/issues/{id}/reactions", commentsHandler.ToggleIssueReaction)
 			protected.Delete("/issues/{id}/reactions", commentsHandler.DeleteIssueReaction)

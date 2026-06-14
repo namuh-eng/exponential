@@ -50,6 +50,18 @@
         {
           "name": "STRIPE_CLOUD_BUSINESS_PRICE_ID",
           "value": "${STRIPE_CLOUD_BUSINESS_PRICE_ID}"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "${AWS_REGION}"
+        },
+        {
+          "name": "S3_BUCKET",
+          "value": "${S3_BUCKET}"
+        },
+        {
+          "name": "S3_ENDPOINT",
+          "value": "${S3_ENDPOINT}"
         }
       ],
       "secrets": [

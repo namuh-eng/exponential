@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
+	"github.com/namuh-eng/exponential/apps/api/internal/demo"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
 )
 
@@ -43,6 +44,10 @@ func (h Handler) AuthorizeOAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	if found.App == nil {
 		problem.JSON(w, 400, map[string]string{"error": "invalid_client"})
+		return
+	}
+	if demo.IsWorkspaceID(r.Context(), h.DB, found.ID) {
+		problem.Write(w, 403, "Demo side effect disabled", "OAuth authorization is disabled for the public demo workspace.")
 		return
 	}
 	allowedRedirects := stringArray(firstNonNilOAuth(found.App["redirectUrls"], []any{found.App["redirectUrl"]}))
@@ -121,6 +126,10 @@ func (h Handler) ExchangeOAuthToken(w http.ResponseWriter, r *http.Request) {
 	}
 	if codeRecord == nil {
 		problem.JSON(w, 400, map[string]string{"error": "invalid_grant"})
+		return
+	}
+	if demo.IsWorkspaceID(r.Context(), h.DB, found.ID) {
+		problem.Write(w, 403, "Demo side effect disabled", "OAuth token exchange is disabled for the public demo workspace.")
 		return
 	}
 	app := findOAuthApp(found.API, clientID, asStringOAuth(codeRecord["applicationId"]))

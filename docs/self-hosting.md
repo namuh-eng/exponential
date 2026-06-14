@@ -113,7 +113,7 @@ at `http://localhost:7015`.
 | Magic-link email (SMTP) | `SENDER_EMAIL`, `SMTP_HOST` (+ optional `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_TLS`) | Use this for any SMTP relay: Mailgun, Postmark, Gmail app password, your own mail server, or Mailhog in dev. |
 | Magic-link email (Opensend) | `SENDER_EMAIL`, `OPENSEND_API_KEY` (+ optional `OPENSEND_BASE_URL`) | — |
 | Magic-link email (SES) | `SENDER_EMAIL` with AWS credentials or instance/task role | — |
-| Attachments | `AWS_REGION`, `S3_BUCKET`, AWS credentials or instance/task role | Attachment endpoints return service unavailable. |
+| Attachments | `AWS_REGION`, `S3_BUCKET`, AWS credentials or instance/task role; optional `S3_ENDPOINT` for S3-compatible storage | Attachment endpoints return service unavailable. |
 | Slack integration | `AUTH_SLACK_ID`, `AUTH_SLACK_SECRET` | Slack installation is unavailable. |
 | Inbound email | `INBOUND_EMAIL_WEBHOOK_SECRET`, `EXPONENTIAL_INBOUND_DOMAIN` | Inbound email routes cannot be used. |
 | AI discussion summaries | `OPENAI_API_KEY`, `DISCUSSION_SUMMARY_PROVIDER=openai` | Summaries stay disabled/fallback-only. |
@@ -153,6 +153,53 @@ SMTP_PORT=1025
 ```
 
 No `SMTP_USERNAME`, `SMTP_PASSWORD`, or `SMTP_TLS` needed for Mailhog.
+
+### Attachment Storage
+
+Attachments use presigned object-storage URLs. Set `S3_BUCKET` for AWS S3, or
+set both `S3_BUCKET` and `S3_ENDPOINT` for S3-compatible services such as MinIO,
+Cloudflare R2, or Garage. When `S3_ENDPOINT` is present, the API signs path-style
+URLs like `http://localhost:9000/bucket/key`.
+
+For S3-compatible storage, `S3_ENDPOINT` must be reachable by the user's browser
+because upload and download requests go directly to object storage. In Docker
+Compose, `http://localhost:9000` works for a local MinIO trial even though the
+API container itself talks to other services by container name.
+
+The bundled Compose files include an optional MinIO profile. Add these values
+to `.env` or export them in the shell before starting Compose:
+
+```bash
+S3_BUCKET=exponential-attachments
+S3_ENDPOINT=http://localhost:9000
+AWS_ACCESS_KEY_ID=minioadmin
+AWS_SECRET_ACCESS_KEY=minioadmin
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin
+
+docker compose --profile minio up --build
+```
+
+MinIO's console is available at `http://localhost:9001` by default. The MinIO
+service allows CORS for `NEXT_PUBLIC_APP_URL`, and the `minio-init` service
+creates the bucket. For a non-local public install, set `NEXT_PUBLIC_APP_URL`
+and `S3_ENDPOINT` to HTTPS origins that browsers can reach.
+
+For R2, Garage, or an external MinIO deployment, create the bucket in that
+service, configure equivalent CORS for `GET` and `PUT`, then set:
+
+```bash
+AWS_REGION=auto
+S3_BUCKET=<bucket>
+S3_ENDPOINT=https://<object-storage-origin>
+AWS_ACCESS_KEY_ID=<access-key>
+AWS_SECRET_ACCESS_KEY=<secret-key>
+```
+
+Local disk attachment storage is intentionally deferred. The current attachment
+flow relies on presigned object-storage URLs; a disk driver would also need
+authenticated file serving, cleanup, backup, and multi-instance semantics, so it
+should be designed as a separate storage-driver change.
 
 ## Ports and Bind Addresses
 
@@ -334,6 +381,110 @@ neither the raw secret value nor an existing ARN is present. When Stripe is not
 configured, the webhook route returns 400 and billing-related API calls are
 unavailable, but all other API and UI functionality works normally.
 
+### Production sizing
+
+`scripts/preflight.sh` defaults to the lowest-cost data tier so trial stacks keep
+the previous behavior: `db.t3.micro`, single-AZ RDS, `cache.t3.micro`, and a
+single ElastiCache Redis node. For production, set the data-tier options before
+running preflight:
+
+```bash
+DB_INSTANCE_CLASS=db.t4g.small \
+DB_MULTI_AZ=true \
+REDIS_NODE_TYPE=cache.t4g.small \
+REDIS_REPLICATION_ENABLED=true \
+DB_PASSWORD=<generated-or-existing-password> \
+bash scripts/preflight.sh
+```
+
+| Variable | Default | Production guidance |
+| --- | --- | --- |
+| `DB_INSTANCE_CLASS` | `db.t3.micro` | Pick a class with enough memory and CPU for the workload, for example `db.t4g.small` or larger. Existing RDS instances are modified in place when this changes. |
+| `DB_MULTI_AZ` | `false` | Set `true` for a standby in another AZ and automatic RDS failover. This raises cost and may briefly affect the instance while AWS applies the change. |
+| `REDIS_NODE_TYPE` | `cache.t3.micro` | Pick a class large enough for session, cache, and realtime fanout load. Existing standalone clusters or replication groups are modified in place when this changes. |
+| `REDIS_REPLICATION_ENABLED` | `false` | Set `true` to provision an ElastiCache replication group with one primary, one replica, Multi-AZ placement, and automatic failover. |
+
+With `REDIS_REPLICATION_ENABLED=false`, preflight manages the legacy standalone
+cluster named `exponential-redis`. A node restart can evict sessions and realtime
+state. With `REDIS_REPLICATION_ENABLED=true`, preflight manages
+`exponential-redis-rg` and writes `REDIS_URL` to the replication group's primary
+endpoint. Preflight does not delete an existing standalone cluster when you
+enable replication; keep it until the ECS services have been redeployed and the
+new Redis endpoint has passed smoke checks.
+
+Changing `DATABASE_URL` or `REDIS_URL` in `.env` is not enough for running ECS
+tasks. When an ARN such as `DATABASE_URL_SECRET_ARN` or `REDIS_URL_SECRET_ARN`
+already exists, re-run `SYNC_DEPLOY_SECRET_VALUES=true bash scripts/prepare-ecs-deploy-env.sh`
+so Secrets Manager receives the new endpoint value, then deploy with
+`RUN_PROD_SMOKE=true scripts/deploy-ecs.sh`.
+
+### RDS point-in-time restore runbook
+
+RDS backups are retained for seven days by preflight. Exercise this runbook after
+the initial production deployment and after major data-tier changes. Record the
+date, source instance, restore target, validation result, and rollback endpoint
+in your operator notes.
+
+1. Capture the current endpoint and latest restorable time:
+
+   ```bash
+   aws rds describe-db-instances \
+     --db-instance-identifier exponential-db \
+     --region "$AWS_REGION" \
+     --query 'DBInstances[0].[Endpoint.Address,LatestRestorableTime]' \
+     --output table
+   ```
+
+2. Restore to a new private RDS instance. Use `--restore-time` with an ISO 8601
+   timestamp for a specific point, or `--use-latest-restorable-time` for a drill:
+
+   ```bash
+   RESTORE_ID="exponential-db-restore-$(date +%Y%m%d%H%M)"
+   aws rds restore-db-instance-to-point-in-time \
+     --source-db-instance-identifier exponential-db \
+     --target-db-instance-identifier "$RESTORE_ID" \
+     --use-latest-restorable-time \
+     --db-instance-class "${DB_INSTANCE_CLASS:-db.t3.micro}" \
+     --db-subnet-group-name exponential-db-subnet \
+     --vpc-security-group-ids "$DB_SG" \
+     --no-publicly-accessible \
+     --region "$AWS_REGION"
+   aws rds wait db-instance-available \
+     --db-instance-identifier "$RESTORE_ID" \
+     --region "$AWS_REGION"
+   ```
+
+   Add `--multi-az` when the restored instance should immediately match a
+   Multi-AZ production target.
+
+3. Validate the restored database from the VPC, using a bastion, VPN, or one-off
+   ECS task with network access to the private subnets:
+
+   ```bash
+   RESTORE_ENDPOINT=$(aws rds describe-db-instances \
+     --db-instance-identifier "$RESTORE_ID" \
+     --region "$AWS_REGION" \
+     --query 'DBInstances[0].Endpoint.Address' \
+     --output text)
+   psql "postgresql://postgres:${DB_PASSWORD}@${RESTORE_ENDPOINT}:5432/exponential" \
+     -c 'select count(*) from workspace;'
+   ```
+
+4. Cut over by updating the database secret and redeploying. Keep the old
+   endpoint value for rollback:
+
+   ```bash
+   OLD_DATABASE_URL="$DATABASE_URL"
+   export DATABASE_URL="postgresql://postgres:${DB_PASSWORD}@${RESTORE_ENDPOINT}:5432/exponential"
+   bash scripts/prepare-ecs-deploy-env.sh
+   RUN_PROD_SMOKE=true scripts/deploy-ecs.sh
+   ```
+
+5. Roll back by restoring `OLD_DATABASE_URL`, re-running
+   `scripts/prepare-ecs-deploy-env.sh`, and redeploying. After the restored stack
+   is stable and the backup window has elapsed, delete abandoned restore
+   instances explicitly; preflight never deletes RDS instances.
+
 For ECS web-to-API server requests, prefer `WEB_INTERNAL_API_URL` pointing at
 the internal ALB/API route so server-side auth/session checks do not hairpin
 through a public CDN or proxy hostname.
@@ -475,8 +626,9 @@ is not the recommended public self-hosting path.
 
 ## Known Limitations
 
-- Attachment storage is S3-oriented; local disk attachment storage is not
-  implemented.
+- Attachment storage is S3/S3-compatible object-storage oriented; local disk
+  attachment storage is intentionally deferred to a separate storage-driver
+  design.
 - Production magic-link sign-in requires at least one email provider (SMTP,
   Opensend, or SES). With no provider configured it returns 503.
 - The pre-built GHCR images bundle the SDK/UI at the commit they were built

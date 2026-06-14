@@ -1,4 +1,4 @@
-.PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd api-build api-test api-dockerfile ecs-task-definitions ecs-render deploy-scripts smoke-script openapi-coverage openapi-strict sqlc-generated web-api-empty web-sdk-usage web-runtime-boundaries
+.PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd api-build api-test api-dockerfile ecs-task-definitions ecs-render deploy-scripts smoke-script openapi-coverage openapi-strict sqlc-generated migrations web-api-empty web-sdk-usage web-runtime-boundaries
 .PHONY: check-header test-header check-verbose test-verbose
 .PHONY: dev-services dev-services-down deploy deploy-oauth-secrets
 .PHONY: dev-op build-op start-op op-bootstrap op-doctor
@@ -7,7 +7,7 @@
 all: check test
 
 # Static analysis: typecheck + lint/format
-check: check-header typecheck lint api-build api-dockerfile ecs-task-definitions ecs-render deploy-scripts smoke-script openapi-coverage openapi-strict sqlc-generated web-api-empty web-sdk-usage web-runtime-boundaries
+check: check-header typecheck lint api-build api-dockerfile ecs-task-definitions ecs-render deploy-scripts smoke-script openapi-coverage openapi-strict sqlc-generated migrations web-api-empty web-sdk-usage web-runtime-boundaries
 
 # TypeScript type checking
 typecheck:
@@ -47,7 +47,7 @@ ecs-render:
 # Deploy script syntax
 deploy-scripts:
 	@. ./hack/run_silent.sh && \
-	run_silent "Deploy scripts are syntactically valid" "sh -n scripts/deploy-ecs.sh && sh -n scripts/configure-ecs-autoscaling.sh && node scripts/check-deploy-scripts.mjs"
+	run_silent "Deploy scripts are syntactically valid" "bash -n scripts/preflight.sh && sh -n scripts/deploy-ecs.sh && sh -n scripts/configure-ecs-autoscaling.sh && sh -n scripts/reset-demo.sh && node scripts/check-deploy-scripts.mjs && node scripts/check-reset-demo-env.mjs"
 
 # Production smoke script shape
 smoke-script:
@@ -68,6 +68,11 @@ openapi-strict:
 sqlc-generated:
 	@. ./hack/run_silent.sh && \
 	run_silent "sqlc generated queries present" "node scripts/check-sqlc-generated.mjs"
+
+# SQL migration filename and prefix guard
+migrations:
+	@. ./hack/run_silent.sh && \
+	run_silent "Migration filename guard passed" "node scripts/check-migrations.mjs"
 
 # Ensure Next.js remains UI-only.
 web-api-empty:

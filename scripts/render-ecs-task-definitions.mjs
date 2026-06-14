@@ -30,6 +30,8 @@ const OPTIONAL_EMPTY_VARS = new Set([
   "STRIPE_SECRET_KEY_SECRET_ARN",
   "STRIPE_CLOUD_TEAM_PRICE_ID",
   "STRIPE_CLOUD_BUSINESS_PRICE_ID",
+  "S3_BUCKET",
+  "S3_ENDPOINT",
 ]);
 
 // Maps optional ARN env-var names to the ECS secret name they populate.

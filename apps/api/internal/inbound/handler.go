@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/namuh-eng/exponential/apps/api/internal/demo"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
 	"github.com/namuh-eng/exponential/apps/api/internal/sanitizehtml"
 )
@@ -68,6 +69,10 @@ func (h Handler) TeamEmail(w http.ResponseWriter, r *http.Request) {
 	team, err := h.findTeam(r.Context(), *rec)
 	if err != nil {
 		problem.Write(w, 404, "Unknown inbound email recipient", "")
+		return
+	}
+	if demo.IsWorkspaceID(r.Context(), h.DB, team.WorkspaceID) {
+		problem.Write(w, 403, "Demo side effect disabled", "Inbound email is disabled for the public demo workspace.")
 		return
 	}
 	if !emailEnabled(team.Settings) {

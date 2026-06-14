@@ -57,6 +57,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/demo/session": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Create a disposable public demo browser session and seed the demo workspace if needed. */
+    get: operations["createDemoSession"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/issues": {
     parameters: {
       query?: never;
@@ -2183,6 +2200,24 @@ export interface components {
       title: string;
       status: number;
       detail?: string;
+    };
+    DemoSessionResponse: {
+      success: boolean;
+      sessionUrl: string;
+      /** Format: date-time */
+      expiresAt: string;
+      workspace: {
+        /** Format: uuid */
+        id: string;
+        name: string;
+        urlSlug: string;
+      };
+      defaultTeam: {
+        /** Format: uuid */
+        id: string;
+        name: string;
+        key: string;
+      };
     };
     AccountSecurityResponse: {
       sessions: {
@@ -4741,6 +4776,34 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["AttachmentDownloadUrlResponse"];
         };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createDemoSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Demo session details for API clients */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DemoSessionResponse"];
+        };
+      };
+      /** @description Browser requests are redirected to the seeded demo workspace after cookies are set. */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       default: components["responses"]["Problem"];
     };

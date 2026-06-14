@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   sendMock,
+  s3ClientInputs,
   S3ClientMock,
   PutObjectCommandMock,
   GetObjectCommandMock,
@@ -9,7 +10,12 @@ const {
   getSignedUrlMock,
 } = vi.hoisted(() => {
   const sendMock = vi.fn(() => Promise.resolve({}));
+  const s3ClientInputs: Record<string, unknown>[] = [];
   class S3ClientMock {
+    constructor(input: Record<string, unknown>) {
+      s3ClientInputs.push(input);
+    }
+
     send = sendMock;
   }
   class PutObjectCommandMock {
@@ -35,6 +41,7 @@ const {
   );
   return {
     sendMock,
+    s3ClientInputs,
     S3ClientMock,
     PutObjectCommandMock,
     GetObjectCommandMock,
@@ -62,13 +69,29 @@ describe("S3 storage utilities", () => {
 
   beforeEach(async () => {
     vi.resetModules();
+    s3ClientInputs.length = 0;
     vi.stubEnv("S3_BUCKET", "test-bucket");
     vi.stubEnv("AWS_REGION", "us-east-1");
+    vi.stubEnv("S3_ENDPOINT", "");
     s3Module = await import("@/lib/s3");
   });
 
   it("exports s3 client", () => {
     expect(s3Module.s3).toBeDefined();
+  });
+
+  it("configures path-style S3 client for a custom endpoint", async () => {
+    vi.resetModules();
+    s3ClientInputs.length = 0;
+    vi.stubEnv("S3_ENDPOINT", "http://localhost:9000");
+
+    await import("@/lib/s3");
+
+    expect(s3ClientInputs.at(-1)).toMatchObject({
+      region: "us-east-1",
+      endpoint: "http://localhost:9000",
+      forcePathStyle: true,
+    });
   });
 
   it("getUploadUrl returns a presigned URL", async () => {

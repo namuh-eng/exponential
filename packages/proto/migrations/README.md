@@ -17,11 +17,19 @@ in the `exponential_schema_migration` table.
 - Keep migrations idempotent-friendly where cheap (`if not exists` for new
   objects) since self-hosted operators may restore from partial backups.
 
-## Known numbering anomaly
+## Known numbering anomalies
 
-`0006_backfill_triage_workflow_state.sql` and `0006_stripe_webhook_event.sql`
-share the `0006` prefix. Both are already applied in production and ordering is
-deterministic (string sort: `backfill` before `stripe`), so they must **not**
-be renamed. The next migration is `0008_*` to keep prefixes unambiguous going
-forward (`0007` is skipped to avoid any suggestion that it sorts between the
-two `0006` files).
+The migration runner records applied migrations by filename, not numeric prefix.
+These duplicate prefixes already exist in deployed branches and must **not** be
+renamed:
+
+- `0006_backfill_triage_workflow_state.sql`
+- `0006_stripe_webhook_event.sql`
+- `0007_integration_provider_lifecycle.sql`
+- `0007_webhook_delivery.sql`
+- `0008_integration_lifecycle.sql`
+- `0008_slack_thread_links.sql`
+
+Ordering is deterministic by full filename string. Every later migration must use
+the next unused prefix (`0009` at the time of this note) so no new duplicate
+prefixes are introduced.

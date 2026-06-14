@@ -161,7 +161,14 @@ func (defaultS3Presigner) client(ctx context.Context) (*s3.PresignClient, error)
 	if err != nil {
 		return nil, err
 	}
-	return s3.NewPresignClient(s3.NewFromConfig(cfg)), nil
+	options := []func(*s3.Options){}
+	if endpoint := strings.TrimSpace(os.Getenv("S3_ENDPOINT")); endpoint != "" {
+		options = append(options, func(o *s3.Options) {
+			o.BaseEndpoint = aws.String(endpoint)
+			o.UsePathStyle = true
+		})
+	}
+	return s3.NewPresignClient(s3.NewFromConfig(cfg, options...)), nil
 }
 
 func (p defaultS3Presigner) PresignPut(ctx context.Context, bucket, key, contentType string, expires time.Duration) (string, map[string]string, error) {
