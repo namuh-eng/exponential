@@ -47,7 +47,7 @@ ecs-render:
 # Deploy script syntax
 deploy-scripts:
 	@. ./hack/run_silent.sh && \
-	run_silent "Deploy scripts are syntactically valid" "bash -n scripts/preflight.sh && sh -n scripts/deploy-ecs.sh && sh -n scripts/configure-ecs-autoscaling.sh && node scripts/check-deploy-scripts.mjs"
+	run_silent "Deploy scripts are syntactically valid" "bash -n scripts/preflight.sh && sh -n scripts/deploy-ecs.sh && sh -n scripts/configure-ecs-autoscaling.sh && sh -n scripts/reset-demo.sh && node scripts/check-deploy-scripts.mjs && node scripts/check-reset-demo-env.mjs"
 
 # Production smoke script shape
 smoke-script:
