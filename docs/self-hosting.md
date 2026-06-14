@@ -82,7 +82,7 @@ at `http://localhost:7015`.
 | --- | --- | --- |
 | Google sign-in | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | Google OAuth is unavailable. |
 | Magic-link email | `SENDER_EMAIL` with SES, or `SENDER_EMAIL` + `OPENSEND_API_KEY` for Opensend | Production magic-link email returns unavailable. |
-| Attachments | `AWS_REGION`, `S3_BUCKET`, AWS credentials or instance/task role | Attachment endpoints return service unavailable. |
+| Attachments | `AWS_REGION`, `S3_BUCKET`, AWS credentials or instance/task role; optional `S3_ENDPOINT` for S3-compatible storage | Attachment endpoints return service unavailable. |
 | Slack integration | `AUTH_SLACK_ID`, `AUTH_SLACK_SECRET` | Slack installation is unavailable. |
 | Inbound email | `INBOUND_EMAIL_WEBHOOK_SECRET`, `EXPONENTIAL_INBOUND_DOMAIN` | Inbound email routes cannot be used. |
 | AI discussion summaries | `OPENAI_API_KEY`, `DISCUSSION_SUMMARY_PROVIDER=openai` | Summaries stay disabled/fallback-only. |
@@ -91,6 +91,53 @@ at `http://localhost:7015`.
 Email provider selection is automatic: `OPENSEND_API_KEY` selects Opensend,
 `SENDER_EMAIL` alone selects SES, and `EMAIL_PROVIDER=ses|opensend` can force a
 provider.
+
+### Attachment Storage
+
+Attachments use presigned object-storage URLs. Set `S3_BUCKET` for AWS S3, or
+set both `S3_BUCKET` and `S3_ENDPOINT` for S3-compatible services such as MinIO,
+Cloudflare R2, or Garage. When `S3_ENDPOINT` is present, the API signs path-style
+URLs like `http://localhost:9000/bucket/key`.
+
+For S3-compatible storage, `S3_ENDPOINT` must be reachable by the user's browser
+because upload and download requests go directly to object storage. In Docker
+Compose, `http://localhost:9000` works for a local MinIO trial even though the
+API container itself talks to other services by container name.
+
+The bundled Compose files include an optional MinIO profile. Add these values
+to `.env` or export them in the shell before starting Compose:
+
+```bash
+S3_BUCKET=exponential-attachments
+S3_ENDPOINT=http://localhost:9000
+AWS_ACCESS_KEY_ID=minioadmin
+AWS_SECRET_ACCESS_KEY=minioadmin
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin
+
+docker compose --profile minio up --build
+```
+
+MinIO's console is available at `http://localhost:9001` by default. The MinIO
+service allows CORS for `NEXT_PUBLIC_APP_URL`, and the `minio-init` service
+creates the bucket. For a non-local public install, set `NEXT_PUBLIC_APP_URL`
+and `S3_ENDPOINT` to HTTPS origins that browsers can reach.
+
+For R2, Garage, or an external MinIO deployment, create the bucket in that
+service, configure equivalent CORS for `GET` and `PUT`, then set:
+
+```bash
+AWS_REGION=auto
+S3_BUCKET=<bucket>
+S3_ENDPOINT=https://<object-storage-origin>
+AWS_ACCESS_KEY_ID=<access-key>
+AWS_SECRET_ACCESS_KEY=<secret-key>
+```
+
+Local disk attachment storage is intentionally deferred. The current attachment
+flow relies on presigned object-storage URLs; a disk driver would also need
+authenticated file serving, cleanup, backup, and multi-instance semantics, so it
+should be designed as a separate storage-driver change.
 
 ## Ports and Bind Addresses
 
@@ -373,8 +420,9 @@ is not the recommended public self-hosting path.
 
 ## Known Limitations
 
-- Attachment storage is S3-oriented; local disk attachment storage is not
-  implemented.
+- Attachment storage is S3/S3-compatible object-storage oriented; local disk
+  attachment storage is intentionally deferred to a separate storage-driver
+  design.
 - Production email requires SES or Opensend configuration.
 - Compose builds local images from source. If you publish your own registry
   images, keep the split `web`, `api`, and migration tasks.
