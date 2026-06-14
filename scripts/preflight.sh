@@ -11,8 +11,47 @@ fi
 REGION="${AWS_REGION:-us-east-1}"
 APP_NAME="exponential"
 
+normalize_bool() {
+  case "${1,,}" in
+    true|1|yes|y|on) printf 'true' ;;
+    false|0|no|n|off) printf 'false' ;;
+    *)
+      echo "Invalid boolean value: $1" >&2
+      echo "Use true or false." >&2
+      exit 1
+      ;;
+  esac
+}
+
+set_env_file() {
+  local key="$1"
+  local value="$2"
+  KEY="$key" VALUE="$value" python3 - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(".env")
+key = os.environ["KEY"]
+value = os.environ["VALUE"]
+lines = path.read_text().splitlines() if path.exists() else []
+for index, line in enumerate(lines):
+    if line.startswith(f"{key}="):
+        lines[index] = f"{key}={value}"
+        break
+else:
+    lines.append(f"{key}={value}")
+path.write_text("\n".join(lines) + "\n")
+PY
+}
+
+DB_INSTANCE_CLASS="${DB_INSTANCE_CLASS:-db.t3.micro}"
+DB_MULTI_AZ="$(normalize_bool "${DB_MULTI_AZ:-false}")"
+REDIS_NODE_TYPE="${REDIS_NODE_TYPE:-cache.t3.micro}"
+REDIS_REPLICATION_ENABLED="$(normalize_bool "${REDIS_REPLICATION_ENABLED:-false}")"
+
 echo "=== Pre-flight Infrastructure Setup (AWS - team tier) ==="
 echo "Region: $REGION"
+echo "Data tier: RDS $DB_INSTANCE_CLASS multi-AZ=$DB_MULTI_AZ | Redis $REDIS_NODE_TYPE replication=$REDIS_REPLICATION_ENABLED"
 
 # 1. VPC and subnets
 echo ""
@@ -197,12 +236,52 @@ aws rds create-db-subnet-group \
   --subnet-ids $PRIV_SUBNET_A $PRIV_SUBNET_B \
   --region $REGION 2>/dev/null || true
 
-if aws rds describe-db-instances --db-instance-identifier ${APP_NAME}-db --region $REGION 2>/dev/null | grep -q "available"; then
-  echo "RDS instance already exists."
+if RDS_INFO=$(aws rds describe-db-instances --db-instance-identifier ${APP_NAME}-db \
+  --region $REGION \
+  --query 'DBInstances[0].[DBInstanceStatus,DBInstanceClass,MultiAZ]' --output text 2>/dev/null); then
+  read -r RDS_STATUS RDS_CLASS RDS_MULTI_AZ_CURRENT <<< "$RDS_INFO"
+  if [ "$RDS_STATUS" != "available" ]; then
+    echo "Waiting for existing RDS instance to become available..."
+    aws rds wait db-instance-available --db-instance-identifier ${APP_NAME}-db --region $REGION
+    RDS_INFO=$(aws rds describe-db-instances --db-instance-identifier ${APP_NAME}-db \
+      --region $REGION \
+      --query 'DBInstances[0].[DBInstanceStatus,DBInstanceClass,MultiAZ]' --output text)
+    read -r RDS_STATUS RDS_CLASS RDS_MULTI_AZ_CURRENT <<< "$RDS_INFO"
+  fi
+
+  RDS_MULTI_AZ_CURRENT="$(normalize_bool "$RDS_MULTI_AZ_CURRENT")"
+  RDS_MODIFY_ARGS=()
+  if [ "$RDS_CLASS" != "$DB_INSTANCE_CLASS" ]; then
+    RDS_MODIFY_ARGS+=(--db-instance-class "$DB_INSTANCE_CLASS")
+  fi
+  if [ "$RDS_MULTI_AZ_CURRENT" != "$DB_MULTI_AZ" ]; then
+    if [ "$DB_MULTI_AZ" = "true" ]; then
+      RDS_MODIFY_ARGS+=(--multi-az)
+    else
+      RDS_MODIFY_ARGS+=(--no-multi-az)
+    fi
+  fi
+
+  if [ "${#RDS_MODIFY_ARGS[@]}" -gt 0 ]; then
+    echo "Reconciling RDS instance: class=$DB_INSTANCE_CLASS multi-AZ=$DB_MULTI_AZ"
+    aws rds modify-db-instance \
+      --db-instance-identifier ${APP_NAME}-db \
+      "${RDS_MODIFY_ARGS[@]}" \
+      --apply-immediately \
+      --region $REGION
+    echo "Waiting for RDS modification..."
+    aws rds wait db-instance-available --db-instance-identifier ${APP_NAME}-db --region $REGION
+  else
+    echo "RDS instance already matches requested data-tier settings."
+  fi
 else
+  RDS_MULTI_AZ_CREATE_ARG="--no-multi-az"
+  if [ "$DB_MULTI_AZ" = "true" ]; then
+    RDS_MULTI_AZ_CREATE_ARG="--multi-az"
+  fi
   aws rds create-db-instance \
     --db-instance-identifier ${APP_NAME}-db \
-    --db-instance-class db.t3.micro \
+    --db-instance-class "$DB_INSTANCE_CLASS" \
     --engine postgres \
     --engine-version 15 \
     --master-username postgres \
@@ -214,7 +293,7 @@ else
     --vpc-security-group-ids $DB_SG \
     --backup-retention-period 7 \
     --region $REGION \
-    --no-multi-az \
+    "$RDS_MULTI_AZ_CREATE_ARG" \
     --storage-type gp3
   echo "Waiting for RDS (~5-10 min)..."
   aws rds wait db-instance-available --db-instance-identifier ${APP_NAME}-db --region $REGION
@@ -222,8 +301,15 @@ fi
 RDS_ENDPOINT=$(aws rds describe-db-instances --db-instance-identifier ${APP_NAME}-db \
   --region $REGION --query 'DBInstances[0].Endpoint.Address' --output text)
 echo "RDS Endpoint (private): $RDS_ENDPOINT"
-grep -q '^DATABASE_URL=' .env || echo "DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@${RDS_ENDPOINT}:5432/${APP_NAME}" >> .env
-grep -q '^DB_SSL=' .env || echo "DB_SSL=true" >> .env
+if [ -n "${DB_PASSWORD:-}" ]; then
+  set_env_file DATABASE_URL "postgresql://postgres:${DB_PASSWORD}@${RDS_ENDPOINT}:5432/${APP_NAME}"
+elif grep -q '^DATABASE_URL=' .env 2>/dev/null; then
+  echo "DATABASE_URL already exists; leaving it unchanged because DB_PASSWORD is not set."
+else
+  echo "Set DB_PASSWORD so preflight can write DATABASE_URL." >&2
+  exit 1
+fi
+set_env_file DB_SSL "true"
 
 # 4. ElastiCache Redis (private subnet)
 echo ""
@@ -235,28 +321,115 @@ aws elasticache create-cache-subnet-group \
   --subnet-ids $PRIV_SUBNET_A $PRIV_SUBNET_B \
   --region $REGION 2>/dev/null || true
 
-if aws elasticache describe-cache-clusters --cache-cluster-id ${APP_NAME}-redis --region $REGION 2>/dev/null | grep -q "available"; then
-  echo "ElastiCache Redis already exists."
+if [ "$REDIS_REPLICATION_ENABLED" = "true" ]; then
+  REDIS_REPLICATION_GROUP="${APP_NAME}-redis-rg"
+  if aws elasticache describe-replication-groups --replication-group-id $REDIS_REPLICATION_GROUP --region $REGION >/dev/null 2>&1; then
+    REDIS_INFO=$(aws elasticache describe-replication-groups --replication-group-id $REDIS_REPLICATION_GROUP \
+      --region $REGION \
+      --query 'ReplicationGroups[0].[Status,AutomaticFailover,MultiAZ,MemberClusters[0]]' --output text)
+    read -r REDIS_STATUS REDIS_AUTOMATIC_FAILOVER REDIS_MULTI_AZ_CURRENT REDIS_MEMBER_CLUSTER <<< "$REDIS_INFO"
+    if [ "$REDIS_STATUS" != "available" ]; then
+      echo "Waiting for existing ElastiCache replication group to become available..."
+      aws elasticache wait replication-group-available --replication-group-id $REDIS_REPLICATION_GROUP --region $REGION
+      REDIS_INFO=$(aws elasticache describe-replication-groups --replication-group-id $REDIS_REPLICATION_GROUP \
+        --region $REGION \
+        --query 'ReplicationGroups[0].[Status,AutomaticFailover,MultiAZ,MemberClusters[0]]' --output text)
+      read -r REDIS_STATUS REDIS_AUTOMATIC_FAILOVER REDIS_MULTI_AZ_CURRENT REDIS_MEMBER_CLUSTER <<< "$REDIS_INFO"
+    fi
+
+    REDIS_CURRENT_NODE_TYPE=$(aws elasticache describe-cache-clusters --cache-cluster-id "$REDIS_MEMBER_CLUSTER" \
+      --region $REGION \
+      --query 'CacheClusters[0].CacheNodeType' --output text)
+    REDIS_MODIFY_ARGS=()
+    if [ "$REDIS_CURRENT_NODE_TYPE" != "$REDIS_NODE_TYPE" ]; then
+      REDIS_MODIFY_ARGS+=(--cache-node-type "$REDIS_NODE_TYPE")
+    fi
+    if [ "$REDIS_AUTOMATIC_FAILOVER" != "enabled" ]; then
+      REDIS_MODIFY_ARGS+=(--automatic-failover-enabled)
+    fi
+    if [ "$REDIS_MULTI_AZ_CURRENT" != "enabled" ]; then
+      REDIS_MODIFY_ARGS+=(--multi-az-enabled)
+    fi
+    if [ "${#REDIS_MODIFY_ARGS[@]}" -gt 0 ]; then
+      echo "Reconciling ElastiCache replication group: node type=$REDIS_NODE_TYPE failover=enabled"
+      aws elasticache modify-replication-group \
+        --replication-group-id $REDIS_REPLICATION_GROUP \
+        "${REDIS_MODIFY_ARGS[@]}" \
+        --apply-immediately \
+        --region $REGION
+      echo "Waiting for ElastiCache replication group modification..."
+      aws elasticache wait replication-group-available --replication-group-id $REDIS_REPLICATION_GROUP --region $REGION
+    else
+      echo "ElastiCache replication group already matches requested data-tier settings."
+    fi
+  else
+    aws elasticache create-replication-group \
+      --replication-group-id $REDIS_REPLICATION_GROUP \
+      --replication-group-description "Redis replication group for ${APP_NAME}" \
+      --engine redis \
+      --cache-node-type "$REDIS_NODE_TYPE" \
+      --num-node-groups 1 \
+      --replicas-per-node-group 1 \
+      --automatic-failover-enabled \
+      --multi-az-enabled \
+      --cache-subnet-group-name $REDIS_SUBNET_GROUP \
+      --security-group-ids $REDIS_SG \
+      --region $REGION
+    echo "Waiting for ElastiCache Redis replication group (~10-15 min)..."
+    aws elasticache wait replication-group-available --replication-group-id $REDIS_REPLICATION_GROUP --region $REGION
+  fi
+  REDIS_ENDPOINT=$(aws elasticache describe-replication-groups --replication-group-id $REDIS_REPLICATION_GROUP \
+    --region $REGION \
+    --query 'ReplicationGroups[0].NodeGroups[0].PrimaryEndpoint.Address' --output text)
+  REDIS_PORT=$(aws elasticache describe-replication-groups --replication-group-id $REDIS_REPLICATION_GROUP \
+    --region $REGION \
+    --query 'ReplicationGroups[0].NodeGroups[0].PrimaryEndpoint.Port' --output text)
 else
-  aws elasticache create-cache-cluster \
-    --cache-cluster-id ${APP_NAME}-redis \
-    --cache-node-type cache.t3.micro \
-    --engine redis \
-    --num-cache-nodes 1 \
-    --cache-subnet-group-name $REDIS_SUBNET_GROUP \
-    --security-group-ids $REDIS_SG \
-    --region $REGION
-  echo "Waiting for ElastiCache Redis (~5 min)..."
-  aws elasticache wait cache-cluster-available --cache-cluster-id ${APP_NAME}-redis --region $REGION
+  if REDIS_INFO=$(aws elasticache describe-cache-clusters --cache-cluster-id ${APP_NAME}-redis \
+    --region $REGION \
+    --query 'CacheClusters[0].[CacheClusterStatus,CacheNodeType]' --output text 2>/dev/null); then
+    read -r REDIS_STATUS REDIS_CURRENT_NODE_TYPE <<< "$REDIS_INFO"
+    if [ "$REDIS_STATUS" != "available" ]; then
+      echo "Waiting for existing ElastiCache Redis cluster to become available..."
+      aws elasticache wait cache-cluster-available --cache-cluster-id ${APP_NAME}-redis --region $REGION
+      REDIS_INFO=$(aws elasticache describe-cache-clusters --cache-cluster-id ${APP_NAME}-redis \
+        --region $REGION \
+        --query 'CacheClusters[0].[CacheClusterStatus,CacheNodeType]' --output text)
+      read -r REDIS_STATUS REDIS_CURRENT_NODE_TYPE <<< "$REDIS_INFO"
+    fi
+    if [ "$REDIS_CURRENT_NODE_TYPE" != "$REDIS_NODE_TYPE" ]; then
+      echo "Reconciling ElastiCache Redis node type: $REDIS_NODE_TYPE"
+      aws elasticache modify-cache-cluster \
+        --cache-cluster-id ${APP_NAME}-redis \
+        --cache-node-type "$REDIS_NODE_TYPE" \
+        --apply-immediately \
+        --region $REGION
+      echo "Waiting for ElastiCache Redis modification..."
+      aws elasticache wait cache-cluster-available --cache-cluster-id ${APP_NAME}-redis --region $REGION
+    else
+      echo "ElastiCache Redis cluster already matches requested data-tier settings."
+    fi
+  else
+    aws elasticache create-cache-cluster \
+      --cache-cluster-id ${APP_NAME}-redis \
+      --cache-node-type "$REDIS_NODE_TYPE" \
+      --engine redis \
+      --num-cache-nodes 1 \
+      --cache-subnet-group-name $REDIS_SUBNET_GROUP \
+      --security-group-ids $REDIS_SG \
+      --region $REGION
+    echo "Waiting for ElastiCache Redis (~5 min)..."
+    aws elasticache wait cache-cluster-available --cache-cluster-id ${APP_NAME}-redis --region $REGION
+  fi
+  REDIS_ENDPOINT=$(aws elasticache describe-cache-clusters --cache-cluster-id ${APP_NAME}-redis \
+    --show-cache-node-info --region $REGION \
+    --query 'CacheClusters[0].CacheNodes[0].Endpoint.Address' --output text)
+  REDIS_PORT=$(aws elasticache describe-cache-clusters --cache-cluster-id ${APP_NAME}-redis \
+    --show-cache-node-info --region $REGION \
+    --query 'CacheClusters[0].CacheNodes[0].Endpoint.Port' --output text)
 fi
-REDIS_ENDPOINT=$(aws elasticache describe-cache-clusters --cache-cluster-id ${APP_NAME}-redis \
-  --show-cache-node-info --region $REGION \
-  --query 'CacheClusters[0].CacheNodes[0].Endpoint.Address' --output text)
-REDIS_PORT=$(aws elasticache describe-cache-clusters --cache-cluster-id ${APP_NAME}-redis \
-  --show-cache-node-info --region $REGION \
-  --query 'CacheClusters[0].CacheNodes[0].Endpoint.Port' --output text)
 echo "Redis Endpoint (private): $REDIS_ENDPOINT:$REDIS_PORT"
-grep -q '^REDIS_URL=' .env || echo "REDIS_URL=redis://${REDIS_ENDPOINT}:${REDIS_PORT}" >> .env
+set_env_file REDIS_URL "redis://${REDIS_ENDPOINT}:${REDIS_PORT}"
 
 # 5. S3 Bucket (file attachments, avatars)
 echo ""
@@ -518,27 +691,6 @@ remove_legacy_auth_rules() {
 # Next.js web service. Remove stale Kratos-era /auth/* ALB rules so future
 # preflight runs cannot keep routing those paths to a retired auth service.
 remove_legacy_auth_rules
-
-set_env_file() {
-  local key="$1"
-  local value="$2"
-  KEY="$key" VALUE="$value" python3 - <<'PY'
-from pathlib import Path
-import os
-
-path = Path(".env")
-key = os.environ["KEY"]
-value = os.environ["VALUE"]
-lines = path.read_text().splitlines() if path.exists() else []
-for index, line in enumerate(lines):
-    if line.startswith(f"{key}="):
-        lines[index] = f"{key}={value}"
-        break
-else:
-    lines.append(f"{key}={value}")
-path.write_text("\n".join(lines) + "\n")
-PY
-}
 
 del_env_file() {
   local key="$1"

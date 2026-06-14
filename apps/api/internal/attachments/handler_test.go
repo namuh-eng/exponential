@@ -3,12 +3,16 @@ package attachments
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 )
 
@@ -99,5 +103,130 @@ func TestCreatePresignedUploadRequiresConfiguredBucket(t *testing.T) {
 
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestDefaultS3PresignerUsesPathStyleCustomEndpoint(t *testing.T) {
+	t.Setenv("AWS_REGION", "us-east-1")
+	t.Setenv("AWS_ACCESS_KEY_ID", "minioadmin")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "minioadmin")
+	t.Setenv("S3_ENDPOINT", "http://localhost:9000")
+
+	signedURL, headers, err := defaultS3Presigner{}.PresignPut(
+		context.Background(),
+		"attachments",
+		"workspaces/ws-1/attachments/file.txt",
+		"text/plain",
+		time.Minute,
+	)
+	if err != nil {
+		t.Fatalf("presign put: %v", err)
+	}
+	parsed, err := url.Parse(signedURL)
+	if err != nil {
+		t.Fatalf("parse signed url: %v", err)
+	}
+	if parsed.Host != "localhost:9000" {
+		t.Fatalf("host = %q", parsed.Host)
+	}
+	if parsed.Path != "/attachments/workspaces/ws-1/attachments/file.txt" {
+		t.Fatalf("path = %q", parsed.Path)
+	}
+	if headers["Content-Type"] != "text/plain" {
+		t.Fatalf("headers = %#v", headers)
+	}
+}
+
+func TestDefaultS3PresignerKeepsAWSVirtualHostStyleWithoutEndpoint(t *testing.T) {
+	t.Setenv("AWS_REGION", "us-east-1")
+	t.Setenv("AWS_ACCESS_KEY_ID", "aws-access-key")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "aws-secret-key")
+	t.Setenv("S3_ENDPOINT", "")
+
+	signedURL, err := defaultS3Presigner{}.PresignGet(
+		context.Background(),
+		"attachments-bucket",
+		"workspaces/ws-1/attachments/file.txt",
+		time.Minute,
+	)
+	if err != nil {
+		t.Fatalf("presign get: %v", err)
+	}
+	parsed, err := url.Parse(signedURL)
+	if err != nil {
+		t.Fatalf("parse signed url: %v", err)
+	}
+	if !strings.HasPrefix(parsed.Host, "attachments-bucket.s3.") {
+		t.Fatalf("host = %q", parsed.Host)
+	}
+	if parsed.Path != "/workspaces/ws-1/attachments/file.txt" {
+		t.Fatalf("path = %q", parsed.Path)
+	}
+}
+
+func TestDefaultS3PresignerMinIOSmoke(t *testing.T) {
+	endpoint := strings.TrimSpace(os.Getenv("ATTACHMENTS_MINIO_SMOKE_ENDPOINT"))
+	if endpoint == "" {
+		t.Skip("set ATTACHMENTS_MINIO_SMOKE_ENDPOINT to run the MinIO presign smoke test")
+	}
+	bucket := strings.TrimSpace(os.Getenv("ATTACHMENTS_MINIO_SMOKE_BUCKET"))
+	if bucket == "" {
+		bucket = "exponential-attachments"
+	}
+	accessKey := strings.TrimSpace(os.Getenv("ATTACHMENTS_MINIO_SMOKE_ACCESS_KEY"))
+	if accessKey == "" {
+		accessKey = "minioadmin"
+	}
+	secretKey := strings.TrimSpace(os.Getenv("ATTACHMENTS_MINIO_SMOKE_SECRET_KEY"))
+	if secretKey == "" {
+		secretKey = "minioadmin"
+	}
+	body := "minio presigned attachment smoke"
+	key := "workspaces/smoke/attachments/" + uuid.NewString() + "-smoke.txt"
+
+	t.Setenv("AWS_REGION", "us-east-1")
+	t.Setenv("AWS_ACCESS_KEY_ID", accessKey)
+	t.Setenv("AWS_SECRET_ACCESS_KEY", secretKey)
+	t.Setenv("S3_ENDPOINT", endpoint)
+
+	presigner := defaultS3Presigner{}
+	putURL, headers, err := presigner.PresignPut(context.Background(), bucket, key, "text/plain", time.Minute)
+	if err != nil {
+		t.Fatalf("presign put: %v", err)
+	}
+	putRequest, err := http.NewRequest(http.MethodPut, putURL, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("build put request: %v", err)
+	}
+	for name, value := range headers {
+		putRequest.Header.Set(name, value)
+	}
+	putResponse, err := http.DefaultClient.Do(putRequest)
+	if err != nil {
+		t.Fatalf("put object: %v", err)
+	}
+	_ = putResponse.Body.Close()
+	if putResponse.StatusCode < 200 || putResponse.StatusCode >= 300 {
+		t.Fatalf("put status = %d", putResponse.StatusCode)
+	}
+
+	getURL, err := presigner.PresignGet(context.Background(), bucket, key, time.Minute)
+	if err != nil {
+		t.Fatalf("presign get: %v", err)
+	}
+	getResponse, err := http.Get(getURL)
+	if err != nil {
+		t.Fatalf("get object: %v", err)
+	}
+	defer getResponse.Body.Close()
+	if getResponse.StatusCode != http.StatusOK {
+		t.Fatalf("get status = %d", getResponse.StatusCode)
+	}
+	got, err := io.ReadAll(getResponse.Body)
+	if err != nil {
+		t.Fatalf("read object: %v", err)
+	}
+	if string(got) != body {
+		t.Fatalf("body = %q", string(got))
 	}
 }

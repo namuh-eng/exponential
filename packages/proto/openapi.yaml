@@ -52,6 +52,22 @@ paths:
                 $ref: '#/components/schemas/AttachmentDownloadUrlResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /demo/session:
+    get:
+      operationId: createDemoSession
+      summary: Create a disposable public demo browser session and seed the demo workspace if needed.
+      security: []
+      responses:
+        '200':
+          description: Demo session details for API clients
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemoSessionResponse'
+        '302':
+          description: Browser requests are redirected to the seeded demo workspace after cookies are set.
+        default:
+          $ref: '#/components/responses/Problem'
   /issues:
     get:
       operationId: listIssues
@@ -3532,6 +3548,27 @@ components:
         title: { type: string }
         status: { type: integer }
         detail: { type: string }
+    DemoSessionResponse:
+      type: object
+      required: [success, sessionUrl, expiresAt, workspace, defaultTeam]
+      properties:
+        success: { type: boolean }
+        sessionUrl: { type: string }
+        expiresAt: { type: string, format: date-time }
+        workspace:
+          type: object
+          required: [id, name, urlSlug]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            urlSlug: { type: string }
+        defaultTeam:
+          type: object
+          required: [id, name, key]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            key: { type: string }
     AccountSecurityResponse:
       type: object
       additionalProperties: true

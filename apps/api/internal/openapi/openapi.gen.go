@@ -418,10 +418,10 @@ const (
 
 // Defines values for SamlSettingsStatus.
 const (
-	SamlSettingsStatusConfigured    SamlSettingsStatus = "configured"
-	SamlSettingsStatusError         SamlSettingsStatus = "error"
-	SamlSettingsStatusNotConfigured SamlSettingsStatus = "not_configured"
-	SamlSettingsStatusVerified      SamlSettingsStatus = "verified"
+	Configured    SamlSettingsStatus = "configured"
+	Error         SamlSettingsStatus = "error"
+	NotConfigured SamlSettingsStatus = "not_configured"
+	Verified      SamlSettingsStatus = "verified"
 )
 
 // Defines values for SidebarFavoriteObjectType.
@@ -1432,6 +1432,23 @@ type CycleTeam struct {
 	Key                string             `json:"key"`
 	Name               string             `json:"name"`
 	Timezone           string             `json:"timezone"`
+}
+
+// DemoSessionResponse defines model for DemoSessionResponse.
+type DemoSessionResponse struct {
+	DefaultTeam struct {
+		Id   openapi_types.UUID `json:"id"`
+		Key  string             `json:"key"`
+		Name string             `json:"name"`
+	} `json:"defaultTeam"`
+	ExpiresAt  time.Time `json:"expiresAt"`
+	SessionUrl string    `json:"sessionUrl"`
+	Success    bool      `json:"success"`
+	Workspace  struct {
+		Id      openapi_types.UUID `json:"id"`
+		Name    string             `json:"name"`
+		UrlSlug string             `json:"urlSlug"`
+	} `json:"workspace"`
 }
 
 // DocumentFolder defines model for DocumentFolder.
@@ -6622,6 +6639,9 @@ type ServerInterface interface {
 
 	// (DELETE /custom-emojis/{id})
 	DeleteCustomEmoji(w http.ResponseWriter, r *http.Request, id string)
+	// Create a disposable public demo browser session and seed the demo workspace if needed.
+	// (GET /demo/session)
+	CreateDemoSession(w http.ResponseWriter, r *http.Request)
 
 	// (POST /document-folders)
 	CreateDocumentFolder(w http.ResponseWriter, r *http.Request)
@@ -7317,6 +7337,12 @@ func (_ Unimplemented) CreateCustomEmoji(w http.ResponseWriter, r *http.Request)
 
 // (DELETE /custom-emojis/{id})
 func (_ Unimplemented) DeleteCustomEmoji(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a disposable public demo browser session and seed the demo workspace if needed.
+// (GET /demo/session)
+func (_ Unimplemented) CreateDemoSession(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8895,6 +8921,20 @@ func (siw *ServerInterfaceWrapper) DeleteCustomEmoji(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteCustomEmoji(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateDemoSession operation middleware
+func (siw *ServerInterfaceWrapper) CreateDemoSession(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateDemoSession(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -14099,6 +14139,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Delete(options.BaseURL+"/custom-emojis/{id}", wrapper.DeleteCustomEmoji)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/demo/session", wrapper.CreateDemoSession)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/document-folders", wrapper.CreateDocumentFolder)
 	})
 	r.Group(func(r chi.Router) {
@@ -15417,6 +15460,42 @@ type DeleteCustomEmojidefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response DeleteCustomEmojidefaultApplicationProblemPlusJSONResponse) VisitDeleteCustomEmojiResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateDemoSessionRequestObject struct {
+}
+
+type CreateDemoSessionResponseObject interface {
+	VisitCreateDemoSessionResponse(w http.ResponseWriter) error
+}
+
+type CreateDemoSession200JSONResponse DemoSessionResponse
+
+func (response CreateDemoSession200JSONResponse) VisitCreateDemoSessionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateDemoSession302Response struct {
+}
+
+func (response CreateDemoSession302Response) VisitCreateDemoSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(302)
+	return nil
+}
+
+type CreateDemoSessiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateDemoSessiondefaultApplicationProblemPlusJSONResponse) VisitCreateDemoSessionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(response.StatusCode)
 
@@ -20821,6 +20900,9 @@ type StrictServerInterface interface {
 
 	// (DELETE /custom-emojis/{id})
 	DeleteCustomEmoji(ctx context.Context, request DeleteCustomEmojiRequestObject) (DeleteCustomEmojiResponseObject, error)
+	// Create a disposable public demo browser session and seed the demo workspace if needed.
+	// (GET /demo/session)
+	CreateDemoSession(ctx context.Context, request CreateDemoSessionRequestObject) (CreateDemoSessionResponseObject, error)
 
 	// (POST /document-folders)
 	CreateDocumentFolder(ctx context.Context, request CreateDocumentFolderRequestObject) (CreateDocumentFolderResponseObject, error)
@@ -22151,6 +22233,30 @@ func (sh *strictHandler) DeleteCustomEmoji(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DeleteCustomEmojiResponseObject); ok {
 		if err := validResponse.VisitDeleteCustomEmojiResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateDemoSession operation middleware
+func (sh *strictHandler) CreateDemoSession(w http.ResponseWriter, r *http.Request) {
+	var request CreateDemoSessionRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateDemoSession(ctx, request.(CreateDemoSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateDemoSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateDemoSessionResponseObject); ok {
+		if err := validResponse.VisitCreateDemoSessionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

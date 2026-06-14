@@ -22,6 +22,5 @@ in the `exponential_schema_migration` table.
 `0006_backfill_triage_workflow_state.sql` and `0006_stripe_webhook_event.sql`
 share the `0006` prefix. Both are already applied in production and ordering is
 deterministic (string sort: `backfill` before `stripe`), so they must **not**
-be renamed. The next migration is `0008_*` to keep prefixes unambiguous going
-forward (`0007` is skipped to avoid any suggestion that it sorts between the
-two `0006` files).
+be renamed. This is the only allowed duplicate prefix; every later migration
+must use the next unused prefix so ordering stays unambiguous.
