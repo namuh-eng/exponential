@@ -17,6 +17,29 @@ for (const expected of [
   }
 }
 
+const preflight = readFileSync("scripts/preflight.sh", "utf8");
+for (const expected of [
+  'DB_INSTANCE_CLASS="${DB_INSTANCE_CLASS:-db.t3.micro}"',
+  'DB_MULTI_AZ="$(normalize_bool "${DB_MULTI_AZ:-false}")"',
+  'REDIS_NODE_TYPE="${REDIS_NODE_TYPE:-cache.t3.micro}"',
+  'REDIS_REPLICATION_ENABLED="$(normalize_bool "${REDIS_REPLICATION_ENABLED:-false}")"',
+  '--db-instance-class "$DB_INSTANCE_CLASS"',
+  "aws rds modify-db-instance",
+  "--multi-az",
+  "--no-multi-az",
+  '--cache-node-type "$REDIS_NODE_TYPE"',
+  "aws elasticache create-replication-group",
+  "--automatic-failover-enabled",
+  "--replicas-per-node-group 1",
+  "set_env_file REDIS_URL",
+]) {
+  if (!preflight.includes(expected)) {
+    throw new Error(
+      `preflight.sh missing data-tier resilience marker: ${expected}`,
+    );
+  }
+}
+
 const workflow = readFileSync(".github/workflows/deploy.yml", "utf8");
 for (const expected of [
   "deploy_lane",
