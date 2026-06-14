@@ -69,6 +69,9 @@ func TestSlackAuthorizationURL(t *testing.T) {
 	if !strings.Contains(got, "client_id=client") || !strings.Contains(got, "state=state-token") {
 		t.Fatalf("missing query params = %q", got)
 	}
+	if !strings.Contains(got, "links%3Aread") || !strings.Contains(got, "links%3Awrite") || !strings.Contains(got, "channels%3Ahistory") {
+		t.Fatalf("missing Slack thread/unfurl scopes = %q", got)
+	}
 	if !strings.Contains(got, "redirect_uri=https%3A%2F%2Fapp.example%2Fapi%2Fintegrations%2Fslack%2Foauth%2Fcallback") {
 		t.Fatalf("missing redirect uri = %q", got)
 	}
@@ -107,6 +110,26 @@ func TestSlackTeamID(t *testing.T) {
 	}
 	if got := slackTeamID(map[string]any{"team": map[string]any{"id": "T456"}}); got != "T456" {
 		t.Fatalf("nested team id = %q", got)
+	}
+}
+
+func TestSlackEventsURLVerificationUsesSignedFixture(t *testing.T) {
+	t.Setenv("SLACK_SIGNING_SECRET", "secret")
+	body := []byte(`{"type":"url_verification","team_id":"T123","challenge":"challenge-token"}`)
+	now := time.Now().UTC()
+	timestamp := strconv.FormatInt(now.Unix(), 10)
+	req := httptest.NewRequest(http.MethodPost, "/api/integrations/slack/events", strings.NewReader(string(body)))
+	req.Header.Set("X-Slack-Request-Timestamp", timestamp)
+	req.Header.Set("X-Slack-Signature", slackTestSignature("secret", timestamp, body))
+	rec := httptest.NewRecorder()
+
+	Handler{}.SlackEvents(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "challenge-token") {
+		t.Fatalf("challenge response = %s", rec.Body.String())
 	}
 }
 
@@ -157,6 +180,84 @@ func TestPostSlackMessage(t *testing.T) {
 
 	if err := postSlackMessage(t.Context(), server.Client(), "xoxb-token", slackPostMessageRequest{Channel: "C123", Text: "Hello"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPostSlackUnfurl(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/chat.unfurl" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer xoxb-token" {
+			t.Fatalf("authorization = %q", r.Header.Get("Authorization"))
+		}
+		var body slackUnfurlRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Channel != "C123" || body.MessageTS != "171.000" || body.Unfurls["https://app.test/issue/ENG-1"].Title == "" {
+			t.Fatalf("body = %#v", body)
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+	t.Setenv("SLACK_API_BASE_URL", server.URL)
+
+	err := postSlackUnfurl(t.Context(), server.Client(), "xoxb-token", slackUnfurlRequest{
+		Channel:   "C123",
+		MessageTS: "171.000",
+		Unfurls: map[string]slackUnfurlAttachment{
+			"https://app.test/issue/ENG-1": {Title: "ENG-1 Fix login"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSlackMessageShouldSyncPreventsLoopsAndNonReplies(t *testing.T) {
+	if !slackMessageShouldSync(slackMessageEvent{Type: "message", Channel: "C123", TS: "2.0", ThreadTS: "1.0", Text: "reply", User: "U1"}, "UBOT") {
+		t.Fatal("human thread reply should sync")
+	}
+	for name, message := range map[string]slackMessageEvent{
+		"root":    {Type: "message", Channel: "C123", TS: "1.0", ThreadTS: "1.0", Text: "root", User: "U1"},
+		"bot":     {Type: "message", Channel: "C123", TS: "2.0", ThreadTS: "1.0", Text: "bot", User: "UBOT"},
+		"subtype": {Type: "message", Channel: "C123", TS: "2.0", ThreadTS: "1.0", Text: "bot", Subtype: "bot_message"},
+		"empty":   {Type: "message", Channel: "C123", TS: "2.0", ThreadTS: "1.0", Text: " "},
+	} {
+		if slackMessageShouldSync(message, "UBOT") {
+			t.Fatalf("%s message should not sync: %#v", name, message)
+		}
+	}
+}
+
+func TestIssueIdentifierFromURL(t *testing.T) {
+	cases := map[string]string{
+		"https://app.example/team/ENG/issue/ENG-574":     "ENG-574",
+		"https://app.example/team/ENG/issue/eng-574?x=y": "ENG-574",
+		"https://app.example/documents/project-plan":     "",
+	}
+	for input, want := range cases {
+		if got := issueIdentifierFromURL(input); got != want {
+			t.Fatalf("issueIdentifierFromURL(%q) = %q want %q", input, got, want)
+		}
+	}
+}
+
+func TestIsConfiguredAppLink(t *testing.T) {
+	t.Setenv("EXPONENTIAL_APP_URL", "https://app.example")
+	if !isConfiguredAppLink("https://app.example/team/ENG/issue/ENG-1") {
+		t.Fatal("expected configured app link")
+	}
+	if isConfiguredAppLink("https://other.example/team/ENG/issue/ENG-1") {
+		t.Fatal("external link should not be unfurled")
+	}
+}
+
+func TestPrivateSlackUnfurlIsAccessSafe(t *testing.T) {
+	got := privateSlackUnfurl("https://app.example/team/ENG/issue/ENG-1")
+	if got.Title != "Private exponential link" || strings.Contains(got.Text, "ENG-1") {
+		t.Fatalf("fallback unfurl leaked details: %#v", got)
 	}
 }
 

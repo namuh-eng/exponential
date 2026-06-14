@@ -9,11 +9,16 @@ import { describe, expect, it } from "vitest";
 describe("account notification settings", () => {
   it("migrates legacy channel matrix into exponential-specific domains", () => {
     const settings = normalizeAccountNotificationSettings({
-      channels: { desktop: { events: { assignments: false, mentions: true } } },
+      channels: {
+        desktop: { events: { assignments: false, mentions: true } },
+        slack: { events: { comments: false, statusChanges: true } },
+      },
     });
 
     expect(settings.inbox.assignedToMe).toBe(false);
     expect(settings.desktop.mentionsAndReplies).toBe(true);
+    expect(settings.slack.comments).toBe(false);
+    expect(settings.slack.updates).toBe(true);
     expect(settings.email.weeklyDigest).toBe(
       DEFAULT_ACCOUNT_NOTIFICATION_SETTINGS.email.weeklyDigest,
     );

@@ -812,6 +812,9 @@ func (h Handler) createSlackIssue(ctx context.Context, install slackInstallRecor
 	if _, err := tx.Exec(ctx, `insert into issue_history (issue_id,actor_id,actor_name,actor_email,event_type,metadata) values ($1::uuid,$2,$3,null,'created',$4::jsonb)`, issueID, nullString(input.UserID), nullString(input.SlackName), historyRaw); err != nil {
 		return createdSlackIssue{}, err
 	}
+	if err := insertSlackRootThreadLink(ctx, tx, install, issueID, input.Source); err != nil {
+		return createdSlackIssue{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return createdSlackIssue{}, err
 	}

@@ -276,8 +276,18 @@ func (h Handler) SlackEvents(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusBadRequest, "Slack event is missing team_id", "")
 		return
 	}
-	if err := h.queueSlackInboundEvent(r.Context(), teamID, event); err != nil {
-		problem.Write(w, http.StatusInternalServerError, "Slack event could not be queued", err.Error())
+	install, err := h.resolveSlackInstall(r.Context(), teamID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.JSON(w, http.StatusAccepted, map[string]bool{"ok": true})
+		return
+	}
+	if err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Slack integration could not be resolved", err.Error())
+		return
+	}
+	if err := h.handleSlackEvent(r.Context(), install, event); err != nil {
+		_ = h.recordSlackIssueEvent(r.Context(), install, "webhook_ingestion_failed", "error", safeSlackError(err), map[string]any{"teamId": teamID})
+		problem.Write(w, http.StatusInternalServerError, "Slack event could not be processed", err.Error())
 		return
 	}
 	problem.JSON(w, http.StatusAccepted, map[string]bool{"ok": true})
@@ -713,7 +723,7 @@ func slackRedirectURI(appURL string) string {
 func slackAuthorizationURL(clientID, appURL, state string) string {
 	values := url.Values{}
 	values.Set("client_id", clientID)
-	values.Set("scope", "channels:read,chat:write,commands")
+	values.Set("scope", "channels:read,channels:history,groups:history,im:history,mpim:history,chat:write,commands,links:read,links:write")
 	values.Set("user_scope", "")
 	values.Set("redirect_uri", slackRedirectURI(appURL))
 	values.Set("state", state)
