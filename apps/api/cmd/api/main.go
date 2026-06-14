@@ -12,6 +12,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/config"
 	"github.com/namuh-eng/exponential/apps/api/internal/database"
 	httpserver "github.com/namuh-eng/exponential/apps/api/internal/http"
+	"github.com/namuh-eng/exponential/apps/api/internal/integrations"
 	"github.com/namuh-eng/exponential/apps/api/internal/logging"
 	"github.com/namuh-eng/exponential/apps/api/internal/observability"
 	"github.com/namuh-eng/exponential/apps/api/internal/webhooks"
@@ -47,6 +48,10 @@ func main() {
 		logger.Fatal("database connection failed", zap.Error(err))
 	}
 	defer db.Close()
+
+	workerCtx, stopWorker := context.WithCancel(context.Background())
+	defer stopWorker()
+	go (integrations.SlackWorker{DB: db}).Start(workerCtx)
 
 	server := &http.Server{
 		Addr:              cfg.Addr,
@@ -84,6 +89,7 @@ func main() {
 	}()
 
 	<-stop
+	stopWorker()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

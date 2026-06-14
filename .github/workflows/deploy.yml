@@ -1,5 +1,5 @@
-# ABOUTME: Deploys exponential (web + api + migrator) to AWS ECS Fargate via the
-# ABOUTME: Mac mini self-hosted runner. Push-to-main + manual workflow_dispatch.
+# ABOUTME: Deploys exponential (web + api + migrator) to AWS ECS Fargate.
+# ABOUTME: Push-to-main uses the Mac mini self-hosted runner; manual dispatch can use an OIDC cloud fallback.
 # Note: this workflow does not consume any untrusted github.event.* inputs in run: commands.
 name: Deploy
 
@@ -17,6 +17,13 @@ on:
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
     inputs:
+      deploy_lane:
+        description: 'Deploy lane'
+        type: choice
+        options:
+          - self-hosted
+          - github-hosted-oidc
+        default: self-hosted
       skip_smoke:
         description: 'Skip the post-deploy production smoke test (dangerous)'
         type: boolean
@@ -34,7 +41,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  precheck-self-hosted-runner:
+    name: Check self-hosted deploy runner
+    if: ${{ github.event_name == 'push' || inputs.deploy_lane == 'self-hosted' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Fail fast if deploy runner is offline
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_RUNNER_STATUS_TOKEN || github.token }}
+          REQUIRED_RUNNER_LABELS: self-hosted,exponential-deploy
+          RUNNER_RECOVERY_RUNBOOK: docs/deploy-runner-recovery.md
+        run: node scripts/check-github-runner.mjs
+
   deploy:
+    if: ${{ github.event_name == 'push' || inputs.deploy_lane == 'self-hosted' }}
+    needs: precheck-self-hosted-runner
     runs-on: [self-hosted, exponential-deploy]
     timeout-minutes: 30
     env:
@@ -137,4 +164,79 @@ jobs:
 
           # IMAGE_TAG defaults to short SHA inside deploy-ecs.sh, which matches
           # the checked-out ref on a self-hosted runner.
+          bash scripts/deploy-ecs.sh
+
+  deploy-cloud-fallback:
+    name: Deploy via GitHub-hosted OIDC fallback
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_lane == 'github-hosted-oidc' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      # AWS account + cluster identifiers (resource IDs, not secrets — fine as repo variables)
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      APP_NAME: ${{ vars.APP_NAME || 'exponential' }}
+
+      # ECS task IAM roles
+      ECS_EXECUTION_ROLE_ARN: ${{ vars.ECS_EXECUTION_ROLE_ARN }}
+      ECS_TASK_ROLE_ARN: ${{ vars.ECS_TASK_ROLE_ARN }}
+
+      # Secrets Manager ARNs (only the ARN is config; the secret value stays in AWS)
+      DATABASE_URL_SECRET_ARN: ${{ vars.DATABASE_URL_SECRET_ARN }}
+      REDIS_URL_SECRET_ARN: ${{ vars.REDIS_URL_SECRET_ARN }}
+      SESSION_SECRET_SECRET_ARN: ${{ vars.SESSION_SECRET_SECRET_ARN }}
+      GOOGLE_CLIENT_ID_SECRET_ARN: ${{ vars.GOOGLE_CLIENT_ID_SECRET_ARN }}
+      GOOGLE_CLIENT_SECRET_SECRET_ARN: ${{ vars.GOOGLE_CLIENT_SECRET_SECRET_ARN }}
+      METRICS_TOKEN_SECRET_ARN: ${{ vars.METRICS_TOKEN_SECRET_ARN }}
+      STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN: ${{ vars.STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN }}
+
+      # Networking
+      PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
+      PRIV_SUBNET_A: ${{ vars.PRIV_SUBNET_A }}
+      PRIV_SUBNET_B: ${{ vars.PRIV_SUBNET_B }}
+      APP_SG: ${{ vars.APP_SG }}
+      ALB_SG: ${{ vars.ALB_SG }}
+      API_TG_ARN: ${{ vars.API_TG_ARN }}
+      WEB_TG_ARN: ${{ vars.WEB_TG_ARN }}
+
+      # Optional
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
+      EXPONENTIAL_TRUSTED_PROXIES: ${{ vars.EXPONENTIAL_TRUSTED_PROXIES }}
+
+      # Deploy-time toggles. Match the self-hosted manual inputs.
+      RUN_PROD_SMOKE: ${{ (inputs.skip_smoke || false) && 'false' || 'true' }}
+      CONFIGURE_AUTOSCALING: ${{ (inputs.skip_autoscaling || false) && 'false' || 'true' }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Configure AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: exponential-github-hosted-deploy
+
+      - name: Show deploy identity
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_REF: ${{ github.ref }}
+          GH_SHA: ${{ github.sha }}
+          GH_ACTOR: ${{ github.actor }}
+          GH_EVENT: ${{ github.event_name }}
+        run: |
+          echo "::group::Deploy identity"
+          printf 'Repo:    %s\n' "$GH_REPO"
+          printf 'Ref:     %s\n' "$GH_REF"
+          printf 'SHA:     %s\n' "$GH_SHA"
+          printf 'Actor:   %s\n' "$GH_ACTOR"
+          printf 'Trigger: %s\n' "$GH_EVENT"
+          aws sts get-caller-identity
+          echo "::endgroup::"
+
+      - name: Deploy to ECS
+        run: |
+          docker buildx version
           bash scripts/deploy-ecs.sh

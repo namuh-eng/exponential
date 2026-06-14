@@ -78,13 +78,13 @@ func TransitionJobStatus(succeeded bool, retryCount, maxRetries int) JobStatus {
 
 // healthRow mirrors the new lifecycle columns in workspace_integration.
 type healthRow struct {
-	LifecycleState      string
-	LastEventAt         *time.Time
-	LastSuccessAt       *time.Time
-	LastFailureAt       *time.Time
-	LastFailureMessage  *string
-	DisconnectedAt      *time.Time
-	HealthSummary       *string
+	LifecycleState     string
+	LastEventAt        *time.Time
+	LastSuccessAt      *time.Time
+	LastFailureAt      *time.Time
+	LastFailureMessage *string
+	DisconnectedAt     *time.Time
+	HealthSummary      *string
 }
 
 // readHealth fetches the health/lifecycle columns for one integration row.

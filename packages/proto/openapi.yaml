@@ -3991,35 +3991,46 @@ components:
         message: { type: string }
     IntegrationActions:
       type: object
-      required: [canConnect, canManage, canDisconnect]
+      required: [canConnect, canManage, canDisconnect, canReconnect]
       properties:
         canConnect: { type: boolean }
         canManage: { type: boolean }
         canDisconnect: { type: boolean }
+        canReconnect: { type: boolean }
+    IntegrationAuditEvent:
+      type: object
+      required: [eventType, severity, message, createdAt]
+      properties:
+        eventType: { type: string }
+        severity: { type: string, enum: [info, warning, error] }
+        message: { type: string }
+        createdAt: { type: string, format: date-time }
     IntegrationHealth:
       type: object
       description: >
-        Lifecycle and health telemetry for a connected integration.
-        No secrets or raw credential metadata are included.
-      required: [lifecycleState]
+        Lifecycle and health telemetry for an integration. No secrets or raw
+        credential metadata are included.
+      required: [lastEventAt, lastSuccessAt, lastFailureAt, lastFailureMessage, tokenExpiresAt, pendingJobCount, failedJobCount, auditEvents]
       properties:
-        lifecycleState:
-          type: string
-          enum: [configuration_required, installing, connected, degraded, revoked, error, not_connected]
         lastEventAt: { type: [string, 'null'], format: date-time }
         lastSuccessAt: { type: [string, 'null'], format: date-time }
         lastFailureAt: { type: [string, 'null'], format: date-time }
         lastFailureMessage: { type: [string, 'null'] }
-        healthSummary: { type: [string, 'null'] }
+        tokenExpiresAt: { type: [string, 'null'], format: date-time }
+        pendingJobCount: { type: integer, minimum: 0 }
+        failedJobCount: { type: integer, minimum: 0 }
+        auditEvents:
+          type: array
+          items: { $ref: '#/components/schemas/IntegrationAuditEvent' }
     Integration:
       type: object
-      required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions]
+      required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions, health]
       properties:
-        provider: { type: string, enum: [github, slack, zendesk] }
+        provider: { type: string, enum: [github, jira, slack, zendesk] }
         name: { type: string }
         description: { type: string }
         id: { type: [string, 'null'], format: uuid }
-        status: { type: string }
+        status: { type: string, enum: [not_connected, configuration_required, installing, connected, degraded, revoked, error] }
         displayName: { type: [string, 'null'] }
         externalId: { type: [string, 'null'] }
         connectedAt: { type: [string, 'null'], format: date-time }
@@ -4028,10 +4039,7 @@ components:
             - $ref: '#/components/schemas/IntegrationSetupRequirement'
             - type: 'null'
         actions: { $ref: '#/components/schemas/IntegrationActions' }
-        health:
-          anyOf:
-            - $ref: '#/components/schemas/IntegrationHealth'
-            - type: 'null'
+        health: { $ref: '#/components/schemas/IntegrationHealth' }
     SlackConnectResponse:
       type: object
       required: [authorizationUrl, state, workspaceSlug]

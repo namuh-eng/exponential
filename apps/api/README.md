@@ -8,9 +8,16 @@ traffic.
 
 ```bash
 curl http://localhost:7016/healthz
+curl http://localhost:7016/metrics -H "X-Metrics-Token: $EXPONENTIAL_METRICS_TOKEN"
 curl http://localhost:7016/metrics/red -H "X-Metrics-Token: $EXPONENTIAL_METRICS_TOKEN"
 curl http://localhost:7016/api/healthz
+curl http://localhost:7016/api/metrics -H "X-Metrics-Token: $EXPONENTIAL_METRICS_TOKEN"
 ```
+
+`/metrics` and `/api/metrics` return Prometheus text metrics for durable
+scraping and aggregation. `/metrics/red` remains a JSON, in-process RED
+snapshot for quick debugging. Metrics endpoints are open outside production and
+require `EXPONENTIAL_METRICS_TOKEN` in production.
 
 Runtime configuration uses `EXPONENTIAL_API_*` variables for process settings
 such as `EXPONENTIAL_API_DATABASE_URL`, `EXPONENTIAL_API_REDIS_URL`, and

@@ -84,7 +84,7 @@ export function ContextualInsights({
         <dialog open aria-label="Insights panel" className="contents">
           <button
             type="button"
-            className="fixed inset-0 z-30 cursor-default bg-[var(--color-content-bg)]"
+            className="fixed inset-0 z-30 cursor-default bg-[#0c0d0c] dark:bg-[var(--color-content-bg)]"
             aria-label="Close Insights overlay"
             onClick={close}
             tabIndex={-1}

@@ -83,7 +83,7 @@ test.describe("Settings API OAuth applications", () => {
           action: "createWebhook",
           label: `Bad webhook ${suffix}`,
           url: "http://localhost:7015/hook",
-          events: ["created"],
+          events: ["issue.created"],
         },
       },
     );
@@ -164,7 +164,7 @@ test.describe("Settings API OAuth applications", () => {
           action: "createWebhook",
           label: webhookName,
           url: `https://hooks-${suffix}.example.com/linear`,
-          events: ["created"],
+          events: ["issue.created"],
         },
       },
     );

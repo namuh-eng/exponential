@@ -46,6 +46,18 @@ fi
 metrics_json=$(curl_json "${PUBLIC_BASE_URL}/api/metrics/red" -H "X-Metrics-Token: ${METRICS_TOKEN}")
 expect_json_field "$metrics_json" endpoints
 
+echo "Smoking Prometheus metrics through /api: ${PUBLIC_BASE_URL}/api/metrics"
+metrics_text=$(curl --fail --silent --show-error --location \
+  --connect-timeout 5 \
+  --max-time 20 \
+  -H 'Accept: text/plain' \
+  -H "X-Metrics-Token: ${METRICS_TOKEN}" \
+  "${PUBLIC_BASE_URL}/api/metrics")
+if [[ "$metrics_text" != *"exponential_http_requests_total"* ]] ||
+  [[ "$metrics_text" != *"exponential_http_request_duration_seconds"* ]]; then
+  echo "Prometheus metrics response missing expected HTTP metrics" >&2
+  exit 1
+fi
 
 if [ -n "$API_TOKEN" ]; then
   echo "Smoking authenticated issues endpoint"
@@ -54,4 +66,4 @@ else
   echo "Skipping authenticated API smoke because EXPONENTIAL_TOKEN is unset"
 fi
 
-echo "Smoke passed: web, API health, RED metrics${API_TOKEN:+, authenticated API}."
+echo "Smoke passed: web, API health, RED metrics, Prometheus metrics${API_TOKEN:+, authenticated API}."

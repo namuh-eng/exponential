@@ -70,7 +70,7 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 	}
 	r.Get("/healthz", healthHandler)
 	r.Get("/api/healthz", healthHandler)
-	metricsHandler := func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	redMetricsHandler := func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		if !metricsAccessAllowed(r) {
 			stdhttp.NotFound(w, r)
 			return
@@ -81,8 +81,21 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 			logger.Error("write metrics response", zap.Error(err))
 		}
 	}
-	r.Get("/metrics/red", metricsHandler)
-	r.Get("/api/metrics/red", metricsHandler)
+	prometheusMetricsHandler := func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		if !metricsAccessAllowed(r) {
+			stdhttp.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		w.WriteHeader(stdhttp.StatusOK)
+		if _, err := w.Write([]byte(observability.Prometheus(metrics))); err != nil {
+			logger.Error("write prometheus metrics response", zap.Error(err))
+		}
+	}
+	r.Get("/metrics", prometheusMetricsHandler)
+	r.Get("/api/metrics", prometheusMetricsHandler)
+	r.Get("/metrics/red", redMetricsHandler)
+	r.Get("/api/metrics/red", redMetricsHandler)
 
 	mountAPIRoutes(r, "/v1", db, emailSender, logger)
 	mountAPIRoutes(r, "/api", db, emailSender, logger)
@@ -92,6 +105,7 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender email.Sender, logger *zap.Logger) {
 	authMiddleware := auth.Middleware{DB: db}
 	authProvidersHandler := authproviders.Handler{DB: db, Email: emailSender}
+	integrationsHandler := integrations.Handler{DB: db}
 	stripeWebhookHandler := billing.NewStripeWebhookHandler(db, logger)
 	commentsHandler := comments.Handler{DB: db}
 	documentsHandler := documents.Handler{DB: db}
@@ -103,6 +117,12 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 		v1.Group(func(publicAuth chi.Router) {
 			publicAuth.Use(ratelimit.PublicMiddleware())
 			publicAuth.Mount("/auth", authProvidersHandler.Routes())
+		})
+		v1.Group(func(publicProvider chi.Router) {
+			publicProvider.Use(ratelimit.PublicMiddleware())
+			publicProvider.Get("/integrations/slack/oauth/callback", integrationsHandler.SlackOAuthCallback)
+			publicProvider.Post("/integrations/slack/events", integrationsHandler.SlackEvents)
+			publicProvider.Post("/integrations/slack/interactivity", integrationsHandler.SlackInteractivity)
 		})
 		v1.Mount("/inbound", inbound.Handler{DB: db}.Routes())
 		v1.Post("/oauth/token", authProvidersHandler.ExchangeOAuthToken)
@@ -128,7 +148,7 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 			protected.Mount("/document-templates", documentsHandler.TemplateRoutes())
 			protected.Delete("/comments/{id}", commentsHandler.Delete)
 			protected.Post("/comments/{id}/reactions", commentsHandler.ToggleCommentReaction)
-			protected.Mount("/integrations", integrations.Handler{DB: db}.Routes())
+			protected.Mount("/integrations", integrationsHandler.Routes())
 			protected.Mount("/initiatives", initiatives.Handler{DB: db}.Routes())
 			protected.Mount("/issue-templates", issuetemplates.Handler{DB: db}.Routes())
 			protected.Mount("/issues", issues.Handler{DB: db}.Routes())

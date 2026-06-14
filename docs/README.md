@@ -46,4 +46,3 @@ planning docs are kept for decision history.
 - [../apps/mcp/README.md](../apps/mcp/README.md) - stdio MCP runtime package.
 - [../packages/sdk/README.md](../packages/sdk/README.md) - generated SDK usage,
   regeneration, and validation.
-

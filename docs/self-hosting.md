@@ -72,6 +72,24 @@ The default Compose stack publishes the web app to all interfaces. Postgres,
 Redis, and the direct API port bind to `127.0.0.1` by default for local admin
 and smoke checks without public exposure.
 
+## First Sign-in
+
+The production Compose stack runs the API with `NODE_ENV=production`, which
+means magic-link sign-in only works once an email provider is configured.
+Before exposing the instance to your team, configure at least one of:
+
+- **Google sign-in** — set `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` (requires
+  an HTTPS public URL for the OAuth redirect).
+- **Magic-link email** — set `SENDER_EMAIL` with SES credentials, or
+  `SENDER_EMAIL` + `OPENSEND_API_KEY` for Opensend.
+
+Without either, magic-link requests return `503` and there is no way to sign
+in. For a quick local trial without any email or OAuth setup, use the
+development stack instead (`docker compose -f docker-compose.dev.yml up
+--build`): in non-production mode the API returns the magic-link URL directly
+in the sign-in response, and Mailhog (`http://localhost:8025`) captures any
+outbound mail.
+
 ## Required Environment
 
 For Compose, set these in `.env` before exposing the instance:
@@ -80,7 +98,7 @@ For Compose, set these in `.env` before exposing the instance:
 | --- | --- | --- |
 | `DB_PASSWORD` | Password for bundled Postgres. | Generate a real password for shared hosts. |
 | `EXPONENTIAL_SESSION_SECRET` | HMAC secret for browser sessions. | `openssl rand -hex 32` |
-| `EXPONENTIAL_METRICS_TOKEN` | Token for production RED metrics. | `openssl rand -hex 32` |
+| `EXPONENTIAL_METRICS_TOKEN` | Token for production RED metrics. The Compose stack runs the API with `EXPONENTIAL_API_ENVIRONMENT=production`, so `/metrics/red` returns `404` until this is set and sent via `X-Metrics-Token`. | `openssl rand -hex 32` |
 | `NEXT_PUBLIC_APP_URL` | Browser-facing URL. | `https://issues.example.com` |
 | `EXPONENTIAL_APP_URL` | Server-side canonical app URL. | Usually same as `NEXT_PUBLIC_APP_URL`. |
 
@@ -159,6 +177,7 @@ After the stack is up:
 ```bash
 curl http://localhost:7015/
 curl http://localhost:7016/healthz
+curl http://localhost:7016/metrics -H "X-Metrics-Token: $EXPONENTIAL_METRICS_TOKEN"
 curl http://localhost:7016/metrics/red -H "X-Metrics-Token: $EXPONENTIAL_METRICS_TOKEN"
 ```
 
@@ -172,6 +191,38 @@ curl "http://localhost:7015/api/issues?limit=1" \
 
 Production metrics are intentionally token-gated. In ECS, `scripts/smoke-prod.sh`
 uses `EXPONENTIAL_METRICS_TOKEN` or reads the token from `METRICS_TOKEN_SECRET_ARN`.
+
+## Metrics Scraping
+
+The Go API exposes Prometheus text metrics at `GET /metrics` and through the
+web/ALB proxy at `GET /api/metrics`. The endpoint includes HTTP request
+counters and latency histograms labeled by low-cardinality method, route
+pattern, and status code. `/metrics/red` remains available as a JSON snapshot
+for quick human checks, but it is in-process only and resets when a task
+restarts.
+
+For self-hosted Prometheus, scrape the API container directly on the private
+network:
+
+```yaml
+scrape_configs:
+  - job_name: exponential-api
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets: ["api:7016"]
+    authorization:
+      type: Bearer
+      credentials: "<EXPONENTIAL_METRICS_TOKEN>"
+```
+
+If you scrape through the web or load balancer, use `metrics_path:
+/api/metrics` and send the same token with either `Authorization: Bearer
+<token>` or `X-Metrics-Token: <token>`. In ECS, run a CloudWatch Agent or OTel
+Collector sidecar/service to scrape `/api/metrics` on each task or target and
+remote-write/export to your metrics backend. The collector, Prometheus, or
+CloudWatch workspace is the durable store that aggregates across task restarts
+and multiple ECS tasks.
 
 ## Headless clients
 

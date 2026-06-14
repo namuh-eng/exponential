@@ -3,28 +3,18 @@
 import { EmptyState } from "@/components/empty-state";
 import { useCallback, useEffect, useState } from "react";
 
-type IntegrationHealth = {
-  lifecycleState: string;
-  lastEventAt: string | null;
-  lastSuccessAt: string | null;
-  lastFailureAt: string | null;
-  lastFailureMessage: string | null;
-  healthSummary: string | null;
-};
-
 type Integration = {
   provider: string;
   name: string;
   description: string;
   status:
-    | "connected"
-    | "not_connected"
     | "configuration_required"
+    | "installing"
+    | "connected"
     | "degraded"
     | "revoked"
     | "error"
-    | "installing"
-    | string;
+    | "not_connected";
   displayName: string | null;
   connectedAt: string | null;
   setupRequirement: { type: string; message: string } | null;
@@ -32,8 +22,23 @@ type Integration = {
     canConnect: boolean;
     canManage: boolean;
     canDisconnect: boolean;
+    canReconnect: boolean;
   };
-  health: IntegrationHealth | null;
+  health: {
+    lastEventAt: string | null;
+    lastSuccessAt: string | null;
+    lastFailureAt: string | null;
+    lastFailureMessage: string | null;
+    tokenExpiresAt: string | null;
+    pendingJobCount: number;
+    failedJobCount: number;
+    auditEvents: {
+      eventType: string;
+      severity: "info" | "warning" | "error";
+      message: string;
+      createdAt: string;
+    }[];
+  };
 };
 
 type IntegrationsPayload = {
@@ -42,94 +47,39 @@ type IntegrationsPayload = {
   error?: string;
 };
 
-function lifecycleLabel(status: Integration["status"]): {
-  text: string;
-  className: string;
-} {
-  switch (status) {
-    case "connected":
-      return {
-        text: "Connected",
-        className: "text-green-400",
-      };
-    case "degraded":
-      return {
-        text: "Degraded",
-        className: "text-amber-400",
-      };
-    case "error":
-      return {
-        text: "Error",
-        className: "text-red-400",
-      };
-    case "installing":
-      return {
-        text: "Installing…",
-        className: "text-[var(--color-text-secondary)]",
-      };
-    case "revoked":
-      return {
-        text: "Disconnected",
-        className: "text-[var(--color-text-tertiary)]",
-      };
-    case "configuration_required":
-      return {
-        text: "Configuration required",
-        className: "text-amber-300",
-      };
-    default:
-      return {
-        text: "Not connected",
-        className: "text-[var(--color-text-tertiary)]",
-      };
+function statusLabel(integration: Integration) {
+  if (integration.status === "connected") return "Connected";
+  if (integration.status === "installing") return "Installing";
+  if (integration.status === "degraded") return "Degraded";
+  if (integration.status === "revoked") return "Revoked";
+  if (integration.status === "error") return "Error";
+  if (integration.status === "configuration_required") {
+    return "Configuration required";
   }
+  return "Not connected";
 }
 
-function formatRelativeDate(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  try {
-    const d = new Date(iso);
-    const now = Date.now();
-    const diffMs = now - d.getTime();
-    const diffMin = Math.floor(diffMs / 60_000);
-    if (diffMin < 1) return "just now";
-    if (diffMin < 60) return `${diffMin}m ago`;
-    const diffH = Math.floor(diffMin / 60);
-    if (diffH < 24) return `${diffH}h ago`;
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  } catch {
-    return null;
-  }
+function formatTimestamp(value: string | null) {
+  if (!value) return "Never";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
-function HealthDetail({ health }: { health: IntegrationHealth }) {
-  const lastSuccess = formatRelativeDate(health.lastSuccessAt);
-  const lastFailure = formatRelativeDate(health.lastFailureAt);
-  const lastEvent = formatRelativeDate(health.lastEventAt);
-
-  return (
-    <div className="mt-2 space-y-0.5 text-[12px]">
-      {health.healthSummary ? (
-        <p className="text-[var(--color-text-tertiary)]">
-          {health.healthSummary}
-        </p>
-      ) : null}
-      {lastEvent ? (
-        <p className="text-[var(--color-text-tertiary)]">
-          Last event: {lastEvent}
-        </p>
-      ) : null}
-      {lastSuccess ? (
-        <p className="text-green-500/70">Last success: {lastSuccess}</p>
-      ) : null}
-      {lastFailure ? (
-        <p className="text-red-400/70">
-          Last failure: {lastFailure}
-          {health.lastFailureMessage ? ` — ${health.lastFailureMessage}` : null}
-        </p>
-      ) : null}
-    </div>
-  );
+function statusClassName(status: Integration["status"]) {
+  if (status === "connected") {
+    return "border-green-500/30 bg-green-500/10 text-green-300";
+  }
+  if (status === "degraded" || status === "error") {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-200";
+  }
+  if (status === "revoked") {
+    return "border-red-500/30 bg-red-500/10 text-red-200";
+  }
+  return "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-tertiary)]";
 }
 
 export default function IntegrationsSettingsPage() {
@@ -242,11 +192,10 @@ export default function IntegrationsSettingsPage() {
     );
   }
 
-  const activeIntegrations = integrations.filter(
-    (i) => i.status !== "not_connected" && i.status !== "revoked",
-  );
-  const connectedIntegrations = integrations.filter(
-    (i) => i.status === "connected",
+  const installedIntegrations = integrations.filter(
+    (integration) =>
+      integration.status !== "not_connected" &&
+      integration.status !== "configuration_required",
   );
 
   return (
@@ -274,50 +223,44 @@ export default function IntegrationsSettingsPage() {
       ) : null}
 
       <div className="mt-8">
-        {activeIntegrations.length ? (
+        {installedIntegrations.length ? (
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
-            {activeIntegrations.map((integration) => {
-              const label = lifecycleLabel(integration.status);
-              return (
-                <div
-                  className="flex items-start justify-between gap-4 border-b border-[var(--color-border)] p-4 last:border-b-0"
-                  key={integration.provider}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
+            {installedIntegrations.map((integration) => (
+              <div
+                className="border-b border-[var(--color-border)] p-4 last:border-b-0"
+                key={integration.provider}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-[15px] font-medium text-[var(--color-text-primary)]">
                         {integration.name}
                       </h2>
                       <span
-                        className={`text-[11px] font-medium uppercase tracking-wide ${label.className}`}
+                        className={`rounded-md border px-2 py-0.5 text-[11px] ${statusClassName(integration.status)}`}
                       >
-                        {label.text}
+                        {statusLabel(integration)}
                       </span>
                     </div>
-                    {integration.displayName ? (
-                      <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
-                        Connected to {integration.displayName}
-                      </p>
-                    ) : null}
-                    {integration.health ? (
-                      <HealthDetail health={integration.health} />
-                    ) : null}
-                    {integration.setupRequirement ? (
-                      <p className="mt-2 text-[12px] text-amber-300">
-                        {integration.setupRequirement.message}
-                      </p>
-                    ) : null}
+                    <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
+                      {integration.status === "revoked"
+                        ? "Disconnected locally; historical links are preserved."
+                        : `Connected to ${integration.displayName || integration.name}`}
+                    </p>
                   </div>
                   <div className="flex shrink-0 gap-2">
-                    {integration.actions.canConnect &&
-                    integration.provider === "slack" ? (
+                    {integration.actions.canReconnect ? (
                       <button
-                        className="rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={pendingProvider === "slack"}
-                        onClick={() => void connectSlack()}
+                        className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
+                        disabled={pendingProvider === integration.provider}
+                        onClick={() =>
+                          integration.provider === "slack"
+                            ? void connectSlack()
+                            : undefined
+                        }
                         type="button"
                       >
-                        {pendingProvider === "slack" ? "Opening…" : "Connect"}
+                        Reconnect
                       </button>
                     ) : null}
                     {integration.actions.canDisconnect ? (
@@ -327,15 +270,75 @@ export default function IntegrationsSettingsPage() {
                         onClick={() => void disconnect(integration.provider)}
                         type="button"
                       >
-                        {pendingProvider === integration.provider
-                          ? "Disconnecting…"
-                          : "Disconnect"}
+                        Disconnect
                       </button>
                     ) : null}
                   </div>
                 </div>
-              );
-            })}
+                <div className="mt-4 grid gap-3 text-[12px] text-[var(--color-text-tertiary)] sm:grid-cols-3">
+                  <div>
+                    <span className="block text-[var(--color-text-secondary)]">
+                      Last event
+                    </span>
+                    {formatTimestamp(integration.health.lastEventAt)}
+                  </div>
+                  <div>
+                    <span className="block text-[var(--color-text-secondary)]">
+                      Last success
+                    </span>
+                    {formatTimestamp(integration.health.lastSuccessAt)}
+                  </div>
+                  <div>
+                    <span className="block text-[var(--color-text-secondary)]">
+                      Last failure
+                    </span>
+                    {formatTimestamp(integration.health.lastFailureAt)}
+                  </div>
+                  <div>
+                    <span className="block text-[var(--color-text-secondary)]">
+                      Token expiry
+                    </span>
+                    {formatTimestamp(integration.health.tokenExpiresAt)}
+                  </div>
+                  <div>
+                    <span className="block text-[var(--color-text-secondary)]">
+                      Jobs
+                    </span>
+                    {integration.health.pendingJobCount} pending /{" "}
+                    {integration.health.failedJobCount} failed
+                  </div>
+                  {integration.health.lastFailureMessage ? (
+                    <div className="sm:col-span-3">
+                      <span className="block text-[var(--color-text-secondary)]">
+                        Action needed
+                      </span>
+                      {integration.health.lastFailureMessage}
+                    </div>
+                  ) : null}
+                </div>
+                {integration.health.auditEvents.length ? (
+                  <div className="mt-4 border-t border-[var(--color-border)] pt-4">
+                    <h3 className="text-[12px] font-medium text-[var(--color-text-secondary)]">
+                      Audit trail
+                    </h3>
+                    <div className="mt-2 flex flex-col gap-2">
+                      {integration.health.auditEvents.map((event) => (
+                        <div
+                          className="grid gap-1 text-[12px] text-[var(--color-text-tertiary)] sm:grid-cols-[120px_80px_1fr]"
+                          key={`${event.createdAt}-${event.eventType}-${event.message}`}
+                        >
+                          <span>{formatTimestamp(event.createdAt)}</span>
+                          <span className="capitalize">{event.severity}</span>
+                          <span className="text-[var(--color-text-secondary)]">
+                            {event.message}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ))}
           </div>
         ) : (
           <EmptyState
@@ -349,7 +352,7 @@ export default function IntegrationsSettingsPage() {
         )}
       </div>
 
-      {connectedIntegrations.length ? (
+      {installedIntegrations.length ? (
         <button
           className="mt-4 rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]"
           onClick={() => setCatalogOpen(true)}
@@ -390,76 +393,74 @@ export default function IntegrationsSettingsPage() {
               </button>
             </div>
             <div className="mt-5 flex flex-col gap-3">
-              {integrations.map((integration) => {
-                const label = lifecycleLabel(integration.status);
-                return (
-                  <div
-                    className="rounded-lg border border-[var(--color-border)] p-4"
-                    key={integration.provider}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-[14px] font-medium text-[var(--color-text-primary)]">
-                          {integration.name}
-                        </h3>
-                        <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
-                          {integration.description}
+              {integrations.map((integration) => (
+                <div
+                  className="rounded-lg border border-[var(--color-border)] p-4"
+                  key={integration.provider}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-[14px] font-medium text-[var(--color-text-primary)]">
+                        {integration.name}
+                      </h3>
+                      <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
+                        {integration.description}
+                      </p>
+                      <p className="mt-2 text-[12px] text-[var(--color-text-tertiary)]">
+                        {statusLabel(integration)}
+                        {integration.displayName
+                          ? ` · ${integration.displayName}`
+                          : ""}
+                      </p>
+                      {integration.setupRequirement ? (
+                        <p className="mt-2 text-[12px] text-amber-300">
+                          {integration.setupRequirement.message}
                         </p>
-                        <p className={`mt-2 text-[12px] ${label.className}`}>
-                          {label.text}
-                          {integration.displayName
-                            ? ` · ${integration.displayName}`
-                            : ""}
-                        </p>
-                        {integration.health ? (
-                          <HealthDetail health={integration.health} />
-                        ) : null}
-                        {integration.setupRequirement ? (
-                          <p className="mt-2 text-[12px] text-amber-300">
-                            {integration.setupRequirement.message}
-                          </p>
-                        ) : null}
-                      </div>
-                      <div className="flex shrink-0 gap-2">
-                        {integration.actions.canDisconnect ? (
-                          <button
-                            className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-red-300 disabled:opacity-50"
-                            disabled={pendingProvider === integration.provider}
-                            onClick={() =>
-                              void disconnect(integration.provider)
-                            }
-                            type="button"
-                          >
-                            {pendingProvider === integration.provider
-                              ? "Disconnecting…"
-                              : "Disconnect"}
-                          </button>
-                        ) : integration.provider === "slack" &&
-                          integration.actions.canConnect ? (
-                          <button
-                            className="rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-                            disabled={pendingProvider === "slack"}
-                            onClick={() => void connectSlack()}
-                            type="button"
-                          >
-                            {pendingProvider === "slack"
-                              ? "Opening…"
-                              : "Connect"}
-                          </button>
-                        ) : (
-                          <button
-                            className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-tertiary)]"
-                            disabled
-                            type="button"
-                          >
-                            Configure
-                          </button>
-                        )}
-                      </div>
+                      ) : null}
                     </div>
+                    {integration.actions.canDisconnect ? (
+                      <button
+                        className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-red-300 disabled:opacity-50"
+                        disabled={pendingProvider === integration.provider}
+                        onClick={() => void disconnect(integration.provider)}
+                        type="button"
+                      >
+                        Disconnect
+                      </button>
+                    ) : integration.actions.canReconnect ? (
+                      <button
+                        className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
+                        disabled={pendingProvider === integration.provider}
+                        onClick={() =>
+                          integration.provider === "slack"
+                            ? void connectSlack()
+                            : undefined
+                        }
+                        type="button"
+                      >
+                        Reconnect
+                      </button>
+                    ) : integration.provider === "slack" ? (
+                      <button
+                        className="rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={pendingProvider === "slack"}
+                        onClick={() => void connectSlack()}
+                        type="button"
+                      >
+                        {pendingProvider === "slack" ? "Opening..." : "Connect"}
+                      </button>
+                    ) : (
+                      <button
+                        className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-tertiary)]"
+                        disabled
+                        type="button"
+                      >
+                        Configure
+                      </button>
+                    )}
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           </div>
         </dialog>

@@ -9,6 +9,10 @@ const nonContractProviderCallbacks = new Set([
   // Inbound Stripe provider callback. This route is not a client/business API
   // surface and must not appear in the generated public SDK.
   "/stripe/webhook",
+  // Slack provider callbacks are invoked by Slack, not by public API clients.
+  "/integrations/slack/oauth/callback",
+  "/integrations/slack/events",
+  "/integrations/slack/interactivity",
 ]);
 
 for (const file of routerFiles) {

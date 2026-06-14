@@ -116,4 +116,3 @@ billing flows without an explicit approved plan.
 The repo currently contains workspace billing/settings surfaces and a Stripe
 webhook ingestion path. Treat those as existing product/admin surfaces unless
 the requested work explicitly changes payment processing or monetization.
-

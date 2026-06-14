@@ -43,16 +43,21 @@ publishes or to verify packaging without releasing. For normal releases, use
 
 # GitHub Actions — deploy
 
-`deploy.yml` ships `exponential` to ECS Fargate via the Mac mini self-hosted
-runner. Triggers:
+`deploy.yml` ships `exponential` to ECS Fargate. Push-to-`main` deploys use the
+Mac mini self-hosted runner, and manual runs can use a GitHub-hosted OIDC
+fallback. Runner-down recovery lives in
+[docs/deploy-runner-recovery.md](../../docs/deploy-runner-recovery.md).
+
+Triggers:
 
 - **Push to `main`** affecting `apps/**`, `packages/**`, `infra/**`, or any of
   the deploy scripts → automatic deploy
-- **Manual `workflow_dispatch`** with optional toggles to skip smoke /
-  autoscaling
+- **Manual `workflow_dispatch`** with a deploy lane selector and optional
+  toggles to skip smoke / autoscaling
 
 The runner uses the host's AWS credentials (same as a local laptop deploy
-would). No OIDC needed because deploys run on hardware you own.
+would). The GitHub-hosted fallback assumes `AWS_DEPLOY_ROLE_ARN` through OIDC
+only when selected manually.
 
 ## One-time setup
 
@@ -103,6 +108,11 @@ running `scripts/prepare-ecs-deploy-env.sh`.
 | `WEB_TG_ARN`                      | Web target-group ARN                                                 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`     | Optional                                                             |
 | `EXPONENTIAL_TRUSTED_PROXIES`     | Optional                                                             |
+| `AWS_DEPLOY_ROLE_ARN`             | Required only for the manual `github-hosted-oidc` fallback lane      |
+
+If the runner precheck cannot read repository self-hosted runner status with
+the default workflow token, set Actions secret `GH_RUNNER_STATUS_TOKEN` to a
+fine-grained token with repository **Administration: read** permission.
 
 Copy values straight from your local `.env`. Example one-liner to read them
 out of `.env` for paste-in (run on your laptop):
@@ -137,9 +147,16 @@ values from the current shell environment.
 
 ### 4. First deploy
 
-Manual trigger from the Actions tab → "Deploy" → "Run workflow". After it
-succeeds, every push to `main` that touches a path listed at the top of
-`deploy.yml` will auto-deploy.
+Manual trigger from the Actions tab → "Deploy" → "Run workflow". Keep
+**Deploy lane** set to `self-hosted` for the normal path. After it succeeds,
+every push to `main` that touches a path listed at the top of `deploy.yml` will
+auto-deploy.
+
+If the self-hosted runner is offline, select **Deploy lane** =
+`github-hosted-oidc`. That fallback uses GitHub-hosted Linux, assumes
+`AWS_DEPLOY_ROLE_ARN`, and runs the same `scripts/deploy-ecs.sh` path. See the
+runner-down procedure in
+[docs/deploy-runner-recovery.md](../../docs/deploy-runner-recovery.md).
 
 ## Local break-glass
 

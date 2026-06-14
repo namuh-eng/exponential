@@ -716,7 +716,13 @@ export function AuthPage({
   }, []);
 
   useEffect(() => {
-    if (process.env.NODE_ENV === "test" || mode !== "login") return;
+    if (
+      process.env.NODE_ENV === "test" ||
+      process.env.PLAYWRIGHT_TEST === "true" ||
+      mode !== "login"
+    ) {
+      return;
+    }
     const controller = new AbortController();
     async function loadRecentSessions() {
       try {
@@ -809,6 +815,10 @@ export function AuthPage({
   }, []);
 
   useEffect(() => {
+    if (process.env.PLAYWRIGHT_TEST === "true") {
+      return;
+    }
+
     const controller = new AbortController();
 
     async function loadPreflightChecks() {

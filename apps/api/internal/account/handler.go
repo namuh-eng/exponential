@@ -433,7 +433,7 @@ func defaultAccountNotifications() map[string]any {
 		"inbox":             map[string]any{"assignedToMe": true, "mentionsAndReplies": true, "subscribedIssues": true, "teamUpdates": true},
 		"email":             map[string]any{"issueActivity": true, "mentionsAndReplies": true, "dailyDigest": false, "weeklyDigest": true, "productUpdates": false, "workspaceInvites": true},
 		"desktop":           map[string]any{"enabled": true, "permission": "default", "issueActivity": true, "mentionsAndReplies": true, "reminders": true, "sound": false},
-		"slack":             map[string]any{"enabled": false, "destination": "not_connected", "mentionsAndReplies": true, "assignedToMe": false, "triageActivity": false, "projectUpdates": false},
+		"slack":             map[string]any{"enabled": false, "destination": "not_connected", "mentionsAndReplies": true, "assignedToMe": false, "comments": true, "updates": false, "triageActivity": false, "projectUpdates": false},
 		"updatesFromLinear": map[string]any{"showInSidebar": true, "changelogNewsletter": false, "marketing": false},
 		"other":             map[string]any{"inviteAccepted": true, "privacyAndLegalUpdates": true, "dpa": false},
 	}

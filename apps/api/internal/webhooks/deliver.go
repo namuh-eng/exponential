@@ -310,7 +310,7 @@ func init() {
 		"::1/128",
 		"fc00::/7",
 		"169.254.0.0/16", // link-local / AWS IMDS
-		"fe80::/10",       // IPv6 link-local
+		"fe80::/10",      // IPv6 link-local
 		"0.0.0.0/8",
 		"100.64.0.0/10", // shared address space (RFC 6598)
 	} {
