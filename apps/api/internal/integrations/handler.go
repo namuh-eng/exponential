@@ -110,6 +110,7 @@ var catalog = []CatalogItem{
 	{Provider: "microsoft_teams", Name: "Microsoft Teams", Description: "Create issues and projects from Teams conversations and post project updates."},
 	{Provider: "sentry", Name: "Sentry", Description: "Create, link, and resolve issues from Sentry errors."},
 	{Provider: "slack", Name: "Slack", Description: "Send issue updates and create issues from Slack messages."},
+	{Provider: "gong", Name: "Gong", Description: "Connect customer call excerpts to issues and customer requests."},
 	{Provider: "zendesk", Name: "Zendesk", Description: "Connect support tickets to product work and customer requests."},
 }
 
@@ -128,6 +129,9 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/microsoft-teams/disconnect", h.MicrosoftTeamsDisconnect)
 	r.Post("/sentry/connect", h.SentryConnect)
 	r.Post("/sentry/disconnect", h.SentryDisconnect)
+	r.Post("/gong/connect", h.GongConnect)
+	r.Post("/gong/disconnect", h.GongDisconnect)
+	r.Post("/gong/{integrationID}/calls", h.GongIngestCall)
 	r.Post("/slack/disconnect", h.SlackDisconnect)
 	return r
 }
@@ -405,6 +409,9 @@ func setupRequirement(provider string) *SetupRequirement {
 	}
 	if provider == "sentry" && !sentryConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Sentry credentials are not configured. Add AUTH_SENTRY_ID, AUTH_SENTRY_SECRET, and SENTRY_WEBHOOK_SECRET to enable installation and signed issue actions."}
+	}
+	if provider == "gong" && !gongConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Gong OAuth credentials are not configured. Add AUTH_GONG_ID and AUTH_GONG_SECRET to enable call ingestion."}
 	}
 	if provider == "github" || provider == "jira" || provider == "zendesk" {
 		name := "GitHub"

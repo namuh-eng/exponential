@@ -129,6 +129,7 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 			publicProvider.Post("/integrations/discord/interactions", integrationsHandler.DiscordInteractions)
 			publicProvider.Get("/integrations/microsoft-teams/oauth/callback", integrationsHandler.MicrosoftTeamsOAuthCallback)
 			publicProvider.Get("/integrations/sentry/oauth/callback", integrationsHandler.SentryOAuthCallback)
+			publicProvider.Get("/integrations/gong/oauth/callback", integrationsHandler.GongOAuthCallback)
 			publicProvider.Post("/integrations/sentry/issues/search", integrationsHandler.SentryIssueSearch)
 			publicProvider.Post("/integrations/sentry/issues/link", integrationsHandler.SentryIssueLink)
 			publicProvider.Post("/integrations/sentry/issues/create", integrationsHandler.SentryIssueCreate)
