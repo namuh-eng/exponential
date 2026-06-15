@@ -47,6 +47,12 @@ type GitLabSetupDetails = {
   webhookSecret: string;
 };
 
+type JiraSetupDetails = {
+  integrationId: string;
+  displayName: string;
+  projectCount: number;
+};
+
 type IntegrationsPayload = {
   integrations?: Integration[];
   canManageIntegrations?: boolean;
@@ -110,6 +116,14 @@ export default function IntegrationsSettingsPage() {
   const [gitLabToken, setGitLabToken] = useState("");
   const [gitLabSetupDetails, setGitLabSetupDetails] =
     useState<GitLabSetupDetails | null>(null);
+  const [jiraDeployment, setJiraDeployment] = useState<"cloud" | "server">(
+    "cloud",
+  );
+  const [jiraBaseUrl, setJiraBaseUrl] = useState("https://acme.atlassian.net");
+  const [jiraEmail, setJiraEmail] = useState("");
+  const [jiraToken, setJiraToken] = useState("");
+  const [jiraSetupDetails, setJiraSetupDetails] =
+    useState<JiraSetupDetails | null>(null);
 
   const loadIntegrations = useCallback(async () => {
     setLoading(true);
@@ -231,6 +245,55 @@ export default function IntegrationsSettingsPage() {
     }
   }
 
+  async function setupJira() {
+    setPendingProvider("jira");
+    setNotice(null);
+    setError(null);
+    setJiraSetupDetails(null);
+    try {
+      const response = await fetch("/api/workspaces/current/import-export", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "configure_jira",
+          deployment: jiraDeployment,
+          baseUrl: jiraBaseUrl,
+          email: jiraDeployment === "cloud" ? jiraEmail : undefined,
+          token: jiraToken,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        integrationId?: string;
+        displayName?: string;
+        projects?: { id: string; key: string; name: string }[];
+        error?: string;
+        message?: string;
+      };
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Jira setup failed.");
+      }
+      setJiraSetupDetails({
+        integrationId: data.integrationId ?? "",
+        displayName: data.displayName ?? "Jira",
+        projectCount: data.projects?.length ?? 0,
+      });
+      setJiraToken("");
+      setNotice(
+        "Jira connected. Use Import & export to preview projects and mappings.",
+      );
+      await loadIntegrations();
+    } catch (setupError) {
+      setError(
+        setupError instanceof Error ? setupError.message : "Jira setup failed.",
+      );
+    } finally {
+      setPendingProvider(null);
+    }
+  }
+
   async function disconnect(provider: string) {
     setPendingProvider(provider);
     setNotice(null);
@@ -331,6 +394,17 @@ export default function IntegrationsSettingsPage() {
           </div>
         </div>
       ) : null}
+      {jiraSetupDetails ? (
+        <div className="mt-6 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
+          <div className="font-medium text-[var(--color-text-primary)]">
+            Jira connection ready
+          </div>
+          <p className="mt-2">
+            {jiraSetupDetails.displayName} returned{" "}
+            {jiraSetupDetails.projectCount} projects for guided import.
+          </p>
+        </div>
+      ) : null}
 
       <div className="mt-8">
         {installedIntegrations.length ? (
@@ -360,7 +434,8 @@ export default function IntegrationsSettingsPage() {
                   </div>
                   <div className="flex shrink-0 gap-2">
                     {integration.actions.canReconnect &&
-                    integration.provider !== "gitlab" ? (
+                    integration.provider !== "gitlab" &&
+                    integration.provider !== "jira" ? (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
@@ -571,6 +646,89 @@ export default function IntegrationsSettingsPage() {
                           </button>
                         </div>
                       ) : null}
+                      {integration.provider === "jira" &&
+                      (integration.actions.canConnect ||
+                        integration.actions.canReconnect) ? (
+                        <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Jira deployment
+                            <select
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setJiraDeployment(
+                                  event.target.value === "server"
+                                    ? "server"
+                                    : "cloud",
+                                )
+                              }
+                              value={jiraDeployment}
+                            >
+                              <option value="cloud">Jira Cloud</option>
+                              <option value="server">
+                                Jira Server/Data Center
+                              </option>
+                            </select>
+                          </label>
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Base URL
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setJiraBaseUrl(event.target.value)
+                              }
+                              placeholder="https://acme.atlassian.net"
+                              type="url"
+                              value={jiraBaseUrl}
+                            />
+                          </label>
+                          {jiraDeployment === "cloud" ? (
+                            <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                              Atlassian email
+                              <input
+                                className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                                onChange={(event) =>
+                                  setJiraEmail(event.target.value)
+                                }
+                                placeholder="admin@example.com"
+                                type="email"
+                                value={jiraEmail}
+                              />
+                            </label>
+                          ) : null}
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            API token or PAT
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setJiraToken(event.target.value)
+                              }
+                              placeholder={
+                                jiraDeployment === "cloud"
+                                  ? "Atlassian API token"
+                                  : "Jira personal access token"
+                              }
+                              type="password"
+                              value={jiraToken}
+                            />
+                          </label>
+                          <button
+                            className="w-fit rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={
+                              pendingProvider === "jira" ||
+                              jiraBaseUrl.trim() === "" ||
+                              jiraToken.trim() === "" ||
+                              (jiraDeployment === "cloud" &&
+                                jiraEmail.trim() === "")
+                            }
+                            onClick={() => void setupJira()}
+                            type="button"
+                          >
+                            {pendingProvider === "jira"
+                              ? "Validating..."
+                              : "Connect Jira"}
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                     {integration.actions.canDisconnect ? (
                       <button
@@ -582,7 +740,8 @@ export default function IntegrationsSettingsPage() {
                         Disconnect
                       </button>
                     ) : integration.actions.canReconnect &&
-                      integration.provider !== "gitlab" ? (
+                      integration.provider !== "gitlab" &&
+                      integration.provider !== "jira" ? (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
@@ -610,7 +769,8 @@ export default function IntegrationsSettingsPage() {
                           ? "Opening..."
                           : "Connect"}
                       </button>
-                    ) : integration.provider === "gitlab" ? null : (
+                    ) : integration.provider === "gitlab" ||
+                      integration.provider === "jira" ? null : (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-tertiary)]"
                         disabled

@@ -2,6 +2,8 @@ package workspaces
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -102,6 +104,64 @@ func TestParseImportCSV(t *testing.T) {
 	}
 	if rows[0].row != 2 || rows[0].get("Title") != "Fix bug" || rows[0].get("Status") != "Todo" {
 		t.Fatalf("first row = %#v", rows[0])
+	}
+}
+
+func TestJiraCredentialValidation(t *testing.T) {
+	_, err := readJiraCredentialInput(map[string]any{"deployment": "cloud", "baseUrl": "https://acme.atlassian.net", "token": "secret"})
+	if err == nil || !strings.Contains(err.Error(), "email") {
+		t.Fatalf("expected cloud email validation, got %v", err)
+	}
+	credential, err := readJiraCredentialInput(map[string]any{"deployment": "server", "baseUrl": "https://jira.example.com/", "token": "pat"})
+	if err != nil {
+		t.Fatalf("server credential should be valid: %v", err)
+	}
+	if credential.BaseURL != "https://jira.example.com" || credential.Deployment != "server" {
+		t.Fatalf("credential normalized incorrectly: %#v", credential)
+	}
+}
+
+func TestJiraClientUsesServerBearerAndBuildsPreview(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer pat-token" {
+			t.Fatalf("authorization = %q", r.Header.Get("Authorization"))
+		}
+		switch r.URL.Path {
+		case "/rest/api/2/project":
+			_, _ = w.Write([]byte(`[{"id":"100","key":"ENG","name":"Engineering"}]`))
+		case "/rest/api/2/search":
+			if r.URL.Query().Get("jql") != "project = ENG ORDER BY created ASC" {
+				t.Fatalf("jql = %q", r.URL.Query().Get("jql"))
+			}
+			_, _ = w.Write([]byte(`{"issues":[{"id":"10001","key":"ENG-1","fields":{"summary":"Ship importer","description":"Move Jira issues","status":{"id":"1","name":"To Do"},"priority":{"id":"2","name":"High"},"assignee":{"displayName":"Ada"},"labels":["migration"],"project":{"id":"100","key":"ENG","name":"Engineering"},"comment":{"comments":[{"id":"c1","body":"Looks good","author":{"displayName":"Ada"}}]}}}]}`))
+		default:
+			t.Fatalf("unexpected path = %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := jiraClient{credential: jiraCredential{Deployment: "server", BaseURL: server.URL, Token: "pat-token"}, client: server.Client()}
+	projects, err := client.projects(t.Context())
+	if err != nil || len(projects) != 1 || projects[0].Key != "ENG" {
+		t.Fatalf("projects = %#v err=%v", projects, err)
+	}
+	issues, err := client.issues(t.Context(), "ENG", 50)
+	if err != nil || len(issues) != 1 {
+		t.Fatalf("issues = %#v err=%v", issues, err)
+	}
+	preview, statuses := buildJiraPreview(client.credential, issues)
+	if len(preview) != 1 || preview[0].Key != "ENG-1" || preview[0].CommentCount != 1 || preview[0].SourceURL != server.URL+"/browse/ENG-1" {
+		t.Fatalf("preview = %#v", preview)
+	}
+	if len(statuses) != 1 || statuses[0] != "To Do" {
+		t.Fatalf("statuses = %#v", statuses)
+	}
+}
+
+func TestJiraTextValueExtractsAtlassianDocumentText(t *testing.T) {
+	input := map[string]any{"content": []any{map[string]any{"content": []any{map[string]any{"text": "Line one"}}}, map[string]any{"content": []any{map[string]any{"text": "Line two"}}}}}
+	if got := jiraTextValue(input); got != "Line one\nLine two" {
+		t.Fatalf("text = %q", got)
 	}
 }
 

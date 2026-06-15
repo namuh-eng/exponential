@@ -53,8 +53,8 @@ func TestSetupRequirement(t *testing.T) {
 	if got := setupRequirement("github"); got == nil || got.Message == "" {
 		t.Fatalf("github requirement = %#v", got)
 	}
-	if got := setupRequirement("jira"); got == nil || !strings.Contains(got.Message, "Jira") {
-		t.Fatalf("jira requirement = %#v", got)
+	if got := setupRequirement("jira"); got != nil {
+		t.Fatalf("jira should be configured from workspace credentials, got %#v", got)
 	}
 }
 
