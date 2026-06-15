@@ -114,6 +114,7 @@ describe("agent actions route", () => {
   });
 
   it("creates a review-gated issue proposal from external source context", async () => {
+    vi.stubEnv("AGENT_ACTIONS_PROVIDER", "deterministic");
     mockSession();
     mockDbSelectRows(
       [{ settings: { ai: { aiFeaturesEnabled: true } } }],
@@ -159,6 +160,86 @@ describe("agent actions route", () => {
     );
   });
 
+  it("records read-only support provider actions without a mutation review gate", async () => {
+    vi.stubEnv("AGENT_ACTIONS_PROVIDER", "deterministic");
+    mockSession();
+    resolveIntegrationActorUserIdMock.mockResolvedValue(null);
+    mockDbSelectRows(
+      [{ settings: { ai: { aiFeaturesEnabled: true } } }],
+      [{ id: "integration-1", status: "connected" }],
+    );
+
+    const response = await POST(
+      request({
+        actionType: "answer_workspace_question",
+        prompt:
+          "Answer whether this workspace has an existing SSO onboarding issue.",
+        source: {
+          provider: "zendesk",
+          conversationId: "ticket-42",
+          ticketId: "ZD-42",
+          customerId: "customer-9",
+          excerpt: "Do we already track the SSO onboarding redirect bug?",
+        },
+        actor: {
+          externalUserId: "agent@example.com",
+          displayName: "Support Agent",
+        },
+      }),
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(payload.run).toMatchObject({
+      actionType: "answer_workspace_question",
+      status: "completed",
+      source: {
+        provider: "zendesk",
+        conversationId: "ticket-42",
+        ticketId: "ZD-42",
+        customerId: "customer-9",
+      },
+      actor: {
+        externalUserId: "agent@example.com",
+        mappedUserId: null,
+      },
+      reviewGate: {
+        required: false,
+        policy: "read_only_action",
+      },
+    });
+    expect(payload.run.suggestions[0]).toMatchObject({
+      actionType: "answer_workspace_question",
+      requiresApproval: false,
+      target: "ZD-42",
+    });
+    expect(payload.run.logs).toEqual(
+      expect.arrayContaining([
+        "Received answer_workspace_question from Zendesk.",
+        "Captured provider source zendesk:ticket-42.",
+        "Captured actor agent@example.com.",
+        "Read-only action recorded without mutation review gate.",
+      ]),
+    );
+  });
+
+  it("returns a disabled state when the AI provider is not configured", async () => {
+    vi.stubEnv("AGENT_ACTIONS_PROVIDER", "");
+    mockSession();
+
+    const response = await POST(request(createIssuePayload));
+    const payload = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(payload).toEqual({
+      status: "disabled",
+      code: "ai_provider_missing",
+      message:
+        "AI agent actions are disabled because AGENT_ACTIONS_PROVIDER is not configured.",
+    });
+    expect(dbSelectMock).not.toHaveBeenCalled();
+  });
+
   it("returns a disabled state when the AI provider is missing", async () => {
     vi.stubEnv("AGENT_ACTIONS_PROVIDER", "openai");
     vi.stubEnv("OPENAI_API_KEY", "");
@@ -178,6 +259,7 @@ describe("agent actions route", () => {
   });
 
   it("returns a provider-missing state instead of a fake external action", async () => {
+    vi.stubEnv("AGENT_ACTIONS_PROVIDER", "deterministic");
     mockSession();
     mockDbSelectRows([{ settings: { ai: { aiFeaturesEnabled: true } } }], []);
 

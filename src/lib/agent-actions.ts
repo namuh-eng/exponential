@@ -63,7 +63,16 @@ export function getAgentActionsProviderState():
   | { status: "enabled" }
   | AgentActionsDisabledState {
   const provider = process.env.AGENT_ACTIONS_PROVIDER?.trim().toLowerCase();
-  if (!provider || provider === "deterministic" || provider === "mock") {
+  if (!provider) {
+    return {
+      status: "disabled",
+      code: "ai_provider_missing",
+      message:
+        "AI agent actions are disabled because AGENT_ACTIONS_PROVIDER is not configured.",
+    };
+  }
+
+  if (provider === "deterministic" || provider === "mock") {
     return { status: "enabled" };
   }
 
