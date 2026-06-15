@@ -1009,6 +1009,36 @@ paths:
                 $ref: '#/components/schemas/SlackConfigurationRequiredResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /integrations/discord/connect:
+    post:
+      operationId: connectDiscordIntegration
+      responses:
+        '200':
+          description: Discord authorization URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscordConnectResponse'
+        '412':
+          description: Discord OAuth is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscordConfigurationRequiredResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/discord/disconnect:
+    post:
+      operationId: disconnectDiscordIntegration
+      responses:
+        '200':
+          description: Discord disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /integrations/slack/disconnect:
     post:
       operationId: disconnectSlackIntegration
@@ -3982,6 +4012,19 @@ components:
         authorizationUrl: { type: string, format: uri }
         state: { type: string }
         workspaceSlug: { type: string }
+    DiscordConnectResponse:
+      type: object
+      required: [authorizationUrl, state, workspaceSlug]
+      properties:
+        authorizationUrl: { type: string, format: uri }
+        state: { type: string }
+        workspaceSlug: { type: string }
+    DiscordConfigurationRequiredResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error: { type: string }
+        message: { type: string }
     SlackConfigurationRequiredResponse:
       type: object
       required: [error, message]

@@ -105,6 +105,7 @@ type slackOAuthResponse struct {
 var catalog = []CatalogItem{
 	{Provider: "github", Name: "GitHub", Description: "Sync pull requests, commits, and issue links with Linear."},
 	{Provider: "jira", Name: "Jira", Description: "Sync issue status, ownership, and cross-links with Jira projects."},
+	{Provider: "discord", Name: "Discord", Description: "Create, search, and share issues from Discord slash commands."},
 	{Provider: "slack", Name: "Slack", Description: "Send issue updates and create issues from Slack messages."},
 	{Provider: "zendesk", Name: "Zendesk", Description: "Connect support tickets to product work and customer requests."},
 }
@@ -114,6 +115,8 @@ func (h Handler) Routes() chi.Router {
 	r.Get("/", h.List)
 	r.Delete("/", h.Delete)
 	r.Post("/slack/connect", h.SlackConnect)
+	r.Post("/discord/connect", h.DiscordConnect)
+	r.Post("/discord/disconnect", h.DiscordDisconnect)
 	r.Post("/slack/disconnect", h.SlackDisconnect)
 	return r
 }
@@ -383,6 +386,9 @@ func setupRequirement(provider string) *SetupRequirement {
 	if provider == "slack" && !slackConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Slack OAuth credentials are not configured. Add AUTH_SLACK_ID and AUTH_SLACK_SECRET to enable installation."}
 	}
+	if provider == "discord" && !discordConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Discord OAuth credentials and public key are not configured. Add AUTH_DISCORD_ID, AUTH_DISCORD_SECRET, and DISCORD_PUBLIC_KEY to enable installation."}
+	}
 	if provider == "github" || provider == "jira" || provider == "zendesk" {
 		name := "GitHub"
 		if provider == "jira" {
@@ -398,6 +404,10 @@ func setupRequirement(provider string) *SetupRequirement {
 
 func slackConfigured() bool {
 	return strings.TrimSpace(os.Getenv("AUTH_SLACK_ID")) != "" && strings.TrimSpace(os.Getenv("AUTH_SLACK_SECRET")) != ""
+}
+
+func discordConfigured() bool {
+	return strings.TrimSpace(os.Getenv("AUTH_DISCORD_ID")) != "" && strings.TrimSpace(os.Getenv("AUTH_DISCORD_SECRET")) != "" && strings.TrimSpace(os.Getenv("DISCORD_PUBLIC_KEY")) != ""
 }
 
 func formatTime(value *time.Time) *string {
