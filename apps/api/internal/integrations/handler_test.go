@@ -2,6 +2,8 @@ package integrations
 
 import (
 	"crypto/hmac"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -23,6 +25,18 @@ func TestSetupRequirement(t *testing.T) {
 	t.Setenv("AUTH_SLACK_SECRET", "secret")
 	if got := setupRequirement("slack"); got != nil {
 		t.Fatalf("configured slack requirement = %#v", got)
+	}
+	t.Setenv("AUTH_DISCORD_ID", "")
+	t.Setenv("AUTH_DISCORD_SECRET", "")
+	t.Setenv("DISCORD_PUBLIC_KEY", "")
+	if got := setupRequirement("discord"); got == nil || got.Type != "configuration_required" {
+		t.Fatalf("discord requirement = %#v", got)
+	}
+	t.Setenv("AUTH_DISCORD_ID", "id")
+	t.Setenv("AUTH_DISCORD_SECRET", "secret")
+	t.Setenv("DISCORD_PUBLIC_KEY", strings.Repeat("a", 64))
+	if got := setupRequirement("discord"); got != nil {
+		t.Fatalf("configured discord requirement = %#v", got)
 	}
 	if got := setupRequirement("github"); got == nil || got.Message == "" {
 		t.Fatalf("github requirement = %#v", got)
@@ -391,6 +405,64 @@ func TestOpenSlackView(t *testing.T) {
 
 	if err := openSlackView(t.Context(), server.Client(), "xoxb-token", "trigger-1", map[string]any{"type": "modal"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDiscordAuthorizationURL(t *testing.T) {
+	got := discordAuthorizationURL("client", "https://app.example/", "state-token")
+	if !strings.HasPrefix(got, "https://discord.com/oauth2/authorize?") {
+		t.Fatalf("unexpected URL = %q", got)
+	}
+	if !strings.Contains(got, "client_id=client") || !strings.Contains(got, "state=state-token") {
+		t.Fatalf("missing query params = %q", got)
+	}
+	if !strings.Contains(got, "scope=bot+applications.commands") || !strings.Contains(got, "permissions=0") {
+		t.Fatalf("missing Discord install scope = %q", got)
+	}
+	if !strings.Contains(got, "redirect_uri=https%3A%2F%2Fapp.example%2Fapi%2Fintegrations%2Fdiscord%2Foauth%2Fcallback") {
+		t.Fatalf("missing redirect uri = %q", got)
+	}
+}
+
+func TestDiscordSignatureVerification(t *testing.T) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 6, 13, 12, 0, 0, 0, time.UTC)
+	body := []byte(`{"type":1}`)
+	timestamp := strconv.FormatInt(now.Unix(), 10)
+	signature := ed25519.Sign(privateKey, append([]byte(timestamp), body...))
+
+	if !verifyDiscordSignature(hex.EncodeToString(publicKey), timestamp, hex.EncodeToString(signature), body, now) {
+		t.Fatal("valid Discord signature was rejected")
+	}
+	if verifyDiscordSignature(hex.EncodeToString(publicKey), timestamp, hex.EncodeToString(signature), []byte(`{"type":2}`), now) {
+		t.Fatal("tampered Discord body was accepted")
+	}
+	stale := strconv.FormatInt(now.Add(-10*time.Minute).Unix(), 10)
+	staleSignature := ed25519.Sign(privateKey, append([]byte(stale), body...))
+	if verifyDiscordSignature(hex.EncodeToString(publicKey), stale, hex.EncodeToString(staleSignature), body, now) {
+		t.Fatal("stale Discord timestamp was accepted")
+	}
+}
+
+func TestDiscordCommandParsingAndResponses(t *testing.T) {
+	subcommand, options := discordSubcommand(discordCommandData{
+		Name: "exponential",
+		Options: []discordOption{{Name: "issue", Type: discordApplicationCommandOptionSubcmd, Options: []discordOption{{Name: "title", Type: discordApplicationCommandOptionString, Value: "  Fix login  "}}}},
+	})
+	if subcommand != "issue" || discordOptionString(options, "title") != "Fix login" {
+		t.Fatalf("parsed command = %q %#v", subcommand, options)
+	}
+	response := discordIssueCardResponse("Created", discordCommandIssue{Identifier: "ENG-1", Title: "Fix login", TeamKey: "ENG", StateName: "Triage", Priority: "high"}, false)
+	data := response["data"].(map[string]any)
+	if data["flags"] != nil || !strings.Contains(data["content"].(string), "ENG-1") {
+		t.Fatalf("issue card response = %#v", response)
+	}
+	ephemeral := discordMessageResponse("private", true)
+	if ephemeral["data"].(map[string]any)["flags"] != discordInteractionResponseEphemeral {
+		t.Fatalf("ephemeral response = %#v", ephemeral)
 	}
 }
 

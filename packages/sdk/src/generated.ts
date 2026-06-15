@@ -755,6 +755,38 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/discord/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectDiscordIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/discord/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectDiscordIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/slack/disconnect": {
     parameters: {
       query?: never;
@@ -2582,7 +2614,7 @@ export interface components {
     };
     Integration: {
       /** @enum {string} */
-      provider: "github" | "jira" | "slack" | "zendesk";
+      provider: "github" | "jira" | "slack" | "zendesk" | "discord";
       name: string;
       description: string;
       /** Format: uuid */
@@ -2611,6 +2643,16 @@ export interface components {
       authorizationUrl: string;
       state: string;
       workspaceSlug: string;
+    };
+    DiscordConnectResponse: {
+      /** Format: uri */
+      authorizationUrl: string;
+      state: string;
+      workspaceSlug: string;
+    };
+    DiscordConfigurationRequiredResponse: {
+      error: string;
+      message: string;
     };
     SlackConfigurationRequiredResponse: {
       error: string;
@@ -6137,6 +6179,57 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SlackConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  connectDiscordIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Discord authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DiscordConnectResponse"];
+        };
+      };
+      /** @description Discord OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DiscordConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectDiscordIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Discord disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
         };
       };
       default: components["responses"]["Problem"];

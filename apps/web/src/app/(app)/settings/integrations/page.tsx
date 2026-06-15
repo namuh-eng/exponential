@@ -82,6 +82,12 @@ function statusClassName(status: Integration["status"]) {
   return "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-tertiary)]";
 }
 
+function isConnectableProvider(
+  provider: string,
+): provider is "slack" | "discord" {
+  return provider === "slack" || provider === "discord";
+}
+
 export default function IntegrationsSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [catalogOpen, setCatalogOpen] = useState(false);
@@ -121,12 +127,13 @@ export default function IntegrationsSettingsPage() {
     void loadIntegrations();
   }, [loadIntegrations]);
 
-  async function connectSlack() {
-    setPendingProvider("slack");
+  async function connectIntegration(provider: "slack" | "discord") {
+    setPendingProvider(provider);
     setNotice(null);
     setError(null);
+    const label = provider === "discord" ? "Discord" : "Slack";
     try {
-      const response = await fetch("/api/integrations/slack/connect", {
+      const response = await fetch(`/api/integrations/${provider}/connect`, {
         method: "POST",
         headers: { Accept: "application/json" },
       });
@@ -136,18 +143,18 @@ export default function IntegrationsSettingsPage() {
         message?: string;
       };
       if (!response.ok) {
-        throw new Error(data.message || data.error || "Slack setup failed.");
+        throw new Error(data.message || data.error || `${label} setup failed.`);
       }
       if (data.authorizationUrl) {
         window.location.assign(data.authorizationUrl);
         return;
       }
-      setNotice("Slack setup started.");
+      setNotice(`${label} setup started.`);
     } catch (connectError) {
       setError(
         connectError instanceof Error
           ? connectError.message
-          : "Slack setup failed.",
+          : `${label} setup failed.`,
       );
     } finally {
       setPendingProvider(null);
@@ -162,9 +169,12 @@ export default function IntegrationsSettingsPage() {
       const endpoint =
         provider === "slack"
           ? "/api/integrations/slack/disconnect"
-          : `/api/integrations?provider=${encodeURIComponent(provider)}`;
+          : provider === "discord"
+            ? "/api/integrations/discord/disconnect"
+            : `/api/integrations?provider=${encodeURIComponent(provider)}`;
       const response = await fetch(endpoint, {
-        method: provider === "slack" ? "POST" : "DELETE",
+        method:
+          provider === "slack" || provider === "discord" ? "POST" : "DELETE",
         headers: { Accept: "application/json" },
       });
       const data = (await response.json().catch(() => ({}))) as {
@@ -254,8 +264,8 @@ export default function IntegrationsSettingsPage() {
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
                         onClick={() =>
-                          integration.provider === "slack"
-                            ? void connectSlack()
+                          isConnectableProvider(integration.provider)
+                            ? void connectIntegration(integration.provider)
                             : undefined
                         }
                         type="button"
@@ -432,22 +442,28 @@ export default function IntegrationsSettingsPage() {
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
                         onClick={() =>
-                          integration.provider === "slack"
-                            ? void connectSlack()
+                          isConnectableProvider(integration.provider)
+                            ? void connectIntegration(integration.provider)
                             : undefined
                         }
                         type="button"
                       >
                         Reconnect
                       </button>
-                    ) : integration.provider === "slack" ? (
+                    ) : isConnectableProvider(integration.provider) ? (
                       <button
                         className="rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={pendingProvider === "slack"}
-                        onClick={() => void connectSlack()}
+                        disabled={pendingProvider === integration.provider}
+                        onClick={() =>
+                          isConnectableProvider(integration.provider)
+                            ? void connectIntegration(integration.provider)
+                            : undefined
+                        }
                         type="button"
                       >
-                        {pendingProvider === "slack" ? "Opening..." : "Connect"}
+                        {pendingProvider === integration.provider
+                          ? "Opening..."
+                          : "Connect"}
                       </button>
                     ) : (
                       <button
