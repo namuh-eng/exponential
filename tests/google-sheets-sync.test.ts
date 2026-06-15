@@ -185,4 +185,164 @@ describe("Google Sheets sync", () => {
       }),
     );
   });
+
+  it("does not leak private-only project names from issues-only exports", async () => {
+    selectResults.push(
+      [
+        {
+          id: "team-public",
+          key: "ENG",
+          name: "Engineering",
+          isPrivate: false,
+        },
+        { id: "team-private", key: "SEC", name: "Security", isPrivate: true },
+      ],
+      [
+        {
+          id: "issue-public",
+          identifier: "ENG-2",
+          title: "Public issue linked to hidden work",
+          teamId: "team-public",
+          teamKey: "ENG",
+          teamName: "Engineering",
+          stateName: "Todo",
+          stateCategory: "unstarted",
+          priority: "medium",
+          estimate: null,
+          projectId: "project-private",
+          projectName: "Private project",
+          assigneeId: null,
+          createdAt: new Date("2026-06-01T00:00:00.000Z"),
+          updatedAt: new Date("2026-06-02T00:00:00.000Z"),
+          completedAt: null,
+          canceledAt: null,
+          archivedAt: null,
+        },
+      ],
+      [
+        {
+          id: "project-private",
+          name: "Private project",
+          slug: "private-project",
+          status: "planned",
+          priority: "urgent",
+          leadId: "user-2",
+          startDate: null,
+          targetDate: null,
+          completedAt: null,
+          canceledAt: null,
+          createdAt: new Date("2026-06-01T00:00:00.000Z"),
+          updatedAt: new Date("2026-06-02T00:00:00.000Z"),
+        },
+      ],
+      [
+        {
+          projectId: "project-private",
+          teamId: "team-private",
+          teamKey: "SEC",
+          isPrivate: true,
+        },
+      ],
+    );
+    const { refreshGoogleSheetsIntegration } = await import(
+      "@/lib/google-sheets-sync"
+    );
+
+    const result = await refreshGoogleSheetsIntegration(
+      { workspaceId: "workspace-1", workspaceSlug: "foreverbrowsing" },
+      {
+        id: "integration-1",
+        metadata: {
+          scopes: { issues: true, projects: false, initiatives: false },
+        },
+      },
+      new Date("2026-06-09T12:00:00.000Z"),
+    );
+
+    expect(result.rows.issues).toHaveLength(1);
+    expect(result.rows.issues[0]?.[9]).toBe("");
+    expect(result.rows.issues[0]?.[10]).toBe("");
+    expect(result.rows.projects).toEqual([]);
+    expect(JSON.stringify(result.rows)).not.toContain("SEC");
+    expect(JSON.stringify(result.rows)).not.toContain("Private project");
+  });
+
+  it("keeps public project slugs in initiatives-only exports", async () => {
+    selectResults.push(
+      [
+        {
+          id: "team-public",
+          key: "ENG",
+          name: "Engineering",
+          isPrivate: false,
+        },
+      ],
+      [
+        {
+          id: "project-public",
+          name: "Public project",
+          slug: "public-project",
+          status: "started",
+          priority: "high",
+          leadId: "user-1",
+          startDate: null,
+          targetDate: null,
+          completedAt: null,
+          canceledAt: null,
+          createdAt: new Date("2026-06-01T00:00:00.000Z"),
+          updatedAt: new Date("2026-06-02T00:00:00.000Z"),
+        },
+      ],
+      [
+        {
+          projectId: "project-public",
+          teamId: "team-public",
+          teamKey: "ENG",
+          isPrivate: false,
+        },
+      ],
+      [
+        {
+          id: "initiative-public",
+          name: "Public initiative",
+          status: "active",
+          health: "on_track",
+          ownerId: "user-1",
+          startDate: null,
+          targetDate: null,
+          timeframe: "Q3",
+          createdAt: new Date("2026-06-01T00:00:00.000Z"),
+          updatedAt: new Date("2026-06-02T00:00:00.000Z"),
+        },
+      ],
+      [
+        {
+          initiativeId: "initiative-public",
+          teamId: "team-public",
+          teamKey: "ENG",
+          isPrivate: false,
+        },
+      ],
+      [{ initiativeId: "initiative-public", projectId: "project-public" }],
+    );
+    const { refreshGoogleSheetsIntegration } = await import(
+      "@/lib/google-sheets-sync"
+    );
+
+    const result = await refreshGoogleSheetsIntegration(
+      { workspaceId: "workspace-1", workspaceSlug: "foreverbrowsing" },
+      {
+        id: "integration-1",
+        metadata: {
+          scopes: { issues: false, projects: false, initiatives: true },
+        },
+      },
+      new Date("2026-06-09T12:00:00.000Z"),
+    );
+
+    expect(result.rows.issues).toEqual([]);
+    expect(result.rows.projects).toEqual([]);
+    expect(result.rows.initiatives).toHaveLength(1);
+    expect(result.rows.initiatives[0]?.[5]).toBe("public-project");
+  });
 });

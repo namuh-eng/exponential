@@ -4,10 +4,12 @@ const mocks = vi.hoisted(() => ({
   requireApiSession: vi.fn(),
   getConfiguredAppUrl: vi.fn(),
   getGoogleOAuthConfig: vi.fn(),
+  getWorkspaceAccess: vi.fn(),
   getWorkspaceAccessForSlug: vi.fn(),
   canManageIntegrations: vi.fn(),
   upsertGoogleSheetsIntegration: vi.fn(),
   refreshDueGoogleSheetsIntegrations: vi.fn(),
+  deleteWhere: vi.fn(),
   fetch: vi.fn(),
 }));
 
@@ -25,10 +27,20 @@ vi.mock("@/lib/auth-providers", () => ({
 
 vi.mock("@/lib/workspace-integrations", () => ({
   canManageIntegrations: mocks.canManageIntegrations,
+  getWorkspaceAccess: mocks.getWorkspaceAccess,
   getWorkspaceAccessForSlug: mocks.getWorkspaceAccessForSlug,
 }));
 
+vi.mock("@/lib/db", () => ({
+  db: {
+    delete: vi.fn(() => ({
+      where: mocks.deleteWhere,
+    })),
+  },
+}));
+
 vi.mock("@/lib/google-sheets-sync", () => ({
+  GOOGLE_SHEETS_PROVIDER: "google_sheets",
   GOOGLE_SHEETS_SCOPES: [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive.file",
@@ -85,7 +97,13 @@ describe("Google Sheets integration routes", () => {
       workspaceSlug: "foreverbrowsing",
       role: "admin",
     });
+    mocks.getWorkspaceAccess.mockResolvedValue({
+      workspaceId: "workspace-1",
+      workspaceSlug: "foreverbrowsing",
+      role: "admin",
+    });
     mocks.canManageIntegrations.mockReturnValue(true);
+    mocks.deleteWhere.mockResolvedValue(undefined);
     mocks.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -177,5 +195,28 @@ describe("Google Sheets integration routes", () => {
       summary: { checked: 2, refreshed: 1, failed: 0, skipped: 1 },
     });
     expect(mocks.refreshDueGoogleSheetsIntegrations).toHaveBeenCalledTimes(1);
+  });
+
+  it("disconnects Google Sheets by deleting the workspace integration", async () => {
+    const { POST } = await import(
+      "@/app/api/integrations/google-sheets/disconnect/route"
+    );
+
+    const response = await POST(
+      new Request(
+        "http://localhost/api/integrations/google-sheets/disconnect",
+        {
+          method: "POST",
+        },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ success: true });
+    expect(mocks.getWorkspaceAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ user: { id: "user-1" } }),
+      expect.any(Request),
+    );
+    expect(mocks.deleteWhere).toHaveBeenCalledTimes(1);
   });
 });

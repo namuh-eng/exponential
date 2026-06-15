@@ -314,6 +314,11 @@ async function collectSheetRows(
     visibleTeams.map((record) => [record.id, record]),
   );
 
+  const needsProjectMetadata =
+    settings.scopes.issues ||
+    settings.scopes.projects ||
+    settings.scopes.initiatives;
+
   const issueRows = settings.scopes.issues
     ? visibleTeamIds.length
       ? await db
@@ -346,7 +351,7 @@ async function collectSheetRows(
       : []
     : [];
 
-  const projects = settings.scopes.projects
+  const projects = needsProjectMetadata
     ? await db
         .select({
           id: project.id,
@@ -367,19 +372,18 @@ async function collectSheetRows(
         .orderBy(asc(project.name))
     : [];
 
-  const projectLinks =
-    settings.scopes.projects || settings.scopes.initiatives
-      ? await db
-          .select({
-            projectId: projectTeam.projectId,
-            teamId: team.id,
-            teamKey: team.key,
-            isPrivate: team.isPrivate,
-          })
-          .from(projectTeam)
-          .innerJoin(team, eq(projectTeam.teamId, team.id))
-          .where(eq(team.workspaceId, workspaceId))
-      : [];
+  const projectLinks = needsProjectMetadata
+    ? await db
+        .select({
+          projectId: projectTeam.projectId,
+          teamId: team.id,
+          teamKey: team.key,
+          isPrivate: team.isPrivate,
+        })
+        .from(projectTeam)
+        .innerJoin(team, eq(projectTeam.teamId, team.id))
+        .where(eq(team.workspaceId, workspaceId))
+    : [];
 
   const projectTeams = new Map<
     string,
@@ -467,54 +471,60 @@ async function collectSheetRows(
   }
 
   return {
-    issues: issueRows.map((record) => [
-      formatCell(record.id),
-      formatCell(record.identifier),
-      formatCell(record.title),
-      formatCell(record.teamKey),
-      formatCell(record.teamName),
-      formatCell(record.stateName),
-      formatCell(record.stateCategory),
-      formatCell(record.priority),
-      formatCell(record.estimate),
-      formatCell(record.projectId),
-      formatCell(record.projectName),
-      formatCell(record.assigneeId),
-      formatCell(record.createdAt),
-      formatCell(record.updatedAt),
-      formatCell(record.completedAt),
-      formatCell(record.canceledAt),
-      formatCell(record.archivedAt),
-    ]),
-    projects: projects
-      .filter((record) => visibleProjectIds.has(record.id))
-      .map((record) => {
-        const links = projectTeams.get(record.id) ?? [];
-        const teamKeys = unique(
-          links
-            .filter(
-              (link) =>
-                settings.includePrivateTeams ||
-                visibleTeamById.has(link.teamId),
-            )
-            .map((link) => link.teamKey),
-        );
-        return [
-          formatCell(record.id),
-          formatCell(record.name),
-          formatCell(record.slug),
-          formatCell(record.status),
-          formatCell(record.priority),
-          teamKeys.join(", "),
-          formatCell(record.leadId),
-          formatCell(record.startDate),
-          formatCell(record.targetDate),
-          formatCell(record.completedAt),
-          formatCell(record.canceledAt),
-          formatCell(record.createdAt),
-          formatCell(record.updatedAt),
-        ];
-      }),
+    issues: issueRows.map((record) => {
+      const canExposeProject =
+        record.projectId === null || visibleProjectIds.has(record.projectId);
+      return [
+        formatCell(record.id),
+        formatCell(record.identifier),
+        formatCell(record.title),
+        formatCell(record.teamKey),
+        formatCell(record.teamName),
+        formatCell(record.stateName),
+        formatCell(record.stateCategory),
+        formatCell(record.priority),
+        formatCell(record.estimate),
+        canExposeProject ? formatCell(record.projectId) : "",
+        canExposeProject ? formatCell(record.projectName) : "",
+        formatCell(record.assigneeId),
+        formatCell(record.createdAt),
+        formatCell(record.updatedAt),
+        formatCell(record.completedAt),
+        formatCell(record.canceledAt),
+        formatCell(record.archivedAt),
+      ];
+    }),
+    projects: settings.scopes.projects
+      ? projects
+          .filter((record) => visibleProjectIds.has(record.id))
+          .map((record) => {
+            const links = projectTeams.get(record.id) ?? [];
+            const teamKeys = unique(
+              links
+                .filter(
+                  (link) =>
+                    settings.includePrivateTeams ||
+                    visibleTeamById.has(link.teamId),
+                )
+                .map((link) => link.teamKey),
+            );
+            return [
+              formatCell(record.id),
+              formatCell(record.name),
+              formatCell(record.slug),
+              formatCell(record.status),
+              formatCell(record.priority),
+              teamKeys.join(", "),
+              formatCell(record.leadId),
+              formatCell(record.startDate),
+              formatCell(record.targetDate),
+              formatCell(record.completedAt),
+              formatCell(record.canceledAt),
+              formatCell(record.createdAt),
+              formatCell(record.updatedAt),
+            ];
+          })
+      : [],
     initiatives: initiatives
       .filter((record) => {
         const links = initiativeTeams.get(record.id) ?? [];
