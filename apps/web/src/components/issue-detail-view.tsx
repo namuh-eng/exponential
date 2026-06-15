@@ -101,6 +101,14 @@ interface IssuePropertyOptions {
   cycles: { id: string; name: string | null; number: number }[];
   estimates: { value: number; label: string }[];
 }
+interface IssueExternalSource {
+  provider: "sentry" | string;
+  label: string;
+  url: string;
+  externalId: string;
+  project: string;
+  integrationId: string;
+}
 
 interface IssueDetail {
   id: string;
@@ -156,6 +164,7 @@ interface IssueDetail {
   };
   comments: IssueComment[];
   subIssues: IssueSubIssue[];
+  sources: IssueExternalSource[];
   createdAt: string;
   updatedAt: string;
 }
@@ -404,7 +413,9 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
           ? " from Slack"
           : event.metadata.source === "microsoft_teams_message"
             ? " from Microsoft Teams"
-            : "";
+            : event.metadata.source === "sentry_issue"
+              ? " from Sentry"
+              : "";
       return `${actorName} created this issue${legacySuffix}${sourceSuffix}`;
     }
     case "updated":
@@ -448,6 +459,19 @@ function getMicrosoftTeamsSourceLink(event: IssueHistoryEvent): string | null {
   }
   return typeof teams.permalink === "string" && teams.permalink.length > 0
     ? teams.permalink
+    : null;
+}
+
+function getSentrySourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "sentry_issue") {
+    return null;
+  }
+  const sentry = event.metadata.sentry;
+  if (!isRecord(sentry)) {
+    return null;
+  }
+  return typeof sentry.webUrl === "string" && sentry.webUrl.length > 0
+    ? sentry.webUrl
     : null;
 }
 
@@ -700,6 +724,7 @@ export function IssueDetailView({
             generatedAt: null,
             sourceCommentCount: 0,
           },
+          sources: json.sources ?? [],
         });
         setDescriptionDraft(
           normalizeIssueDescriptionHtml(json.description) ?? "",
@@ -1962,6 +1987,16 @@ export function IssueDetailView({
                             View source message in Microsoft Teams
                           </a>
                         ) : null}
+                        {getSentrySourceLink(event) ? (
+                          <a
+                            href={getSentrySourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source issue in Sentry
+                          </a>
+                        ) : null}
                       </div>
                     </div>
                   ))}
@@ -2414,6 +2449,30 @@ export function IssueDetailView({
               />
             )}
           </div>
+
+          {issue.sources.length > 0 ? (
+            <div className="border-b border-[var(--color-border)] p-4">
+              <div className="editorial-section-title mb-3 text-[12px] uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                Sources
+              </div>
+              <div className="space-y-2">
+                {issue.sources.map((source) => (
+                  <a
+                    key={`${source.provider}-${source.externalId}`}
+                    href={source.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="tty-row flex items-center justify-between border border-[var(--color-border)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                  >
+                    <span>{source.label}</span>
+                    <span className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-text-tertiary)]">
+                      {source.provider}
+                    </span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div className="border-b border-[var(--color-border)] p-4">
             <div className="editorial-section-title mb-3 text-[12px] uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">

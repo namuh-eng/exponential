@@ -787,6 +787,102 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/sentry/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectSentryIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/sentry/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectSentryIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/sentry/oauth/callback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["sentryOAuthCallback"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/sentry/issues/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["searchSentryLinkableIssues"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/sentry/issues/link": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["linkSentryIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/sentry/issues/create": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createIssueFromSentry"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/microsoft-teams/disconnect": {
     parameters: {
       query?: never;
@@ -2650,6 +2746,7 @@ export interface components {
         | "github"
         | "jira"
         | "slack"
+        | "sentry"
         | "zendesk"
         | "discord"
         | "microsoft_teams";
@@ -2694,6 +2791,12 @@ export interface components {
       state: string;
       workspaceSlug: string;
     };
+    SentryConnectResponse: {
+      /** Format: uri */
+      authorizationUrl: string;
+      state: string;
+      workspaceSlug: string;
+    };
     DiscordConfigurationRequiredResponse: {
       error: string;
       message: string;
@@ -2705,6 +2808,38 @@ export interface components {
     MicrosoftTeamsConfigurationRequiredResponse: {
       error: string;
       message: string;
+    };
+    SentryConfigurationRequiredResponse: {
+      error: string;
+      message: string;
+    };
+    SentryIssueActionRequest: {
+      query?: string;
+      exponentialIssueId?: string;
+      issueIdentifier?: string;
+      /** Format: uuid */
+      teamId?: string;
+      teamKey?: string;
+      title?: string;
+      description?: string;
+      /** Format: email */
+      assigneeEmail?: string;
+      /** @enum {string} */
+      priority?: "none" | "urgent" | "high" | "medium" | "low";
+      issue?: {
+        [key: string]: unknown;
+      };
+    } & {
+      [key: string]: unknown;
+    };
+    SentryIssueActionResponse: {
+      /** Format: uri */
+      webUrl: string;
+      project: string;
+      identifier: string;
+    };
+    SentryIssueSearchResponse: {
+      issues: components["schemas"]["SentryIssueActionResponse"][];
     };
     IntegrationListResponse: {
       canManageIntegrations: boolean;
@@ -4511,6 +4646,16 @@ export interface components {
     };
     /** @enum {string} */
     IssuePriority: "none" | "urgent" | "high" | "medium" | "low";
+    IssueExternalSource: {
+      provider: string;
+      label: string;
+      /** Format: uri */
+      url: string;
+      externalId: string;
+      project: string;
+      /** Format: uuid */
+      integrationId: string;
+    };
     Issue: {
       /** Format: uuid */
       id: string;
@@ -4547,6 +4692,7 @@ export interface components {
       canceled_at?: string | null;
       /** Format: date-time */
       completed_at?: string | null;
+      sources?: components["schemas"]["IssueExternalSource"][];
     };
     IssueListResponse: {
       data: components["schemas"]["Issue"][];
@@ -6287,6 +6433,154 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["MicrosoftTeamsConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  connectSentryIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sentry authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SentryConnectResponse"];
+        };
+      };
+      /** @description Sentry OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SentryConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectSentryIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sentry disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  sentryOAuthCallback: {
+    parameters: {
+      query?: {
+        code?: string;
+        state?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Redirects to integration settings */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  searchSentryLinkableIssues: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SentryIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linkable Exponential issues for Sentry */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SentryIssueSearchResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkSentryIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SentryIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked Exponential issue descriptor for Sentry */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SentryIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createIssueFromSentry: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SentryIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Created Exponential issue descriptor for Sentry */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SentryIssueActionResponse"];
         };
       };
       default: components["responses"]["Problem"];

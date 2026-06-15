@@ -84,11 +84,12 @@ function statusClassName(status: Integration["status"]) {
 
 function isConnectableProvider(
   provider: string,
-): provider is "slack" | "discord" | "microsoft_teams" {
+): provider is "slack" | "discord" | "microsoft_teams" | "sentry" {
   return (
     provider === "slack" ||
     provider === "discord" ||
-    provider === "microsoft_teams"
+    provider === "microsoft_teams" ||
+    provider === "sentry"
   );
 }
 
@@ -132,13 +133,14 @@ export default function IntegrationsSettingsPage() {
   }, [loadIntegrations]);
 
   async function connectIntegration(
-    provider: "slack" | "discord" | "microsoft_teams",
+    provider: "slack" | "discord" | "microsoft_teams" | "sentry",
   ) {
     setPendingProvider(provider);
     setNotice(null);
     setError(null);
     let label = provider === "discord" ? "Discord" : "Slack";
     if (provider === "microsoft_teams") label = "Microsoft Teams";
+    if (provider === "sentry") label = "Sentry";
     const endpoint =
       provider === "microsoft_teams"
         ? "/api/integrations/microsoft-teams/connect"
@@ -184,12 +186,15 @@ export default function IntegrationsSettingsPage() {
             ? "/api/integrations/discord/disconnect"
             : provider === "microsoft_teams"
               ? "/api/integrations/microsoft-teams/disconnect"
-              : `/api/integrations?provider=${encodeURIComponent(provider)}`;
+              : provider === "sentry"
+                ? "/api/integrations/sentry/disconnect"
+                : `/api/integrations?provider=${encodeURIComponent(provider)}`;
       const response = await fetch(endpoint, {
         method:
           provider === "slack" ||
           provider === "discord" ||
-          provider === "microsoft_teams"
+          provider === "microsoft_teams" ||
+          provider === "sentry"
             ? "POST"
             : "DELETE",
         headers: { Accept: "application/json" },
