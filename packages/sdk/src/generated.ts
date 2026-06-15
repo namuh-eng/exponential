@@ -2614,7 +2614,7 @@ export interface components {
     };
     Integration: {
       /** @enum {string} */
-      provider: "github" | "jira" | "slack" | "zendesk";
+      provider: "github" | "jira" | "slack" | "zendesk" | "discord";
       name: string;
       description: string;
       /** Format: uuid */

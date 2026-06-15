@@ -3991,7 +3991,7 @@ components:
       type: object
       required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions, health]
       properties:
-        provider: { type: string, enum: [github, jira, slack, zendesk] }
+        provider: { type: string, enum: [github, jira, slack, zendesk, discord] }
         name: { type: string }
         description: { type: string }
         id: { type: [string, 'null'], format: uuid }
