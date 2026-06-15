@@ -739,6 +739,86 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/gitlab": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getGitLabIntegration"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gitlab/setup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["setupGitLabIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gitlab/workflows": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["updateGitLabWorkflowAutomation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gitlab/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectGitLabIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gitlab/webhook/{integrationId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["ingestGitLabWebhook"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/slack/connect": {
     parameters: {
       query?: never;
@@ -2744,6 +2824,7 @@ export interface components {
       /** @enum {string} */
       provider:
         | "github"
+        | "gitlab"
         | "jira"
         | "slack"
         | "sentry"
@@ -2772,6 +2853,55 @@ export interface components {
         | null;
       actions: components["schemas"]["IntegrationActions"];
       health: components["schemas"]["IntegrationHealth"];
+    };
+    GitLabWorkflowMapping: {
+      /** Format: uuid */
+      teamId: string;
+      teamKey: string;
+      teamName: string;
+      /** Format: uuid */
+      mergeRequestMergedStateId: string | null;
+    };
+    GitLabStatusResponse: {
+      connected: boolean;
+      /** Format: uuid */
+      integrationId: string | null;
+      /** Format: uri */
+      origin: string | null;
+      displayName: string | null;
+      /** Format: uri */
+      webhookUrl: string | null;
+      webhookSecret: string | null;
+      workflows: components["schemas"]["GitLabWorkflowMapping"][];
+    };
+    GitLabSetupRequest: {
+      origin: string;
+      token: string;
+    };
+    GitLabSetupResponse: {
+      connected: boolean;
+      /** Format: uuid */
+      integrationId: string;
+      /** Format: uri */
+      origin: string;
+      displayName: string;
+      /** Format: uri */
+      webhookUrl: string;
+      webhookSecret: string;
+      workflows: components["schemas"]["GitLabWorkflowMapping"][];
+    };
+    GitLabWorkflowRequest: {
+      /** Format: uuid */
+      teamId: string;
+      /** Format: uuid */
+      mergeRequestMergedStateId?: string | null;
+    };
+    GitLabWorkflowResponse: {
+      workflows: components["schemas"]["GitLabWorkflowMapping"][];
+    };
+    GitLabWebhookResponse: {
+      ok: boolean;
+      processedIssueCount: number;
     };
     SlackConnectResponse: {
       /** Format: uri */
@@ -6343,6 +6473,121 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getGitLabIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description GitLab integration status */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitLabStatusResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  setupGitLabIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["GitLabSetupRequest"];
+      };
+    };
+    responses: {
+      /** @description GitLab integration connected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitLabSetupResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateGitLabWorkflowAutomation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["GitLabWorkflowRequest"];
+      };
+    };
+    responses: {
+      /** @description GitLab workflow mappings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitLabWorkflowResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectGitLabIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description GitLab disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  ingestGitLabWebhook: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        integrationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description GitLab webhook accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitLabWebhookResponse"];
         };
       };
       default: components["responses"]["Problem"];
