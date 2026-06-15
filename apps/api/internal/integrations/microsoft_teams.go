@@ -598,7 +598,13 @@ func (h Handler) completeMicrosoftTeamsInstall(ctx context.Context, install micr
 	if _, err := tx.Exec(ctx, `update provider_credential set active=false, revoked_at=coalesce(revoked_at, $2), updated_at=$2 where workspace_integration_id=$1::uuid and active`, install.ID, now); err != nil {
 		return err
 	}
-	credential := map[string]any{"tenantId": tenantID, "botSecretRef": "MICROSOFT_TEAMS_BOT_SECRET"}
+	credential := map[string]any{
+		"tenantId":     tenantID,
+		"botSecretRef": "MICROSOFT_TEAMS_BOT_SECRET",
+		"botToken":     strings.TrimSpace(os.Getenv("MICROSOFT_TEAMS_BOT_TOKEN")),
+		"serviceUrl":   strings.TrimSpace(os.Getenv("MICROSOFT_TEAMS_SERVICE_URL")),
+		"webhookUrl":   strings.TrimSpace(os.Getenv("MICROSOFT_TEAMS_WEBHOOK_URL")),
+	}
 	credentialRaw, err := json.Marshal(credential)
 	if err != nil {
 		return err

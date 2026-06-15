@@ -510,6 +510,54 @@ func TestMicrosoftTeamsCommandParsingAndChannelPolicy(t *testing.T) {
 	}
 }
 
+func TestPostMicrosoftTeamsMessageUsesWebhook(t *testing.T) {
+	var got map[string]string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/teams-webhook" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Fatalf("content type = %q", r.Header.Get("Content-Type"))
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	err := postMicrosoftTeamsMessage(t.Context(), server.Client(), microsoftTeamsCredential{}, microsoftTeamsOutboundMessage{ChannelID: "19:channel", Text: "Project update", WebhookURL: server.URL + "/teams-webhook"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["type"] != "message" || got["text"] != "Project update" {
+		t.Fatalf("payload = %#v", got)
+	}
+}
+
+func TestPostMicrosoftTeamsMessageFailureIsRetryableAndAuthAware(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "expired", http.StatusUnauthorized)
+	}))
+	defer server.Close()
+
+	err := postMicrosoftTeamsMessage(t.Context(), server.Client(), microsoftTeamsCredential{ServiceURL: server.URL, BotToken: "token"}, microsoftTeamsOutboundMessage{ChannelID: "19:channel", Text: "Project update"})
+	if err == nil {
+		t.Fatal("expected delivery failure")
+	}
+	if !isMicrosoftTeamsAuthFailure(err) {
+		t.Fatalf("expected auth failure, got %v", err)
+	}
+	status, nextRunAt := providerJobFailureStatus(1, 3)
+	if status != "failed" || nextRunAt == nil {
+		t.Fatalf("retry status = %q next=%v", status, nextRunAt)
+	}
+	status, nextRunAt = providerJobFailureStatus(3, 3)
+	if status != "dead" || nextRunAt != nil {
+		t.Fatalf("dead status = %q next=%v", status, nextRunAt)
+	}
+}
+
 func TestDiscordCommandParsingAndResponses(t *testing.T) {
 	subcommand, options := discordSubcommand(discordCommandData{
 		Name: "exponential",
