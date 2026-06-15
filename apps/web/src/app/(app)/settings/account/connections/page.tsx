@@ -3,7 +3,13 @@
 import { linkSocialAccount, unlinkSocialAccount } from "@/lib/auth-client";
 import { useEffect, useMemo, useState } from "react";
 
-type ProviderId = "google" | "github" | "gitlab" | "slack" | "discord";
+type ProviderId =
+  | "google"
+  | "github"
+  | "gitlab"
+  | "slack"
+  | "discord"
+  | "microsoft";
 
 type ConnectedProvider = {
   id: string;
@@ -92,6 +98,15 @@ const ACCOUNT_PROVIDER_REGISTRY: ProviderRegistryEntry[] = [
     description: "Connect your Discord identity for slash command access.",
     attributionPurpose:
       "Maps Discord slash commands and message links to your exponential user.",
+  },
+  {
+    id: "microsoft",
+    label: "Microsoft",
+    capabilityKey: "microsoft",
+    unavailableReason: "Microsoft account linking is not configured",
+    description: "Connect your Microsoft account for Teams-backed attribution.",
+    attributionPurpose:
+      "Maps Microsoft Teams actions to your exponential user.",
   },
   {
     id: "google",

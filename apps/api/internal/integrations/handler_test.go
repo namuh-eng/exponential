@@ -38,6 +38,18 @@ func TestSetupRequirement(t *testing.T) {
 	if got := setupRequirement("discord"); got != nil {
 		t.Fatalf("configured discord requirement = %#v", got)
 	}
+	t.Setenv("AUTH_MICROSOFT_ID", "")
+	t.Setenv("AUTH_MICROSOFT_SECRET", "")
+	t.Setenv("MICROSOFT_TEAMS_BOT_SECRET", "")
+	if got := setupRequirement("microsoft_teams"); got == nil || got.Type != "configuration_required" {
+		t.Fatalf("microsoft teams requirement = %#v", got)
+	}
+	t.Setenv("AUTH_MICROSOFT_ID", "id")
+	t.Setenv("AUTH_MICROSOFT_SECRET", "secret")
+	t.Setenv("MICROSOFT_TEAMS_BOT_SECRET", "bot-secret")
+	if got := setupRequirement("microsoft_teams"); got != nil {
+		t.Fatalf("configured microsoft teams requirement = %#v", got)
+	}
 	if got := setupRequirement("github"); got == nil || got.Message == "" {
 		t.Fatalf("github requirement = %#v", got)
 	}
@@ -444,6 +456,57 @@ func TestDiscordSignatureVerification(t *testing.T) {
 	staleSignature := ed25519.Sign(privateKey, append([]byte(stale), body...))
 	if verifyDiscordSignature(hex.EncodeToString(publicKey), stale, hex.EncodeToString(staleSignature), body, now) {
 		t.Fatal("stale Discord timestamp was accepted")
+	}
+}
+
+func TestMicrosoftTeamsAuthorizationURL(t *testing.T) {
+	got := microsoftTeamsAuthorizationURL("client", "https://app.example/", "state-token")
+	if !strings.HasPrefix(got, "https://login.microsoftonline.com/common/adminconsent?") {
+		t.Fatalf("unexpected URL = %q", got)
+	}
+	if !strings.Contains(got, "client_id=client") || !strings.Contains(got, "state=state-token") {
+		t.Fatalf("missing query params = %q", got)
+	}
+	if !strings.Contains(got, "redirect_uri=https%3A%2F%2Fapp.example%2Fapi%2Fintegrations%2Fmicrosoft-teams%2Foauth%2Fcallback") {
+		t.Fatalf("missing redirect uri = %q", got)
+	}
+}
+
+func TestMicrosoftTeamsSignatureVerification(t *testing.T) {
+	now := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
+	body := []byte(`{"type":"message","text":"create issue Bug","channelData":{"tenant":{"id":"tenant-1"}}}`)
+	timestamp := strconv.FormatInt(now.Unix(), 10)
+	signature := microsoftTeamsTestSignature("secret", timestamp, body)
+	if !verifyMicrosoftTeamsSignature("secret", timestamp, signature, body, now) {
+		t.Fatal("valid Microsoft Teams signature was rejected")
+	}
+	if verifyMicrosoftTeamsSignature("secret", timestamp, signature, []byte(`{"type":"message","text":"tampered"}`), now) {
+		t.Fatal("tampered Microsoft Teams body was accepted")
+	}
+	stale := strconv.FormatInt(now.Add(-10*time.Minute).Unix(), 10)
+	if verifyMicrosoftTeamsSignature("secret", stale, microsoftTeamsTestSignature("secret", stale, body), body, now) {
+		t.Fatal("stale Microsoft Teams timestamp was accepted")
+	}
+}
+
+func TestMicrosoftTeamsCommandParsingAndChannelPolicy(t *testing.T) {
+	command, rest := microsoftTeamsCommand("<at>exponential</at> create issue Fix production alert")
+	if command != "create_issue" || rest != "Fix production alert" {
+		t.Fatalf("issue command = %q %q", command, rest)
+	}
+	command, rest = microsoftTeamsCommand("summarize thread")
+	if command != "summarize_thread" || rest != "" {
+		t.Fatalf("summarize command = %q %q", command, rest)
+	}
+	standard := microsoftTeamsActivity{}
+	standard.ChannelData.Channel.ChannelType = "standard"
+	if !microsoftTeamsStandardChannel(standard) {
+		t.Fatal("standard channel was rejected")
+	}
+	shared := microsoftTeamsActivity{}
+	shared.ChannelData.Channel.ChannelType = "shared"
+	if microsoftTeamsStandardChannel(shared) {
+		t.Fatal("shared channel was accepted")
 	}
 }
 
