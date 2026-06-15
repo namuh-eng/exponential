@@ -50,6 +50,16 @@ func TestSetupRequirement(t *testing.T) {
 	if got := setupRequirement("microsoft_teams"); got != nil {
 		t.Fatalf("configured microsoft teams requirement = %#v", got)
 	}
+	t.Setenv("AUTH_FIGMA_ID", "")
+	t.Setenv("AUTH_FIGMA_SECRET", "")
+	if got := setupRequirement("figma"); got == nil || !strings.Contains(got.Message, "AUTH_FIGMA_ID") {
+		t.Fatalf("figma requirement = %#v", got)
+	}
+	t.Setenv("AUTH_FIGMA_ID", "id")
+	t.Setenv("AUTH_FIGMA_SECRET", "secret")
+	if got := setupRequirement("figma"); got != nil {
+		t.Fatalf("configured figma requirement = %#v", got)
+	}
 	if got := setupRequirement("github"); got == nil || got.Message == "" {
 		t.Fatalf("github requirement = %#v", got)
 	}

@@ -38,6 +38,21 @@ interface IssueCommentAttachment {
   downloadUrl: string | null;
 }
 
+interface FigmaSource {
+  id: string;
+  url: string;
+  normalizedUrl: string;
+  fileKey: string;
+  nodeId: string | null;
+  kind: "file" | "design" | "proto";
+  name: string | null;
+  thumbnailUrl: string | null;
+  containerType: "issue_description" | "comment" | "document" | "plugin";
+  capturedAt: string;
+  refreshedAt: string | null;
+  lastError: string | null;
+}
+
 interface WorkspaceMemberOption {
   userId: string;
   name: string | null;
@@ -155,6 +170,7 @@ interface IssueDetail {
     error?: string | null;
   };
   comments: IssueComment[];
+  figmaSources: FigmaSource[];
   subIssues: IssueSubIssue[];
   createdAt: string;
   updatedAt: string;
@@ -569,6 +585,84 @@ function CommentReactions({
   );
 }
 
+function getFigmaKindLabel(kind: FigmaSource["kind"]): string {
+  switch (kind) {
+    case "proto":
+      return "Prototype";
+    case "design":
+      return "Design";
+    case "file":
+      return "File";
+  }
+}
+
+function FigmaPreviewCard({
+  source,
+  refreshing,
+  onRefresh,
+}: {
+  source: FigmaSource;
+  refreshing: boolean;
+  onRefresh: (sourceId: string) => void;
+}) {
+  const label = getFigmaKindLabel(source.kind);
+  const title = source.name?.trim() || `Figma ${label.toLowerCase()}`;
+  const timestamp = source.refreshedAt ?? source.capturedAt;
+
+  return (
+    <div className="tty-row overflow-hidden border border-[var(--color-border)] bg-[var(--color-content-bg)]">
+      {source.thumbnailUrl ? (
+        <img
+          src={source.thumbnailUrl}
+          alt=""
+          className="h-28 w-full object-cover"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+        />
+      ) : null}
+      <div className="p-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+              Figma {label}
+            </div>
+            <a
+              href={source.normalizedUrl || source.url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 block truncate text-[14px] font-medium text-[var(--color-text-primary)] hover:text-[var(--color-accent)]"
+            >
+              {title}
+            </a>
+            <div className="mt-1 truncate text-[12px] text-[var(--color-text-secondary)]">
+              {source.nodeId
+                ? `${source.fileKey} · ${source.nodeId}`
+                : source.fileKey}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onRefresh(source.id)}
+            disabled={refreshing}
+            className="tty-row border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
+        <div className="mt-3 text-[12px] text-[var(--color-text-secondary)]">
+          {source.refreshedAt ? "Refreshed" : "Captured"}{" "}
+          {formatFullDate(timestamp)}
+        </div>
+        {source.lastError ? (
+          <div className="mt-2 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[12px] text-red-600 dark:text-red-300">
+            {source.lastError}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function IssueDetailView({
   issueId,
   compact = false,
@@ -620,6 +714,12 @@ export function IssueDetailView({
   );
   const [issueReactionPickerOpen, setIssueReactionPickerOpen] = useState(false);
   const [subscriptionSaving, setSubscriptionSaving] = useState(false);
+  const [refreshingFigmaSourceId, setRefreshingFigmaSourceId] = useState<
+    string | null
+  >(null);
+  const [figmaActionStatus, setFigmaActionStatus] = useState<string | null>(
+    null,
+  );
   const [descriptionDraft, setDescriptionDraft] = useState("");
   const [descriptionFocused, setDescriptionFocused] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
@@ -693,6 +793,9 @@ export function IssueDetailView({
             subscribed: false,
             watcherCount: 0,
           },
+          figmaSources: Array.isArray(json.figmaSources)
+            ? json.figmaSources
+            : [],
           discussionSummary: json.discussionSummary ?? {
             enabled: false,
             status: "disabled",
@@ -855,6 +958,9 @@ export function IssueDetailView({
           : current,
       );
       void fetchHistory();
+      if (field === "description") {
+        void fetchIssue();
+      }
     } finally {
       setSavingField(null);
     }
@@ -1298,6 +1404,40 @@ export function IssueDetailView({
       );
     } finally {
       setSubscriptionSaving(false);
+    }
+  }
+
+  async function handleFigmaRefresh(sourceId: string) {
+    if (!issue || refreshingFigmaSourceId) {
+      return;
+    }
+
+    setRefreshingFigmaSourceId(sourceId);
+    setFigmaActionStatus(null);
+    try {
+      const response = await fetch(
+        `/api/issues/${issue.id}/figma-sources/${sourceId}/refresh`,
+        { method: "POST" },
+      );
+      if (!response.ok) {
+        throw new Error("Failed to refresh Figma preview");
+      }
+      const refreshed = (await response.json()) as FigmaSource;
+      setIssue((current) =>
+        current
+          ? {
+              ...current,
+              figmaSources: current.figmaSources.map((source) =>
+                source.id === sourceId ? refreshed : source,
+              ),
+            }
+          : current,
+      );
+      setFigmaActionStatus("Figma preview refreshed.");
+    } catch {
+      setFigmaActionStatus("Figma preview could not be refreshed.");
+    } finally {
+      setRefreshingFigmaSourceId(null);
     }
   }
 
@@ -1759,6 +1899,40 @@ export function IssueDetailView({
                   : "Use Bold, Italic, Bullet list, and Quote for richer notes."}
               </div>
             </section>
+
+            {issue.figmaSources.length > 0 ? (
+              <section
+                className="tty-panel px-5 py-4"
+                aria-label="Figma previews"
+              >
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-[13px] font-medium text-[var(--color-text-secondary)]">
+                      Figma previews
+                    </h2>
+                    <p className="mt-1 text-[12px] text-[var(--color-text-secondary)]">
+                      Safe preview cards are generated from linked Figma files,
+                      designs, and prototypes.
+                    </p>
+                  </div>
+                  {figmaActionStatus ? (
+                    <span className="text-[12px] text-[var(--color-text-secondary)]">
+                      {figmaActionStatus}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {issue.figmaSources.map((source) => (
+                    <FigmaPreviewCard
+                      key={source.id}
+                      source={source}
+                      refreshing={refreshingFigmaSourceId === source.id}
+                      onRefresh={handleFigmaRefresh}
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             <section className="tty-panel px-5 py-4">
               <div className="mb-4 flex items-center justify-between">

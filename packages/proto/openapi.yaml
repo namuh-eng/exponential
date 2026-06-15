@@ -159,6 +159,28 @@ paths:
                   success: { type: boolean }
         default:
           $ref: '#/components/responses/Problem'
+  /issues/{id}/figma-sources/{sourceId}/refresh:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+      - name: sourceId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: refreshIssueFigmaSource
+      summary: Refresh stored metadata for a linked Figma source
+      responses:
+        '200':
+          description: Refreshed Figma source
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FigmaSource'
+        default:
+          $ref: '#/components/responses/Problem'
   /issues/{id}/comments:
     parameters:
       - name: id
@@ -4021,7 +4043,7 @@ components:
       type: object
       required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions, health]
       properties:
-        provider: { type: string, enum: [github, jira, slack, zendesk, discord, microsoft_teams] }
+        provider: { type: string, enum: [github, jira, slack, zendesk, discord, microsoft_teams, figma] }
         name: { type: string }
         description: { type: string }
         id: { type: [string, 'null'], format: uuid }
@@ -6237,6 +6259,22 @@ components:
     IssuePriority:
       type: string
       enum: [none, urgent, high, medium, low]
+    FigmaSource:
+      type: object
+      required: [id, url, normalizedUrl, fileKey, kind, containerType, capturedAt]
+      properties:
+        id: { type: string, format: uuid }
+        url: { type: string, format: uri }
+        normalizedUrl: { type: string, format: uri }
+        fileKey: { type: string }
+        nodeId: { type: [string, 'null'] }
+        kind: { type: string, enum: [file, design, proto] }
+        name: { type: [string, 'null'] }
+        thumbnailUrl: { type: [string, 'null'], format: uri }
+        containerType: { type: string, enum: [issue_description, comment, document, plugin] }
+        capturedAt: { type: string, format: date-time }
+        refreshedAt: { type: [string, 'null'], format: date-time }
+        lastError: { type: [string, 'null'] }
     Issue:
       type: object
       required: [id, number, identifier, title, team_id, state_id, creator_id, priority, created_at, updated_at]
@@ -6263,6 +6301,9 @@ components:
         archived_at: { type: [string, 'null'], format: date-time }
         canceled_at: { type: [string, 'null'], format: date-time }
         completed_at: { type: [string, 'null'], format: date-time }
+        figmaSources:
+          type: array
+          items: { $ref: '#/components/schemas/FigmaSource' }
     IssueListResponse:
       type: object
       required: [data]

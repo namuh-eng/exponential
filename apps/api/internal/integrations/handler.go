@@ -107,6 +107,7 @@ var catalog = []CatalogItem{
 	{Provider: "jira", Name: "Jira", Description: "Sync issue status, ownership, and cross-links with Jira projects."},
 	{Provider: "discord", Name: "Discord", Description: "Create, search, and share issues from Discord slash commands."},
 	{Provider: "microsoft_teams", Name: "Microsoft Teams", Description: "Create issues and projects from Teams conversations and post project updates."},
+	{Provider: "figma", Name: "Figma", Description: "Preview design links and connect Figma selections to issues."},
 	{Provider: "slack", Name: "Slack", Description: "Send issue updates and create issues from Slack messages."},
 	{Provider: "zendesk", Name: "Zendesk", Description: "Connect support tickets to product work and customer requests."},
 }
@@ -395,6 +396,9 @@ func setupRequirement(provider string) *SetupRequirement {
 	if provider == "microsoft_teams" && !microsoftTeamsConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Microsoft Teams credentials are not configured. Add AUTH_MICROSOFT_ID, AUTH_MICROSOFT_SECRET, and MICROSOFT_TEAMS_BOT_SECRET to enable tenant installation."}
 	}
+	if provider == "figma" && !figmaConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Figma OAuth credentials are not configured. Add AUTH_FIGMA_ID and AUTH_FIGMA_SECRET to enable design previews."}
+	}
 	if provider == "github" || provider == "jira" || provider == "zendesk" {
 		name := "GitHub"
 		if provider == "jira" {
@@ -418,6 +422,10 @@ func discordConfigured() bool {
 
 func microsoftTeamsConfigured() bool {
 	return strings.TrimSpace(os.Getenv("AUTH_MICROSOFT_ID")) != "" && strings.TrimSpace(os.Getenv("AUTH_MICROSOFT_SECRET")) != "" && strings.TrimSpace(os.Getenv("MICROSOFT_TEAMS_BOT_SECRET")) != ""
+}
+
+func figmaConfigured() bool {
+	return strings.TrimSpace(os.Getenv("AUTH_FIGMA_ID")) != "" && strings.TrimSpace(os.Getenv("AUTH_FIGMA_SECRET")) != ""
 }
 
 func formatTime(value *time.Time) *string {
