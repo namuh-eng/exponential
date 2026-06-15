@@ -316,6 +316,20 @@ describe("current workspace api route", () => {
     expect(updateSetMock).not.toHaveBeenCalled();
   });
 
+  it("rejects Airbyte read-only tokens on member API routes", async () => {
+    getSessionMock.mockResolvedValue(null);
+    requestHeaders = new Headers({
+      authorization: "Bearer lin_airbyte_readonly",
+    });
+    const { GET } = await import("@/app/api/workspaces/current/api/route");
+
+    const response = await GET();
+
+    expect(response.status).toBe(401);
+    expect(apiKeyLimitMock).not.toHaveBeenCalled();
+    expect(updateSetMock).not.toHaveBeenCalled();
+  });
+
   it("rejects unknown API key bearer tokens without updating lastUsedAt", async () => {
     getSessionMock.mockResolvedValue(null);
     requestHeaders = new Headers({

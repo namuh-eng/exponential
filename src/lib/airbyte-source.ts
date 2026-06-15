@@ -27,7 +27,6 @@ const AIRBYTE_STREAMS = [
   "comments",
   "cycles",
   "initiatives",
-  "customers",
 ] as const;
 
 export type AirbyteStreamName = (typeof AIRBYTE_STREAMS)[number];
@@ -182,31 +181,11 @@ export const AIRBYTE_CATALOG: StreamCatalogEntry[] = [
       },
     },
   },
-  {
-    name: "customers",
-    cursorField: "updatedAt",
-    primaryKey: "id",
-    supportedSyncModes: ["full_refresh", "incremental"],
-    scopes: ["customers:read"],
-    schema: {
-      type: "object",
-      properties: {
-        id: stringField(),
-        name: stringField(),
-        externalId: nullable("string"),
-        workspaceId: stringField(),
-        createdAt: dateTime,
-        updatedAt: dateTime,
-      },
-    },
-  },
 ];
 
 export const AIRBYTE_PRIVATE_DATA_BEHAVIOR = {
   privateTeams:
     "Airbyte tokens are workspace-scoped and include issues, comments, cycles, and project metadata from private teams.",
-  customers:
-    "Customer records are exposed when customer storage exists. This clone currently returns an empty customers stream with stable schema metadata.",
 };
 
 function readAirbyteToken(headers: Headers) {
@@ -328,10 +307,6 @@ export async function readAirbyteRecords(
   cursor: Date | null,
   limit: number,
 ) {
-  if (stream === "customers") {
-    return [];
-  }
-
   if (stream === "issues") {
     const conditions = [eq(team.workspaceId, auth.workspaceId)];
     if (cursor) {

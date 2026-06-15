@@ -1001,8 +1001,8 @@ export default function ApiSettingsPage() {
         <SectionHeader>Airbyte warehouse sync</SectionHeader>
         <p className="mb-1 text-[13px] text-[var(--color-text-tertiary)]">
           Generate read-only tokens for Airbyte full refresh and incremental
-          sync. Tokens can read issues, projects, comments, cycles, initiatives,
-          and customers metadata.
+          sync. Tokens can read issues, projects, comments, cycles, and
+          initiatives.
         </p>
         <p className="mb-4 text-[13px] text-[var(--color-text-tertiary)]">
           Private team data is included for workspace-scoped Airbyte tokens.{" "}

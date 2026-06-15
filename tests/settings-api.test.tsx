@@ -366,14 +366,7 @@ describe("API settings page", () => {
               id: "airbyte_1",
               name: "Airbyte warehouse sync",
               keyPrefix: "lin_airbyte_123…",
-              scopes: [
-                "issues:read",
-                "projects:read",
-                "comments:read",
-                "cycles:read",
-                "initiatives:read",
-                "customers:read",
-              ],
+              scopes: ["read"],
               createdAt: "2026-04-08T10:00:00.000Z",
               lastUsedAt: null,
               creator: {
@@ -407,7 +400,7 @@ describe("API settings page", () => {
       name: "Airbyte warehouse sync",
     });
     expect(screen.getByText("lin_airbyte_secret")).toBeInTheDocument();
-    expect(screen.getByText(/issues:read, projects:read/)).toBeInTheDocument();
+    expect(screen.getByText("Scopes: read")).toBeInTheDocument();
     expect(
       screen.getByText(/Private team data is included/),
     ).toBeInTheDocument();

@@ -33,9 +33,11 @@ the last emitted `updatedAt` cursor from the previous response.
 | `comments` | `id` | `updatedAt` | Includes issue comments and author ids. |
 | `cycles` | `id` | `updatedAt` | Includes cycle number, team, date window, and rollover flag. |
 | `initiatives` | `id` | `updatedAt` | Includes roadmap metadata, owner, health, timeframe, and hierarchy parent. |
-| `customers` | `id` | `updatedAt` | Schema is stable. This clone returns an empty stream until customer storage is present. |
 
 All streams support full refresh and incremental sync.
+
+Customer/customer request streams are not exposed yet. They should be added
+after first-class customer storage and API surfaces land in #556.
 
 ## Private Data Behavior
 

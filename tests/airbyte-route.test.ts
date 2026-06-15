@@ -77,7 +77,11 @@ describe("Airbyte source routes", () => {
     expect(updateSetMock).toHaveBeenCalledWith({
       lastUsedAt: expect.any(Date),
     });
-    await expect(response.json()).resolves.toMatchObject({
+    const payload = await response.json();
+    expect(
+      payload.streams.map((stream: { name: string }) => stream.name),
+    ).toEqual(["issues", "projects", "comments", "cycles", "initiatives"]);
+    expect(payload).toMatchObject({
       connector: {
         name: "Exponential Airbyte source",
         workspaceSlug: "foreverbrowsing",
@@ -88,10 +92,6 @@ describe("Airbyte source routes", () => {
           name: "issues",
           cursorField: "updatedAt",
           supportedSyncModes: ["full_refresh", "incremental"],
-        }),
-        expect.objectContaining({
-          name: "customers",
-          cursorField: "updatedAt",
         }),
       ]),
       privateData: {
@@ -163,7 +163,7 @@ describe("Airbyte source routes", () => {
     });
   });
 
-  it("rejects unsupported streams and malformed cursors", async () => {
+  it("rejects unsupported streams, including customers, and malformed cursors", async () => {
     const { GET } = await import("@/app/api/airbyte/streams/[stream]/route");
 
     const unauthenticatedUnsupported = await GET(
@@ -199,6 +199,16 @@ describe("Airbyte source routes", () => {
           memberRole: "admin",
         },
       ],
+      [
+        {
+          tokenId: "token-1",
+          workspaceId: "workspace-1",
+          workspaceSlug: "foreverbrowsing",
+          settings: {},
+          userId: "user-1",
+          memberRole: "admin",
+        },
+      ],
     );
 
     const unsupported = await GET(
@@ -208,6 +218,14 @@ describe("Airbyte source routes", () => {
       { params: { stream: "users" } },
     );
     expect(unsupported.status).toBe(404);
+
+    const customers = await GET(
+      new Request("http://localhost/api/airbyte/streams/customers", {
+        headers: { authorization: "Bearer lin_airbyte_secret" },
+      }),
+      { params: { stream: "customers" } },
+    );
+    expect(customers.status).toBe(404);
 
     const malformedCursor = await GET(
       new Request("http://localhost/api/airbyte/streams/issues?cursor=nope", {

@@ -188,14 +188,7 @@ async function buildApiPayload(access: WorkspaceAccess) {
         id: item.id,
         name: item.name,
         keyPrefix: item.keyPrefix,
-        scopes: [
-          "issues:read",
-          "projects:read",
-          "comments:read",
-          "cycles:read",
-          "initiatives:read",
-          "customers:read",
-        ],
+        scopes: ["read"],
         createdAt: item.createdAt.toISOString(),
         lastUsedAt: item.lastUsedAt ? item.lastUsedAt.toISOString() : null,
         creator: {
