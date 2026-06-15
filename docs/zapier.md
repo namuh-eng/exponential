@@ -2,6 +2,10 @@
 
 Exponential exposes a Zapier-facing REST contract under `/api/zapier`.
 
+The Zapier Platform app source lives in `apps/zapier`. It wires Zapier OAuth,
+REST-hook subscriptions, polling fallbacks, sample payloads, and action calls to
+the endpoints below.
+
 ## Authentication
 
 Zapier can authenticate with either:
@@ -70,7 +74,10 @@ Supported action keys:
 - `create_issue`: `title`, `teamId` or `teamKey`, optional `description`, `stateId`, `priority`, `assigneeId`, `projectId`, `dueDate`.
 - `update_issue`: `issueId`, plus one or more editable issue fields.
 - `create_comment`: `issueId`, `body`.
-- `create_attachment`: `issueId`, `url`, optional `title`, `note`. Link attachments are recorded as issue comments.
+- `create_attachment`: `issueId`, `url`, optional `title`, `note`. This public
+  Zapier action creates link attachments as issue comments. Native binary
+  upload via presigned S3 URL still needs a dedicated public metadata endpoint
+  before it can be exposed in Zapier.
 - `create_project`: `name`, optional `slug`, `description`, `status`, `teamId` or `teamKey`.
 
 Failed actions return structured, user-readable errors:

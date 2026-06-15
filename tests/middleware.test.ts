@@ -155,6 +155,18 @@ describe("Auth proxy", () => {
     expect(mockNext).toHaveBeenCalled();
   });
 
+  it("allows Zapier API requests to authenticate inside the route", async () => {
+    mockNext.mockClear();
+    mockRedirect.mockClear();
+    mockRewrite.mockClear();
+    const { proxy } = await import("@/proxy");
+    const req = createMockRequest("/api/zapier/triggers/new_issue");
+    await proxy(req as never);
+    expect(mockRedirect).not.toHaveBeenCalled();
+    expect(mockRewrite).not.toHaveBeenCalled();
+    expect(mockNext).toHaveBeenCalled();
+  });
+
   it("redirects unauthenticated users away from /create-workspace", async () => {
     mockRedirect.mockClear();
     const { proxy } = await import("@/proxy");
