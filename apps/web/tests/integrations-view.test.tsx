@@ -69,6 +69,34 @@ const integrations = [
       auditEvents: [],
     },
   },
+  {
+    provider: "sentry",
+    name: "Sentry",
+    description: "Create, link, and resolve issues from Sentry errors.",
+    status: "configuration_required",
+    displayName: null,
+    connectedAt: null,
+    setupRequirement: {
+      type: "configuration_required",
+      message: "Sentry credentials are not configured.",
+    },
+    actions: {
+      canConnect: false,
+      canManage: false,
+      canDisconnect: false,
+      canReconnect: false,
+    },
+    health: {
+      lastEventAt: null,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      lastFailureMessage: null,
+      tokenExpiresAt: null,
+      pendingJobCount: 0,
+      failedJobCount: 0,
+      auditEvents: [],
+    },
+  },
 ];
 
 const degradedSlack = {
@@ -137,11 +165,15 @@ describe("IntegrationsSettingsPage component", () => {
     expect(dialog).toBeInTheDocument();
     expect(screen.getByText("GitHub")).toBeInTheDocument();
     expect(screen.getByText("Slack")).toBeInTheDocument();
+    expect(screen.getByText("Sentry")).toBeInTheDocument();
     expect(
       screen.queryByText(/Setup unavailable in this workspace/),
     ).not.toBeInTheDocument();
     expect(screen.getByText(/Slack OAuth credentials/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Connect" })).toBeInTheDocument();
+    expect(screen.getByText(/Sentry credentials/)).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: "Connect" }).length,
+    ).toBeGreaterThan(0);
   });
 
   it("surfaces Slack connect API failures instead of no-oping", async () => {
@@ -162,7 +194,7 @@ describe("IntegrationsSettingsPage component", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Explore integrations" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Connect" })[0]);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Add AUTH_SLACK_ID",

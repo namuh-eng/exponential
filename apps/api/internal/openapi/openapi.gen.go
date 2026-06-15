@@ -136,10 +136,13 @@ const (
 
 // Defines values for IntegrationProvider.
 const (
-	IntegrationProviderGithub  IntegrationProvider = "github"
-	IntegrationProviderJira    IntegrationProvider = "jira"
-	IntegrationProviderSlack   IntegrationProvider = "slack"
-	IntegrationProviderZendesk IntegrationProvider = "zendesk"
+	IntegrationProviderDiscord        IntegrationProvider = "discord"
+	IntegrationProviderGithub         IntegrationProvider = "github"
+	IntegrationProviderJira           IntegrationProvider = "jira"
+	IntegrationProviderMicrosoftTeams IntegrationProvider = "microsoft_teams"
+	IntegrationProviderSentry         IntegrationProvider = "sentry"
+	IntegrationProviderSlack          IntegrationProvider = "slack"
+	IntegrationProviderZendesk        IntegrationProvider = "zendesk"
 )
 
 // Defines values for IntegrationStatus.
@@ -416,6 +419,15 @@ const (
 	Error         SamlSettingsStatus = "error"
 	NotConfigured SamlSettingsStatus = "not_configured"
 	Verified      SamlSettingsStatus = "verified"
+)
+
+// Defines values for SentryIssueActionRequestPriority.
+const (
+	SentryIssueActionRequestPriorityHigh   SentryIssueActionRequestPriority = "high"
+	SentryIssueActionRequestPriorityLow    SentryIssueActionRequestPriority = "low"
+	SentryIssueActionRequestPriorityMedium SentryIssueActionRequestPriority = "medium"
+	SentryIssueActionRequestPriorityNone   SentryIssueActionRequestPriority = "none"
+	SentryIssueActionRequestPriorityUrgent SentryIssueActionRequestPriority = "urgent"
 )
 
 // Defines values for SidebarFavoriteObjectType.
@@ -741,10 +753,10 @@ const (
 
 // Defines values for ListMyIssuesParamsTab.
 const (
-	Activity   ListMyIssuesParamsTab = "activity"
-	Assigned   ListMyIssuesParamsTab = "assigned"
-	Created    ListMyIssuesParamsTab = "created"
-	Subscribed ListMyIssuesParamsTab = "subscribed"
+	ListMyIssuesParamsTabActivity   ListMyIssuesParamsTab = "activity"
+	ListMyIssuesParamsTabAssigned   ListMyIssuesParamsTab = "assigned"
+	ListMyIssuesParamsTabCreated    ListMyIssuesParamsTab = "created"
+	ListMyIssuesParamsTabSubscribed ListMyIssuesParamsTab = "subscribed"
 )
 
 // Defines values for AuthorizeOAuthApplicationParamsResponseType.
@@ -1426,6 +1438,19 @@ type DemoSessionResponse struct {
 	} `json:"workspace"`
 }
 
+// DiscordConfigurationRequiredResponse defines model for DiscordConfigurationRequiredResponse.
+type DiscordConfigurationRequiredResponse struct {
+	Error   string `json:"error"`
+	Message string `json:"message"`
+}
+
+// DiscordConnectResponse defines model for DiscordConnectResponse.
+type DiscordConnectResponse struct {
+	AuthorizationUrl string `json:"authorizationUrl"`
+	State            string `json:"state"`
+	WorkspaceSlug    string `json:"workspaceSlug"`
+}
+
 // DocumentFolder defines model for DocumentFolder.
 type DocumentFolder struct {
 	Color       DocumentFolderColor `json:"color"`
@@ -1674,28 +1699,29 @@ type InviteWorkspaceMembersResponse struct {
 
 // Issue defines model for Issue.
 type Issue struct {
-	ArchivedAt         *time.Time          `json:"archived_at"`
-	AssigneeId         *string             `json:"assignee_id"`
-	CanceledAt         *time.Time          `json:"canceled_at"`
-	CompletedAt        *time.Time          `json:"completed_at"`
-	CreatedAt          time.Time           `json:"created_at"`
-	CreatorId          string              `json:"creator_id"`
-	CycleId            *openapi_types.UUID `json:"cycle_id"`
-	Description        *string             `json:"description"`
-	DueDate            *time.Time          `json:"due_date"`
-	Estimate           *float32            `json:"estimate"`
-	Id                 openapi_types.UUID  `json:"id"`
-	Identifier         string              `json:"identifier"`
-	Number             int                 `json:"number"`
-	ParentIssueId      *openapi_types.UUID `json:"parent_issue_id"`
-	Priority           IssuePriority       `json:"priority"`
-	ProjectId          *openapi_types.UUID `json:"project_id"`
-	ProjectMilestoneId *openapi_types.UUID `json:"project_milestone_id"`
-	SortOrder          *float32            `json:"sort_order,omitempty"`
-	StateId            openapi_types.UUID  `json:"state_id"`
-	TeamId             openapi_types.UUID  `json:"team_id"`
-	Title              string              `json:"title"`
-	UpdatedAt          time.Time           `json:"updated_at"`
+	ArchivedAt         *time.Time             `json:"archived_at"`
+	AssigneeId         *string                `json:"assignee_id"`
+	CanceledAt         *time.Time             `json:"canceled_at"`
+	CompletedAt        *time.Time             `json:"completed_at"`
+	CreatedAt          time.Time              `json:"created_at"`
+	CreatorId          string                 `json:"creator_id"`
+	CycleId            *openapi_types.UUID    `json:"cycle_id"`
+	Description        *string                `json:"description"`
+	DueDate            *time.Time             `json:"due_date"`
+	Estimate           *float32               `json:"estimate"`
+	Id                 openapi_types.UUID     `json:"id"`
+	Identifier         string                 `json:"identifier"`
+	Number             int                    `json:"number"`
+	ParentIssueId      *openapi_types.UUID    `json:"parent_issue_id"`
+	Priority           IssuePriority          `json:"priority"`
+	ProjectId          *openapi_types.UUID    `json:"project_id"`
+	ProjectMilestoneId *openapi_types.UUID    `json:"project_milestone_id"`
+	SortOrder          *float32               `json:"sort_order,omitempty"`
+	Sources            *[]IssueExternalSource `json:"sources,omitempty"`
+	StateId            openapi_types.UUID     `json:"state_id"`
+	TeamId             openapi_types.UUID     `json:"team_id"`
+	Title              string                 `json:"title"`
+	UpdatedAt          time.Time              `json:"updated_at"`
 }
 
 // IssueDiscussionSummary defines model for IssueDiscussionSummary.
@@ -1713,6 +1739,16 @@ type IssueDiscussionSummary struct {
 
 // IssueDiscussionSummaryStatus defines model for IssueDiscussionSummary.Status.
 type IssueDiscussionSummaryStatus string
+
+// IssueExternalSource defines model for IssueExternalSource.
+type IssueExternalSource struct {
+	ExternalId    string             `json:"externalId"`
+	IntegrationId openapi_types.UUID `json:"integrationId"`
+	Label         string             `json:"label"`
+	Project       string             `json:"project"`
+	Provider      string             `json:"provider"`
+	Url           string             `json:"url"`
+}
 
 // IssueHistoryActor defines model for IssueHistoryActor.
 type IssueHistoryActor struct {
@@ -1863,6 +1899,19 @@ type ListInitiativesResponse struct {
 	InitiativesSettings WorkspaceInitiativeSettings `json:"initiativesSettings"`
 	WorkspaceMembers    []InitiativeUser            `json:"workspaceMembers"`
 	WorkspaceTeams      []InitiativeTeam            `json:"workspaceTeams"`
+}
+
+// MicrosoftTeamsConfigurationRequiredResponse defines model for MicrosoftTeamsConfigurationRequiredResponse.
+type MicrosoftTeamsConfigurationRequiredResponse struct {
+	Error   string `json:"error"`
+	Message string `json:"message"`
+}
+
+// MicrosoftTeamsConnectResponse defines model for MicrosoftTeamsConnectResponse.
+type MicrosoftTeamsConnectResponse struct {
+	AuthorizationUrl string `json:"authorizationUrl"`
+	State            string `json:"state"`
+	WorkspaceSlug    string `json:"workspaceSlug"`
 }
 
 // MutateWorkspaceMemberRequest defines model for MutateWorkspaceMemberRequest.
@@ -2475,6 +2524,49 @@ type SamlSettingsResponse struct {
 // ScimSettingsResponse defines model for ScimSettingsResponse.
 type ScimSettingsResponse struct {
 	Scim PublicScimSettings `json:"scim"`
+}
+
+// SentryConfigurationRequiredResponse defines model for SentryConfigurationRequiredResponse.
+type SentryConfigurationRequiredResponse struct {
+	Error   string `json:"error"`
+	Message string `json:"message"`
+}
+
+// SentryConnectResponse defines model for SentryConnectResponse.
+type SentryConnectResponse struct {
+	AuthorizationUrl string `json:"authorizationUrl"`
+	State            string `json:"state"`
+	WorkspaceSlug    string `json:"workspaceSlug"`
+}
+
+// SentryIssueActionRequest defines model for SentryIssueActionRequest.
+type SentryIssueActionRequest struct {
+	AssigneeEmail        *openapi_types.Email              `json:"assigneeEmail,omitempty"`
+	Description          *string                           `json:"description,omitempty"`
+	ExponentialIssueId   *string                           `json:"exponentialIssueId,omitempty"`
+	Issue                *map[string]interface{}           `json:"issue,omitempty"`
+	IssueIdentifier      *string                           `json:"issueIdentifier,omitempty"`
+	Priority             *SentryIssueActionRequestPriority `json:"priority,omitempty"`
+	Query                *string                           `json:"query,omitempty"`
+	TeamId               *openapi_types.UUID               `json:"teamId,omitempty"`
+	TeamKey              *string                           `json:"teamKey,omitempty"`
+	Title                *string                           `json:"title,omitempty"`
+	AdditionalProperties map[string]interface{}            `json:"-"`
+}
+
+// SentryIssueActionRequestPriority defines model for SentryIssueActionRequest.Priority.
+type SentryIssueActionRequestPriority string
+
+// SentryIssueActionResponse defines model for SentryIssueActionResponse.
+type SentryIssueActionResponse struct {
+	Identifier string `json:"identifier"`
+	Project    string `json:"project"`
+	WebUrl     string `json:"webUrl"`
+}
+
+// SentryIssueSearchResponse defines model for SentryIssueSearchResponse.
+type SentryIssueSearchResponse struct {
+	Issues []SentryIssueActionResponse `json:"issues"`
 }
 
 // SidebarFavorite defines model for SidebarFavorite.
@@ -3586,6 +3678,12 @@ type DeleteIntegrationParams struct {
 	Provider string `form:"provider" json:"provider"`
 }
 
+// SentryOAuthCallbackParams defines parameters for SentryOAuthCallback.
+type SentryOAuthCallbackParams struct {
+	Code  *string `form:"code,omitempty" json:"code,omitempty"`
+	State *string `form:"state,omitempty" json:"state,omitempty"`
+}
+
 // ListIssueTemplatesParams defines parameters for ListIssueTemplates.
 type ListIssueTemplatesParams struct {
 	TeamKey *string `form:"teamKey,omitempty" json:"teamKey,omitempty"`
@@ -3762,6 +3860,15 @@ type CreateInitiativeJSONRequestBody = CreateInitiativeRequest
 
 // UpdateInitiativeJSONRequestBody defines body for UpdateInitiative for application/json ContentType.
 type UpdateInitiativeJSONRequestBody = UpdateInitiativeRequest
+
+// CreateIssueFromSentryJSONRequestBody defines body for CreateIssueFromSentry for application/json ContentType.
+type CreateIssueFromSentryJSONRequestBody = SentryIssueActionRequest
+
+// LinkSentryIssueJSONRequestBody defines body for LinkSentryIssue for application/json ContentType.
+type LinkSentryIssueJSONRequestBody = SentryIssueActionRequest
+
+// SearchSentryLinkableIssuesJSONRequestBody defines body for SearchSentryLinkableIssues for application/json ContentType.
+type SearchSentryLinkableIssuesJSONRequestBody = SentryIssueActionRequest
 
 // CreateIssueTemplateJSONRequestBody defines body for CreateIssueTemplate for application/json ContentType.
 type CreateIssueTemplateJSONRequestBody = CreateIssueTemplateRequest
@@ -4492,6 +4599,209 @@ func (a RecurringIssueRequest) MarshalJSON() ([]byte, error) {
 		object["timezone"], err = json.Marshal(a.Timezone)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling 'timezone': %w", err)
+		}
+	}
+
+	if a.Title != nil {
+		object["title"], err = json.Marshal(a.Title)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'title': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for SentryIssueActionRequest. Returns the specified
+// element and whether it was found
+func (a SentryIssueActionRequest) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for SentryIssueActionRequest
+func (a *SentryIssueActionRequest) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for SentryIssueActionRequest to handle AdditionalProperties
+func (a *SentryIssueActionRequest) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["assigneeEmail"]; found {
+		err = json.Unmarshal(raw, &a.AssigneeEmail)
+		if err != nil {
+			return fmt.Errorf("error reading 'assigneeEmail': %w", err)
+		}
+		delete(object, "assigneeEmail")
+	}
+
+	if raw, found := object["description"]; found {
+		err = json.Unmarshal(raw, &a.Description)
+		if err != nil {
+			return fmt.Errorf("error reading 'description': %w", err)
+		}
+		delete(object, "description")
+	}
+
+	if raw, found := object["exponentialIssueId"]; found {
+		err = json.Unmarshal(raw, &a.ExponentialIssueId)
+		if err != nil {
+			return fmt.Errorf("error reading 'exponentialIssueId': %w", err)
+		}
+		delete(object, "exponentialIssueId")
+	}
+
+	if raw, found := object["issue"]; found {
+		err = json.Unmarshal(raw, &a.Issue)
+		if err != nil {
+			return fmt.Errorf("error reading 'issue': %w", err)
+		}
+		delete(object, "issue")
+	}
+
+	if raw, found := object["issueIdentifier"]; found {
+		err = json.Unmarshal(raw, &a.IssueIdentifier)
+		if err != nil {
+			return fmt.Errorf("error reading 'issueIdentifier': %w", err)
+		}
+		delete(object, "issueIdentifier")
+	}
+
+	if raw, found := object["priority"]; found {
+		err = json.Unmarshal(raw, &a.Priority)
+		if err != nil {
+			return fmt.Errorf("error reading 'priority': %w", err)
+		}
+		delete(object, "priority")
+	}
+
+	if raw, found := object["query"]; found {
+		err = json.Unmarshal(raw, &a.Query)
+		if err != nil {
+			return fmt.Errorf("error reading 'query': %w", err)
+		}
+		delete(object, "query")
+	}
+
+	if raw, found := object["teamId"]; found {
+		err = json.Unmarshal(raw, &a.TeamId)
+		if err != nil {
+			return fmt.Errorf("error reading 'teamId': %w", err)
+		}
+		delete(object, "teamId")
+	}
+
+	if raw, found := object["teamKey"]; found {
+		err = json.Unmarshal(raw, &a.TeamKey)
+		if err != nil {
+			return fmt.Errorf("error reading 'teamKey': %w", err)
+		}
+		delete(object, "teamKey")
+	}
+
+	if raw, found := object["title"]; found {
+		err = json.Unmarshal(raw, &a.Title)
+		if err != nil {
+			return fmt.Errorf("error reading 'title': %w", err)
+		}
+		delete(object, "title")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for SentryIssueActionRequest to handle AdditionalProperties
+func (a SentryIssueActionRequest) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.AssigneeEmail != nil {
+		object["assigneeEmail"], err = json.Marshal(a.AssigneeEmail)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'assigneeEmail': %w", err)
+		}
+	}
+
+	if a.Description != nil {
+		object["description"], err = json.Marshal(a.Description)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'description': %w", err)
+		}
+	}
+
+	if a.ExponentialIssueId != nil {
+		object["exponentialIssueId"], err = json.Marshal(a.ExponentialIssueId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'exponentialIssueId': %w", err)
+		}
+	}
+
+	if a.Issue != nil {
+		object["issue"], err = json.Marshal(a.Issue)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'issue': %w", err)
+		}
+	}
+
+	if a.IssueIdentifier != nil {
+		object["issueIdentifier"], err = json.Marshal(a.IssueIdentifier)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'issueIdentifier': %w", err)
+		}
+	}
+
+	if a.Priority != nil {
+		object["priority"], err = json.Marshal(a.Priority)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'priority': %w", err)
+		}
+	}
+
+	if a.Query != nil {
+		object["query"], err = json.Marshal(a.Query)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'query': %w", err)
+		}
+	}
+
+	if a.TeamId != nil {
+		object["teamId"], err = json.Marshal(a.TeamId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'teamId': %w", err)
+		}
+	}
+
+	if a.TeamKey != nil {
+		object["teamKey"], err = json.Marshal(a.TeamKey)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'teamKey': %w", err)
 		}
 	}
 
@@ -6663,6 +6973,36 @@ type ServerInterface interface {
 	// (GET /integrations)
 	ListIntegrations(w http.ResponseWriter, r *http.Request)
 
+	// (POST /integrations/discord/connect)
+	ConnectDiscordIntegration(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/discord/disconnect)
+	DisconnectDiscordIntegration(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/microsoft-teams/connect)
+	ConnectMicrosoftTeamsIntegration(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/microsoft-teams/disconnect)
+	DisconnectMicrosoftTeamsIntegration(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/sentry/connect)
+	ConnectSentryIntegration(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/sentry/disconnect)
+	DisconnectSentryIntegration(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/sentry/issues/create)
+	CreateIssueFromSentry(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/sentry/issues/link)
+	LinkSentryIssue(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/sentry/issues/search)
+	SearchSentryLinkableIssues(w http.ResponseWriter, r *http.Request)
+
+	// (GET /integrations/sentry/oauth/callback)
+	SentryOAuthCallback(w http.ResponseWriter, r *http.Request, params SentryOAuthCallbackParams)
+
 	// (POST /integrations/slack/connect)
 	ConnectSlackIntegration(w http.ResponseWriter, r *http.Request)
 
@@ -7390,6 +7730,56 @@ func (_ Unimplemented) DeleteIntegration(w http.ResponseWriter, r *http.Request,
 
 // (GET /integrations)
 func (_ Unimplemented) ListIntegrations(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/discord/connect)
+func (_ Unimplemented) ConnectDiscordIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/discord/disconnect)
+func (_ Unimplemented) DisconnectDiscordIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/microsoft-teams/connect)
+func (_ Unimplemented) ConnectMicrosoftTeamsIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/microsoft-teams/disconnect)
+func (_ Unimplemented) DisconnectMicrosoftTeamsIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/sentry/connect)
+func (_ Unimplemented) ConnectSentryIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/sentry/disconnect)
+func (_ Unimplemented) DisconnectSentryIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/sentry/issues/create)
+func (_ Unimplemented) CreateIssueFromSentry(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/sentry/issues/link)
+func (_ Unimplemented) LinkSentryIssue(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/sentry/issues/search)
+func (_ Unimplemented) SearchSentryLinkableIssues(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /integrations/sentry/oauth/callback)
+func (_ Unimplemented) SentryOAuthCallback(w http.ResponseWriter, r *http.Request, params SentryOAuthCallbackParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9308,6 +9698,203 @@ func (siw *ServerInterfaceWrapper) ListIntegrations(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListIntegrations(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConnectDiscordIntegration operation middleware
+func (siw *ServerInterfaceWrapper) ConnectDiscordIntegration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConnectDiscordIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DisconnectDiscordIntegration operation middleware
+func (siw *ServerInterfaceWrapper) DisconnectDiscordIntegration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisconnectDiscordIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConnectMicrosoftTeamsIntegration operation middleware
+func (siw *ServerInterfaceWrapper) ConnectMicrosoftTeamsIntegration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConnectMicrosoftTeamsIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DisconnectMicrosoftTeamsIntegration operation middleware
+func (siw *ServerInterfaceWrapper) DisconnectMicrosoftTeamsIntegration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisconnectMicrosoftTeamsIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConnectSentryIntegration operation middleware
+func (siw *ServerInterfaceWrapper) ConnectSentryIntegration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConnectSentryIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DisconnectSentryIntegration operation middleware
+func (siw *ServerInterfaceWrapper) DisconnectSentryIntegration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisconnectSentryIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateIssueFromSentry operation middleware
+func (siw *ServerInterfaceWrapper) CreateIssueFromSentry(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateIssueFromSentry(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LinkSentryIssue operation middleware
+func (siw *ServerInterfaceWrapper) LinkSentryIssue(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LinkSentryIssue(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchSentryLinkableIssues operation middleware
+func (siw *ServerInterfaceWrapper) SearchSentryLinkableIssues(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchSentryLinkableIssues(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SentryOAuthCallback operation middleware
+func (siw *ServerInterfaceWrapper) SentryOAuthCallback(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SentryOAuthCallbackParams
+
+	// ------------- Optional query parameter "code" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "code", r.URL.Query(), &params.Code)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "code", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "state", r.URL.Query(), &params.State)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SentryOAuthCallback(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -14106,6 +14693,36 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/integrations", wrapper.ListIntegrations)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/discord/connect", wrapper.ConnectDiscordIntegration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/discord/disconnect", wrapper.DisconnectDiscordIntegration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/microsoft-teams/connect", wrapper.ConnectMicrosoftTeamsIntegration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/microsoft-teams/disconnect", wrapper.DisconnectMicrosoftTeamsIntegration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/sentry/connect", wrapper.ConnectSentryIntegration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/sentry/disconnect", wrapper.DisconnectSentryIntegration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/sentry/issues/create", wrapper.CreateIssueFromSentry)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/sentry/issues/link", wrapper.LinkSentryIssue)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/sentry/issues/search", wrapper.SearchSentryLinkableIssues)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/integrations/sentry/oauth/callback", wrapper.SentryOAuthCallback)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/integrations/slack/connect", wrapper.ConnectSlackIntegration)
 	})
 	r.Group(func(r chi.Router) {
@@ -15862,6 +16479,316 @@ type ListIntegrationsdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListIntegrationsdefaultApplicationProblemPlusJSONResponse) VisitListIntegrationsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ConnectDiscordIntegrationRequestObject struct {
+}
+
+type ConnectDiscordIntegrationResponseObject interface {
+	VisitConnectDiscordIntegrationResponse(w http.ResponseWriter) error
+}
+
+type ConnectDiscordIntegration200JSONResponse DiscordConnectResponse
+
+func (response ConnectDiscordIntegration200JSONResponse) VisitConnectDiscordIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ConnectDiscordIntegration412JSONResponse DiscordConfigurationRequiredResponse
+
+func (response ConnectDiscordIntegration412JSONResponse) VisitConnectDiscordIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(412)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ConnectDiscordIntegrationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ConnectDiscordIntegrationdefaultApplicationProblemPlusJSONResponse) VisitConnectDiscordIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DisconnectDiscordIntegrationRequestObject struct {
+}
+
+type DisconnectDiscordIntegrationResponseObject interface {
+	VisitDisconnectDiscordIntegrationResponse(w http.ResponseWriter) error
+}
+
+type DisconnectDiscordIntegration200JSONResponse SuccessResponse
+
+func (response DisconnectDiscordIntegration200JSONResponse) VisitDisconnectDiscordIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DisconnectDiscordIntegrationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DisconnectDiscordIntegrationdefaultApplicationProblemPlusJSONResponse) VisitDisconnectDiscordIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ConnectMicrosoftTeamsIntegrationRequestObject struct {
+}
+
+type ConnectMicrosoftTeamsIntegrationResponseObject interface {
+	VisitConnectMicrosoftTeamsIntegrationResponse(w http.ResponseWriter) error
+}
+
+type ConnectMicrosoftTeamsIntegration200JSONResponse MicrosoftTeamsConnectResponse
+
+func (response ConnectMicrosoftTeamsIntegration200JSONResponse) VisitConnectMicrosoftTeamsIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ConnectMicrosoftTeamsIntegration412JSONResponse MicrosoftTeamsConfigurationRequiredResponse
+
+func (response ConnectMicrosoftTeamsIntegration412JSONResponse) VisitConnectMicrosoftTeamsIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(412)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ConnectMicrosoftTeamsIntegrationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ConnectMicrosoftTeamsIntegrationdefaultApplicationProblemPlusJSONResponse) VisitConnectMicrosoftTeamsIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DisconnectMicrosoftTeamsIntegrationRequestObject struct {
+}
+
+type DisconnectMicrosoftTeamsIntegrationResponseObject interface {
+	VisitDisconnectMicrosoftTeamsIntegrationResponse(w http.ResponseWriter) error
+}
+
+type DisconnectMicrosoftTeamsIntegration200JSONResponse SuccessResponse
+
+func (response DisconnectMicrosoftTeamsIntegration200JSONResponse) VisitDisconnectMicrosoftTeamsIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DisconnectMicrosoftTeamsIntegrationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DisconnectMicrosoftTeamsIntegrationdefaultApplicationProblemPlusJSONResponse) VisitDisconnectMicrosoftTeamsIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ConnectSentryIntegrationRequestObject struct {
+}
+
+type ConnectSentryIntegrationResponseObject interface {
+	VisitConnectSentryIntegrationResponse(w http.ResponseWriter) error
+}
+
+type ConnectSentryIntegration200JSONResponse SentryConnectResponse
+
+func (response ConnectSentryIntegration200JSONResponse) VisitConnectSentryIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ConnectSentryIntegration412JSONResponse SentryConfigurationRequiredResponse
+
+func (response ConnectSentryIntegration412JSONResponse) VisitConnectSentryIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(412)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ConnectSentryIntegrationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ConnectSentryIntegrationdefaultApplicationProblemPlusJSONResponse) VisitConnectSentryIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DisconnectSentryIntegrationRequestObject struct {
+}
+
+type DisconnectSentryIntegrationResponseObject interface {
+	VisitDisconnectSentryIntegrationResponse(w http.ResponseWriter) error
+}
+
+type DisconnectSentryIntegration200JSONResponse SuccessResponse
+
+func (response DisconnectSentryIntegration200JSONResponse) VisitDisconnectSentryIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DisconnectSentryIntegrationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DisconnectSentryIntegrationdefaultApplicationProblemPlusJSONResponse) VisitDisconnectSentryIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateIssueFromSentryRequestObject struct {
+	Body *CreateIssueFromSentryJSONRequestBody
+}
+
+type CreateIssueFromSentryResponseObject interface {
+	VisitCreateIssueFromSentryResponse(w http.ResponseWriter) error
+}
+
+type CreateIssueFromSentry200JSONResponse SentryIssueActionResponse
+
+func (response CreateIssueFromSentry200JSONResponse) VisitCreateIssueFromSentryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateIssueFromSentrydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateIssueFromSentrydefaultApplicationProblemPlusJSONResponse) VisitCreateIssueFromSentryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type LinkSentryIssueRequestObject struct {
+	Body *LinkSentryIssueJSONRequestBody
+}
+
+type LinkSentryIssueResponseObject interface {
+	VisitLinkSentryIssueResponse(w http.ResponseWriter) error
+}
+
+type LinkSentryIssue200JSONResponse SentryIssueActionResponse
+
+func (response LinkSentryIssue200JSONResponse) VisitLinkSentryIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type LinkSentryIssuedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response LinkSentryIssuedefaultApplicationProblemPlusJSONResponse) VisitLinkSentryIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SearchSentryLinkableIssuesRequestObject struct {
+	Body *SearchSentryLinkableIssuesJSONRequestBody
+}
+
+type SearchSentryLinkableIssuesResponseObject interface {
+	VisitSearchSentryLinkableIssuesResponse(w http.ResponseWriter) error
+}
+
+type SearchSentryLinkableIssues200JSONResponse SentryIssueSearchResponse
+
+func (response SearchSentryLinkableIssues200JSONResponse) VisitSearchSentryLinkableIssuesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchSentryLinkableIssuesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SearchSentryLinkableIssuesdefaultApplicationProblemPlusJSONResponse) VisitSearchSentryLinkableIssuesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SentryOAuthCallbackRequestObject struct {
+	Params SentryOAuthCallbackParams
+}
+
+type SentryOAuthCallbackResponseObject interface {
+	VisitSentryOAuthCallbackResponse(w http.ResponseWriter) error
+}
+
+type SentryOAuthCallback302Response struct {
+}
+
+func (response SentryOAuthCallback302Response) VisitSentryOAuthCallbackResponse(w http.ResponseWriter) error {
+	w.WriteHeader(302)
+	return nil
+}
+
+type SentryOAuthCallbackdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SentryOAuthCallbackdefaultApplicationProblemPlusJSONResponse) VisitSentryOAuthCallbackResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(response.StatusCode)
 
@@ -20805,6 +21732,36 @@ type StrictServerInterface interface {
 	// (GET /integrations)
 	ListIntegrations(ctx context.Context, request ListIntegrationsRequestObject) (ListIntegrationsResponseObject, error)
 
+	// (POST /integrations/discord/connect)
+	ConnectDiscordIntegration(ctx context.Context, request ConnectDiscordIntegrationRequestObject) (ConnectDiscordIntegrationResponseObject, error)
+
+	// (POST /integrations/discord/disconnect)
+	DisconnectDiscordIntegration(ctx context.Context, request DisconnectDiscordIntegrationRequestObject) (DisconnectDiscordIntegrationResponseObject, error)
+
+	// (POST /integrations/microsoft-teams/connect)
+	ConnectMicrosoftTeamsIntegration(ctx context.Context, request ConnectMicrosoftTeamsIntegrationRequestObject) (ConnectMicrosoftTeamsIntegrationResponseObject, error)
+
+	// (POST /integrations/microsoft-teams/disconnect)
+	DisconnectMicrosoftTeamsIntegration(ctx context.Context, request DisconnectMicrosoftTeamsIntegrationRequestObject) (DisconnectMicrosoftTeamsIntegrationResponseObject, error)
+
+	// (POST /integrations/sentry/connect)
+	ConnectSentryIntegration(ctx context.Context, request ConnectSentryIntegrationRequestObject) (ConnectSentryIntegrationResponseObject, error)
+
+	// (POST /integrations/sentry/disconnect)
+	DisconnectSentryIntegration(ctx context.Context, request DisconnectSentryIntegrationRequestObject) (DisconnectSentryIntegrationResponseObject, error)
+
+	// (POST /integrations/sentry/issues/create)
+	CreateIssueFromSentry(ctx context.Context, request CreateIssueFromSentryRequestObject) (CreateIssueFromSentryResponseObject, error)
+
+	// (POST /integrations/sentry/issues/link)
+	LinkSentryIssue(ctx context.Context, request LinkSentryIssueRequestObject) (LinkSentryIssueResponseObject, error)
+
+	// (POST /integrations/sentry/issues/search)
+	SearchSentryLinkableIssues(ctx context.Context, request SearchSentryLinkableIssuesRequestObject) (SearchSentryLinkableIssuesResponseObject, error)
+
+	// (GET /integrations/sentry/oauth/callback)
+	SentryOAuthCallback(ctx context.Context, request SentryOAuthCallbackRequestObject) (SentryOAuthCallbackResponseObject, error)
+
 	// (POST /integrations/slack/connect)
 	ConnectSlackIntegration(ctx context.Context, request ConnectSlackIntegrationRequestObject) (ConnectSlackIntegrationResponseObject, error)
 
@@ -22553,6 +23510,269 @@ func (sh *strictHandler) ListIntegrations(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListIntegrationsResponseObject); ok {
 		if err := validResponse.VisitListIntegrationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ConnectDiscordIntegration operation middleware
+func (sh *strictHandler) ConnectDiscordIntegration(w http.ResponseWriter, r *http.Request) {
+	var request ConnectDiscordIntegrationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ConnectDiscordIntegration(ctx, request.(ConnectDiscordIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConnectDiscordIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ConnectDiscordIntegrationResponseObject); ok {
+		if err := validResponse.VisitConnectDiscordIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DisconnectDiscordIntegration operation middleware
+func (sh *strictHandler) DisconnectDiscordIntegration(w http.ResponseWriter, r *http.Request) {
+	var request DisconnectDiscordIntegrationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisconnectDiscordIntegration(ctx, request.(DisconnectDiscordIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisconnectDiscordIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisconnectDiscordIntegrationResponseObject); ok {
+		if err := validResponse.VisitDisconnectDiscordIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ConnectMicrosoftTeamsIntegration operation middleware
+func (sh *strictHandler) ConnectMicrosoftTeamsIntegration(w http.ResponseWriter, r *http.Request) {
+	var request ConnectMicrosoftTeamsIntegrationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ConnectMicrosoftTeamsIntegration(ctx, request.(ConnectMicrosoftTeamsIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConnectMicrosoftTeamsIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ConnectMicrosoftTeamsIntegrationResponseObject); ok {
+		if err := validResponse.VisitConnectMicrosoftTeamsIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DisconnectMicrosoftTeamsIntegration operation middleware
+func (sh *strictHandler) DisconnectMicrosoftTeamsIntegration(w http.ResponseWriter, r *http.Request) {
+	var request DisconnectMicrosoftTeamsIntegrationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisconnectMicrosoftTeamsIntegration(ctx, request.(DisconnectMicrosoftTeamsIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisconnectMicrosoftTeamsIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisconnectMicrosoftTeamsIntegrationResponseObject); ok {
+		if err := validResponse.VisitDisconnectMicrosoftTeamsIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ConnectSentryIntegration operation middleware
+func (sh *strictHandler) ConnectSentryIntegration(w http.ResponseWriter, r *http.Request) {
+	var request ConnectSentryIntegrationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ConnectSentryIntegration(ctx, request.(ConnectSentryIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConnectSentryIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ConnectSentryIntegrationResponseObject); ok {
+		if err := validResponse.VisitConnectSentryIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DisconnectSentryIntegration operation middleware
+func (sh *strictHandler) DisconnectSentryIntegration(w http.ResponseWriter, r *http.Request) {
+	var request DisconnectSentryIntegrationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisconnectSentryIntegration(ctx, request.(DisconnectSentryIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisconnectSentryIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisconnectSentryIntegrationResponseObject); ok {
+		if err := validResponse.VisitDisconnectSentryIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateIssueFromSentry operation middleware
+func (sh *strictHandler) CreateIssueFromSentry(w http.ResponseWriter, r *http.Request) {
+	var request CreateIssueFromSentryRequestObject
+
+	var body CreateIssueFromSentryJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateIssueFromSentry(ctx, request.(CreateIssueFromSentryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateIssueFromSentry")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateIssueFromSentryResponseObject); ok {
+		if err := validResponse.VisitCreateIssueFromSentryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// LinkSentryIssue operation middleware
+func (sh *strictHandler) LinkSentryIssue(w http.ResponseWriter, r *http.Request) {
+	var request LinkSentryIssueRequestObject
+
+	var body LinkSentryIssueJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.LinkSentryIssue(ctx, request.(LinkSentryIssueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "LinkSentryIssue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LinkSentryIssueResponseObject); ok {
+		if err := validResponse.VisitLinkSentryIssueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SearchSentryLinkableIssues operation middleware
+func (sh *strictHandler) SearchSentryLinkableIssues(w http.ResponseWriter, r *http.Request) {
+	var request SearchSentryLinkableIssuesRequestObject
+
+	var body SearchSentryLinkableIssuesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchSentryLinkableIssues(ctx, request.(SearchSentryLinkableIssuesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchSentryLinkableIssues")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchSentryLinkableIssuesResponseObject); ok {
+		if err := validResponse.VisitSearchSentryLinkableIssuesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SentryOAuthCallback operation middleware
+func (sh *strictHandler) SentryOAuthCallback(w http.ResponseWriter, r *http.Request, params SentryOAuthCallbackParams) {
+	var request SentryOAuthCallbackRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SentryOAuthCallback(ctx, request.(SentryOAuthCallbackRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SentryOAuthCallback")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SentryOAuthCallbackResponseObject); ok {
+		if err := validResponse.VisitSentryOAuthCallbackResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

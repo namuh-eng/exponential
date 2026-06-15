@@ -1045,6 +1045,108 @@ paths:
                 $ref: '#/components/schemas/MicrosoftTeamsConfigurationRequiredResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /integrations/sentry/connect:
+    post:
+      operationId: connectSentryIntegration
+      responses:
+        '200':
+          description: Sentry authorization URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentryConnectResponse'
+        '412':
+          description: Sentry OAuth is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentryConfigurationRequiredResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/sentry/disconnect:
+    post:
+      operationId: disconnectSentryIntegration
+      responses:
+        '200':
+          description: Sentry disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/sentry/oauth/callback:
+    get:
+      operationId: sentryOAuthCallback
+      security: []
+      parameters:
+        - name: code
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+      responses:
+        '302': { description: Redirects to integration settings }
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/sentry/issues/search:
+    post:
+      operationId: searchSentryLinkableIssues
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SentryIssueActionRequest'
+      responses:
+        '200':
+          description: Linkable Exponential issues for Sentry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentryIssueSearchResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/sentry/issues/link:
+    post:
+      operationId: linkSentryIssue
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SentryIssueActionRequest'
+      responses:
+        '200':
+          description: Linked Exponential issue descriptor for Sentry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentryIssueActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/sentry/issues/create:
+    post:
+      operationId: createIssueFromSentry
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SentryIssueActionRequest'
+      responses:
+        '200':
+          description: Created Exponential issue descriptor for Sentry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentryIssueActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /integrations/microsoft-teams/disconnect:
     post:
       operationId: disconnectMicrosoftTeamsIntegration
@@ -4021,7 +4123,7 @@ components:
       type: object
       required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions, health]
       properties:
-        provider: { type: string, enum: [github, jira, slack, zendesk, discord, microsoft_teams] }
+        provider: { type: string, enum: [github, jira, slack, sentry, zendesk, discord, microsoft_teams] }
         name: { type: string }
         description: { type: string }
         id: { type: [string, 'null'], format: uuid }
@@ -4056,6 +4158,13 @@ components:
         authorizationUrl: { type: string, format: uri }
         state: { type: string }
         workspaceSlug: { type: string }
+    SentryConnectResponse:
+      type: object
+      required: [authorizationUrl, state, workspaceSlug]
+      properties:
+        authorizationUrl: { type: string, format: uri }
+        state: { type: string }
+        workspaceSlug: { type: string }
     DiscordConfigurationRequiredResponse:
       type: object
       required: [error, message]
@@ -4074,6 +4183,42 @@ components:
       properties:
         error: { type: string }
         message: { type: string }
+    SentryConfigurationRequiredResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error: { type: string }
+        message: { type: string }
+    SentryIssueActionRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        query: { type: string }
+        exponentialIssueId: { type: string }
+        issueIdentifier: { type: string }
+        teamId: { type: string, format: uuid }
+        teamKey: { type: string }
+        title: { type: string }
+        description: { type: string }
+        assigneeEmail: { type: string, format: email }
+        priority: { type: string, enum: [none, urgent, high, medium, low] }
+        issue:
+          type: object
+          additionalProperties: true
+    SentryIssueActionResponse:
+      type: object
+      required: [webUrl, project, identifier]
+      properties:
+        webUrl: { type: string, format: uri }
+        project: { type: string }
+        identifier: { type: string }
+    SentryIssueSearchResponse:
+      type: object
+      required: [issues]
+      properties:
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/SentryIssueActionResponse' }
     IntegrationListResponse:
       type: object
       required: [canManageIntegrations, integrations]
@@ -6237,6 +6382,16 @@ components:
     IssuePriority:
       type: string
       enum: [none, urgent, high, medium, low]
+    IssueExternalSource:
+      type: object
+      required: [provider, label, url, externalId, project, integrationId]
+      properties:
+        provider: { type: string }
+        label: { type: string }
+        url: { type: string, format: uri }
+        externalId: { type: string }
+        project: { type: string }
+        integrationId: { type: string, format: uuid }
     Issue:
       type: object
       required: [id, number, identifier, title, team_id, state_id, creator_id, priority, created_at, updated_at]
@@ -6263,6 +6418,9 @@ components:
         archived_at: { type: [string, 'null'], format: date-time }
         canceled_at: { type: [string, 'null'], format: date-time }
         completed_at: { type: [string, 'null'], format: date-time }
+        sources:
+          type: array
+          items: { $ref: '#/components/schemas/IssueExternalSource' }
     IssueListResponse:
       type: object
       required: [data]

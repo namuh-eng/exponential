@@ -1,8 +1,8 @@
 package integrations
 
 import (
-	"crypto/hmac"
 	"crypto/ed25519"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -560,7 +560,7 @@ func TestPostMicrosoftTeamsMessageFailureIsRetryableAndAuthAware(t *testing.T) {
 
 func TestDiscordCommandParsingAndResponses(t *testing.T) {
 	subcommand, options := discordSubcommand(discordCommandData{
-		Name: "exponential",
+		Name:    "exponential",
 		Options: []discordOption{{Name: "issue", Type: discordApplicationCommandOptionSubcmd, Options: []discordOption{{Name: "title", Type: discordApplicationCommandOptionString, Value: "  Fix login  "}}}},
 	})
 	if subcommand != "issue" || discordOptionString(options, "title") != "Fix login" {
@@ -633,5 +633,72 @@ func TestIntegrationJSONOmitsCredentialFields(t *testing.T) {
 		if strings.Contains(strings.ToLower(body), strings.ToLower(forbidden)) {
 			t.Fatalf("integration response leaked %q in %s", forbidden, body)
 		}
+	}
+}
+
+func TestSentrySetupRequirementAndAuthorizationURL(t *testing.T) {
+	t.Setenv("AUTH_SENTRY_ID", "")
+	t.Setenv("AUTH_SENTRY_SECRET", "")
+	t.Setenv("SENTRY_WEBHOOK_SECRET", "")
+	if got := setupRequirement("sentry"); got == nil || got.Type != "configuration_required" {
+		t.Fatalf("sentry requirement = %#v", got)
+	}
+	t.Setenv("AUTH_SENTRY_ID", "sentry-id")
+	t.Setenv("AUTH_SENTRY_SECRET", "sentry-secret")
+	t.Setenv("SENTRY_WEBHOOK_SECRET", "webhook-secret")
+	if got := setupRequirement("sentry"); got != nil {
+		t.Fatalf("configured sentry requirement = %#v", got)
+	}
+	got := sentryAuthorizationURL("client", "https://app.example/", "state-token")
+	if !strings.HasPrefix(got, "https://sentry.io/oauth/authorize/?") {
+		t.Fatalf("unexpected Sentry URL = %q", got)
+	}
+	if !strings.Contains(got, "client_id=client") || !strings.Contains(got, "state=state-token") {
+		t.Fatalf("missing query params = %q", got)
+	}
+	if !strings.Contains(got, "event%3Awrite") || !strings.Contains(got, "org%3Aread") {
+		t.Fatalf("missing Sentry scopes = %q", got)
+	}
+	if !strings.Contains(got, "redirect_uri=https%3A%2F%2Fapp.example%2Fapi%2Fintegrations%2Fsentry%2Foauth%2Fcallback") {
+		t.Fatalf("missing redirect uri = %q", got)
+	}
+}
+
+func TestSentrySignatureVerification(t *testing.T) {
+	body := []byte(`{"issue":{"id":"123"}}`)
+	mac := hmac.New(sha256.New, []byte("secret"))
+	_, _ = mac.Write(body)
+	signature := hex.EncodeToString(mac.Sum(nil))
+	if !verifySentrySignature("secret", signature, body) {
+		t.Fatal("valid Sentry signature was rejected")
+	}
+	if !verifySentrySignature("secret", "sha256="+signature, body) {
+		t.Fatal("prefixed Sentry signature was rejected")
+	}
+	if verifySentrySignature("secret", signature, []byte(`{"issue":{"id":"456"}}`)) {
+		t.Fatal("tampered Sentry body was accepted")
+	}
+}
+
+func TestSentryIssueActionFromPayload(t *testing.T) {
+	payload := map[string]any{
+		"query":           "ENG",
+		"teamKey":         "ENG",
+		"issueIdentifier": "ENG-42",
+		"assigneeEmail":   "ASHLEY@EXAMPLE.COM",
+		"issue": map[string]any{
+			"id":        "987",
+			"short_id":  "PROJ-987",
+			"title":     "panic in worker",
+			"permalink": "https://sentry.example/issues/987",
+			"project":   map[string]any{"id": "11", "slug": "api"},
+		},
+	}
+	got := sentryIssueActionFromPayload(payload)
+	if got.Query != "ENG" || got.TeamKey != "ENG" || got.IssueID != "ENG-42" {
+		t.Fatalf("parsed action = %#v", got)
+	}
+	if got.AssigneeEmail != "ashley@example.com" || got.SentryIssue.ID != "987" || got.SentryIssue.Project.Slug != "api" {
+		t.Fatalf("parsed Sentry issue = %#v", got)
 	}
 }
