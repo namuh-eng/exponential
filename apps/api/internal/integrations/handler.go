@@ -104,6 +104,7 @@ type slackOAuthResponse struct {
 
 var catalog = []CatalogItem{
 	{Provider: "github", Name: "GitHub", Description: "Sync pull requests, commits, and issue links with Linear."},
+	{Provider: "gitlab", Name: "GitLab", Description: "Link merge requests, commits, and workflow automation to issues."},
 	{Provider: "jira", Name: "Jira", Description: "Sync issue status, ownership, and cross-links with Jira projects."},
 	{Provider: "discord", Name: "Discord", Description: "Create, search, and share issues from Discord slash commands."},
 	{Provider: "microsoft_teams", Name: "Microsoft Teams", Description: "Create issues and projects from Teams conversations and post project updates."},
@@ -117,6 +118,10 @@ func (h Handler) Routes() chi.Router {
 	r.Get("/", h.List)
 	r.Delete("/", h.Delete)
 	r.Post("/slack/connect", h.SlackConnect)
+	r.Get("/gitlab", h.GitLabStatus)
+	r.Post("/gitlab/setup", h.GitLabSetup)
+	r.Post("/gitlab/workflows", h.GitLabWorkflow)
+	r.Post("/gitlab/disconnect", h.GitLabDisconnect)
 	r.Post("/discord/connect", h.DiscordConnect)
 	r.Post("/discord/disconnect", h.DiscordDisconnect)
 	r.Post("/microsoft-teams/connect", h.MicrosoftTeamsConnect)

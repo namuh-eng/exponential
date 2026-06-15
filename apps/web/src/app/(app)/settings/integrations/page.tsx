@@ -41,6 +41,12 @@ type Integration = {
   };
 };
 
+type GitLabSetupDetails = {
+  origin: string;
+  webhookUrl: string;
+  webhookSecret: string;
+};
+
 type IntegrationsPayload = {
   integrations?: Integration[];
   canManageIntegrations?: boolean;
@@ -100,6 +106,10 @@ export default function IntegrationsSettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pendingProvider, setPendingProvider] = useState<string | null>(null);
+  const [gitLabOrigin, setGitLabOrigin] = useState("https://gitlab.com");
+  const [gitLabToken, setGitLabToken] = useState("");
+  const [gitLabSetupDetails, setGitLabSetupDetails] =
+    useState<GitLabSetupDetails | null>(null);
 
   const loadIntegrations = useCallback(async () => {
     setLoading(true);
@@ -168,6 +178,53 @@ export default function IntegrationsSettingsPage() {
         connectError instanceof Error
           ? connectError.message
           : `${label} setup failed.`,
+      );
+    } finally {
+      setPendingProvider(null);
+    }
+  }
+
+  async function setupGitLab() {
+    setPendingProvider("gitlab");
+    setNotice(null);
+    setError(null);
+    setGitLabSetupDetails(null);
+    try {
+      const response = await fetch("/api/integrations/gitlab/setup", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ origin: gitLabOrigin, token: gitLabToken }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        origin?: string;
+        webhookUrl?: string;
+        webhookSecret?: string;
+        error?: string;
+        message?: string;
+      };
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "GitLab setup failed.");
+      }
+      if (data.origin && data.webhookUrl && data.webhookSecret) {
+        setGitLabSetupDetails({
+          origin: data.origin,
+          webhookUrl: data.webhookUrl,
+          webhookSecret: data.webhookSecret,
+        });
+      }
+      setGitLabToken("");
+      setNotice(
+        "GitLab connected. Copy the webhook URL and secret into GitLab.",
+      );
+      await loadIntegrations();
+    } catch (setupError) {
+      setError(
+        setupError instanceof Error
+          ? setupError.message
+          : "GitLab setup failed.",
       );
     } finally {
       setPendingProvider(null);
@@ -253,6 +310,27 @@ export default function IntegrationsSettingsPage() {
           {error}
         </div>
       ) : null}
+      {gitLabSetupDetails ? (
+        <div className="mt-6 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
+          <div className="font-medium text-[var(--color-text-primary)]">
+            GitLab webhook details
+          </div>
+          <div className="mt-3 grid gap-2">
+            <div className="grid gap-1">
+              <span>Webhook URL</span>
+              <code className="overflow-x-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[12px] text-[var(--color-text-primary)]">
+                {gitLabSetupDetails.webhookUrl}
+              </code>
+            </div>
+            <div className="grid gap-1">
+              <span>Secret token</span>
+              <code className="overflow-x-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[12px] text-[var(--color-text-primary)]">
+                {gitLabSetupDetails.webhookSecret}
+              </code>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-8">
         {installedIntegrations.length ? (
@@ -281,7 +359,8 @@ export default function IntegrationsSettingsPage() {
                     </p>
                   </div>
                   <div className="flex shrink-0 gap-2">
-                    {integration.actions.canReconnect ? (
+                    {integration.actions.canReconnect &&
+                    integration.provider !== "gitlab" ? (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
@@ -449,6 +528,49 @@ export default function IntegrationsSettingsPage() {
                           {integration.setupRequirement.message}
                         </p>
                       ) : null}
+                      {integration.provider === "gitlab" &&
+                      (integration.actions.canConnect ||
+                        integration.actions.canReconnect) ? (
+                        <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            GitLab origin
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setGitLabOrigin(event.target.value)
+                              }
+                              placeholder="https://gitlab.com"
+                              type="url"
+                              value={gitLabOrigin}
+                            />
+                          </label>
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Personal access token
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setGitLabToken(event.target.value)
+                              }
+                              placeholder="glpat-..."
+                              type="password"
+                              value={gitLabToken}
+                            />
+                          </label>
+                          <button
+                            className="w-fit rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={
+                              pendingProvider === "gitlab" ||
+                              gitLabToken.trim() === ""
+                            }
+                            onClick={() => void setupGitLab()}
+                            type="button"
+                          >
+                            {pendingProvider === "gitlab"
+                              ? "Validating..."
+                              : "Connect GitLab"}
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                     {integration.actions.canDisconnect ? (
                       <button
@@ -459,7 +581,8 @@ export default function IntegrationsSettingsPage() {
                       >
                         Disconnect
                       </button>
-                    ) : integration.actions.canReconnect ? (
+                    ) : integration.actions.canReconnect &&
+                      integration.provider !== "gitlab" ? (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
@@ -487,7 +610,7 @@ export default function IntegrationsSettingsPage() {
                           ? "Opening..."
                           : "Connect"}
                       </button>
-                    ) : (
+                    ) : integration.provider === "gitlab" ? null : (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-tertiary)]"
                         disabled

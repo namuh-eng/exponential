@@ -138,6 +138,7 @@ const (
 const (
 	IntegrationProviderDiscord        IntegrationProvider = "discord"
 	IntegrationProviderGithub         IntegrationProvider = "github"
+	IntegrationProviderGitlab         IntegrationProvider = "gitlab"
 	IntegrationProviderJira           IntegrationProvider = "jira"
 	IntegrationProviderMicrosoftTeams IntegrationProvider = "microsoft_teams"
 	IntegrationProviderSentry         IntegrationProvider = "sentry"
@@ -1510,6 +1511,59 @@ type DocumentTemplateRequest struct {
 // DocumentTemplateResponse defines model for DocumentTemplateResponse.
 type DocumentTemplateResponse struct {
 	Template DocumentTemplate `json:"template"`
+}
+
+// GitLabSetupRequest defines model for GitLabSetupRequest.
+type GitLabSetupRequest struct {
+	Origin string `json:"origin"`
+	Token  string `json:"token"`
+}
+
+// GitLabSetupResponse defines model for GitLabSetupResponse.
+type GitLabSetupResponse struct {
+	Connected     bool                    `json:"connected"`
+	DisplayName   string                  `json:"displayName"`
+	IntegrationId openapi_types.UUID      `json:"integrationId"`
+	Origin        string                  `json:"origin"`
+	WebhookSecret string                  `json:"webhookSecret"`
+	WebhookUrl    string                  `json:"webhookUrl"`
+	Workflows     []GitLabWorkflowMapping `json:"workflows"`
+}
+
+// GitLabStatusResponse defines model for GitLabStatusResponse.
+type GitLabStatusResponse struct {
+	Connected     bool                    `json:"connected"`
+	DisplayName   *string                 `json:"displayName"`
+	IntegrationId *openapi_types.UUID     `json:"integrationId"`
+	Origin        *string                 `json:"origin"`
+	WebhookSecret *string                 `json:"webhookSecret"`
+	WebhookUrl    *string                 `json:"webhookUrl"`
+	Workflows     []GitLabWorkflowMapping `json:"workflows"`
+}
+
+// GitLabWebhookResponse defines model for GitLabWebhookResponse.
+type GitLabWebhookResponse struct {
+	Ok                  bool `json:"ok"`
+	ProcessedIssueCount int  `json:"processedIssueCount"`
+}
+
+// GitLabWorkflowMapping defines model for GitLabWorkflowMapping.
+type GitLabWorkflowMapping struct {
+	MergeRequestMergedStateId *openapi_types.UUID `json:"mergeRequestMergedStateId"`
+	TeamId                    openapi_types.UUID  `json:"teamId"`
+	TeamKey                   string              `json:"teamKey"`
+	TeamName                  string              `json:"teamName"`
+}
+
+// GitLabWorkflowRequest defines model for GitLabWorkflowRequest.
+type GitLabWorkflowRequest struct {
+	MergeRequestMergedStateId *openapi_types.UUID `json:"mergeRequestMergedStateId"`
+	TeamId                    openapi_types.UUID  `json:"teamId"`
+}
+
+// GitLabWorkflowResponse defines model for GitLabWorkflowResponse.
+type GitLabWorkflowResponse struct {
+	Workflows []GitLabWorkflowMapping `json:"workflows"`
 }
 
 // InboundTeamEmailRequest defines model for InboundTeamEmailRequest.
@@ -3860,6 +3914,12 @@ type CreateInitiativeJSONRequestBody = CreateInitiativeRequest
 
 // UpdateInitiativeJSONRequestBody defines body for UpdateInitiative for application/json ContentType.
 type UpdateInitiativeJSONRequestBody = UpdateInitiativeRequest
+
+// SetupGitLabIntegrationJSONRequestBody defines body for SetupGitLabIntegration for application/json ContentType.
+type SetupGitLabIntegrationJSONRequestBody = GitLabSetupRequest
+
+// UpdateGitLabWorkflowAutomationJSONRequestBody defines body for UpdateGitLabWorkflowAutomation for application/json ContentType.
+type UpdateGitLabWorkflowAutomationJSONRequestBody = GitLabWorkflowRequest
 
 // CreateIssueFromSentryJSONRequestBody defines body for CreateIssueFromSentry for application/json ContentType.
 type CreateIssueFromSentryJSONRequestBody = SentryIssueActionRequest
@@ -6979,6 +7039,21 @@ type ServerInterface interface {
 	// (POST /integrations/discord/disconnect)
 	DisconnectDiscordIntegration(w http.ResponseWriter, r *http.Request)
 
+	// (GET /integrations/gitlab)
+	GetGitLabIntegration(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/gitlab/disconnect)
+	DisconnectGitLabIntegration(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/gitlab/setup)
+	SetupGitLabIntegration(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/gitlab/webhook/{integrationId})
+	IngestGitLabWebhook(w http.ResponseWriter, r *http.Request, integrationId openapi_types.UUID)
+
+	// (POST /integrations/gitlab/workflows)
+	UpdateGitLabWorkflowAutomation(w http.ResponseWriter, r *http.Request)
+
 	// (POST /integrations/microsoft-teams/connect)
 	ConnectMicrosoftTeamsIntegration(w http.ResponseWriter, r *http.Request)
 
@@ -7740,6 +7815,31 @@ func (_ Unimplemented) ConnectDiscordIntegration(w http.ResponseWriter, r *http.
 
 // (POST /integrations/discord/disconnect)
 func (_ Unimplemented) DisconnectDiscordIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /integrations/gitlab)
+func (_ Unimplemented) GetGitLabIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/gitlab/disconnect)
+func (_ Unimplemented) DisconnectGitLabIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/gitlab/setup)
+func (_ Unimplemented) SetupGitLabIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/gitlab/webhook/{integrationId})
+func (_ Unimplemented) IngestGitLabWebhook(w http.ResponseWriter, r *http.Request, integrationId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/gitlab/workflows)
+func (_ Unimplemented) UpdateGitLabWorkflowAutomation(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9738,6 +9838,111 @@ func (siw *ServerInterfaceWrapper) DisconnectDiscordIntegration(w http.ResponseW
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DisconnectDiscordIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetGitLabIntegration operation middleware
+func (siw *ServerInterfaceWrapper) GetGitLabIntegration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetGitLabIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DisconnectGitLabIntegration operation middleware
+func (siw *ServerInterfaceWrapper) DisconnectGitLabIntegration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisconnectGitLabIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetupGitLabIntegration operation middleware
+func (siw *ServerInterfaceWrapper) SetupGitLabIntegration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetupGitLabIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// IngestGitLabWebhook operation middleware
+func (siw *ServerInterfaceWrapper) IngestGitLabWebhook(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "integrationId" -------------
+	var integrationId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "integrationId", chi.URLParam(r, "integrationId"), &integrationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "integrationId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IngestGitLabWebhook(w, r, integrationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateGitLabWorkflowAutomation operation middleware
+func (siw *ServerInterfaceWrapper) UpdateGitLabWorkflowAutomation(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateGitLabWorkflowAutomation(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -14699,6 +14904,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/integrations/discord/disconnect", wrapper.DisconnectDiscordIntegration)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/integrations/gitlab", wrapper.GetGitLabIntegration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/gitlab/disconnect", wrapper.DisconnectGitLabIntegration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/gitlab/setup", wrapper.SetupGitLabIntegration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/gitlab/webhook/{integrationId}", wrapper.IngestGitLabWebhook)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/gitlab/workflows", wrapper.UpdateGitLabWorkflowAutomation)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/integrations/microsoft-teams/connect", wrapper.ConnectMicrosoftTeamsIntegration)
 	})
 	r.Group(func(r chi.Router) {
@@ -16544,6 +16764,149 @@ type DisconnectDiscordIntegrationdefaultApplicationProblemPlusJSONResponse struc
 }
 
 func (response DisconnectDiscordIntegrationdefaultApplicationProblemPlusJSONResponse) VisitDisconnectDiscordIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetGitLabIntegrationRequestObject struct {
+}
+
+type GetGitLabIntegrationResponseObject interface {
+	VisitGetGitLabIntegrationResponse(w http.ResponseWriter) error
+}
+
+type GetGitLabIntegration200JSONResponse GitLabStatusResponse
+
+func (response GetGitLabIntegration200JSONResponse) VisitGetGitLabIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetGitLabIntegrationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetGitLabIntegrationdefaultApplicationProblemPlusJSONResponse) VisitGetGitLabIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DisconnectGitLabIntegrationRequestObject struct {
+}
+
+type DisconnectGitLabIntegrationResponseObject interface {
+	VisitDisconnectGitLabIntegrationResponse(w http.ResponseWriter) error
+}
+
+type DisconnectGitLabIntegration200JSONResponse SuccessResponse
+
+func (response DisconnectGitLabIntegration200JSONResponse) VisitDisconnectGitLabIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DisconnectGitLabIntegrationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DisconnectGitLabIntegrationdefaultApplicationProblemPlusJSONResponse) VisitDisconnectGitLabIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetupGitLabIntegrationRequestObject struct {
+	Body *SetupGitLabIntegrationJSONRequestBody
+}
+
+type SetupGitLabIntegrationResponseObject interface {
+	VisitSetupGitLabIntegrationResponse(w http.ResponseWriter) error
+}
+
+type SetupGitLabIntegration200JSONResponse GitLabSetupResponse
+
+func (response SetupGitLabIntegration200JSONResponse) VisitSetupGitLabIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetupGitLabIntegrationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SetupGitLabIntegrationdefaultApplicationProblemPlusJSONResponse) VisitSetupGitLabIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IngestGitLabWebhookRequestObject struct {
+	IntegrationId openapi_types.UUID `json:"integrationId"`
+}
+
+type IngestGitLabWebhookResponseObject interface {
+	VisitIngestGitLabWebhookResponse(w http.ResponseWriter) error
+}
+
+type IngestGitLabWebhook202JSONResponse GitLabWebhookResponse
+
+func (response IngestGitLabWebhook202JSONResponse) VisitIngestGitLabWebhookResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type IngestGitLabWebhookdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response IngestGitLabWebhookdefaultApplicationProblemPlusJSONResponse) VisitIngestGitLabWebhookResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateGitLabWorkflowAutomationRequestObject struct {
+	Body *UpdateGitLabWorkflowAutomationJSONRequestBody
+}
+
+type UpdateGitLabWorkflowAutomationResponseObject interface {
+	VisitUpdateGitLabWorkflowAutomationResponse(w http.ResponseWriter) error
+}
+
+type UpdateGitLabWorkflowAutomation200JSONResponse GitLabWorkflowResponse
+
+func (response UpdateGitLabWorkflowAutomation200JSONResponse) VisitUpdateGitLabWorkflowAutomationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateGitLabWorkflowAutomationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateGitLabWorkflowAutomationdefaultApplicationProblemPlusJSONResponse) VisitUpdateGitLabWorkflowAutomationResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(response.StatusCode)
 
@@ -21738,6 +22101,21 @@ type StrictServerInterface interface {
 	// (POST /integrations/discord/disconnect)
 	DisconnectDiscordIntegration(ctx context.Context, request DisconnectDiscordIntegrationRequestObject) (DisconnectDiscordIntegrationResponseObject, error)
 
+	// (GET /integrations/gitlab)
+	GetGitLabIntegration(ctx context.Context, request GetGitLabIntegrationRequestObject) (GetGitLabIntegrationResponseObject, error)
+
+	// (POST /integrations/gitlab/disconnect)
+	DisconnectGitLabIntegration(ctx context.Context, request DisconnectGitLabIntegrationRequestObject) (DisconnectGitLabIntegrationResponseObject, error)
+
+	// (POST /integrations/gitlab/setup)
+	SetupGitLabIntegration(ctx context.Context, request SetupGitLabIntegrationRequestObject) (SetupGitLabIntegrationResponseObject, error)
+
+	// (POST /integrations/gitlab/webhook/{integrationId})
+	IngestGitLabWebhook(ctx context.Context, request IngestGitLabWebhookRequestObject) (IngestGitLabWebhookResponseObject, error)
+
+	// (POST /integrations/gitlab/workflows)
+	UpdateGitLabWorkflowAutomation(ctx context.Context, request UpdateGitLabWorkflowAutomationRequestObject) (UpdateGitLabWorkflowAutomationResponseObject, error)
+
 	// (POST /integrations/microsoft-teams/connect)
 	ConnectMicrosoftTeamsIntegration(ctx context.Context, request ConnectMicrosoftTeamsIntegrationRequestObject) (ConnectMicrosoftTeamsIntegrationResponseObject, error)
 
@@ -23558,6 +23936,142 @@ func (sh *strictHandler) DisconnectDiscordIntegration(w http.ResponseWriter, r *
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DisconnectDiscordIntegrationResponseObject); ok {
 		if err := validResponse.VisitDisconnectDiscordIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetGitLabIntegration operation middleware
+func (sh *strictHandler) GetGitLabIntegration(w http.ResponseWriter, r *http.Request) {
+	var request GetGitLabIntegrationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetGitLabIntegration(ctx, request.(GetGitLabIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetGitLabIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetGitLabIntegrationResponseObject); ok {
+		if err := validResponse.VisitGetGitLabIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DisconnectGitLabIntegration operation middleware
+func (sh *strictHandler) DisconnectGitLabIntegration(w http.ResponseWriter, r *http.Request) {
+	var request DisconnectGitLabIntegrationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisconnectGitLabIntegration(ctx, request.(DisconnectGitLabIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisconnectGitLabIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisconnectGitLabIntegrationResponseObject); ok {
+		if err := validResponse.VisitDisconnectGitLabIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetupGitLabIntegration operation middleware
+func (sh *strictHandler) SetupGitLabIntegration(w http.ResponseWriter, r *http.Request) {
+	var request SetupGitLabIntegrationRequestObject
+
+	var body SetupGitLabIntegrationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetupGitLabIntegration(ctx, request.(SetupGitLabIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetupGitLabIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetupGitLabIntegrationResponseObject); ok {
+		if err := validResponse.VisitSetupGitLabIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// IngestGitLabWebhook operation middleware
+func (sh *strictHandler) IngestGitLabWebhook(w http.ResponseWriter, r *http.Request, integrationId openapi_types.UUID) {
+	var request IngestGitLabWebhookRequestObject
+
+	request.IntegrationId = integrationId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.IngestGitLabWebhook(ctx, request.(IngestGitLabWebhookRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "IngestGitLabWebhook")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(IngestGitLabWebhookResponseObject); ok {
+		if err := validResponse.VisitIngestGitLabWebhookResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateGitLabWorkflowAutomation operation middleware
+func (sh *strictHandler) UpdateGitLabWorkflowAutomation(w http.ResponseWriter, r *http.Request) {
+	var request UpdateGitLabWorkflowAutomationRequestObject
+
+	var body UpdateGitLabWorkflowAutomationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateGitLabWorkflowAutomation(ctx, request.(UpdateGitLabWorkflowAutomationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateGitLabWorkflowAutomation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateGitLabWorkflowAutomationResponseObject); ok {
+		if err := validResponse.VisitUpdateGitLabWorkflowAutomationResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

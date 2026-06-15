@@ -577,6 +577,99 @@ func TestDiscordCommandParsingAndResponses(t *testing.T) {
 	}
 }
 
+func TestNormalizeGitLabOrigin(t *testing.T) {
+	cases := map[string]string{
+		"":                                "https://gitlab.com",
+		"gitlab.example.com":              "https://gitlab.example.com",
+		"https://GitLab.Example.com/":     "https://gitlab.example.com",
+		"https://gitlab.example.com:8443": "https://gitlab.example.com:8443",
+	}
+	for input, want := range cases {
+		got, err := normalizeGitLabOrigin(input)
+		if err != nil {
+			t.Fatalf("normalizeGitLabOrigin(%q) error = %v", input, err)
+		}
+		if got != want {
+			t.Fatalf("normalizeGitLabOrigin(%q) = %q want %q", input, got, want)
+		}
+	}
+	for _, input := range []string{"http://gitlab.example.com", "https://user@gitlab.example.com", "https://gitlab.example.com/group", "https://gitlab.example.com?token=x"} {
+		if got, err := normalizeGitLabOrigin(input); err == nil {
+			t.Fatalf("normalizeGitLabOrigin(%q) = %q, expected error", input, got)
+		}
+	}
+}
+
+func TestValidateGitLabToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/user" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.Header.Get("PRIVATE-TOKEN") != "glpat-valid" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"id":123,"username":"octo","name":"Octo User"}`))
+	}))
+	defer server.Close()
+
+	user, err := validateGitLabToken(t.Context(), server.Client(), server.URL, "glpat-valid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user.ID != 123 || user.Username != "octo" {
+		t.Fatalf("user = %#v", user)
+	}
+	if _, err := validateGitLabToken(t.Context(), server.Client(), server.URL, "bad"); err == nil {
+		t.Fatal("invalid token was accepted")
+	}
+}
+
+func TestGitLabWebhookSecretVerification(t *testing.T) {
+	if !verifyGitLabWebhookSecret("secret", "secret") {
+		t.Fatal("valid GitLab webhook secret was rejected")
+	}
+	if verifyGitLabWebhookSecret("secret", "wrong") {
+		t.Fatal("invalid GitLab webhook secret was accepted")
+	}
+	if verifyGitLabWebhookSecret("", "") {
+		t.Fatal("empty GitLab webhook secret was accepted")
+	}
+}
+
+func TestGitLabMergeRequestEventParsing(t *testing.T) {
+	payload := gitLabWebhookPayload{ObjectKind: "merge_request"}
+	payload.Project.ID = float64(7)
+	payload.Project.PathWithNamespace = "namuh/exponential"
+	payload.Project.WebURL = "https://gitlab.example.com/namuh/exponential"
+	payload.User.Name = "Ada"
+	payload.User.Username = "ada"
+	payload.User.Email = "ada@example.com"
+	payload.ObjectAttributes.ID = float64(42)
+	payload.ObjectAttributes.IID = float64(5)
+	payload.ObjectAttributes.Action = "merge"
+	payload.ObjectAttributes.State = "merged"
+	payload.ObjectAttributes.Title = "Fix ENG-581 and eng-12"
+	payload.ObjectAttributes.Description = "Closes PROD-7"
+	payload.ObjectAttributes.SourceBranch = "feature/eng-581-gitlab"
+	payload.ObjectAttributes.TargetBranch = "main"
+	payload.ObjectAttributes.URL = "https://gitlab.example.com/namuh/exponential/-/merge_requests/5"
+	payload.ObjectAttributes.LastCommit.Message = "Follow-up for OPS-3"
+	payload.Commits = []gitLabCommitPayload{{Message: "Refs ENG-581"}}
+
+	event, ok := gitLabMergeRequestEventFromPayload(payload)
+	if !ok {
+		t.Fatal("merge request event was not parsed")
+	}
+	if event.Action != "merged" || event.ProjectID != "7" || event.MRIID != "5" || event.ActorName != "Ada" {
+		t.Fatalf("event = %#v", event)
+	}
+	want := []string{"ENG-12", "ENG-581", "OPS-3", "PROD-7"}
+	if strings.Join(event.Identifiers, ",") != strings.Join(want, ",") {
+		t.Fatalf("identifiers = %#v want %#v", event.Identifiers, want)
+	}
+}
+
 func slackTestSignature(secret string, timestamp string, body []byte) string {
 	base := "v0:" + timestamp + ":" + string(body)
 	mac := hmac.New(sha256.New, []byte(secret))

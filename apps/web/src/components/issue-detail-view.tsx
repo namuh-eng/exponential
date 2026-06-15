@@ -169,7 +169,11 @@ interface IssueDetail {
   updatedAt: string;
 }
 
-type IssueHistoryEventType = "created" | "updated" | "comment_created";
+type IssueHistoryEventType =
+  | "created"
+  | "updated"
+  | "comment_created"
+  | "gitlab_merge_request";
 
 interface IssueHistoryEvent {
   id: string;
@@ -340,7 +344,10 @@ function normalizeHistoryEvent(value: unknown): IssueHistoryEvent | null {
   const { id, type, metadata, actor, createdAt } = value;
   if (
     typeof id !== "string" ||
-    (type !== "created" && type !== "updated" && type !== "comment_created") ||
+    (type !== "created" &&
+      type !== "updated" &&
+      type !== "comment_created" &&
+      type !== "gitlab_merge_request") ||
     typeof createdAt !== "string"
   ) {
     return null;
@@ -400,6 +407,22 @@ function getChangedFieldsLabel(metadata: Record<string, unknown>): string {
   return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
 }
 
+function getGitLabMergeRequestTitle(event: IssueHistoryEvent): string {
+  const gitlab = event.metadata.gitlab;
+  if (!isRecord(gitlab)) {
+    return "merge request";
+  }
+  const title = typeof gitlab.title === "string" ? gitlab.title.trim() : "";
+  const iid =
+    typeof gitlab.mergeRequestIid === "string"
+      ? gitlab.mergeRequestIid.trim()
+      : "";
+  if (title && iid) return `!${iid} ${title}`;
+  if (title) return title;
+  if (iid) return `!${iid}`;
+  return "merge request";
+}
+
 function getHistoryEventDescription(event: IssueHistoryEvent): string {
   const actorName = getHistoryActorName(event);
 
@@ -429,6 +452,13 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
             }`
           : "";
       return `${actorName} added a comment${attachmentLabel}`;
+    }
+    case "gitlab_merge_request": {
+      const action =
+        typeof event.metadata.action === "string"
+          ? event.metadata.action
+          : "linked";
+      return `${actorName} ${action.replaceAll("_", " ")} GitLab ${getGitLabMergeRequestTitle(event)}`;
     }
   }
 }
@@ -472,6 +502,19 @@ function getSentrySourceLink(event: IssueHistoryEvent): string | null {
   }
   return typeof sentry.webUrl === "string" && sentry.webUrl.length > 0
     ? sentry.webUrl
+    : null;
+}
+
+function getGitLabSourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "gitlab_merge_request") {
+    return null;
+  }
+  const gitlab = event.metadata.gitlab;
+  if (!isRecord(gitlab)) {
+    return null;
+  }
+  return typeof gitlab.url === "string" && gitlab.url.length > 0
+    ? gitlab.url
     : null;
 }
 
@@ -1995,6 +2038,16 @@ export function IssueDetailView({
                             className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
                           >
                             View source issue in Sentry
+                          </a>
+                        ) : null}
+                        {getGitLabSourceLink(event) ? (
+                          <a
+                            href={getGitLabSourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View merge request in GitLab
                           </a>
                         ) : null}
                       </div>
