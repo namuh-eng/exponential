@@ -1027,6 +1027,36 @@ paths:
                 $ref: '#/components/schemas/DiscordConfigurationRequiredResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /integrations/microsoft-teams/connect:
+    post:
+      operationId: connectMicrosoftTeamsIntegration
+      responses:
+        '200':
+          description: Microsoft Teams authorization URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MicrosoftTeamsConnectResponse'
+        '412':
+          description: Microsoft Teams OAuth is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MicrosoftTeamsConfigurationRequiredResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/microsoft-teams/disconnect:
+    post:
+      operationId: disconnectMicrosoftTeamsIntegration
+      responses:
+        '200':
+          description: Microsoft Teams disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /integrations/discord/disconnect:
     post:
       operationId: disconnectDiscordIntegration
@@ -3991,7 +4021,7 @@ components:
       type: object
       required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions, health]
       properties:
-        provider: { type: string, enum: [github, jira, slack, zendesk, discord] }
+        provider: { type: string, enum: [github, jira, slack, zendesk, discord, microsoft_teams] }
         name: { type: string }
         description: { type: string }
         id: { type: [string, 'null'], format: uuid }
@@ -4019,6 +4049,13 @@ components:
         authorizationUrl: { type: string, format: uri }
         state: { type: string }
         workspaceSlug: { type: string }
+    MicrosoftTeamsConnectResponse:
+      type: object
+      required: [authorizationUrl, state, workspaceSlug]
+      properties:
+        authorizationUrl: { type: string, format: uri }
+        state: { type: string }
+        workspaceSlug: { type: string }
     DiscordConfigurationRequiredResponse:
       type: object
       required: [error, message]
@@ -4026,6 +4063,12 @@ components:
         error: { type: string }
         message: { type: string }
     SlackConfigurationRequiredResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error: { type: string }
+        message: { type: string }
+    MicrosoftTeamsConfigurationRequiredResponse:
       type: object
       required: [error, message]
       properties:

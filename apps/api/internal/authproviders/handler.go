@@ -53,6 +53,8 @@ func (h Handler) Routes() chi.Router {
 	r.Get("/google/callback", h.GoogleCallback)
 	r.Get("/discord/start", h.StartDiscord)
 	r.Get("/discord/callback", h.DiscordCallback)
+	r.Get("/microsoft/start", h.StartMicrosoft)
+	r.Get("/microsoft/callback", h.MicrosoftCallback)
 	r.Post("/magic-link", h.StartMagicLink)
 	r.Get("/magic-link/callback", h.MagicLinkCallback)
 	r.Post("/sign-out", h.SignOut)
@@ -83,6 +85,7 @@ func (h Handler) ProviderCapabilities(w http.ResponseWriter, r *http.Request) {
 		"gitlab":        accountProviderCapability(oauthConfigured("AUTH_GITLAB_ID", "AUTH_GITLAB_SECRET"), "GitLab"),
 		"slack":         accountProviderCapability(oauthConfigured("AUTH_SLACK_ID", "AUTH_SLACK_SECRET"), "Slack"),
 		"discord":      accountProviderCapability(oauthConfigured("AUTH_DISCORD_ID", "AUTH_DISCORD_SECRET"), "Discord"),
+		"microsoft":     accountProviderCapability(oauthConfigured("AUTH_MICROSOFT_ID", "AUTH_MICROSOFT_SECRET"), "Microsoft"),
 		"passkey":       emailPasskeyAllowed && passkeyAuthEnabled(),
 		"googleAllowed": googleAllowed,
 		"emailPasskey":  emailPasskeyAllowed,

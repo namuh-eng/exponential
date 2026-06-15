@@ -402,7 +402,9 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
         event.metadata.source === "slack_message" ||
         event.metadata.source === "slack_ask"
           ? " from Slack"
-          : "";
+          : event.metadata.source === "microsoft_teams_message"
+            ? " from Microsoft Teams"
+            : "";
       return `${actorName} created this issue${legacySuffix}${sourceSuffix}`;
     }
     case "updated":
@@ -433,6 +435,19 @@ function getSlackSourceLink(event: IssueHistoryEvent): string | null {
   }
   return typeof slack.permalink === "string" && slack.permalink.length > 0
     ? slack.permalink
+    : null;
+}
+
+function getMicrosoftTeamsSourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "microsoft_teams_message") {
+    return null;
+  }
+  const teams = event.metadata.microsoftTeams;
+  if (!isRecord(teams)) {
+    return null;
+  }
+  return typeof teams.permalink === "string" && teams.permalink.length > 0
+    ? teams.permalink
     : null;
 }
 
@@ -1933,6 +1948,18 @@ export function IssueDetailView({
                             className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
                           >
                             View source message in Slack
+                          </a>
+                        ) : null}
+                        {getMicrosoftTeamsSourceLink(event) ? (
+                          <a
+                            href={
+                              getMicrosoftTeamsSourceLink(event) ?? undefined
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source message in Microsoft Teams
                           </a>
                         ) : null}
                       </div>

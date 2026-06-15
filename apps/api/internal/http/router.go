@@ -127,6 +127,8 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 			publicProvider.Get("/integrations/slack/oauth/callback", integrationsHandler.SlackOAuthCallback)
 			publicProvider.Get("/integrations/discord/oauth/callback", integrationsHandler.DiscordOAuthCallback)
 			publicProvider.Post("/integrations/discord/interactions", integrationsHandler.DiscordInteractions)
+			publicProvider.Get("/integrations/microsoft-teams/oauth/callback", integrationsHandler.MicrosoftTeamsOAuthCallback)
+			publicProvider.Post("/integrations/microsoft-teams/activities", integrationsHandler.MicrosoftTeamsActivities)
 			publicProvider.Post("/integrations/slack/events", integrationsHandler.SlackEvents)
 			publicProvider.Post("/integrations/slack/interactivity", integrationsHandler.SlackInteractivity)
 		})

@@ -84,8 +84,12 @@ function statusClassName(status: Integration["status"]) {
 
 function isConnectableProvider(
   provider: string,
-): provider is "slack" | "discord" {
-  return provider === "slack" || provider === "discord";
+): provider is "slack" | "discord" | "microsoft_teams" {
+  return (
+    provider === "slack" ||
+    provider === "discord" ||
+    provider === "microsoft_teams"
+  );
 }
 
 export default function IntegrationsSettingsPage() {
@@ -127,13 +131,20 @@ export default function IntegrationsSettingsPage() {
     void loadIntegrations();
   }, [loadIntegrations]);
 
-  async function connectIntegration(provider: "slack" | "discord") {
+  async function connectIntegration(
+    provider: "slack" | "discord" | "microsoft_teams",
+  ) {
     setPendingProvider(provider);
     setNotice(null);
     setError(null);
-    const label = provider === "discord" ? "Discord" : "Slack";
+    let label = provider === "discord" ? "Discord" : "Slack";
+    if (provider === "microsoft_teams") label = "Microsoft Teams";
+    const endpoint =
+      provider === "microsoft_teams"
+        ? "/api/integrations/microsoft-teams/connect"
+        : `/api/integrations/${provider}/connect`;
     try {
-      const response = await fetch(`/api/integrations/${provider}/connect`, {
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { Accept: "application/json" },
       });
@@ -171,10 +182,16 @@ export default function IntegrationsSettingsPage() {
           ? "/api/integrations/slack/disconnect"
           : provider === "discord"
             ? "/api/integrations/discord/disconnect"
-            : `/api/integrations?provider=${encodeURIComponent(provider)}`;
+            : provider === "microsoft_teams"
+              ? "/api/integrations/microsoft-teams/disconnect"
+              : `/api/integrations?provider=${encodeURIComponent(provider)}`;
       const response = await fetch(endpoint, {
         method:
-          provider === "slack" || provider === "discord" ? "POST" : "DELETE",
+          provider === "slack" ||
+          provider === "discord" ||
+          provider === "microsoft_teams"
+            ? "POST"
+            : "DELETE",
         headers: { Accept: "application/json" },
       });
       const data = (await response.json().catch(() => ({}))) as {

@@ -51,6 +51,7 @@ func main() {
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	defer stopWorker()
 	go (integrations.SlackWorker{DB: db}).Start(workerCtx)
+	go (integrations.MicrosoftTeamsWorker{DB: db}).Start(workerCtx)
 
 	server := &http.Server{
 		Addr:              cfg.Addr,

@@ -38,6 +38,18 @@ func TestSetupRequirement(t *testing.T) {
 	if got := setupRequirement("discord"); got != nil {
 		t.Fatalf("configured discord requirement = %#v", got)
 	}
+	t.Setenv("AUTH_MICROSOFT_ID", "")
+	t.Setenv("AUTH_MICROSOFT_SECRET", "")
+	t.Setenv("MICROSOFT_TEAMS_BOT_SECRET", "")
+	if got := setupRequirement("microsoft_teams"); got == nil || got.Type != "configuration_required" {
+		t.Fatalf("microsoft teams requirement = %#v", got)
+	}
+	t.Setenv("AUTH_MICROSOFT_ID", "id")
+	t.Setenv("AUTH_MICROSOFT_SECRET", "secret")
+	t.Setenv("MICROSOFT_TEAMS_BOT_SECRET", "bot-secret")
+	if got := setupRequirement("microsoft_teams"); got != nil {
+		t.Fatalf("configured microsoft teams requirement = %#v", got)
+	}
 	if got := setupRequirement("github"); got == nil || got.Message == "" {
 		t.Fatalf("github requirement = %#v", got)
 	}
@@ -444,6 +456,105 @@ func TestDiscordSignatureVerification(t *testing.T) {
 	staleSignature := ed25519.Sign(privateKey, append([]byte(stale), body...))
 	if verifyDiscordSignature(hex.EncodeToString(publicKey), stale, hex.EncodeToString(staleSignature), body, now) {
 		t.Fatal("stale Discord timestamp was accepted")
+	}
+}
+
+func TestMicrosoftTeamsAuthorizationURL(t *testing.T) {
+	got := microsoftTeamsAuthorizationURL("client", "https://app.example/", "state-token")
+	if !strings.HasPrefix(got, "https://login.microsoftonline.com/common/adminconsent?") {
+		t.Fatalf("unexpected URL = %q", got)
+	}
+	if !strings.Contains(got, "client_id=client") || !strings.Contains(got, "state=state-token") {
+		t.Fatalf("missing query params = %q", got)
+	}
+	if !strings.Contains(got, "redirect_uri=https%3A%2F%2Fapp.example%2Fapi%2Fintegrations%2Fmicrosoft-teams%2Foauth%2Fcallback") {
+		t.Fatalf("missing redirect uri = %q", got)
+	}
+}
+
+func TestMicrosoftTeamsSignatureVerification(t *testing.T) {
+	now := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
+	body := []byte(`{"type":"message","text":"create issue Bug","channelData":{"tenant":{"id":"tenant-1"}}}`)
+	timestamp := strconv.FormatInt(now.Unix(), 10)
+	signature := microsoftTeamsTestSignature("secret", timestamp, body)
+	if !verifyMicrosoftTeamsSignature("secret", timestamp, signature, body, now) {
+		t.Fatal("valid Microsoft Teams signature was rejected")
+	}
+	if verifyMicrosoftTeamsSignature("secret", timestamp, signature, []byte(`{"type":"message","text":"tampered"}`), now) {
+		t.Fatal("tampered Microsoft Teams body was accepted")
+	}
+	stale := strconv.FormatInt(now.Add(-10*time.Minute).Unix(), 10)
+	if verifyMicrosoftTeamsSignature("secret", stale, microsoftTeamsTestSignature("secret", stale, body), body, now) {
+		t.Fatal("stale Microsoft Teams timestamp was accepted")
+	}
+}
+
+func TestMicrosoftTeamsCommandParsingAndChannelPolicy(t *testing.T) {
+	command, rest := microsoftTeamsCommand("<at>exponential</at> create issue Fix production alert")
+	if command != "create_issue" || rest != "Fix production alert" {
+		t.Fatalf("issue command = %q %q", command, rest)
+	}
+	command, rest = microsoftTeamsCommand("summarize thread")
+	if command != "summarize_thread" || rest != "" {
+		t.Fatalf("summarize command = %q %q", command, rest)
+	}
+	standard := microsoftTeamsActivity{}
+	standard.ChannelData.Channel.ChannelType = "standard"
+	if !microsoftTeamsStandardChannel(standard) {
+		t.Fatal("standard channel was rejected")
+	}
+	shared := microsoftTeamsActivity{}
+	shared.ChannelData.Channel.ChannelType = "shared"
+	if microsoftTeamsStandardChannel(shared) {
+		t.Fatal("shared channel was accepted")
+	}
+}
+
+func TestPostMicrosoftTeamsMessageUsesWebhook(t *testing.T) {
+	var got map[string]string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/teams-webhook" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Fatalf("content type = %q", r.Header.Get("Content-Type"))
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	err := postMicrosoftTeamsMessage(t.Context(), server.Client(), microsoftTeamsCredential{}, microsoftTeamsOutboundMessage{ChannelID: "19:channel", Text: "Project update", WebhookURL: server.URL + "/teams-webhook"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["type"] != "message" || got["text"] != "Project update" {
+		t.Fatalf("payload = %#v", got)
+	}
+}
+
+func TestPostMicrosoftTeamsMessageFailureIsRetryableAndAuthAware(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "expired", http.StatusUnauthorized)
+	}))
+	defer server.Close()
+
+	err := postMicrosoftTeamsMessage(t.Context(), server.Client(), microsoftTeamsCredential{ServiceURL: server.URL, BotToken: "token"}, microsoftTeamsOutboundMessage{ChannelID: "19:channel", Text: "Project update"})
+	if err == nil {
+		t.Fatal("expected delivery failure")
+	}
+	if !isMicrosoftTeamsAuthFailure(err) {
+		t.Fatalf("expected auth failure, got %v", err)
+	}
+	status, nextRunAt := providerJobFailureStatus(1, 3)
+	if status != "failed" || nextRunAt == nil {
+		t.Fatalf("retry status = %q next=%v", status, nextRunAt)
+	}
+	status, nextRunAt = providerJobFailureStatus(3, 3)
+	if status != "dead" || nextRunAt != nil {
+		t.Fatalf("dead status = %q next=%v", status, nextRunAt)
 	}
 }
 

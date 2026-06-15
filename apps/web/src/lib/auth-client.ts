@@ -1,4 +1,10 @@
-type SocialLinkProvider = "google" | "github" | "gitlab" | "slack" | "discord";
+type SocialLinkProvider =
+  | "google"
+  | "github"
+  | "gitlab"
+  | "slack"
+  | "discord"
+  | "microsoft";
 
 type SocialSignInOptions = {
   provider: SocialLinkProvider;
@@ -97,6 +103,13 @@ function discordStartURL(callbackURL: string) {
   return `/api/auth/discord/start?${params.toString()}`;
 }
 
+function microsoftStartURL(callbackURL: string) {
+  const params = new URLSearchParams({
+    callback_url: localPathFromCallback(callbackURL),
+  });
+  return `/api/auth/microsoft/start?${params.toString()}`;
+}
+
 export const signIn = {
   async social(options: SocialSignInOptions): Promise<LinkSocialAccountResult> {
     if (options.provider === "google") {
@@ -105,6 +118,10 @@ export const signIn = {
     }
     if (options.provider === "discord") {
       const url = discordStartURL(options.callbackURL);
+      return { data: { url, redirect: true }, url };
+    }
+    if (options.provider === "microsoft") {
+      const url = microsoftStartURL(options.callbackURL);
       return { data: { url, redirect: true }, url };
     }
     return {

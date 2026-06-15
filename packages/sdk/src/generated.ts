@@ -771,6 +771,38 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/microsoft-teams/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectMicrosoftTeamsIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/microsoft-teams/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectMicrosoftTeamsIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/discord/disconnect": {
     parameters: {
       query?: never;
@@ -2614,7 +2646,13 @@ export interface components {
     };
     Integration: {
       /** @enum {string} */
-      provider: "github" | "jira" | "slack" | "zendesk" | "discord";
+      provider:
+        | "github"
+        | "jira"
+        | "slack"
+        | "zendesk"
+        | "discord"
+        | "microsoft_teams";
       name: string;
       description: string;
       /** Format: uuid */
@@ -2650,11 +2688,21 @@ export interface components {
       state: string;
       workspaceSlug: string;
     };
+    MicrosoftTeamsConnectResponse: {
+      /** Format: uri */
+      authorizationUrl: string;
+      state: string;
+      workspaceSlug: string;
+    };
     DiscordConfigurationRequiredResponse: {
       error: string;
       message: string;
     };
     SlackConfigurationRequiredResponse: {
+      error: string;
+      message: string;
+    };
+    MicrosoftTeamsConfigurationRequiredResponse: {
       error: string;
       message: string;
     };
@@ -6209,6 +6257,57 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["DiscordConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  connectMicrosoftTeamsIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Microsoft Teams authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MicrosoftTeamsConnectResponse"];
+        };
+      };
+      /** @description Microsoft Teams OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MicrosoftTeamsConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectMicrosoftTeamsIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Microsoft Teams disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
         };
       };
       default: components["responses"]["Problem"];
