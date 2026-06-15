@@ -783,7 +783,7 @@ func microsoftTeamsTextResponse(text string) map[string]any {
 func microsoftTeamsIssueDescriptionHTML(description string, command microsoftTeamsCommandContext) string {
 	parts := []string{}
 	if strings.TrimSpace(description) != "" {
-		parts = append(parts, sanitizehtml.SanitizeToHTML(description))
+		parts = append(parts, sanitizehtml.RichText(description))
 	}
 	source := "Created from Microsoft Teams"
 	if command.Permalink != "" {
