@@ -115,12 +115,16 @@ func (h Handler) FrontSetup(w http.ResponseWriter, r *http.Request) {
 	}
 	input.APIToken = strings.TrimSpace(input.APIToken)
 	input.CompanyID = strings.TrimSpace(input.CompanyID)
-	baseURL := frontAPIBaseURL(input.BaseURL)
+	baseURL, err := normalizeFrontBaseURL(input.BaseURL)
+	if err != nil {
+		problem.Write(w, http.StatusBadRequest, err.Error(), "")
+		return
+	}
 	if input.APIToken == "" {
 		problem.Write(w, http.StatusBadRequest, "Front API token is required", "")
 		return
 	}
-	if err := validateFrontToken(r.Context(), http.DefaultClient, baseURL, input.APIToken); err != nil {
+	if err := validateFrontToken(r.Context(), &http.Client{Timeout: 10 * time.Second}, baseURL, input.APIToken); err != nil {
 		problem.Write(w, http.StatusBadGateway, "Front token validation failed", err.Error())
 		return
 	}
@@ -232,7 +236,11 @@ func (h Handler) FrontIssueCreate(w http.ResponseWriter, r *http.Request) {
 	issue, err := h.createFrontIssue(r.Context(), install, input)
 	if err != nil {
 		_ = h.recordFrontEvent(r.Context(), install, "issue_creation_failed", "error", err.Error(), input.Raw)
-		problem.Write(w, http.StatusBadRequest, "Create issue from Front failed", err.Error())
+		if isFrontValidationError(err) {
+			problem.Write(w, http.StatusBadRequest, "Create issue from Front failed", err.Error())
+		} else {
+			problem.Write(w, http.StatusInternalServerError, "Create issue from Front failed", err.Error())
+		}
 		return
 	}
 	_ = h.recordFrontEvent(r.Context(), install, "issue_created", "info", "Front conversation created an Exponential issue.", map[string]any{"issueId": issue.ID, "conversationId": input.Conversation.ID})
@@ -527,16 +535,19 @@ func frontHistoryMetadata(conversation frontConversationRef) map[string]any {
 
 func frontIssueDescriptionHTML(description string, conversation frontConversationRef) string {
 	description = strings.TrimSpace(description)
+	var body string
 	if strings.Contains(description, "<") {
-		description = sanitizehtml.RichText(description)
+		body = description
 	} else if description != "" {
-		description = "<p>" + htmlEscapeParagraph(description) + "</p>"
+		body = "<p>" + htmlEscapeParagraph(description) + "</p>"
 	}
-	if conversation.Permalink == "" {
-		return description
+	if conversation.Permalink != "" {
+		body += `<p><a href="` + htmlEscapeAttribute(conversation.Permalink) + `">View source conversation in Front</a></p>`
 	}
-	link := `<p><a href="` + htmlEscapeAttribute(conversation.Permalink) + `">View source conversation in Front</a></p>`
-	return sanitizehtml.RichText(description + link)
+	if body == "" {
+		return ""
+	}
+	return sanitizehtml.RichText(body)
 }
 
 func frontIssueResponse(issue frontIssueRow) frontIssueActionResponse {
@@ -562,6 +573,39 @@ func verifyFrontSignature(secret string, signature string, body []byte) bool {
 	return subtle.ConstantTimeCompare([]byte(expected), []byte(signature)) == 1
 }
 
+// normalizeFrontBaseURL validates and normalizes a Front API base URL supplied by
+// an admin. It rejects non-https schemes and hosts that do not end with
+// ".frontapp.com" to prevent SSRF via user-supplied values. If value is empty
+// the environment override or the default "https://api2.frontapp.com" is used.
+func normalizeFrontBaseURL(value string) (string, error) {
+	base := strings.TrimRight(strings.TrimSpace(value), "/")
+	if base == "" {
+		base = strings.TrimRight(strings.TrimSpace(os.Getenv("FRONT_API_BASE_URL")), "/")
+	}
+	if base == "" {
+		return "https://api2.frontapp.com", nil
+	}
+	parsed, err := url.Parse(base)
+	if err != nil {
+		return "", fmt.Errorf("Front base URL is invalid: %w", err)
+	}
+	if parsed.Scheme != "https" {
+		return "", fmt.Errorf("Front base URL must use https")
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host != "frontapp.com" && !strings.HasSuffix(host, ".frontapp.com") {
+		return "", fmt.Errorf("Front base URL host must be frontapp.com or a subdomain of frontapp.com")
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("Front base URL must not include credentials, query, or fragment")
+	}
+	return strings.TrimRight(base, "/"), nil
+}
+
+// frontAPIBaseURL resolves the effective Front API base URL from a stored
+// credential value. Unlike normalizeFrontBaseURL it does not validate the
+// value because it originates from our own database (already validated on
+// write). Falls back to the environment override then the default.
 func frontAPIBaseURL(value string) string {
 	baseURL := strings.TrimRight(strings.TrimSpace(value), "/")
 	if baseURL == "" {
@@ -571,6 +615,16 @@ func frontAPIBaseURL(value string) string {
 		baseURL = "https://api2.frontapp.com"
 	}
 	return baseURL
+}
+
+// isFrontValidationError reports whether err is a user-input validation
+// sentinel that should be surfaced as HTTP 400 rather than HTTP 500.
+func isFrontValidationError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return msg == "title is required" || msg == "Front conversation id is required"
 }
 
 func validateFrontToken(ctx context.Context, client *http.Client, baseURL string, token string) error {

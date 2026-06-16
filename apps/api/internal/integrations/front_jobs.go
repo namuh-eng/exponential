@@ -151,7 +151,7 @@ func (w FrontWorker) failFrontJob(ctx context.Context, job frontJob, cause error
 		}
 		integrationStatus := "degraded"
 		if isFrontPermissionFailure(cause) {
-			integrationStatus = "degraded"
+			integrationStatus = "error"
 		}
 		if _, err := tx.Exec(ctx, `update workspace_integration set status=$2, last_failure_at=$3, last_failure_message=$4, last_event_at=$3, updated_at=$3 where id=$1::uuid`, job.IntegrationID, integrationStatus, now, cause.Error()); err != nil {
 			return err
