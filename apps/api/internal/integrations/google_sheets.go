@@ -57,17 +57,17 @@ type googleSheetsSettings struct {
 
 type googleSheetsMetadata struct {
 	googleSheetsSettings
-	OAuthStateHash           string         `json:"oauthStateHash,omitempty"`
-	OAuthStateExpiresAt      string         `json:"oauthStateExpiresAt,omitempty"`
-	OAuthStartedAt           string         `json:"oauthStartedAt,omitempty"`
-	SpreadsheetID            string         `json:"spreadsheetId,omitempty"`
-	SpreadsheetURL           string         `json:"spreadsheetUrl,omitempty"`
-	SpreadsheetTitle         string         `json:"spreadsheetTitle,omitempty"`
-	GoogleSpreadsheetCreated bool           `json:"googleSpreadsheetCreated"`
-	OAuthScopes              []string       `json:"oauthScopes,omitempty"`
-	RowCounts                map[string]int `json:"rowCounts"`
+	OAuthStateHash           string              `json:"oauthStateHash,omitempty"`
+	OAuthStateExpiresAt      string              `json:"oauthStateExpiresAt,omitempty"`
+	OAuthStartedAt           string              `json:"oauthStartedAt,omitempty"`
+	SpreadsheetID            string              `json:"spreadsheetId,omitempty"`
+	SpreadsheetURL           string              `json:"spreadsheetUrl,omitempty"`
+	SpreadsheetTitle         string              `json:"spreadsheetTitle,omitempty"`
+	GoogleSpreadsheetCreated bool                `json:"googleSpreadsheetCreated"`
+	OAuthScopes              []string            `json:"oauthScopes,omitempty"`
+	RowCounts                map[string]int      `json:"rowCounts"`
 	SheetSchemas             map[string][]string `json:"sheetSchemas"`
-	NextRunAt                string         `json:"nextRunAt,omitempty"`
+	NextRunAt                string              `json:"nextRunAt,omitempty"`
 }
 
 type googleSheetsCredential struct {
@@ -222,13 +222,13 @@ func (h Handler) saveGoogleSheetsOAuthState(ctx context.Context, workspaceID, us
 	now := time.Now().UTC()
 	metadata := googleSheetsMetadata{
 		googleSheetsSettings: settings,
-		OAuthStateHash:      hashSlackSecret(state),
-		OAuthStateExpiresAt: now.Add(10 * time.Minute).Format(time.RFC3339Nano),
-		OAuthStartedAt:      now.Format(time.RFC3339Nano),
-		SpreadsheetTitle:    workspaceSlug + " analytics",
-		OAuthScopes:         googleSheetsScopes,
-		RowCounts:           map[string]int{"issues": 0, "projects": 0, "initiatives": 0},
-		SheetSchemas:        googleSheetSchemas,
+		OAuthStateHash:       hashSlackSecret(state),
+		OAuthStateExpiresAt:  now.Add(10 * time.Minute).Format(time.RFC3339Nano),
+		OAuthStartedAt:       now.Format(time.RFC3339Nano),
+		SpreadsheetTitle:     workspaceSlug + " analytics",
+		OAuthScopes:          googleSheetsScopes,
+		RowCounts:            map[string]int{"issues": 0, "projects": 0, "initiatives": 0},
+		SheetSchemas:         googleSheetSchemas,
 	}
 	raw, err := json.Marshal(metadata)
 	if err != nil {
@@ -333,6 +333,23 @@ func (h Handler) completeGoogleSheetsInstall(ctx context.Context, install google
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func (h Handler) recordGoogleSheetsFailure(ctx context.Context, integrationID string, workspaceID string, eventType string, message string) error {
+	if strings.TrimSpace(eventType) == "" {
+		eventType = "sync_failed"
+	}
+	_, err := h.DB.Exec(ctx, `
+		update workspace_integration
+		set status='error', last_failure_at=now(), last_failure_message=$2, updated_at=now()
+		where id=$1::uuid`, integrationID, message)
+	if err != nil {
+		return err
+	}
+	_, err = h.DB.Exec(ctx, `
+		insert into provider_event (workspace_id, workspace_integration_id, provider, event_type, severity, message, payload)
+		values ($1::uuid, $2::uuid, 'google_sheets', $3, 'error', $4, '{}'::jsonb)`, workspaceID, integrationID, eventType, message)
+	return err
 }
 
 func (h Handler) queueGoogleSheetsSync(ctx context.Context, workspaceID string, immediate bool) (string, error) {
@@ -504,8 +521,6 @@ func splitOAuthScopes(value string) []string {
 	return out
 }
 
-
-
 func formatSheetCell(value any) string {
 	if value == nil {
 		return ""
@@ -542,7 +557,6 @@ func sortedUnique(values []string) []string {
 	sort.Strings(out)
 	return out
 }
-
 
 func readBody(resp *http.Response) string {
 	if resp == nil || resp.Body == nil {
