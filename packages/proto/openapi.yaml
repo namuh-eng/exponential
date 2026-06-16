@@ -1225,6 +1225,146 @@ paths:
                 $ref: '#/components/schemas/SentryIssueActionResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /integrations/salesforce/connect:
+    post:
+      operationId: connectSalesforceIntegration
+      responses:
+        '200':
+          description: Salesforce authorization URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesforceConnectResponse'
+        '412':
+          description: Salesforce OAuth is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesforceConfigurationRequiredResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/salesforce/disconnect:
+    post:
+      operationId: disconnectSalesforceIntegration
+      responses:
+        '200':
+          description: Salesforce disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/salesforce/oauth/callback:
+    get:
+      operationId: salesforceOAuthCallback
+      security: []
+      parameters:
+        - name: code
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+      responses:
+        '302': { description: Redirects to integration settings }
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/salesforce/issues/search:
+    post:
+      operationId: searchSalesforceLinkableIssues
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SalesforceCaseActionRequest'
+      responses:
+        '200':
+          description: Linkable Exponential issues for Salesforce cases
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesforceIssueSearchResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/salesforce/issues/link:
+    post:
+      operationId: linkSalesforceCaseToIssue
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SalesforceCaseActionRequest'
+      responses:
+        '200':
+          description: Linked Exponential issue descriptor for Salesforce
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesforceIssueActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/salesforce/issues/create:
+    post:
+      operationId: createIssueFromSalesforceCase
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SalesforceCaseActionRequest'
+      responses:
+        '200':
+          description: Created Exponential issue descriptor for Salesforce
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesforceIssueActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/salesforce/projects/search:
+    post:
+      operationId: searchSalesforceLinkableProjects
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SalesforceCaseActionRequest'
+      responses:
+        '200':
+          description: Linkable Exponential projects for Salesforce cases
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesforceProjectSearchResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/salesforce/projects/link:
+    post:
+      operationId: linkSalesforceCaseToProject
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SalesforceCaseActionRequest'
+      responses:
+        '200':
+          description: Linked Exponential project descriptor for Salesforce
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesforceProjectActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /integrations/microsoft-teams/disconnect:
     post:
       operationId: disconnectMicrosoftTeamsIntegration
@@ -4201,7 +4341,7 @@ components:
       type: object
       required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions, health]
       properties:
-        provider: { type: string, enum: [github, gitlab, jira, slack, sentry, zendesk, discord, microsoft_teams] }
+        provider: { type: string, enum: [github, gitlab, jira, slack, sentry, salesforce, zendesk, discord, microsoft_teams] }
         name: { type: string }
         description: { type: string }
         id: { type: [string, 'null'], format: uuid }
@@ -4302,6 +4442,13 @@ components:
         authorizationUrl: { type: string, format: uri }
         state: { type: string }
         workspaceSlug: { type: string }
+    SalesforceConnectResponse:
+      type: object
+      required: [authorizationUrl, state, workspaceSlug]
+      properties:
+        authorizationUrl: { type: string, format: uri }
+        state: { type: string }
+        workspaceSlug: { type: string }
     DiscordConfigurationRequiredResponse:
       type: object
       required: [error, message]
@@ -4321,6 +4468,12 @@ components:
         error: { type: string }
         message: { type: string }
     SentryConfigurationRequiredResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error: { type: string }
+        message: { type: string }
+    SalesforceConfigurationRequiredResponse:
       type: object
       required: [error, message]
       properties:
@@ -4356,6 +4509,64 @@ components:
         issues:
           type: array
           items: { $ref: '#/components/schemas/SentryIssueActionResponse' }
+    SalesforceCaseActionRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        organizationId: { type: string }
+        orgId: { type: string }
+        query: { type: string }
+        exponentialIssueId: { type: string }
+        issueIdentifier: { type: string }
+        projectId: { type: string, format: uuid }
+        projectSlug: { type: string }
+        teamId: { type: string, format: uuid }
+        teamKey: { type: string }
+        title: { type: string }
+        description: { type: string }
+        priority: { type: string, enum: [none, urgent, high, medium, low] }
+        case:
+          type: object
+          additionalProperties: true
+    SalesforceIssueActionResponse:
+      type: object
+      required: [webUrl, project, identifier, status, statusCategory, priority]
+      properties:
+        webUrl: { type: string, format: uri }
+        issueId: { type: string, format: uuid }
+        project: { type: string }
+        identifier: { type: string }
+        status: { type: string }
+        statusCategory: { type: string }
+        priority: { type: string }
+        caseId: { type: string }
+        caseNumber: { type: string }
+    SalesforceIssueSearchResponse:
+      type: object
+      required: [issues]
+      properties:
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/SalesforceIssueActionResponse' }
+    SalesforceProjectActionResponse:
+      type: object
+      required: [webUrl, projectId, name, slug, status, priority]
+      properties:
+        webUrl: { type: string, format: uri }
+        projectId: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        status: { type: string }
+        priority: { type: string }
+        caseId: { type: string }
+        caseNumber: { type: string }
+    SalesforceProjectSearchResponse:
+      type: object
+      required: [projects]
+      properties:
+        projects:
+          type: array
+          items: { $ref: '#/components/schemas/SalesforceProjectActionResponse' }
     IntegrationListResponse:
       type: object
       required: [canManageIntegrations, integrations]

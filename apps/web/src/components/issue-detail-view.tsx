@@ -438,7 +438,9 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
             ? " from Microsoft Teams"
             : event.metadata.source === "sentry_issue"
               ? " from Sentry"
-              : "";
+              : event.metadata.source === "salesforce_case"
+                ? " from Salesforce"
+                : "";
       return `${actorName} created this issue${legacySuffix}${sourceSuffix}`;
     }
     case "updated":
@@ -502,6 +504,19 @@ function getSentrySourceLink(event: IssueHistoryEvent): string | null {
   }
   return typeof sentry.webUrl === "string" && sentry.webUrl.length > 0
     ? sentry.webUrl
+    : null;
+}
+
+function getSalesforceSourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "salesforce_case") {
+    return null;
+  }
+  const salesforce = event.metadata.salesforce;
+  if (!isRecord(salesforce)) {
+    return null;
+  }
+  return typeof salesforce.caseUrl === "string" && salesforce.caseUrl.length > 0
+    ? salesforce.caseUrl
     : null;
 }
 
@@ -2038,6 +2053,16 @@ export function IssueDetailView({
                             className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
                           >
                             View source issue in Sentry
+                          </a>
+                        ) : null}
+                        {getSalesforceSourceLink(event) ? (
+                          <a
+                            href={getSalesforceSourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source case in Salesforce
                           </a>
                         ) : null}
                         {getGitLabSourceLink(event) ? (

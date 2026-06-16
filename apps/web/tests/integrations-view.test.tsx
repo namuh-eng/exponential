@@ -97,6 +97,36 @@ const integrations = [
       auditEvents: [],
     },
   },
+  {
+    provider: "salesforce",
+    name: "Salesforce",
+    description:
+      "Link cases to issues and projects, then sync status and priority back to support.",
+    status: "configuration_required",
+    displayName: null,
+    connectedAt: null,
+    setupRequirement: {
+      type: "configuration_required",
+      message:
+        "Salesforce OAuth credentials and component secret are not configured.",
+    },
+    actions: {
+      canConnect: false,
+      canManage: false,
+      canDisconnect: false,
+      canReconnect: false,
+    },
+    health: {
+      lastEventAt: null,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      lastFailureMessage: null,
+      tokenExpiresAt: null,
+      pendingJobCount: 0,
+      failedJobCount: 0,
+      auditEvents: [],
+    },
+  },
 ];
 
 const degradedSlack = {
@@ -166,11 +196,15 @@ describe("IntegrationsSettingsPage component", () => {
     expect(screen.getByText("GitHub")).toBeInTheDocument();
     expect(screen.getByText("Slack")).toBeInTheDocument();
     expect(screen.getByText("Sentry")).toBeInTheDocument();
+    expect(screen.getByText("Salesforce")).toBeInTheDocument();
     expect(
       screen.queryByText(/Setup unavailable in this workspace/),
     ).not.toBeInTheDocument();
     expect(screen.getByText(/Slack OAuth credentials/)).toBeInTheDocument();
     expect(screen.getByText(/Sentry credentials/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Salesforce OAuth credentials/),
+    ).toBeInTheDocument();
     expect(
       screen.getAllByRole("button", { name: "Connect" }).length,
     ).toBeGreaterThan(0);

@@ -90,12 +90,18 @@ function statusClassName(status: Integration["status"]) {
 
 function isConnectableProvider(
   provider: string,
-): provider is "slack" | "discord" | "microsoft_teams" | "sentry" {
+): provider is
+  | "slack"
+  | "discord"
+  | "microsoft_teams"
+  | "sentry"
+  | "salesforce" {
   return (
     provider === "slack" ||
     provider === "discord" ||
     provider === "microsoft_teams" ||
-    provider === "sentry"
+    provider === "sentry" ||
+    provider === "salesforce"
   );
 }
 
@@ -143,7 +149,7 @@ export default function IntegrationsSettingsPage() {
   }, [loadIntegrations]);
 
   async function connectIntegration(
-    provider: "slack" | "discord" | "microsoft_teams" | "sentry",
+    provider: "slack" | "discord" | "microsoft_teams" | "sentry" | "salesforce",
   ) {
     setPendingProvider(provider);
     setNotice(null);
@@ -151,6 +157,7 @@ export default function IntegrationsSettingsPage() {
     let label = provider === "discord" ? "Discord" : "Slack";
     if (provider === "microsoft_teams") label = "Microsoft Teams";
     if (provider === "sentry") label = "Sentry";
+    if (provider === "salesforce") label = "Salesforce";
     const endpoint =
       provider === "microsoft_teams"
         ? "/api/integrations/microsoft-teams/connect"
@@ -245,13 +252,16 @@ export default function IntegrationsSettingsPage() {
               ? "/api/integrations/microsoft-teams/disconnect"
               : provider === "sentry"
                 ? "/api/integrations/sentry/disconnect"
-                : `/api/integrations?provider=${encodeURIComponent(provider)}`;
+                : provider === "salesforce"
+                  ? "/api/integrations/salesforce/disconnect"
+                  : `/api/integrations?provider=${encodeURIComponent(provider)}`;
       const response = await fetch(endpoint, {
         method:
           provider === "slack" ||
           provider === "discord" ||
           provider === "microsoft_teams" ||
-          provider === "sentry"
+          provider === "sentry" ||
+          provider === "salesforce"
             ? "POST"
             : "DELETE",
         headers: { Accept: "application/json" },

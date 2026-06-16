@@ -25,7 +25,7 @@ func (h Handler) issueExternalSources(ctx context.Context, issueID string) ([]is
 			coalesce(external_channel_id,''),
 			coalesce(workspace_integration_id::text,'')
 		from integration_thread_link
-		where issue_id=$1::uuid and provider in ('sentry') and external_permalink is not null
+		where issue_id=$1::uuid and provider in ('sentry','salesforce') and external_permalink is not null
 		order by created_at asc`, issueID)
 	if err != nil {
 		return nil, err
@@ -51,6 +51,13 @@ func sourceLabel(provider string, project string, externalID string) string {
 		}
 		if strings.TrimSpace(externalID) != "" {
 			parts = append(parts, externalID)
+		}
+		return strings.Join(parts, " · ")
+	}
+	if provider == "salesforce" {
+		parts := []string{"Salesforce"}
+		if strings.TrimSpace(externalID) != "" {
+			parts = append(parts, "Case "+externalID)
 		}
 		return strings.Join(parts, " · ")
 	}
