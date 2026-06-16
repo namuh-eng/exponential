@@ -1,7 +1,7 @@
 # Integration Parity Roadmap
 
-**Owner:** jaeyunha  
-**Roadmap parent:** [#592](https://github.com/namuh-eng/exponential/issues/592)  
+**Owner:** jaeyunha
+**Roadmap parent:** [#592](https://github.com/namuh-eng/exponential/issues/592)
 **Last reviewed:** 2026-06-16
 
 This artifact is the repo-owned backlog contract for Linear-style integration
