@@ -1415,7 +1415,7 @@ export function AuthPage({
                       setPasskeyPending(false);
                       setStep("email-input");
                     }}
-                    disabled={loading}
+                    disabled
                     className="flex items-center gap-3 border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-3 py-3 text-[13px] text-[var(--auth-text)] transition-colors hover:bg-[var(--auth-secondary-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <svg
@@ -1442,11 +1442,8 @@ export function AuthPage({
                         magic link · sent to inbox
                       </span>
                     </span>
-                    <span
-                      aria-hidden="true"
-                      className="ml-auto text-[10.5px] text-[var(--auth-faint)]"
-                    >
-                      ↵
+                    <span className="ml-auto shrink-0 border border-[var(--auth-secondary-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-[var(--auth-muted)]">
+                      coming soon
                     </span>
                   </button>
                 )}
@@ -1467,7 +1464,7 @@ export function AuthPage({
                   setPasskeyPending(false);
                   setError("");
                 }}
-                disabled={loading}
+                disabled
                 className="flex w-full items-center gap-3 border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-3 py-2.5 text-[13px] text-[var(--auth-text)] transition-colors hover:bg-[var(--auth-secondary-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span aria-hidden="true" className="text-[var(--auth-prompt)]">
@@ -1491,11 +1488,8 @@ export function AuthPage({
                   <path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" />
                 </svg>
                 <span>Continue with SAML SSO</span>
-                <span
-                  aria-hidden="true"
-                  className="ml-auto text-[10.5px] text-[var(--auth-faint)]"
-                >
-                  oidc · enterprise
+                <span className="ml-auto shrink-0 border border-[var(--auth-secondary-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-[var(--auth-muted)]">
+                  coming soon
                 </span>
               </button>
 
@@ -1503,7 +1497,7 @@ export function AuthPage({
                 <button
                   type="button"
                   onClick={handlePasskeyLogin}
-                  disabled={loading || passkeyPending || !passkeySupported}
+                  disabled
                   className="flex w-full items-center gap-3 border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-3 py-2.5 text-[13px] text-[var(--auth-text)] transition-colors hover:bg-[var(--auth-secondary-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <span
@@ -1532,11 +1526,8 @@ export function AuthPage({
                       ? "Waiting for passkey"
                       : "Log in with passkey"}
                   </span>
-                  <span
-                    aria-hidden="true"
-                    className="ml-auto text-[10.5px] text-[var(--auth-faint)]"
-                  >
-                    webauthn
+                  <span className="ml-auto shrink-0 border border-[var(--auth-secondary-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-[var(--auth-muted)]">
+                    coming soon
                   </span>
                 </button>
               )}
