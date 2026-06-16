@@ -39,6 +39,14 @@ describe("Zapier public app", () => {
         zapierApp.triggers[triggerKey].operation.performUnsubscribe,
       ).toBeTypeOf("function");
     }
+
+    expect(zapierApp.creates.create_attachment.operation.inputFields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "fileName", required: true }),
+        expect.objectContaining({ key: "contentType", required: true }),
+        expect.objectContaining({ key: "size", required: true }),
+      ]),
+    );
   });
 
   it("uses Exponential OAuth endpoints for the public auth flow", async () => {

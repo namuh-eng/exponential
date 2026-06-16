@@ -502,8 +502,8 @@ const app: ZapierAppDefinition = {
     create_attachment: createAction(
       "create_attachment",
       "Attachment",
-      "Create Link Attachment",
-      "Adds a link attachment to an Exponential issue as a comment.",
+      "Create Attachment Upload",
+      "Creates attachment metadata and returns a presigned upload URL for an Exponential issue.",
       [
         {
           key: "issueId",
@@ -511,9 +511,34 @@ const app: ZapierAppDefinition = {
           required: true,
           type: "string",
         },
-        { key: "url", label: "URL", required: true, type: "string" },
-        { key: "title", label: "Title", required: false, type: "string" },
-        { key: "note", label: "Note", required: false, type: "text" },
+        {
+          key: "fileName",
+          label: "File Name",
+          required: true,
+          type: "string",
+        },
+        {
+          key: "contentType",
+          label: "Content Type",
+          required: true,
+          type: "string",
+          helpText:
+            "MIME type for the file Zapier will upload, for example application/pdf.",
+        },
+        {
+          key: "size",
+          label: "File Size",
+          required: true,
+          type: "integer",
+          helpText: "File size in bytes. Attachments can be up to 10 MB.",
+        },
+        {
+          key: "body",
+          label: "Comment Body",
+          required: false,
+          type: "text",
+          helpText: "Optional comment text shown with the attachment.",
+        },
       ],
     ),
     create_project: createAction(

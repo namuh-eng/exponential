@@ -5,6 +5,7 @@ import { OAUTH_SCOPE_OPTIONS } from "@/lib/api-settings";
 import { db } from "@/lib/db";
 import {
   comment,
+  commentAttachment,
   issue,
   issueHistory,
   member,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/db/schema";
 import { normalizeIssueDescriptionHtml } from "@/lib/issue-description";
 import { insertIssueHistoryEvent } from "@/lib/issue-history";
+import { buildKey, getUploadUrl } from "@/lib/s3";
 import { activeTeamFilter, isTeamRetired } from "@/lib/team-lifecycle";
 import { and, desc, eq, gt, or, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -130,6 +132,43 @@ function readString(value: unknown) {
 function readOptionalString(value: unknown) {
   const nextValue = readString(value);
   return nextValue || null;
+}
+
+const ZAPIER_ATTACHMENT_UPLOAD_EXPIRES_SECONDS = 3600;
+const ZAPIER_MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+
+function sanitizeAttachmentFilename(value: string) {
+  const sanitized = value.replaceAll(/[^a-zA-Z0-9._-]/g, "-").slice(0, 500);
+  return /[a-zA-Z0-9]/.test(sanitized) ? sanitized : "";
+}
+
+function readAttachmentSize(value: unknown) {
+  const size = Number(value);
+  if (!Number.isInteger(size) || size <= 0) {
+    throw new ZapierActionError("Attachment size is required.", {
+      field: "size",
+    });
+  }
+
+  if (size > ZAPIER_MAX_ATTACHMENT_SIZE) {
+    throw new ZapierActionError("Attachment exceeds the 10 MB limit.", {
+      code: "attachment_too_large",
+      field: "size",
+    });
+  }
+
+  return size;
+}
+
+function readAttachmentContentType(value: unknown) {
+  const contentType = readString(value) || "application/octet-stream";
+  if (contentType.length > 255) {
+    throw new ZapierActionError("Attachment content type is too long.", {
+      field: "contentType",
+    });
+  }
+
+  return contentType;
 }
 
 function readLimit(request: Request) {
@@ -792,22 +831,16 @@ export async function runZapierAction(
     return issuePayload({ ...updated, teamKey: existingIssue.teamKey });
   }
 
-  if (action === "create_comment" || action === "create_attachment") {
+  if (action === "create_comment") {
     const existingIssue = await findIssueForZapier(
       context.workspaceId,
       body.issueId,
     );
-    const bodyText =
-      action === "create_attachment"
-        ? buildAttachmentCommentBody(body)
-        : readString(body.body);
+    const bodyText = readString(body.body);
     if (!bodyText) {
-      throw new ZapierActionError(
-        action === "create_attachment"
-          ? "Attachment URL is required."
-          : "Comment body is required.",
-        { field: action === "create_attachment" ? "url" : "body" },
-      );
+      throw new ZapierActionError("Comment body is required.", {
+        field: "body",
+      });
     }
 
     const [created] = await db
@@ -842,6 +875,136 @@ export async function runZapierAction(
       issueIdentifier: existingIssue.identifier,
       body: created.body,
       createdAt: created.createdAt.toISOString(),
+    };
+  }
+
+  if (action === "create_attachment") {
+    const existingIssue = await findIssueForZapier(
+      context.workspaceId,
+      body.issueId,
+    );
+    const fileName =
+      readString(body.fileName) ||
+      readString(body.filename) ||
+      readString(body.name);
+
+    if (!fileName) {
+      const bodyText = buildAttachmentCommentBody(body);
+      if (!bodyText) {
+        throw new ZapierActionError("Attachment file name is required.", {
+          field: "fileName",
+        });
+      }
+
+      const [created] = await db
+        .insert(comment)
+        .values({
+          issueId: existingIssue.id,
+          userId: context.user.id,
+          body: bodyText,
+        })
+        .returning({
+          id: comment.id,
+          body: comment.body,
+          createdAt: comment.createdAt,
+        });
+
+      await insertIssueHistoryEvent(
+        db,
+        { settings: existingIssue.teamSettings },
+        {
+          issueId: existingIssue.id,
+          actorId: context.user.id,
+          actorName: context.user.name ?? null,
+          actorEmail: context.user.email ?? null,
+          eventType: "comment_created",
+          metadata: { commentId: created.id, source: "zapier" },
+        },
+      );
+
+      return {
+        id: created.id,
+        issueId: existingIssue.id,
+        issueIdentifier: existingIssue.identifier,
+        body: created.body,
+        createdAt: created.createdAt.toISOString(),
+        attachmentType: "link",
+      };
+    }
+
+    const sanitizedFileName = sanitizeAttachmentFilename(fileName);
+    if (!sanitizedFileName) {
+      throw new ZapierActionError(
+        "Attachment file name must include letters or numbers.",
+        { field: "fileName" },
+      );
+    }
+
+    const contentType = readAttachmentContentType(body.contentType);
+    const size = readAttachmentSize(body.size);
+    const storageKey = buildKey(
+      "attachment",
+      context.workspaceId,
+      sanitizedFileName,
+    );
+    const uploadUrl = await getUploadUrl(
+      storageKey,
+      contentType,
+      ZAPIER_ATTACHMENT_UPLOAD_EXPIRES_SECONDS,
+    );
+    const commentId = crypto.randomUUID();
+    const attachmentId = crypto.randomUUID();
+    const commentBody =
+      readOptionalString(body.body) ??
+      readOptionalString(body.note) ??
+      `Zapier attachment: ${fileName}`;
+
+    await db.transaction(async (tx) => {
+      await tx.insert(comment).values({
+        id: commentId,
+        issueId: existingIssue.id,
+        userId: context.user.id,
+        body: commentBody,
+      });
+      await tx.insert(commentAttachment).values({
+        id: attachmentId,
+        commentId,
+        fileName,
+        storageKey,
+        contentType,
+        size,
+      });
+      await insertIssueHistoryEvent(
+        tx,
+        { settings: existingIssue.teamSettings },
+        {
+          issueId: existingIssue.id,
+          actorId: context.user.id,
+          actorName: context.user.name ?? null,
+          actorEmail: context.user.email ?? null,
+          eventType: "comment_created",
+          metadata: {
+            commentId,
+            attachmentId,
+            attachmentCount: 1,
+            source: "zapier",
+          },
+        },
+      );
+    });
+
+    return {
+      id: attachmentId,
+      commentId,
+      issueId: existingIssue.id,
+      issueIdentifier: existingIssue.identifier,
+      fileName,
+      contentType,
+      size,
+      uploadUrl,
+      uploadMethod: "PUT",
+      uploadHeaders: { "Content-Type": contentType },
+      uploadExpiresInSeconds: ZAPIER_ATTACHMENT_UPLOAD_EXPIRES_SECONDS,
     };
   }
 

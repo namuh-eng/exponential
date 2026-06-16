@@ -74,10 +74,7 @@ Supported action keys:
 - `create_issue`: `title`, `teamId` or `teamKey`, optional `description`, `stateId`, `priority`, `assigneeId`, `projectId`, `dueDate`.
 - `update_issue`: `issueId`, plus one or more editable issue fields.
 - `create_comment`: `issueId`, `body`.
-- `create_attachment`: `issueId`, `url`, optional `title`, `note`. This public
-  Zapier action creates link attachments as issue comments. Native binary
-  upload via presigned S3 URL still needs a dedicated public metadata endpoint
-  before it can be exposed in Zapier.
+- `create_attachment`: `issueId`, `fileName`, `contentType`, `size`, optional `body`. The response creates the attachment metadata, returns a presigned `uploadUrl`, and includes `uploadMethod: "PUT"` plus the required `Content-Type` upload header. The file must be uploaded to that URL before the returned expiration window closes.
 - `create_project`: `name`, optional `slug`, `description`, `status`, `teamId` or `teamKey`.
 
 Failed actions return structured, user-readable errors:
