@@ -74,6 +74,7 @@ type Integration struct {
 	SetupRequirement *SetupRequirement `json:"setupRequirement"`
 	Actions          Actions           `json:"actions"`
 	Health           Health            `json:"health"`
+	Details          map[string]any     `json:"details,omitempty"`
 }
 
 type response struct {
@@ -107,6 +108,7 @@ var catalog = []CatalogItem{
 	{Provider: "gitlab", Name: "GitLab", Description: "Link merge requests, commits, and workflow automation to issues."},
 	{Provider: "jira", Name: "Jira", Description: "Sync issue status, ownership, and cross-links with Jira projects."},
 	{Provider: "discord", Name: "Discord", Description: "Create, search, and share issues from Discord slash commands."},
+	{Provider: "google_sheets", Name: "Google Sheets", Description: "Create an hourly analytics spreadsheet for issues, projects, and initiatives."},
 	{Provider: "microsoft_teams", Name: "Microsoft Teams", Description: "Create issues and projects from Teams conversations and post project updates."},
 	{Provider: "sentry", Name: "Sentry", Description: "Create, link, and resolve issues from Sentry errors."},
 	{Provider: "slack", Name: "Slack", Description: "Send issue updates and create issues from Slack messages."},
@@ -118,6 +120,9 @@ func (h Handler) Routes() chi.Router {
 	r.Get("/", h.List)
 	r.Delete("/", h.Delete)
 	r.Post("/slack/connect", h.SlackConnect)
+	r.Post("/google-sheets/connect", h.GoogleSheetsConnect)
+	r.Post("/google-sheets/refresh", h.GoogleSheetsRefresh)
+	r.Post("/google-sheets/disconnect", h.GoogleSheetsDisconnect)
 	r.Get("/gitlab", h.GitLabStatus)
 	r.Post("/gitlab/setup", h.GitLabSetup)
 	r.Post("/gitlab/workflows", h.GitLabWorkflow)
@@ -166,7 +171,7 @@ func (h Handler) List(w http.ResponseWriter, r *http.Request) {
 		if ok {
 			health = connected.Health()
 		}
-		out = append(out, Integration{CatalogItem: item, ID: id, Status: status, DisplayName: displayName, ExternalID: externalID, ConnectedAt: connectedAt, SetupRequirement: requirement, Actions: integrationActions(canManage, ok, status, requirement), Health: health})
+		out = append(out, Integration{CatalogItem: item, ID: id, Status: status, DisplayName: displayName, ExternalID: externalID, ConnectedAt: connectedAt, SetupRequirement: requirement, Actions: integrationActions(canManage, ok, status, requirement), Health: health, Details: integrationDetails(connected)})
 	}
 	problem.JSON(w, 200, response{CanManageIntegrations: canManage, Integrations: out})
 }
@@ -337,6 +342,7 @@ type row struct {
 	LastFailureAt      *time.Time
 	LastFailureMessage *string
 	TokenExpiresAt     *time.Time
+	Metadata           []byte
 	PendingJobCount    int
 	FailedJobCount     int
 	AuditEvents        []AuditEvent
@@ -355,6 +361,7 @@ func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error
 			wi.last_failure_at,
 			wi.last_failure_message,
 			wi.token_expires_at,
+			coalesce(wi.metadata,'{}'::jsonb),
 			coalesce(count(pj.id) filter (where pj.status in ('queued','running')),0)::int,
 			coalesce(count(pj.id) filter (where pj.status in ('failed','dead')),0)::int
 		from workspace_integration wi
@@ -368,7 +375,7 @@ func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error
 	out := []row{}
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.ID, &r.Provider, &r.Status, &r.DisplayName, &r.ExternalID, &r.ConnectedAt, &r.LastEventAt, &r.LastSuccessAt, &r.LastFailureAt, &r.LastFailureMessage, &r.TokenExpiresAt, &r.PendingJobCount, &r.FailedJobCount); err != nil {
+		if err := rows.Scan(&r.ID, &r.Provider, &r.Status, &r.DisplayName, &r.ExternalID, &r.ConnectedAt, &r.LastEventAt, &r.LastSuccessAt, &r.LastFailureAt, &r.LastFailureMessage, &r.TokenExpiresAt, &r.Metadata, &r.PendingJobCount, &r.FailedJobCount); err != nil {
 			return nil, err
 		}
 		events, err := h.auditEvents(ctx, r.ID)
@@ -396,6 +403,9 @@ func integrationActions(canManage bool, installed bool, status string, requireme
 func setupRequirement(provider string) *SetupRequirement {
 	if provider == "slack" && !slackConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Slack OAuth credentials are not configured. Add AUTH_SLACK_ID and AUTH_SLACK_SECRET to enable installation."}
+	}
+	if provider == "google_sheets" && !googleSheetsConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Google OAuth credentials are not configured. Add AUTH_GOOGLE_ID and AUTH_GOOGLE_SECRET to enable Google Sheets analytics sync."}
 	}
 	if provider == "discord" && !discordConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Discord OAuth credentials and public key are not configured. Add AUTH_DISCORD_ID, AUTH_DISCORD_SECRET, and DISCORD_PUBLIC_KEY to enable installation."}
@@ -452,6 +462,13 @@ func (r row) Health() Health {
 		FailedJobCount:     r.FailedJobCount,
 		AuditEvents:        r.AuditEvents,
 	}
+}
+
+func integrationDetails(value row) map[string]any {
+	if value.Provider == googleSheetsProvider {
+		return googleSheetsDetails(value.Metadata)
+	}
+	return nil
 }
 
 func (h Handler) auditEvents(ctx context.Context, integrationID string) ([]AuditEvent, error) {

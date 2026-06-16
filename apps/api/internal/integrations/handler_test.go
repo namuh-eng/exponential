@@ -50,6 +50,16 @@ func TestSetupRequirement(t *testing.T) {
 	if got := setupRequirement("microsoft_teams"); got != nil {
 		t.Fatalf("configured microsoft teams requirement = %#v", got)
 	}
+	t.Setenv("AUTH_GOOGLE_ID", "")
+	t.Setenv("AUTH_GOOGLE_SECRET", "")
+	if got := setupRequirement("google_sheets"); got == nil || got.Type != "configuration_required" {
+		t.Fatalf("google sheets requirement = %#v", got)
+	}
+	t.Setenv("AUTH_GOOGLE_ID", "id")
+	t.Setenv("AUTH_GOOGLE_SECRET", "secret")
+	if got := setupRequirement("google_sheets"); got != nil {
+		t.Fatalf("configured google sheets requirement = %#v", got)
+	}
 	if got := setupRequirement("github"); got == nil || got.Message == "" {
 		t.Fatalf("github requirement = %#v", got)
 	}
@@ -109,6 +119,57 @@ func TestSlackOAuthConfig(t *testing.T) {
 	clientID, clientSecret, ok := slackOAuthConfig()
 	if !ok || clientID != "slack-id" || clientSecret != "slack-secret" {
 		t.Fatalf("config = %q %q %v", clientID, clientSecret, ok)
+	}
+}
+
+func TestGoogleSheetsAuthorizationURL(t *testing.T) {
+	got := googleSheetsAuthorizationURL("google-client", "https://app.example/", "state-token")
+	if !strings.HasPrefix(got, "https://accounts.google.com/o/oauth2/v2/auth?") {
+		t.Fatalf("unexpected URL = %q", got)
+	}
+	if !strings.Contains(got, "client_id=google-client") || !strings.Contains(got, "state=state-token") {
+		t.Fatalf("missing query params = %q", got)
+	}
+	if !strings.Contains(got, "spreadsheets") || !strings.Contains(got, "drive.file") {
+		t.Fatalf("missing sheets scopes = %q", got)
+	}
+	if !strings.Contains(got, "redirect_uri=https%3A%2F%2Fapp.example%2Fapi%2Fintegrations%2Fgoogle-sheets%2Foauth%2Fcallback") {
+		t.Fatalf("missing redirect uri = %q", got)
+	}
+}
+
+func TestGoogleSheetsSettingsRequireAtLeastOneScope(t *testing.T) {
+	settings := normalizeGoogleSheetsSettings(googleSheetsConnectRequest{Scopes: map[string]bool{"issues": false, "projects": false, "initiatives": false}})
+	if hasGoogleSheetsScope(settings) {
+		t.Fatal("empty Google Sheets scope selection should be rejected")
+	}
+	settings = normalizeGoogleSheetsSettings(googleSheetsConnectRequest{})
+	if !settings.Scopes["issues"] || !settings.Scopes["projects"] || !settings.Scopes["initiatives"] || settings.IncludePrivateTeams {
+		t.Fatalf("default settings = %#v", settings)
+	}
+}
+
+func TestGoogleSheetsDetailsExposeAnalyticsStatus(t *testing.T) {
+	raw, err := json.Marshal(googleSheetsMetadata{
+		googleSheetsSettings: googleSheetsSettings{Scopes: map[string]bool{"issues": true, "projects": false, "initiatives": true}, IncludePrivateTeams: false, Schedule: "hourly", Enabled: true},
+		SpreadsheetID:            "sheet-1",
+		SpreadsheetURL:           "https://docs.google.com/spreadsheets/d/sheet-1/edit",
+		SpreadsheetTitle:         "workspace analytics",
+		GoogleSpreadsheetCreated: true,
+		NextRunAt:                "2026-06-16T10:00:00Z",
+		RowCounts:                map[string]int{"issues": 2, "projects": 0, "initiatives": 1},
+		SheetSchemas:             googleSheetSchemas,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	details := googleSheetsDetails(raw)
+	if details["spreadsheetUrl"] != "https://docs.google.com/spreadsheets/d/sheet-1/edit" || details["schedule"] != "hourly" {
+		t.Fatalf("details = %#v", details)
+	}
+	rowCounts := details["rowCounts"].(map[string]int)
+	if rowCounts["issues"] != 2 || rowCounts["initiatives"] != 1 {
+		t.Fatalf("row counts = %#v", rowCounts)
 	}
 }
 

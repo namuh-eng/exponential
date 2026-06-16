@@ -39,12 +39,28 @@ type Integration = {
       createdAt: string;
     }[];
   };
+  details?: {
+    spreadsheetUrl?: string;
+    spreadsheetTitle?: string;
+    scopes?: { issues?: boolean; projects?: boolean; initiatives?: boolean };
+    includePrivateTeams?: boolean;
+    schedule?: string;
+    nextRunAt?: string | null;
+    rowCounts?: { issues?: number; projects?: number; initiatives?: number };
+  } | null;
 };
 
 type GitLabSetupDetails = {
   origin: string;
   webhookUrl: string;
   webhookSecret: string;
+};
+
+type SheetsScopeState = {
+  issues: boolean;
+  projects: boolean;
+  initiatives: boolean;
+  includePrivateTeams: boolean;
 };
 
 type IntegrationsPayload = {
@@ -90,12 +106,18 @@ function statusClassName(status: Integration["status"]) {
 
 function isConnectableProvider(
   provider: string,
-): provider is "slack" | "discord" | "microsoft_teams" | "sentry" {
+): provider is
+  | "slack"
+  | "discord"
+  | "microsoft_teams"
+  | "sentry"
+  | "google_sheets" {
   return (
     provider === "slack" ||
     provider === "discord" ||
     provider === "microsoft_teams" ||
-    provider === "sentry"
+    provider === "sentry" ||
+    provider === "google_sheets"
   );
 }
 
@@ -110,6 +132,12 @@ export default function IntegrationsSettingsPage() {
   const [gitLabToken, setGitLabToken] = useState("");
   const [gitLabSetupDetails, setGitLabSetupDetails] =
     useState<GitLabSetupDetails | null>(null);
+  const [sheetsScopes, setSheetsScopes] = useState<SheetsScopeState>({
+    issues: true,
+    projects: true,
+    initiatives: true,
+    includePrivateTeams: false,
+  });
 
   const loadIntegrations = useCallback(async () => {
     setLoading(true);
@@ -143,7 +171,12 @@ export default function IntegrationsSettingsPage() {
   }, [loadIntegrations]);
 
   async function connectIntegration(
-    provider: "slack" | "discord" | "microsoft_teams" | "sentry",
+    provider:
+      | "slack"
+      | "discord"
+      | "microsoft_teams"
+      | "sentry"
+      | "google_sheets",
   ) {
     setPendingProvider(provider);
     setNotice(null);
@@ -151,14 +184,34 @@ export default function IntegrationsSettingsPage() {
     let label = provider === "discord" ? "Discord" : "Slack";
     if (provider === "microsoft_teams") label = "Microsoft Teams";
     if (provider === "sentry") label = "Sentry";
+    if (provider === "google_sheets") label = "Google Sheets";
     const endpoint =
       provider === "microsoft_teams"
         ? "/api/integrations/microsoft-teams/connect"
-        : `/api/integrations/${provider}/connect`;
+        : provider === "google_sheets"
+          ? "/api/integrations/google-sheets/connect"
+          : `/api/integrations/${provider}/connect`;
     try {
       const response = await fetch(endpoint, {
         method: "POST",
-        headers: { Accept: "application/json" },
+        headers: {
+          Accept: "application/json",
+          ...(provider === "google_sheets"
+            ? { "Content-Type": "application/json" }
+            : {}),
+        },
+        ...(provider === "google_sheets"
+          ? {
+              body: JSON.stringify({
+                scopes: {
+                  issues: sheetsScopes.issues,
+                  projects: sheetsScopes.projects,
+                  initiatives: sheetsScopes.initiatives,
+                },
+                includePrivateTeams: sheetsScopes.includePrivateTeams,
+              }),
+            }
+          : {}),
       });
       const data = (await response.json().catch(() => ({}))) as {
         authorizationUrl?: string;
@@ -178,6 +231,37 @@ export default function IntegrationsSettingsPage() {
         connectError instanceof Error
           ? connectError.message
           : `${label} setup failed.`,
+      );
+    } finally {
+      setPendingProvider(null);
+    }
+  }
+
+  async function refreshGoogleSheets() {
+    setPendingProvider("google_sheets");
+    setNotice(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/integrations/google-sheets/refresh", {
+        method: "POST",
+        headers: { Accept: "application/json" },
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+      };
+      if (!response.ok) {
+        throw new Error(
+          data.message || data.error || "Google Sheets refresh failed.",
+        );
+      }
+      setNotice("Google Sheets analytics sync refreshed.");
+      await loadIntegrations();
+    } catch (refreshError) {
+      setError(
+        refreshError instanceof Error
+          ? refreshError.message
+          : "Google Sheets refresh failed.",
       );
     } finally {
       setPendingProvider(null);
@@ -245,13 +329,16 @@ export default function IntegrationsSettingsPage() {
               ? "/api/integrations/microsoft-teams/disconnect"
               : provider === "sentry"
                 ? "/api/integrations/sentry/disconnect"
-                : `/api/integrations?provider=${encodeURIComponent(provider)}`;
+                : provider === "google_sheets"
+                  ? "/api/integrations/google-sheets/disconnect"
+                  : `/api/integrations?provider=${encodeURIComponent(provider)}`;
       const response = await fetch(endpoint, {
         method:
           provider === "slack" ||
           provider === "discord" ||
           provider === "microsoft_teams" ||
-          provider === "sentry"
+          provider === "sentry" ||
+          provider === "google_sheets"
             ? "POST"
             : "DELETE",
         headers: { Accept: "application/json" },
@@ -357,8 +444,48 @@ export default function IntegrationsSettingsPage() {
                         ? "Disconnected locally; historical links are preserved."
                         : `Connected to ${integration.displayName || integration.name}`}
                     </p>
+                    {integration.provider === "google_sheets" &&
+                    integration.details ? (
+                      <div className="mt-2 space-y-1 text-[12px] text-[var(--color-text-tertiary)]">
+                        {integration.details.spreadsheetUrl ? (
+                          <a
+                            className="text-blue-300 hover:text-blue-200"
+                            href={integration.details.spreadsheetUrl}
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            Open analytics sheet
+                          </a>
+                        ) : null}
+                        <p>
+                          Next run{" "}
+                          {formatTimestamp(
+                            integration.details.nextRunAt ?? null,
+                          )}{" "}
+                          · {integration.details.schedule ?? "hourly"}
+                        </p>
+                        <p>
+                          Rows: issues{" "}
+                          {integration.details.rowCounts?.issues ?? 0}, projects{" "}
+                          {integration.details.rowCounts?.projects ?? 0},
+                          initiatives{" "}
+                          {integration.details.rowCounts?.initiatives ?? 0}
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 gap-2">
+                    {integration.provider === "google_sheets" &&
+                    integration.actions.canManage ? (
+                      <button
+                        className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
+                        disabled={pendingProvider === integration.provider}
+                        onClick={() => void refreshGoogleSheets()}
+                        type="button"
+                      >
+                        Refresh now
+                      </button>
+                    ) : null}
                     {integration.actions.canReconnect &&
                     integration.provider !== "gitlab" ? (
                       <button
@@ -528,6 +655,48 @@ export default function IntegrationsSettingsPage() {
                           {integration.setupRequirement.message}
                         </p>
                       ) : null}
+                      {integration.provider === "google_sheets" &&
+                      (integration.actions.canConnect ||
+                        integration.actions.canReconnect) ? (
+                        <fieldset className="mt-4 grid gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-[12px] text-[var(--color-text-secondary)]">
+                          <legend className="px-1 text-[12px] text-[var(--color-text-tertiary)]">
+                            Export scopes
+                          </legend>
+                          {(["issues", "projects", "initiatives"] as const).map(
+                            (scope) => (
+                              <label
+                                className="flex items-center gap-2"
+                                key={scope}
+                              >
+                                <input
+                                  checked={sheetsScopes[scope]}
+                                  onChange={(event) =>
+                                    setSheetsScopes((current) => ({
+                                      ...current,
+                                      [scope]: event.target.checked,
+                                    }))
+                                  }
+                                  type="checkbox"
+                                />
+                                {scope[0].toUpperCase() + scope.slice(1)}
+                              </label>
+                            ),
+                          )}
+                          <label className="flex items-center gap-2">
+                            <input
+                              checked={sheetsScopes.includePrivateTeams}
+                              onChange={(event) =>
+                                setSheetsScopes((current) => ({
+                                  ...current,
+                                  includePrivateTeams: event.target.checked,
+                                }))
+                              }
+                              type="checkbox"
+                            />
+                            Include private teams
+                          </label>
+                        </fieldset>
+                      ) : null}
                       {integration.provider === "gitlab" &&
                       (integration.actions.canConnect ||
                         integration.actions.canReconnect) ? (
@@ -598,7 +767,13 @@ export default function IntegrationsSettingsPage() {
                     ) : isConnectableProvider(integration.provider) ? (
                       <button
                         className="rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={pendingProvider === integration.provider}
+                        disabled={
+                          pendingProvider === integration.provider ||
+                          (integration.provider === "google_sheets" &&
+                            !sheetsScopes.issues &&
+                            !sheetsScopes.projects &&
+                            !sheetsScopes.initiatives)
+                        }
                         onClick={() =>
                           isConnectableProvider(integration.provider)
                             ? void connectIntegration(integration.provider)
@@ -608,7 +783,9 @@ export default function IntegrationsSettingsPage() {
                       >
                         {pendingProvider === integration.provider
                           ? "Opening..."
-                          : "Connect"}
+                          : integration.provider === "google_sheets"
+                            ? "Create sheet"
+                            : "Connect"}
                       </button>
                     ) : integration.provider === "gitlab" ? null : (
                       <button
