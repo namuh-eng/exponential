@@ -100,6 +100,60 @@ describe("Airbyte source routes", () => {
     });
   });
 
+  it("supports Airbyte check and discover endpoints", async () => {
+    queueSelect(
+      [
+        {
+          tokenId: "token-1",
+          workspaceId: "workspace-1",
+          workspaceSlug: "foreverbrowsing",
+          settings: {},
+          userId: "user-1",
+          memberRole: "admin",
+        },
+      ],
+      [
+        {
+          tokenId: "token-1",
+          workspaceId: "workspace-1",
+          workspaceSlug: "foreverbrowsing",
+          settings: {},
+          userId: "user-1",
+          memberRole: "admin",
+        },
+      ],
+    );
+    const { GET: check } = await import("@/app/api/airbyte/check/route");
+    const { GET: discover } = await import("@/app/api/airbyte/discover/route");
+
+    const checkResponse = await check(
+      new Request("http://localhost/api/airbyte/check", {
+        headers: { authorization: "Bearer lin_airbyte_secret" },
+      }),
+    );
+    const discoverResponse = await discover(
+      new Request("http://localhost/api/airbyte/discover", {
+        headers: { authorization: "Bearer lin_airbyte_secret" },
+      }),
+    );
+
+    expect(checkResponse.status).toBe(200);
+    await expect(checkResponse.json()).resolves.toMatchObject({
+      status: "SUCCEEDED",
+      message: expect.stringContaining("foreverbrowsing"),
+    });
+    expect(discoverResponse.status).toBe(200);
+    await expect(discoverResponse.json()).resolves.toMatchObject({
+      connector: {
+        name: "Exponential Airbyte source",
+        workspaceSlug: "foreverbrowsing",
+      },
+      streams: expect.arrayContaining([
+        expect.objectContaining({ name: "comments", primaryKey: "id" }),
+      ]),
+    });
+  });
+
   it("performs incremental issue sync with cursor metadata", async () => {
     queueSelect(
       [

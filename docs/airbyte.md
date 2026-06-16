@@ -18,6 +18,8 @@ Use the HTTP API source or the connector builder with:
 
 - Base URL: `https://<your-host>/api/airbyte`
 - Auth header: `Authorization: Bearer <lin_airbyte_token>`
+- Check endpoint: `GET /check`
+- Discover endpoint: `GET /discover` (same catalog metadata as `GET /catalog`)
 - Catalog endpoint: `GET /catalog`
 - Stream endpoint: `GET /streams/<stream>?cursor=<iso_timestamp>&limit=100`
 

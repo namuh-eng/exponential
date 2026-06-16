@@ -1,7 +1,4 @@
-import {
-  authenticateAirbyteRequest,
-  buildAirbyteCatalogPayload,
-} from "@/lib/airbyte-source";
+import { authenticateAirbyteRequest } from "@/lib/airbyte-source";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
@@ -10,5 +7,8 @@ export async function GET(request: Request) {
     return response;
   }
 
-  return NextResponse.json(buildAirbyteCatalogPayload(auth));
+  return NextResponse.json({
+    status: "SUCCEEDED",
+    message: `Authenticated Airbyte source for workspace ${auth.workspaceSlug}.`,
+  });
 }

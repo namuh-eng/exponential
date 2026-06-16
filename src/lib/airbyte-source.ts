@@ -188,6 +188,18 @@ export const AIRBYTE_PRIVATE_DATA_BEHAVIOR = {
     "Airbyte tokens are workspace-scoped and include issues, comments, cycles, and project metadata from private teams.",
 };
 
+export function buildAirbyteCatalogPayload(auth: AirbyteAuth) {
+  return {
+    connector: {
+      name: "Exponential Airbyte source",
+      workspaceId: auth.workspaceId,
+      workspaceSlug: auth.workspaceSlug,
+      supportedSyncModes: ["full_refresh", "incremental"],
+    },
+    streams: AIRBYTE_CATALOG,
+    privateData: AIRBYTE_PRIVATE_DATA_BEHAVIOR,
+  };
+}
 function readAirbyteToken(headers: Headers) {
   const authorization = headers.get("authorization")?.trim();
   if (authorization) {
