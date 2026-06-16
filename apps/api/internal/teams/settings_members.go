@@ -2,6 +2,7 @@ package teams
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -250,7 +251,15 @@ func (h Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := h.validateTriageDefaultSettings(r.Context(), triageTeam{ID: team.ID, WorkspaceID: team.WorkspaceID, Settings: settings}); err != nil {
-		problem.Write(w, 400, err.Error(), "")
+		// triageValidationError carries a safe static message suitable for a
+		// 400 title. Any other error is a DB failure and must become a 500 so
+		// raw DB internals never appear in the response title.
+		var ve *triageValidationError
+		if errors.As(err, &ve) {
+			problem.Write(w, 400, ve.msg, "")
+		} else {
+			problem.Write(w, 500, "Update team settings failed", "")
+		}
 		return
 	}
 	tx, err := h.DB.Begin(r.Context())

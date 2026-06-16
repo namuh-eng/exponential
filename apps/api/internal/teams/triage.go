@@ -17,6 +17,13 @@ import (
 var triageAcceptCategories = map[string]bool{"backlog": true, "unstarted": true, "started": true, "completed": true}
 var triagePriorities = map[string]bool{"none": true, "urgent": true, "high": true, "medium": true, "low": true}
 
+// triageValidationError is a typed sentinel for user-visible 400-level
+// validation failures. It lets callers distinguish safe static messages from
+// raw DB errors (which must become 500s instead of leaking as 400 titles).
+type triageValidationError struct{ msg string }
+
+func (e *triageValidationError) Error() string { return e.msg }
+
 const (
 	triageDefaultAssigneeKey = "triageDefaultAssigneeId"
 	triageDefaultLabelIDsKey = "triageDefaultLabelIds"
@@ -125,7 +132,13 @@ func (h Handler) DecideTriage(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 400, "Invalid JSON", err.Error())
 		return
 	}
-	result, status := h.applyTriageDecision(w, r, team, p.UserID, chi.URLParam(r, "issueID"), input)
+	result, status := h.applyTriageDecision(r, team, p.UserID, chi.URLParam(r, "issueID"), input)
+	if status >= 500 {
+		// Server-side failure: write a generic title so DB internals are never
+		// surfaced in the response.
+		problem.Write(w, status, "Triage decision failed", "")
+		return
+	}
 	if status != 0 {
 		problem.JSON(w, status, result)
 	}
@@ -153,11 +166,18 @@ func (h Handler) BulkTriage(w http.ResponseWriter, r *http.Request) {
 	results := []map[string]any{}
 	updated := 0
 	for _, issueID := range input.IssueIDs {
-		result, status := h.applyTriageDecision(w, r, team, p.UserID, issueID, input)
+		result, status := h.applyTriageDecision(r, team, p.UserID, issueID, input)
+		if status >= 500 {
+			// Server-side failure: abort the batch. The response has not been
+			// written yet so it is safe to write a 500 here.
+			problem.Write(w, 500, "Triage decision failed", "")
+			return
+		}
 		if status >= 200 && status < 300 {
 			updated++
 			results = append(results, map[string]any{"issueId": issueID, "status": "updated"})
 		} else {
+			// 4xx conflict/validation: result map is guaranteed non-nil here.
 			results = append(results, map[string]any{"issueId": issueID, "status": "conflict", "error": result["error"]})
 		}
 	}
@@ -168,7 +188,12 @@ func (h Handler) BulkTriage(w http.ResponseWriter, r *http.Request) {
 	problem.JSON(w, status, map[string]any{"updatedCount": updated, "conflictCount": len(input.IssueIDs) - updated, "results": results, "decision": map[string]any{"action": input.Action, "reason": stringPtrTrim(input.Reason)}})
 }
 
-func (h Handler) applyTriageDecision(w http.ResponseWriter, r *http.Request, team triageTeam, userID, issueID string, input triageDecisionRequest) (map[string]any, int) {
+// applyTriageDecision applies a single triage decision. It no longer writes to
+// http.ResponseWriter: server-side errors return (nil, 500) so the caller
+// decides when to write the response, preventing double-write and nil-map
+// panics in BulkTriage. 4xx validation failures return a non-nil result map
+// with an "error" key. 2xx success returns (result, 200).
+func (h Handler) applyTriageDecision(r *http.Request, team triageTeam, userID, issueID string, input triageDecisionRequest) (map[string]any, int) {
 	if input.Action != "accept" && input.Action != "decline" {
 		return map[string]any{"error": "Invalid action"}, 400
 	}
@@ -187,8 +212,7 @@ func (h Handler) applyTriageDecision(w http.ResponseWriter, r *http.Request, tea
 		return map[string]any{"error": "Destination status not found for this team"}, 400
 	}
 	if err != nil {
-		problem.Write(w, 500, "Triage decision failed", err.Error())
-		return nil, 0
+		return nil, 500
 	}
 	if (input.Action == "accept" && !triageAcceptCategories[dest.Category]) || (input.Action == "decline" && dest.Category != "canceled") {
 		return map[string]any{"error": "Destination status is not allowed for this triage decision"}, 400
@@ -198,8 +222,7 @@ func (h Handler) applyTriageDecision(w http.ResponseWriter, r *http.Request, tea
 		return map[string]any{"error": "Issue not found"}, 404
 	}
 	if err != nil {
-		problem.Write(w, 500, "Triage decision failed", err.Error())
-		return nil, 0
+		return nil, 500
 	}
 	if current.Category != "triage" {
 		return map[string]any{"error": "Issue is not currently in triage"}, 409
@@ -228,7 +251,13 @@ func (h Handler) applyTriageDecision(w http.ResponseWriter, r *http.Request, tea
 		dueDate = parsed
 	}
 	if err := h.validateTriageDecisionResources(r.Context(), team, input); err != nil {
-		return map[string]any{"error": err.Error()}, 400
+		// Distinguish safe validation messages from raw DB errors so that DB
+		// internals never appear in a 400 title.
+		var ve *triageValidationError
+		if errors.As(err, &ve) {
+			return map[string]any{"error": ve.msg}, 400
+		}
+		return nil, 500
 	}
 	canceledAt := any(nil)
 	if input.Action == "decline" {
@@ -240,23 +269,19 @@ func (h Handler) applyTriageDecision(w http.ResponseWriter, r *http.Request, tea
 	}
 	tx, err := h.DB.Begin(r.Context())
 	if err != nil {
-		problem.Write(w, 500, "Triage decision failed", err.Error())
-		return nil, 0
+		return nil, 500
 	}
 	defer func() { _ = tx.Rollback(r.Context()) }()
 	if _, err := tx.Exec(r.Context(), `update issue set state_id=$1::uuid, updated_at=now(), canceled_at=$2, completed_at=$3, priority=coalesce($4,priority), estimate=coalesce($5,estimate), assignee_id=$6, project_id=$7::uuid, project_milestone_id=$8::uuid, cycle_id=$9::uuid, due_date=coalesce($10,due_date) where id=$11::uuid and team_id=$12::uuid and state_id=$13::uuid`, dest.ID, canceledAt, completedAt, priority, estimate, nullableTrim(input.AssigneeID), nullableTrim(input.ProjectID), nullableTrim(input.ProjectMilestoneID), nullableTrim(input.CycleID), dueDate, issueID, team.ID, current.StateID); err != nil {
-		problem.Write(w, 500, "Triage decision failed", err.Error())
-		return nil, 0
+		return nil, 500
 	}
 	if input.Action == "accept" && input.LabelIDs != nil {
 		if _, err := tx.Exec(r.Context(), `delete from issue_label where issue_id=$1::uuid`, issueID); err != nil {
-			problem.Write(w, 500, "Triage decision failed", err.Error())
-			return nil, 0
+			return nil, 500
 		}
 		for _, labelID := range cleanStringIDs(input.LabelIDs) {
 			if _, err := tx.Exec(r.Context(), `insert into issue_label (issue_id,label_id) values ($1::uuid,$2::uuid) on conflict do nothing`, issueID, labelID); err != nil {
-				problem.Write(w, 500, "Triage decision failed", err.Error())
-				return nil, 0
+				return nil, 500
 			}
 		}
 	}
@@ -266,19 +291,16 @@ func (h Handler) applyTriageDecision(w http.ResponseWriter, r *http.Request, tea
 	}
 	if commentBody != "" {
 		if _, err := tx.Exec(r.Context(), `insert into comment (body,issue_id,user_id) values ($1,$2::uuid,$3)`, commentBody, issueID, userID); err != nil {
-			problem.Write(w, 500, "Triage decision failed", err.Error())
-			return nil, 0
+			return nil, 500
 		}
 	}
 	if input.Action == "accept" && input.Subscribe != nil {
 		if _, err := tx.Exec(r.Context(), `insert into issue_subscription (issue_id,user_id,subscribed,updated_at) values ($1::uuid,$2,$3,now()) on conflict (issue_id,user_id) do update set subscribed=$3, updated_at=now()`, issueID, userID, *input.Subscribe); err != nil {
-			problem.Write(w, 500, "Triage decision failed", err.Error())
-			return nil, 0
+			return nil, 500
 		}
 	}
 	if err := tx.Commit(r.Context()); err != nil {
-		problem.Write(w, 500, "Triage decision failed", err.Error())
-		return nil, 0
+		return nil, 500
 	}
 	return map[string]any{"issue": map[string]any{"id": issueID}, "decision": map[string]any{"action": input.Action, "destinationState": map[string]any{"id": dest.ID, "name": dest.Name, "category": dest.Category}, "reason": stringPtrTrim(input.Reason)}}, 200
 }
@@ -323,32 +345,53 @@ func (h Handler) triageIssues(r *http.Request, teamID string) ([]map[string]any,
 		return nil, err
 	}
 	defer rows.Close()
+
+	// First pass: collect all rows and issue IDs for batch loading.
 	out := []map[string]any{}
+	ids := []string{}
 	for rows.Next() {
-		var id, identifier, title, priority, stateID, stateName, stateColor, creatorID, creatorName, teamID string
+		var id, identifier, title, priority, stateID, stateName, stateColor, creatorID, creatorName, teamIDCol string
 		var description, creatorImage, assigneeID, projectID, projectName, milestoneID, cycleID, dueDate *string
 		var estimate *float32
 		var createdAt, updatedAt time.Time
-		if err := rows.Scan(&id, &identifier, &title, &description, &priority, &stateID, &stateName, &stateColor, &creatorID, &creatorName, &creatorImage, &createdAt, &updatedAt, &assigneeID, &projectID, &projectName, &milestoneID, &cycleID, &dueDate, &estimate, &teamID); err != nil {
+		if err := rows.Scan(&id, &identifier, &title, &description, &priority, &stateID, &stateName, &stateColor, &creatorID, &creatorName, &creatorImage, &createdAt, &updatedAt, &assigneeID, &projectID, &projectName, &milestoneID, &cycleID, &dueDate, &estimate, &teamIDCol); err != nil {
 			return nil, err
 		}
-		labels, err := h.triageIssueLabels(r, id)
-		if err != nil {
-			return nil, err
-		}
-		labelIDs := make([]string, 0, len(labels))
-		for _, label := range labels {
-			if labelID, ok := label["id"].(string); ok {
-				labelIDs = append(labelIDs, labelID)
-			}
-		}
-		sourceContext, err := h.triageIssueSourceContext(r, id)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, map[string]any{"id": id, "identifier": identifier, "title": title, "description": description, "priority": priority, "stateId": stateID, "stateName": stateName, "stateColor": stateColor, "creatorId": creatorID, "creatorName": creatorName, "creatorImage": creatorImage, "createdAt": createdAt.UTC().Format(time.RFC3339), "updatedAt": updatedAt.UTC().Format(time.RFC3339), "labelIds": labelIDs, "labels": labels, "assigneeId": assigneeID, "projectId": projectID, "projectName": projectName, "projectMilestoneId": milestoneID, "cycleId": cycleID, "dueDate": dueDate, "estimate": estimate, "teamId": teamID, "sourceContext": sourceContext})
+		ids = append(ids, id)
+		out = append(out, map[string]any{"id": id, "identifier": identifier, "title": title, "description": description, "priority": priority, "stateId": stateID, "stateName": stateName, "stateColor": stateColor, "creatorId": creatorID, "creatorName": creatorName, "creatorImage": creatorImage, "createdAt": createdAt.UTC().Format(time.RFC3339), "updatedAt": updatedAt.UTC().Format(time.RFC3339), "labelIds": []string{}, "labels": []any{}, "assigneeId": assigneeID, "projectId": projectID, "projectName": projectName, "projectMilestoneId": milestoneID, "cycleId": cycleID, "dueDate": dueDate, "estimate": estimate, "teamId": teamIDCol, "sourceContext": nil})
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Batch-load labels keyed by issue ID to avoid N+1 queries.
+	labelMap, err := h.triageIssueLabelsBatch(r, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	// Batch-load external source context keyed by issue ID to avoid N+1 queries.
+	sourceMap, err := h.triageIssueSourceContextBatch(r, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	// Second pass: merge batch-loaded data into each issue entry.
+	for i, issue := range out {
+		id := issue["id"].(string)
+		if labels, ok := labelMap[id]; ok {
+			labelIDs := make([]string, len(labels))
+			for j, l := range labels {
+				labelIDs[j] = l["id"].(string)
+			}
+			out[i]["labelIds"] = labelIDs
+			out[i]["labels"] = labels
+		}
+		if src, ok := sourceMap[id]; ok {
+			out[i]["sourceContext"] = src
+		}
+	}
+	return out, nil
 }
 
 func (h Handler) triageDecisionStates(r *http.Request, teamID string, settings map[string]any) ([]map[string]any, []map[string]any, error) {
@@ -442,37 +485,59 @@ func (h Handler) triageMembers(ctx context.Context, teamID, workspaceID string) 
 	return out, rows.Err()
 }
 
-func (h Handler) triageIssueLabels(r *http.Request, issueID string) ([]map[string]any, error) {
-	rows, err := h.DB.Query(r.Context(), `select l.id::text,l.name,l.color from issue_label il join label l on l.id=il.label_id where il.issue_id=$1::uuid order by l.name asc`, issueID)
+// triageIssueLabelsBatch batch-loads labels for a set of issue IDs, returning
+// a map keyed by issue ID. Uses WHERE issue_id = ANY($1::uuid[]) to avoid
+// N+1 queries when rendering the triage issue list.
+func (h Handler) triageIssueLabelsBatch(r *http.Request, ids []string) (map[string][]map[string]any, error) {
+	out := map[string][]map[string]any{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := h.DB.Query(r.Context(), `select il.issue_id::text,l.id::text,l.name,l.color from issue_label il join label l on l.id=il.label_id where il.issue_id = any($1::uuid[]) order by l.name asc`, ids)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []map[string]any{}
 	for rows.Next() {
-		var id, name, color string
-		if err := rows.Scan(&id, &name, &color); err != nil {
+		var issueID, lID, lName, lColor string
+		if err := rows.Scan(&issueID, &lID, &lName, &lColor); err != nil {
 			return nil, err
 		}
-		out = append(out, map[string]any{"id": id, "name": name, "color": color})
+		out[issueID] = append(out[issueID], map[string]any{"id": lID, "name": lName, "color": lColor})
 	}
 	return out, rows.Err()
 }
 
-func (h Handler) triageIssueSourceContext(r *http.Request, issueID string) (map[string]any, error) {
-	var raw []byte
-	err := h.DB.QueryRow(r.Context(), `select metadata from issue_history where issue_id=$1::uuid and event_type='created' order by created_at asc limit 1`, issueID).Scan(&raw)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
+// triageIssueSourceContextBatch batch-loads source-context metadata for a set
+// of issue IDs, returning a map keyed by issue ID. Uses WHERE issue_id =
+// ANY($1::uuid[]) to avoid N+1 queries when rendering the triage issue list.
+func (h Handler) triageIssueSourceContextBatch(r *http.Request, ids []string) (map[string]map[string]any, error) {
+	out := map[string]map[string]any{}
+	if len(ids) == 0 {
+		return out, nil
 	}
+	// Select the earliest "created" history event per issue so we pick up the
+	// original source metadata without needing a per-issue subquery.
+	rows, err := h.DB.Query(r.Context(), `select distinct on (issue_id) issue_id::text, metadata from issue_history where issue_id = any($1::uuid[]) and event_type='created' order by issue_id, created_at asc`, ids)
 	if err != nil {
 		return nil, err
 	}
-	metadata := map[string]any{}
-	if err := json.Unmarshal(raw, &metadata); err != nil {
-		return nil, err
+	defer rows.Close()
+	for rows.Next() {
+		var issueID string
+		var raw []byte
+		if err := rows.Scan(&issueID, &raw); err != nil {
+			return nil, err
+		}
+		metadata := map[string]any{}
+		if err := json.Unmarshal(raw, &metadata); err != nil {
+			continue // malformed metadata — skip, don't error out the whole list
+		}
+		if src := triageSourceContext(metadata); src != nil {
+			out[issueID] = src
+		}
 	}
-	return triageSourceContext(metadata), nil
+	return out, rows.Err()
 }
 
 func triageSourceContext(metadata map[string]any) map[string]any {
@@ -484,13 +549,14 @@ func triageSourceContext(metadata map[string]any) map[string]any {
 	if label == "" {
 		label = source
 	}
-	context := map[string]any{"source": source, "label": label}
+	// Named "out" to avoid shadowing the "context" package import.
+	out := map[string]any{"source": source, "label": label}
 	for _, key := range []string{"backlink", "url", "recipient", "sender", "title", "identifier"} {
 		if value := strings.TrimSpace(stringFromAny(metadata[key], "")); value != "" {
-			context[key] = value
+			out[key] = value
 		}
 	}
-	return context
+	return out
 }
 func (h Handler) triageDestination(r *http.Request, teamID, id string) (triageDestinationState, error) {
 	var s triageDestinationState
@@ -585,12 +651,13 @@ func (h Handler) validateTriageDecisionResources(ctx context.Context, team triag
 
 func (h Handler) validateTriageAssignee(ctx context.Context, team triageTeam, userID string) error {
 	var ok bool
-	err := h.DB.QueryRow(ctx, `select exists(select 1 from team_member tm join member m on m.user_id=tm.user_id and m.workspace_id=$3::uuid where tm.team_id=$1::uuid and tm.user_id=$2)`, team.ID, userID, team.WorkspaceID).Scan(&ok)
+	// $2::uuid cast added for consistency with other UUID parameters.
+	err := h.DB.QueryRow(ctx, `select exists(select 1 from team_member tm join member m on m.user_id=tm.user_id and m.workspace_id=$3::uuid where tm.team_id=$1::uuid and tm.user_id=$2::uuid)`, team.ID, userID, team.WorkspaceID).Scan(&ok)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return errors.New("Assignee is not a member of this team")
+		return &triageValidationError{"Assignee is not a member of this team"}
 	}
 	return nil
 }
@@ -606,7 +673,7 @@ func (h Handler) validateTriageLabels(ctx context.Context, team triageTeam, labe
 		return err
 	}
 	if count != len(ids) {
-		return errors.New("Labels must belong to this workspace and team")
+		return &triageValidationError{"Labels must belong to this workspace and team"}
 	}
 	return nil
 }
@@ -618,14 +685,14 @@ func (h Handler) validateTriageProject(ctx context.Context, workspaceID, project
 		return err
 	}
 	if !ok {
-		return errors.New("Project must belong to this workspace")
+		return &triageValidationError{"Project must belong to this workspace and must be active"}
 	}
 	return nil
 }
 
 func (h Handler) validateTriageMilestone(ctx context.Context, workspaceID, projectID, milestoneID string) error {
 	if projectID == "" {
-		return errors.New("Project is required when setting a project milestone")
+		return &triageValidationError{"Project is required when setting a project milestone"}
 	}
 	var ok bool
 	err := h.DB.QueryRow(ctx, `select exists(select 1 from project_milestone pm join project p on p.id=pm.project_id where pm.id=$1::uuid and pm.project_id=$2::uuid and p.workspace_id=$3::uuid)`, milestoneID, projectID, workspaceID).Scan(&ok)
@@ -633,7 +700,7 @@ func (h Handler) validateTriageMilestone(ctx context.Context, workspaceID, proje
 		return err
 	}
 	if !ok {
-		return errors.New("Project milestone must belong to the selected project")
+		return &triageValidationError{"Project milestone must belong to the selected project"}
 	}
 	return nil
 }
@@ -645,7 +712,7 @@ func (h Handler) validateTriageCycle(ctx context.Context, teamID, cycleID string
 		return err
 	}
 	if !ok {
-		return errors.New("Cycle must belong to this team")
+		return &triageValidationError{"Cycle must belong to this team"}
 	}
 	return nil
 }
