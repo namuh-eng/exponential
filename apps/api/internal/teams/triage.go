@@ -1,6 +1,7 @@
 package teams
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -15,6 +16,13 @@ import (
 
 var triageAcceptCategories = map[string]bool{"backlog": true, "unstarted": true, "started": true, "completed": true}
 var triagePriorities = map[string]bool{"none": true, "urgent": true, "high": true, "medium": true, "low": true}
+
+const (
+	triageDefaultAssigneeKey = "triageDefaultAssigneeId"
+	triageDefaultLabelIDsKey = "triageDefaultLabelIds"
+	triageDefaultProjectKey  = "triageDefaultProjectId"
+	triageDefaultCycleKey    = "triageDefaultCycleId"
+)
 
 type triageTeam struct {
 	ID            string
@@ -37,9 +45,33 @@ type triageDecisionRequest struct {
 	ProjectID          *string  `json:"projectId"`
 	ProjectMilestoneID *string  `json:"projectMilestoneId"`
 	AssigneeID         *string  `json:"assigneeId"`
+	DueDate            *string  `json:"dueDate"`
 	Comment            *string  `json:"comment"`
 	Subscribe          *bool    `json:"subscribe"`
 	IssueIDs           []string `json:"issueIds"`
+	fieldsPresent      map[string]bool
+}
+
+func (t *triageDecisionRequest) UnmarshalJSON(data []byte) error {
+	type alias triageDecisionRequest
+	var decoded alias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*t = triageDecisionRequest(decoded)
+	t.fieldsPresent = map[string]bool{}
+	for key := range raw {
+		t.fieldsPresent[key] = true
+	}
+	return nil
+}
+
+func (t triageDecisionRequest) hasField(key string) bool {
+	return t.fieldsPresent != nil && t.fieldsPresent[key]
 }
 
 type triageDestinationState struct{ ID, Name, Category string }
@@ -79,7 +111,7 @@ func (h Handler) ListTriage(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Load triage failed", err.Error())
 		return
 	}
-	problem.JSON(w, 200, map[string]any{"team": teamSummaryJSON(team), "issues": issues, "count": len(issues), "createStateId": states[0]["id"], "createStateName": states[0]["name"], "triageEnabled": true, "acceptDestinationStates": accept, "declineDestinationStates": decline, "metadataOptions": options})
+	problem.JSON(w, 200, map[string]any{"team": teamSummaryJSON(team), "issues": issues, "count": len(issues), "createStateId": states[0]["id"], "createStateName": states[0]["name"], "triageEnabled": true, "acceptDestinationStates": accept, "declineDestinationStates": decline, "metadataOptions": options, "defaults": triageDefaultSettings(team.Settings)})
 }
 
 func (h Handler) DecideTriage(w http.ResponseWriter, r *http.Request) {
@@ -172,6 +204,9 @@ func (h Handler) applyTriageDecision(w http.ResponseWriter, r *http.Request, tea
 	if current.Category != "triage" {
 		return map[string]any{"error": "Issue is not currently in triage"}, 409
 	}
+	if input.Action == "accept" {
+		applyTriageDefaultMetadata(team.Settings, &input)
+	}
 	priority := any(nil)
 	if input.Priority != nil {
 		value := stringPtrTrim(input.Priority)
@@ -183,6 +218,17 @@ func (h Handler) applyTriageDecision(w http.ResponseWriter, r *http.Request, tea
 	estimate := any(nil)
 	if input.Estimate != nil {
 		estimate = *input.Estimate
+	}
+	dueDate := any(nil)
+	if input.DueDate != nil {
+		parsed, err := parseTriageDueDate(input.DueDate)
+		if err != nil {
+			return map[string]any{"error": "Invalid due date"}, 400
+		}
+		dueDate = parsed
+	}
+	if err := h.validateTriageDecisionResources(r.Context(), team, input); err != nil {
+		return map[string]any{"error": err.Error()}, 400
 	}
 	canceledAt := any(nil)
 	if input.Action == "decline" {
@@ -198,7 +244,7 @@ func (h Handler) applyTriageDecision(w http.ResponseWriter, r *http.Request, tea
 		return nil, 0
 	}
 	defer func() { _ = tx.Rollback(r.Context()) }()
-	if _, err := tx.Exec(r.Context(), `update issue set state_id=$1::uuid, updated_at=now(), canceled_at=$2, completed_at=$3, priority=coalesce($4,priority), estimate=coalesce($5,estimate), assignee_id=$6, project_id=$7::uuid, project_milestone_id=$8::uuid, cycle_id=$9::uuid where id=$10::uuid and team_id=$11::uuid and state_id=$12::uuid`, dest.ID, canceledAt, completedAt, priority, estimate, nullableTrim(input.AssigneeID), nullableTrim(input.ProjectID), nullableTrim(input.ProjectMilestoneID), nullableTrim(input.CycleID), issueID, team.ID, current.StateID); err != nil {
+	if _, err := tx.Exec(r.Context(), `update issue set state_id=$1::uuid, updated_at=now(), canceled_at=$2, completed_at=$3, priority=coalesce($4,priority), estimate=coalesce($5,estimate), assignee_id=$6, project_id=$7::uuid, project_milestone_id=$8::uuid, cycle_id=$9::uuid, due_date=coalesce($10,due_date) where id=$11::uuid and team_id=$12::uuid and state_id=$13::uuid`, dest.ID, canceledAt, completedAt, priority, estimate, nullableTrim(input.AssigneeID), nullableTrim(input.ProjectID), nullableTrim(input.ProjectMilestoneID), nullableTrim(input.CycleID), dueDate, issueID, team.ID, current.StateID); err != nil {
 		problem.Write(w, 500, "Triage decision failed", err.Error())
 		return nil, 0
 	}
@@ -207,15 +253,19 @@ func (h Handler) applyTriageDecision(w http.ResponseWriter, r *http.Request, tea
 			problem.Write(w, 500, "Triage decision failed", err.Error())
 			return nil, 0
 		}
-		for _, labelID := range input.LabelIDs {
+		for _, labelID := range cleanStringIDs(input.LabelIDs) {
 			if _, err := tx.Exec(r.Context(), `insert into issue_label (issue_id,label_id) values ($1::uuid,$2::uuid) on conflict do nothing`, issueID, labelID); err != nil {
 				problem.Write(w, 500, "Triage decision failed", err.Error())
 				return nil, 0
 			}
 		}
 	}
-	if input.Action == "accept" && stringPtrTrim(input.Comment) != "" {
-		if _, err := tx.Exec(r.Context(), `insert into comment (body,issue_id,user_id) values ($1,$2::uuid,$3)`, stringPtrTrim(input.Comment), issueID, userID); err != nil {
+	commentBody := stringPtrTrim(input.Comment)
+	if input.Action == "decline" && commentBody == "" {
+		commentBody = stringPtrTrim(input.Reason)
+	}
+	if commentBody != "" {
+		if _, err := tx.Exec(r.Context(), `insert into comment (body,issue_id,user_id) values ($1,$2::uuid,$3)`, commentBody, issueID, userID); err != nil {
 			problem.Write(w, 500, "Triage decision failed", err.Error())
 			return nil, 0
 		}
@@ -282,7 +332,21 @@ func (h Handler) triageIssues(r *http.Request, teamID string) ([]map[string]any,
 		if err := rows.Scan(&id, &identifier, &title, &description, &priority, &stateID, &stateName, &stateColor, &creatorID, &creatorName, &creatorImage, &createdAt, &updatedAt, &assigneeID, &projectID, &projectName, &milestoneID, &cycleID, &dueDate, &estimate, &teamID); err != nil {
 			return nil, err
 		}
-		out = append(out, map[string]any{"id": id, "identifier": identifier, "title": title, "description": description, "priority": priority, "stateId": stateID, "stateName": stateName, "stateColor": stateColor, "creatorId": creatorID, "creatorName": creatorName, "creatorImage": creatorImage, "createdAt": createdAt.UTC().Format(time.RFC3339), "updatedAt": updatedAt.UTC().Format(time.RFC3339), "labelIds": []string{}, "labels": []any{}, "assigneeId": assigneeID, "projectId": projectID, "projectName": projectName, "projectMilestoneId": milestoneID, "cycleId": cycleID, "dueDate": dueDate, "estimate": estimate, "teamId": teamID})
+		labels, err := h.triageIssueLabels(r, id)
+		if err != nil {
+			return nil, err
+		}
+		labelIDs := make([]string, 0, len(labels))
+		for _, label := range labels {
+			if labelID, ok := label["id"].(string); ok {
+				labelIDs = append(labelIDs, labelID)
+			}
+		}
+		sourceContext, err := h.triageIssueSourceContext(r, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, map[string]any{"id": id, "identifier": identifier, "title": title, "description": description, "priority": priority, "stateId": stateID, "stateName": stateName, "stateColor": stateColor, "creatorId": creatorID, "creatorName": creatorName, "creatorImage": creatorImage, "createdAt": createdAt.UTC().Format(time.RFC3339), "updatedAt": updatedAt.UTC().Format(time.RFC3339), "labelIds": labelIDs, "labels": labels, "assigneeId": assigneeID, "projectId": projectID, "projectName": projectName, "projectMilestoneId": milestoneID, "cycleId": cycleID, "dueDate": dueDate, "estimate": estimate, "teamId": teamID, "sourceContext": sourceContext})
 	}
 	return out, rows.Err()
 }
@@ -316,7 +380,117 @@ func (h Handler) triageDecisionStates(r *http.Request, teamID string, settings m
 }
 
 func (h Handler) triageMetadataOptions(r *http.Request, team triageTeam) (map[string]any, error) {
-	return map[string]any{"labels": []any{}, "cycles": []any{}, "projects": []any{}, "projectMilestones": []any{}, "members": []any{}}, nil
+	labels, err := h.optionLabels(r.Context(), team.WorkspaceID, team.ID)
+	if err != nil {
+		return nil, err
+	}
+	cycles, err := h.optionCycles(r.Context(), team.ID)
+	if err != nil {
+		return nil, err
+	}
+	projects, err := h.optionProjects(r.Context(), team.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	milestones, err := h.triageProjectMilestones(r.Context(), team.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	members, err := h.triageMembers(r.Context(), team.ID, team.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	templates, err := h.optionTemplates(r.Context(), team.WorkspaceID, team.ID)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"labels": labels, "cycles": cycles, "projects": projects, "projectMilestones": milestones, "members": members, "templates": templates}, nil
+}
+
+func (h Handler) triageProjectMilestones(ctx context.Context, workspaceID string) ([]map[string]any, error) {
+	rows, err := h.DB.Query(ctx, `select pm.id::text,pm.name,pm.project_id::text from project_milestone pm join project p on p.id=pm.project_id where p.workspace_id=$1::uuid order by p.name asc, pm.sort_order asc, pm.name asc`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	for rows.Next() {
+		var id, name, projectID string
+		if err := rows.Scan(&id, &name, &projectID); err != nil {
+			return nil, err
+		}
+		out = append(out, map[string]any{"id": id, "name": name, "projectId": projectID})
+	}
+	return out, rows.Err()
+}
+
+func (h Handler) triageMembers(ctx context.Context, teamID, workspaceID string) ([]map[string]any, error) {
+	rows, err := h.DB.Query(ctx, `select u.id,u.name,u.email,u.image from team_member tm join "user" u on u.id=tm.user_id join member m on m.user_id=u.id and m.workspace_id=$2::uuid where tm.team_id=$1::uuid order by u.name asc,u.email asc`, teamID, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	for rows.Next() {
+		var id string
+		var name, email, image *string
+		if err := rows.Scan(&id, &name, &email, &image); err != nil {
+			return nil, err
+		}
+		out = append(out, map[string]any{"id": id, "name": name, "email": email, "image": image})
+	}
+	return out, rows.Err()
+}
+
+func (h Handler) triageIssueLabels(r *http.Request, issueID string) ([]map[string]any, error) {
+	rows, err := h.DB.Query(r.Context(), `select l.id::text,l.name,l.color from issue_label il join label l on l.id=il.label_id where il.issue_id=$1::uuid order by l.name asc`, issueID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	for rows.Next() {
+		var id, name, color string
+		if err := rows.Scan(&id, &name, &color); err != nil {
+			return nil, err
+		}
+		out = append(out, map[string]any{"id": id, "name": name, "color": color})
+	}
+	return out, rows.Err()
+}
+
+func (h Handler) triageIssueSourceContext(r *http.Request, issueID string) (map[string]any, error) {
+	var raw []byte
+	err := h.DB.QueryRow(r.Context(), `select metadata from issue_history where issue_id=$1::uuid and event_type='created' order by created_at asc limit 1`, issueID).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	metadata := map[string]any{}
+	if err := json.Unmarshal(raw, &metadata); err != nil {
+		return nil, err
+	}
+	return triageSourceContext(metadata), nil
+}
+
+func triageSourceContext(metadata map[string]any) map[string]any {
+	source := strings.TrimSpace(stringFromAny(metadata["source"], ""))
+	if source == "" {
+		return nil
+	}
+	label := map[string]string{"slack_message": "Slack", "slack": "Slack", "discord_command": "Discord", "microsoft_teams_message": "Microsoft Teams", "inbound_email": "Email", "demo_seed": "Demo import"}[source]
+	if label == "" {
+		label = source
+	}
+	context := map[string]any{"source": source, "label": label}
+	for _, key := range []string{"backlink", "url", "recipient", "sender", "title", "identifier"} {
+		if value := strings.TrimSpace(stringFromAny(metadata[key], "")); value != "" {
+			context[key] = value
+		}
+	}
+	return context
 }
 func (h Handler) triageDestination(r *http.Request, teamID, id string) (triageDestinationState, error) {
 	var s triageDestinationState
@@ -340,6 +514,201 @@ func defaultTriageDestination(settings map[string]any, action string) string {
 		return strings.TrimSpace(value)
 	}
 	return ""
+}
+
+func triageDefaultSettings(settings map[string]any) map[string]any {
+	return map[string]any{
+		"acceptDestinationStateId":  defaultTriageDestination(settings, "accept"),
+		"declineDestinationStateId": defaultTriageDestination(settings, "decline"),
+		"assigneeId":                settingString(settings, triageDefaultAssigneeKey),
+		"labelIds":                  settingStringSlice(settings, triageDefaultLabelIDsKey),
+		"projectId":                 settingString(settings, triageDefaultProjectKey),
+		"cycleId":                   settingString(settings, triageDefaultCycleKey),
+	}
+}
+
+func applyTriageDefaultMetadata(settings map[string]any, input *triageDecisionRequest) {
+	if !input.hasField("assigneeId") {
+		input.AssigneeID = stringPtrOrNil(settingString(settings, triageDefaultAssigneeKey))
+	}
+	if !input.hasField("labelIds") {
+		input.LabelIDs = settingStringSlice(settings, triageDefaultLabelIDsKey)
+	}
+	if !input.hasField("projectId") {
+		input.ProjectID = stringPtrOrNil(settingString(settings, triageDefaultProjectKey))
+	}
+	if !input.hasField("cycleId") {
+		input.CycleID = stringPtrOrNil(settingString(settings, triageDefaultCycleKey))
+	}
+}
+
+func (h Handler) validateTriageDefaultSettings(ctx context.Context, team triageTeam) error {
+	input := triageDecisionRequest{
+		AssigneeID: stringPtrOrNil(settingString(team.Settings, triageDefaultAssigneeKey)),
+		LabelIDs:   settingStringSlice(team.Settings, triageDefaultLabelIDsKey),
+		ProjectID:  stringPtrOrNil(settingString(team.Settings, triageDefaultProjectKey)),
+		CycleID:    stringPtrOrNil(settingString(team.Settings, triageDefaultCycleKey)),
+	}
+	return h.validateTriageDecisionResources(ctx, team, input)
+}
+
+func (h Handler) validateTriageDecisionResources(ctx context.Context, team triageTeam, input triageDecisionRequest) error {
+	if input.AssigneeID != nil && stringPtrTrim(input.AssigneeID) != "" {
+		if err := h.validateTriageAssignee(ctx, team, stringPtrTrim(input.AssigneeID)); err != nil {
+			return err
+		}
+	}
+	if input.LabelIDs != nil {
+		if err := h.validateTriageLabels(ctx, team, input.LabelIDs); err != nil {
+			return err
+		}
+	}
+	projectID := stringPtrTrim(input.ProjectID)
+	if projectID != "" {
+		if err := h.validateTriageProject(ctx, team.WorkspaceID, projectID); err != nil {
+			return err
+		}
+	}
+	milestoneID := stringPtrTrim(input.ProjectMilestoneID)
+	if milestoneID != "" {
+		if err := h.validateTriageMilestone(ctx, team.WorkspaceID, projectID, milestoneID); err != nil {
+			return err
+		}
+	}
+	if input.CycleID != nil && stringPtrTrim(input.CycleID) != "" {
+		if err := h.validateTriageCycle(ctx, team.ID, stringPtrTrim(input.CycleID)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h Handler) validateTriageAssignee(ctx context.Context, team triageTeam, userID string) error {
+	var ok bool
+	err := h.DB.QueryRow(ctx, `select exists(select 1 from team_member tm join member m on m.user_id=tm.user_id and m.workspace_id=$3::uuid where tm.team_id=$1::uuid and tm.user_id=$2)`, team.ID, userID, team.WorkspaceID).Scan(&ok)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("Assignee is not a member of this team")
+	}
+	return nil
+}
+
+func (h Handler) validateTriageLabels(ctx context.Context, team triageTeam, labelIDs []string) error {
+	ids := cleanStringIDs(labelIDs)
+	if len(ids) == 0 {
+		return nil
+	}
+	var count int
+	err := h.DB.QueryRow(ctx, `select count(distinct id)::int from label where workspace_id=$1::uuid and (team_id is null or team_id=$2::uuid) and archived_at is null and id=any($3::uuid[])`, team.WorkspaceID, team.ID, ids).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count != len(ids) {
+		return errors.New("Labels must belong to this workspace and team")
+	}
+	return nil
+}
+
+func (h Handler) validateTriageProject(ctx context.Context, workspaceID, projectID string) error {
+	var ok bool
+	err := h.DB.QueryRow(ctx, `select exists(select 1 from project where id=$1::uuid and workspace_id=$2::uuid and completed_at is null and canceled_at is null)`, projectID, workspaceID).Scan(&ok)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("Project must belong to this workspace")
+	}
+	return nil
+}
+
+func (h Handler) validateTriageMilestone(ctx context.Context, workspaceID, projectID, milestoneID string) error {
+	if projectID == "" {
+		return errors.New("Project is required when setting a project milestone")
+	}
+	var ok bool
+	err := h.DB.QueryRow(ctx, `select exists(select 1 from project_milestone pm join project p on p.id=pm.project_id where pm.id=$1::uuid and pm.project_id=$2::uuid and p.workspace_id=$3::uuid)`, milestoneID, projectID, workspaceID).Scan(&ok)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("Project milestone must belong to the selected project")
+	}
+	return nil
+}
+
+func (h Handler) validateTriageCycle(ctx context.Context, teamID, cycleID string) error {
+	var ok bool
+	err := h.DB.QueryRow(ctx, `select exists(select 1 from cycle where id=$1::uuid and team_id=$2::uuid)`, cycleID, teamID).Scan(&ok)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("Cycle must belong to this team")
+	}
+	return nil
+}
+
+func parseTriageDueDate(value *string) (any, error) {
+	trimmed := stringPtrTrim(value)
+	if trimmed == "" {
+		return nil, nil
+	}
+	if parsed, err := time.Parse(time.RFC3339, trimmed); err == nil {
+		return parsed, nil
+	}
+	parsed, err := time.Parse("2006-01-02", trimmed)
+	if err != nil {
+		return nil, err
+	}
+	return parsed, nil
+}
+
+func cleanStringIDs(values []string) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" || seen[trimmed] {
+			continue
+		}
+		seen[trimmed] = true
+		out = append(out, trimmed)
+	}
+	return out
+}
+
+func settingString(settings map[string]any, key string) string {
+	if value, ok := settings[key].(string); ok {
+		return strings.TrimSpace(value)
+	}
+	return ""
+}
+
+func settingStringSlice(settings map[string]any, key string) []string {
+	switch value := settings[key].(type) {
+	case []string:
+		return cleanStringIDs(value)
+	case []any:
+		out := []string{}
+		for _, item := range value {
+			if text, ok := item.(string); ok {
+				out = append(out, text)
+			}
+		}
+		return cleanStringIDs(out)
+	default:
+		return nil
+	}
+}
+
+func stringPtrOrNil(value string) *string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }
 func stringPtrTrim(value *string) string {
 	if value == nil {

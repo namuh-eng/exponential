@@ -5255,6 +5255,9 @@ components:
         metadataOptions:
           type: object
           additionalProperties: true
+        defaults:
+          type: object
+          additionalProperties: true
     TriageDecisionRequest:
       type: object
       additionalProperties: true
@@ -5276,6 +5279,7 @@ components:
         projectMilestoneId: { type: [string, 'null'], format: uuid }
         assigneeId: { type: [string, 'null'] }
         comment: { type: [string, 'null'] }
+        dueDate: { type: [string, 'null'], format: date }
         subscribe: { type: boolean }
     TriageDecisionResponse:
       type: object
