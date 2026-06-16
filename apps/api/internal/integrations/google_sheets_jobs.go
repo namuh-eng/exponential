@@ -618,4 +618,3 @@ func enabledGoogleSheetsScopes(settings googleSheetsSettings) []string {
 	}
 	return out
 }
-
