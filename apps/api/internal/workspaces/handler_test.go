@@ -130,10 +130,10 @@ func TestJiraClientUsesServerBearerAndBuildsPreview(t *testing.T) {
 		case "/rest/api/2/project":
 			_, _ = w.Write([]byte(`[{"id":"100","key":"ENG","name":"Engineering"}]`))
 		case "/rest/api/2/search":
-			if r.URL.Query().Get("jql") != "project = ENG ORDER BY created ASC" {
+			if r.URL.Query().Get("jql") != `project = "ENG" ORDER BY created ASC` {
 				t.Fatalf("jql = %q", r.URL.Query().Get("jql"))
 			}
-			_, _ = w.Write([]byte(`{"issues":[{"id":"10001","key":"ENG-1","fields":{"summary":"Ship importer","description":"Move Jira issues","status":{"id":"1","name":"To Do"},"priority":{"id":"2","name":"High"},"assignee":{"displayName":"Ada"},"labels":["migration"],"project":{"id":"100","key":"ENG","name":"Engineering"},"comment":{"comments":[{"id":"c1","body":"Looks good","author":{"displayName":"Ada"}}]}}}]}`))
+			_, _ = w.Write([]byte(`{"startAt":0,"total":1,"issues":[{"id":"10001","key":"ENG-1","fields":{"summary":"Ship importer","description":"Move Jira issues","status":{"id":"1","name":"To Do"},"priority":{"id":"2","name":"High"},"assignee":{"displayName":"Ada"},"labels":["migration"],"project":{"id":"100","key":"ENG","name":"Engineering"},"comment":{"comments":[{"id":"c1","body":"Looks good","author":{"displayName":"Ada"}}]}}}]}`))
 		default:
 			t.Fatalf("unexpected path = %s", r.URL.Path)
 		}

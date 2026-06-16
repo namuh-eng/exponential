@@ -170,7 +170,7 @@ function ImportModal({
   const [jiraDeployment, setJiraDeployment] = useState<"cloud" | "server">(
     "cloud",
   );
-  const [jiraBaseUrl, setJiraBaseUrl] = useState("https://acme.atlassian.net");
+  const [jiraBaseUrl, setJiraBaseUrl] = useState("");
   const [jiraEmail, setJiraEmail] = useState("");
   const [jiraToken, setJiraToken] = useState("");
   const [jiraProjects, setJiraProjects] = useState<JiraProjectOption[]>([]);

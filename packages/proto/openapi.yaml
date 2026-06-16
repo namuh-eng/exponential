@@ -5642,7 +5642,7 @@ components:
         deployment: { type: string, enum: [cloud, server] }
         baseUrl: { type: string, format: uri }
         email: { type: string, format: email }
-        token: { type: string }
+        token: { type: string, writeOnly: true, description: "API token or personal access token for authenticating with the provider. Write-only: never returned in responses." }
         projectKey: { type: string }
         teamId: { type: string, format: uuid }
         statusMapping:

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,6 +19,17 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
 )
+
+// jiraTruncatedError is returned by issues() when the Jira total exceeds the
+// number of issues fetched (i.e. caller passed a hard cap).
+type jiraTruncatedError struct {
+	fetched int
+	total   int
+}
+
+func (e *jiraTruncatedError) Error() string {
+	return fmt.Sprintf("jira returned %d of %d total issues; import may be incomplete", e.fetched, e.total)
+}
 
 type jiraCredential struct {
 	Deployment string `json:"deployment"`
@@ -87,7 +99,9 @@ type jiraIssue struct {
 }
 
 type jiraSearchResponse struct {
-	Issues []jiraIssue `json:"issues"`
+	StartAt int         `json:"startAt"`
+	Total   int         `json:"total"`
+	Issues  []jiraIssue `json:"issues"`
 }
 
 type jiraPreviewIssue struct {
@@ -181,21 +195,26 @@ func (h Handler) handleJiraPreview(w http.ResponseWriter, r *http.Request, curre
 		problem.Write(w, 500, "Load workflow states failed", err.Error())
 		return
 	}
-	issues, err := (jiraClient{credential: install.Credential, client: http.DefaultClient}).issues(r.Context(), projectKey, 100)
-	if err != nil {
+	issues, err := (jiraClient{credential: install.Credential, client: http.DefaultClient}).issues(r.Context(), projectKey, 0)
+	var truncated *jiraTruncatedError
+	if err != nil && !errors.As(err, &truncated) {
 		problem.Write(w, 502, "Jira issues could not be loaded", err.Error())
 		return
 	}
 	preview, statuses := buildJiraPreview(install.Credential, issues)
-	problem.JSON(w, 200, map[string]any{
+	resp := map[string]any{
 		"integrationId": install.ID,
-		"projects": projects,
-		"projectKey": projectKey,
-		"issues": preview,
+		"projects":      projects,
+		"projectKey":    projectKey,
+		"issues":        preview,
 		"statusOptions": statuses,
-		"teamStates": states,
-		"mapping": map[string]any{"teamId": teamID, "statuses": suggestJiraStatusMapping(statuses, states)},
-	})
+		"teamStates":    states,
+		"mapping":       map[string]any{"teamId": teamID, "statuses": suggestJiraStatusMapping(statuses, states)},
+	}
+	if truncated != nil {
+		resp["warning"] = truncated.Error()
+	}
+	problem.JSON(w, 200, resp)
 }
 
 func (h Handler) handleJiraImport(w http.ResponseWriter, r *http.Request, current importExportWorkspace, p auth.Principal, body map[string]any) {
@@ -218,8 +237,9 @@ func (h Handler) handleJiraImport(w http.ResponseWriter, r *http.Request, curren
 		problem.Write(w, 400, "Invalid Jira status mapping", err.Error())
 		return
 	}
-	issues, err := (jiraClient{credential: install.Credential, client: http.DefaultClient}).issues(r.Context(), projectKey, 100)
-	if err != nil {
+	issues, err := (jiraClient{credential: install.Credential, client: http.DefaultClient}).issues(r.Context(), projectKey, 0)
+	var truncatedImport *jiraTruncatedError
+	if err != nil && !errors.As(err, &truncatedImport) {
 		problem.Write(w, 502, "Jira issues could not be loaded", err.Error())
 		return
 	}
@@ -240,7 +260,11 @@ func (h Handler) handleJiraImport(w http.ResponseWriter, r *http.Request, curren
 		problem.Write(w, 500, "Save Jira import history failed", err.Error())
 		return
 	}
-	problem.JSON(w, 201, map[string]any{"import": job, "summary": summary})
+	importResp := map[string]any{"import": job, "summary": summary}
+	if truncatedImport != nil {
+		importResp["warning"] = truncatedImport.Error()
+	}
+	problem.JSON(w, 201, importResp)
 }
 
 func (h Handler) handleJiraSyncPause(w http.ResponseWriter, r *http.Request, current importExportWorkspace, p auth.Principal, body map[string]any, paused bool) {
@@ -293,8 +317,11 @@ func normalizeJiraBaseURL(value string) (string, error) {
 		return "", errors.New("baseUrl is required")
 	}
 	parsed, err := url.Parse(trimmed)
-	if err != nil || parsed.Host == "" || (parsed.Scheme != "https" && parsed.Scheme != "http") {
-		return "", errors.New("baseUrl must be an absolute HTTP(S) URL")
+	if err != nil || parsed.Host == "" || parsed.Scheme == "" {
+		return "", errors.New("baseUrl must be an absolute HTTPS URL")
+	}
+	if parsed.Scheme != "https" {
+		return "", errors.New("baseUrl must use HTTPS")
 	}
 	return parsed.String(), nil
 }
@@ -315,20 +342,49 @@ func (c jiraClient) projects(ctx context.Context) ([]jiraProject, error) {
 	return projects, nil
 }
 
+// jiraProjectKeyRE validates Jira project keys to prevent JQL injection.
+// Jira project keys are 1–10 uppercase letters/digits, starting with a letter.
+var jiraProjectKeyRE = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,9}$`)
+
 func (c jiraClient) issues(ctx context.Context, projectKey string, maxResults int) ([]jiraIssue, error) {
-	if maxResults <= 0 || maxResults > 100 {
+	if !jiraProjectKeyRE.MatchString(projectKey) {
+		return nil, fmt.Errorf("invalid Jira project key: %q", projectKey)
+	}
+	if maxResults <= 0 {
 		maxResults = 100
 	}
-	values := url.Values{}
-	values.Set("jql", "project = "+projectKey+" ORDER BY created ASC")
-	values.Set("maxResults", strconv.Itoa(maxResults))
-	values.Set("fields", "summary,description,status,priority,assignee,reporter,labels,created,updated,comment,project")
-	var response jiraSearchResponse
-	path := "/rest/api/" + jiraAPIVersion(c.credential.Deployment) + "/search?" + values.Encode()
-	if err := c.getJSON(ctx, path, &response); err != nil {
-		return nil, err
+	// Escape any embedded double-quotes in the key to be safe, then wrap in quotes.
+	escapedKey := strings.ReplaceAll(projectKey, `"`, `\"`)
+	jql := `project = "` + escapedKey + `" ORDER BY created ASC`
+	fields := "summary,description,status,priority,assignee,reporter,labels,created,updated,comment,project"
+	var all []jiraIssue
+	startAt := 0
+	for {
+		batchSize := maxResults
+		if batchSize > 100 {
+			batchSize = 100
+		}
+		values := url.Values{}
+		values.Set("jql", jql)
+		values.Set("maxResults", strconv.Itoa(batchSize))
+		values.Set("startAt", strconv.Itoa(startAt))
+		values.Set("fields", fields)
+		var response jiraSearchResponse
+		path := "/rest/api/" + jiraAPIVersion(c.credential.Deployment) + "/search?" + values.Encode()
+		if err := c.getJSON(ctx, path, &response); err != nil {
+			return nil, err
+		}
+		all = append(all, response.Issues...)
+		startAt += len(response.Issues)
+		if len(response.Issues) == 0 || startAt >= response.Total || (maxResults > 0 && len(all) >= maxResults) {
+			if response.Total > len(all) {
+				// Caller passed a cap smaller than the total; surface the warning via a
+				// sentinel so handlers can add a truncation notice to the response.
+				return all, &jiraTruncatedError{fetched: len(all), total: response.Total}
+			}
+			return all, nil
+		}
 	}
-	return response.Issues, nil
 }
 
 func (c jiraClient) getJSON(ctx context.Context, path string, target any) error {
@@ -352,14 +408,15 @@ func (c jiraClient) getJSON(ctx context.Context, path string, target any) error 
 		return err
 	}
 	defer response.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
 		return fmt.Errorf("jira returned %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
 	}
-	if len(body) == 0 {
+	err = json.NewDecoder(response.Body).Decode(target)
+	if errors.Is(err, io.EOF) {
 		return nil
 	}
-	return json.Unmarshal(body, target)
+	return err
 }
 
 func (h Handler) saveJiraIntegration(ctx context.Context, workspaceID string, userID string, credential jiraCredential, account jiraUser, projects []jiraProject) (string, error) {
@@ -514,6 +571,11 @@ func (h Handler) importJiraIssues(ctx context.Context, p auth.Principal, install
 		if err != nil {
 			return err
 		}
+		// Fetch team key once to avoid an N+1 query inside the issue loop.
+		var teamKey string
+		if err := tx.QueryRow(ctx, `select key from team where id=$1::uuid`, teamID).Scan(&teamKey); err != nil || teamKey == "" {
+			teamKey = "JIRA"
+		}
 		project := issues[0].Fields.Project
 		if project.ID == "" {
 			project.ID = project.Key
@@ -544,7 +606,7 @@ func (h Handler) importJiraIssues(ctx context.Context, p auth.Principal, install
 			err := tx.QueryRow(ctx, `select issue_id::text from jira_issue_link where workspace_integration_id=$1::uuid and jira_issue_id=$2 limit 1 for update`, install.ID, source.ID).Scan(&issueID)
 			if errors.Is(err, pgx.ErrNoRows) {
 				maxNumber++
-				identifier := jiraTeamIdentifier(ctx, tx, teamID, maxNumber)
+				identifier := teamKey + "-" + strconv.Itoa(maxNumber)
 				if err := tx.QueryRow(ctx, `insert into issue (number, identifier, title, description, team_id, state_id, assignee_id, creator_id, priority, updated_at) values ($1,$2,$3,$4,$5::uuid,$6::uuid,nullif($7,''),$8,$9,now()) returning id::text`, maxNumber, identifier, strings.TrimSpace(source.Fields.Summary), description, teamID, stateID, assigneeID, p.UserID, priority).Scan(&issueID); err != nil {
 					return err
 				}
