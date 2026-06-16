@@ -991,6 +991,84 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /integrations/github:
+    get:
+      operationId: getGitHubIntegration
+      responses:
+        '200':
+          description: GitHub integration status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubStatusResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/github/setup:
+    post:
+      operationId: setupGitHubIntegration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GitHubSetupRequest'
+      responses:
+        '200':
+          description: GitHub integration connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubSetupResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/github/workflows:
+    post:
+      operationId: updateGitHubWorkflowAutomation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GitHubWorkflowRequest'
+      responses:
+        '200':
+          description: GitHub workflow mappings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubWorkflowResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/github/disconnect:
+    post:
+      operationId: disconnectGitHubIntegration
+      responses:
+        '200':
+          description: GitHub disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/github/webhook/{integrationId}:
+    post:
+      operationId: ingestGitHubWebhook
+      security: []
+      parameters:
+        - name: integrationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '202':
+          description: GitHub webhook accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubWebhookResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /integrations/gitlab:
     get:
       operationId: getGitLabIntegration
@@ -4215,6 +4293,98 @@ components:
             - type: 'null'
         actions: { $ref: '#/components/schemas/IntegrationActions' }
         health: { $ref: '#/components/schemas/IntegrationHealth' }
+    GitHubRepositoryMapping:
+      type: object
+      required: [id, owner, name, fullName, htmlUrl, teamId, enabled]
+      properties:
+        id: { type: string }
+        owner: { type: string }
+        name: { type: string }
+        fullName: { type: string }
+        htmlUrl: { type: [string, 'null'], format: uri }
+        teamId: { type: [string, 'null'], format: uuid }
+        enabled: { type: boolean }
+    GitHubWorkflowMapping:
+      type: object
+      required: [teamId, teamKey, teamName, pullRequestMergedStateId]
+      properties:
+        teamId: { type: string, format: uuid }
+        teamKey: { type: string }
+        teamName: { type: string }
+        pullRequestMergedStateId: { type: [string, 'null'], format: uuid }
+    GitHubStatusResponse:
+      type: object
+      required: [connected, integrationId, installationId, displayName, webhookUrl, webhookSecret, repositories, workflows]
+      properties:
+        connected: { type: boolean }
+        integrationId: { type: [string, 'null'], format: uuid }
+        installationId: { type: [string, 'null'] }
+        displayName: { type: [string, 'null'] }
+        webhookUrl: { type: [string, 'null'], format: uri }
+        webhookSecret: { type: [string, 'null'] }
+        repositories:
+          type: array
+          items: { $ref: '#/components/schemas/GitHubRepositoryMapping' }
+        workflows:
+          type: array
+          items: { $ref: '#/components/schemas/GitHubWorkflowMapping' }
+    GitHubRepositoryInput:
+      type: object
+      required: [id, fullName]
+      properties:
+        id: { type: string, minLength: 1 }
+        owner: { type: string }
+        name: { type: string }
+        fullName: { type: string, minLength: 1 }
+        htmlUrl: { type: string, format: uri }
+    GitHubSetupRequest:
+      type: object
+      required: [installationId, accountLogin, repositories]
+      properties:
+        installationId: { type: string, minLength: 1 }
+        accountLogin: { type: string, minLength: 1 }
+        accountType: { type: string }
+        webhookSecret: { type: string }
+        branchNameFormat: { type: string }
+        repositories:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/GitHubRepositoryInput' }
+    GitHubSetupResponse:
+      type: object
+      required: [connected, integrationId, installationId, displayName, webhookUrl, webhookSecret, repositories, workflows]
+      properties:
+        connected: { type: boolean }
+        integrationId: { type: string, format: uuid }
+        installationId: { type: string }
+        displayName: { type: string }
+        webhookUrl: { type: string, format: uri }
+        webhookSecret: { type: string }
+        repositories:
+          type: array
+          items: { $ref: '#/components/schemas/GitHubRepositoryMapping' }
+        workflows:
+          type: array
+          items: { $ref: '#/components/schemas/GitHubWorkflowMapping' }
+    GitHubWorkflowRequest:
+      type: object
+      required: [teamId]
+      properties:
+        teamId: { type: string, format: uuid }
+        pullRequestMergedStateId: { type: [string, 'null'], format: uuid }
+    GitHubWorkflowResponse:
+      type: object
+      required: [workflows]
+      properties:
+        workflows:
+          type: array
+          items: { $ref: '#/components/schemas/GitHubWorkflowMapping' }
+    GitHubWebhookResponse:
+      type: object
+      required: [ok, processedIssueCount]
+      properties:
+        ok: { type: boolean }
+        processedIssueCount: { type: integer, minimum: 0 }
     GitLabWorkflowMapping:
       type: object
       required: [teamId, teamKey, teamName, mergeRequestMergedStateId]

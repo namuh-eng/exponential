@@ -173,7 +173,9 @@ type IssueHistoryEventType =
   | "created"
   | "updated"
   | "comment_created"
-  | "gitlab_merge_request";
+  | "gitlab_merge_request"
+  | "github_pull_request"
+  | "github_commit";
 
 interface IssueHistoryEvent {
   id: string;
@@ -347,7 +349,9 @@ function normalizeHistoryEvent(value: unknown): IssueHistoryEvent | null {
     (type !== "created" &&
       type !== "updated" &&
       type !== "comment_created" &&
-      type !== "gitlab_merge_request") ||
+      type !== "gitlab_merge_request" &&
+      type !== "github_pull_request" &&
+      type !== "github_commit") ||
     typeof createdAt !== "string"
   ) {
     return null;
@@ -423,6 +427,45 @@ function getGitLabMergeRequestTitle(event: IssueHistoryEvent): string {
   return "merge request";
 }
 
+function getGitHubPullRequestTitle(event: IssueHistoryEvent): string {
+  const github = event.metadata.github;
+  if (!isRecord(github)) {
+    return "pull request";
+  }
+  const title = typeof github.title === "string" ? github.title.trim() : "";
+  const number =
+    typeof github.pullRequestNumber === "string"
+      ? github.pullRequestNumber.trim()
+      : "";
+  if (title && number) return `#${number} ${title}`;
+  if (title) return title;
+  if (number) return `#${number}`;
+  return "pull request";
+}
+
+function getGitHubCommitTitle(event: IssueHistoryEvent): string {
+  const github = event.metadata.github;
+  if (!isRecord(github)) {
+    return "commit";
+  }
+  const sha = typeof github.sha === "string" ? github.sha.trim() : "";
+  const shortSha = sha.length > 7 ? sha.slice(0, 7) : sha;
+  return shortSha ? `commit ${shortSha}` : "commit";
+}
+
+function branchSlug(value: string): string {
+  const slug = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return slug || "issue";
+}
+
+function defaultBranchName(issue: Pick<IssueDetail, "identifier" | "title">) {
+  return `${issue.identifier.toLowerCase()}-${branchSlug(issue.title)}`;
+}
+
 function getHistoryEventDescription(event: IssueHistoryEvent): string {
   const actorName = getHistoryActorName(event);
 
@@ -460,6 +503,15 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
           : "linked";
       return `${actorName} ${action.replaceAll("_", " ")} GitLab ${getGitLabMergeRequestTitle(event)}`;
     }
+    case "github_pull_request": {
+      const action =
+        typeof event.metadata.action === "string"
+          ? event.metadata.action
+          : "linked";
+      return `${actorName} ${action.replaceAll("_", " ")} GitHub ${getGitHubPullRequestTitle(event)}`;
+    }
+    case "github_commit":
+      return `${actorName} linked GitHub ${getGitHubCommitTitle(event)}`;
   }
 }
 
@@ -515,6 +567,22 @@ function getGitLabSourceLink(event: IssueHistoryEvent): string | null {
   }
   return typeof gitlab.url === "string" && gitlab.url.length > 0
     ? gitlab.url
+    : null;
+}
+
+function getGitHubSourceLink(event: IssueHistoryEvent): string | null {
+  if (
+    event.metadata.source !== "github_pull_request" &&
+    event.metadata.source !== "github_commit"
+  ) {
+    return null;
+  }
+  const github = event.metadata.github;
+  if (!isRecord(github)) {
+    return null;
+  }
+  return typeof github.url === "string" && github.url.length > 0
+    ? github.url
     : null;
 }
 
@@ -692,6 +760,9 @@ export function IssueDetailView({
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
     "idle",
   );
+  const [branchCopyState, setBranchCopyState] = useState<
+    "idle" | "copied" | "failed"
+  >("idle");
   const [actionsOpen, setActionsOpen] = useState(false);
   const [commentActionMenuId, setCommentActionMenuId] = useState<string | null>(
     null,
@@ -1580,6 +1651,19 @@ export function IssueDetailView({
     }, 2000);
   }
 
+  async function handleCopyBranchName(branchName: string) {
+    try {
+      await navigator.clipboard.writeText(branchName);
+      setBranchCopyState("copied");
+    } catch {
+      setBranchCopyState("failed");
+    }
+
+    window.setTimeout(() => {
+      setBranchCopyState("idle");
+    }, 2000);
+  }
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center text-[var(--color-text-secondary)]">
@@ -1604,6 +1688,7 @@ export function IssueDetailView({
     `/team/${issue.team.key}/issue/${issue.identifier}`,
     workspaceSlug,
   );
+  const branchName = defaultBranchName(issue);
   const descriptionIsEmpty =
     richTextHtmlToPlainText(descriptionDraft).trim().length === 0;
 
@@ -1690,6 +1775,17 @@ export function IssueDetailView({
                   : copyState === "failed"
                     ? "Copy failed"
                     : "Copy link"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleCopyBranchName(branchName)}
+                className="tty-row border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+              >
+                {branchCopyState === "copied"
+                  ? "Branch copied"
+                  : branchCopyState === "failed"
+                    ? "Copy failed"
+                    : "Copy branch"}
               </button>
               <button
                 type="button"
@@ -2048,6 +2144,16 @@ export function IssueDetailView({
                             className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
                           >
                             View merge request in GitLab
+                          </a>
+                        ) : null}
+                        {getGitHubSourceLink(event) ? (
+                          <a
+                            href={getGitHubSourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source in GitHub
                           </a>
                         ) : null}
                       </div>

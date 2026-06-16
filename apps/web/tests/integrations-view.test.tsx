@@ -17,15 +17,12 @@ const integrations = [
     name: "GitHub",
     description:
       "Sync pull requests, commits, and issue links with exponential.",
-    status: "configuration_required",
+    status: "not_connected",
     displayName: null,
     connectedAt: null,
-    setupRequirement: {
-      type: "configuration_required",
-      message: "GitHub setup is not configured in this environment yet.",
-    },
+    setupRequirement: null,
     actions: {
-      canConnect: false,
+      canConnect: true,
       canManage: false,
       canDisconnect: false,
       canReconnect: false,
@@ -129,6 +126,18 @@ const degradedSlack = {
   },
 };
 
+const connectableSlack = {
+  ...integrations[1],
+  status: "not_connected",
+  setupRequirement: null,
+  actions: {
+    canConnect: true,
+    canManage: false,
+    canDisconnect: false,
+    canReconnect: false,
+  },
+};
+
 describe("IntegrationsSettingsPage component", () => {
   beforeEach(() => {
     fetchMock.mockReset();
@@ -169,18 +178,26 @@ describe("IntegrationsSettingsPage component", () => {
     expect(
       screen.queryByText(/Setup unavailable in this workspace/),
     ).not.toBeInTheDocument();
-    expect(screen.getByText(/Slack OAuth credentials/)).toBeInTheDocument();
-    expect(screen.getByText(/Sentry credentials/)).toBeInTheDocument();
     expect(
-      screen.getAllByRole("button", { name: "Connect" }).length,
-    ).toBeGreaterThan(0);
+      screen.queryByText(/GitHub setup is not configured/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByLabelText("GitHub App installation ID"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Repository full name")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Connect GitHub" }),
+    ).toBeDisabled();
   });
 
   it("surfaces Slack connect API failures instead of no-oping", async () => {
     fetchMock
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ integrations, canManageIntegrations: true }),
+        json: async () => ({
+          integrations: [integrations[0], connectableSlack, integrations[2]],
+          canManageIntegrations: true,
+        }),
       })
       .mockResolvedValueOnce({
         ok: false,
@@ -205,6 +222,57 @@ describe("IntegrationsSettingsPage component", () => {
     );
   });
 
+  it("posts GitHub installation metadata and shows webhook details", async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ integrations, canManageIntegrations: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          webhookUrl: "https://app.example/api/integrations/github/webhook/123",
+          webhookSecret: "secret-token",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ integrations, canManageIntegrations: true }),
+      });
+
+    render(<IntegrationsSettingsPage />);
+    await screen.findByText("No active integrations");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Explore integrations" }),
+    );
+    fireEvent.change(screen.getByLabelText("GitHub App installation ID"), {
+      target: { value: "98765" },
+    });
+    fireEvent.change(screen.getByLabelText("Account or organization login"), {
+      target: { value: "namuh-eng" },
+    });
+    fireEvent.change(screen.getByLabelText("Repository full name"), {
+      target: { value: "namuh-eng/exponential" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect GitHub" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/integrations/github/setup",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+    const setupBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(setupBody).toMatchObject({
+      installationId: "98765",
+      accountLogin: "namuh-eng",
+      repositories: [{ fullName: "namuh-eng/exponential" }],
+    });
+    expect(
+      await screen.findByText("GitHub webhook details"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("secret-token")).toBeInTheDocument();
+  });
   it("shows admin health and reconnect state for installed providers", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,

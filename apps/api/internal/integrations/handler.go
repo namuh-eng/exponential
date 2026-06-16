@@ -103,7 +103,7 @@ type slackOAuthResponse struct {
 }
 
 var catalog = []CatalogItem{
-	{Provider: "github", Name: "GitHub", Description: "Sync pull requests, commits, and issue links with Linear."},
+	{Provider: "github", Name: "GitHub", Description: "Sync pull requests, commits, and issue links with Exponential."},
 	{Provider: "gitlab", Name: "GitLab", Description: "Link merge requests, commits, and workflow automation to issues."},
 	{Provider: "jira", Name: "Jira", Description: "Sync issue status, ownership, and cross-links with Jira projects."},
 	{Provider: "discord", Name: "Discord", Description: "Create, search, and share issues from Discord slash commands."},
@@ -118,6 +118,10 @@ func (h Handler) Routes() chi.Router {
 	r.Get("/", h.List)
 	r.Delete("/", h.Delete)
 	r.Post("/slack/connect", h.SlackConnect)
+	r.Get("/github", h.GitHubStatus)
+	r.Post("/github/setup", h.GitHubSetup)
+	r.Post("/github/workflows", h.GitHubWorkflow)
+	r.Post("/github/disconnect", h.GitHubDisconnect)
 	r.Get("/gitlab", h.GitLabStatus)
 	r.Post("/gitlab/setup", h.GitLabSetup)
 	r.Post("/gitlab/workflows", h.GitLabWorkflow)
@@ -406,7 +410,7 @@ func setupRequirement(provider string) *SetupRequirement {
 	if provider == "sentry" && !sentryConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Sentry credentials are not configured. Add AUTH_SENTRY_ID, AUTH_SENTRY_SECRET, and SENTRY_WEBHOOK_SECRET to enable installation and signed issue actions."}
 	}
-	if provider == "github" || provider == "jira" || provider == "zendesk" {
+	if provider == "jira" || provider == "zendesk" {
 		name := "GitHub"
 		if provider == "jira" {
 			name = "Jira"

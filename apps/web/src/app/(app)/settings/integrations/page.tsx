@@ -47,6 +47,11 @@ type GitLabSetupDetails = {
   webhookSecret: string;
 };
 
+type GitHubSetupDetails = {
+  webhookUrl: string;
+  webhookSecret: string;
+};
+
 type IntegrationsPayload = {
   integrations?: Integration[];
   canManageIntegrations?: boolean;
@@ -110,6 +115,11 @@ export default function IntegrationsSettingsPage() {
   const [gitLabToken, setGitLabToken] = useState("");
   const [gitLabSetupDetails, setGitLabSetupDetails] =
     useState<GitLabSetupDetails | null>(null);
+  const [gitHubInstallationId, setGitHubInstallationId] = useState("");
+  const [gitHubAccountLogin, setGitHubAccountLogin] = useState("");
+  const [gitHubRepositoryFullName, setGitHubRepositoryFullName] = useState("");
+  const [gitHubSetupDetails, setGitHubSetupDetails] =
+    useState<GitHubSetupDetails | null>(null);
 
   const loadIntegrations = useCallback(async () => {
     setLoading(true);
@@ -231,6 +241,63 @@ export default function IntegrationsSettingsPage() {
     }
   }
 
+  async function setupGitHub() {
+    setPendingProvider("github");
+    setNotice(null);
+    setError(null);
+    setGitHubSetupDetails(null);
+    const [owner, name] = gitHubRepositoryFullName.trim().split("/");
+    try {
+      const response = await fetch("/api/integrations/github/setup", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          installationId: gitHubInstallationId,
+          accountLogin: gitHubAccountLogin,
+          repositories: [
+            {
+              id: gitHubRepositoryFullName.trim(),
+              owner,
+              name,
+              fullName: gitHubRepositoryFullName.trim(),
+              htmlUrl: `https://github.com/${gitHubRepositoryFullName.trim()}`,
+            },
+          ],
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        webhookUrl?: string;
+        webhookSecret?: string;
+        error?: string;
+        message?: string;
+      };
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "GitHub setup failed.");
+      }
+      if (data.webhookUrl && data.webhookSecret) {
+        setGitHubSetupDetails({
+          webhookUrl: data.webhookUrl,
+          webhookSecret: data.webhookSecret,
+        });
+      }
+      setNotice(
+        "GitHub connected. Copy the webhook URL and secret into your GitHub App.",
+      );
+      await loadIntegrations();
+    } catch (setupError) {
+      setError(
+        setupError instanceof Error
+          ? setupError.message
+          : "GitHub setup failed.",
+      );
+    } finally {
+      setPendingProvider(null);
+    }
+  }
+
   async function disconnect(provider: string) {
     setPendingProvider(provider);
     setNotice(null);
@@ -331,6 +398,27 @@ export default function IntegrationsSettingsPage() {
           </div>
         </div>
       ) : null}
+      {gitHubSetupDetails ? (
+        <div className="mt-6 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
+          <div className="font-medium text-[var(--color-text-primary)]">
+            GitHub webhook details
+          </div>
+          <div className="mt-3 grid gap-2">
+            <div className="grid gap-1">
+              <span>Webhook URL</span>
+              <code className="overflow-x-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[12px] text-[var(--color-text-primary)]">
+                {gitHubSetupDetails.webhookUrl}
+              </code>
+            </div>
+            <div className="grid gap-1">
+              <span>Secret</span>
+              <code className="overflow-x-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[12px] text-[var(--color-text-primary)]">
+                {gitHubSetupDetails.webhookSecret}
+              </code>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-8">
         {installedIntegrations.length ? (
@@ -360,7 +448,8 @@ export default function IntegrationsSettingsPage() {
                   </div>
                   <div className="flex shrink-0 gap-2">
                     {integration.actions.canReconnect &&
-                    integration.provider !== "gitlab" ? (
+                    integration.provider !== "gitlab" &&
+                    integration.provider !== "github" ? (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
@@ -571,6 +660,63 @@ export default function IntegrationsSettingsPage() {
                           </button>
                         </div>
                       ) : null}
+                      {integration.provider === "github" &&
+                      (integration.actions.canConnect ||
+                        integration.actions.canReconnect) ? (
+                        <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            GitHub App installation ID
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setGitHubInstallationId(event.target.value)
+                              }
+                              placeholder="12345678"
+                              type="text"
+                              value={gitHubInstallationId}
+                            />
+                          </label>
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Account or organization login
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setGitHubAccountLogin(event.target.value)
+                              }
+                              placeholder="acme"
+                              type="text"
+                              value={gitHubAccountLogin}
+                            />
+                          </label>
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Repository full name
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setGitHubRepositoryFullName(event.target.value)
+                              }
+                              placeholder="acme/web"
+                              type="text"
+                              value={gitHubRepositoryFullName}
+                            />
+                          </label>
+                          <button
+                            className="w-fit rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={
+                              pendingProvider === "github" ||
+                              gitHubInstallationId.trim() === "" ||
+                              gitHubAccountLogin.trim() === "" ||
+                              !gitHubRepositoryFullName.includes("/")
+                            }
+                            onClick={() => void setupGitHub()}
+                            type="button"
+                          >
+                            {pendingProvider === "github"
+                              ? "Connecting..."
+                              : "Connect GitHub"}
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                     {integration.actions.canDisconnect ? (
                       <button
@@ -582,7 +728,8 @@ export default function IntegrationsSettingsPage() {
                         Disconnect
                       </button>
                     ) : integration.actions.canReconnect &&
-                      integration.provider !== "gitlab" ? (
+                      integration.provider !== "gitlab" &&
+                      integration.provider !== "github" ? (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
