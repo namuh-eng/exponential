@@ -3771,6 +3771,7 @@ export interface components {
         | "jira"
         | "slack"
         | "sentry"
+        | "salesforce"
         | "zendesk"
         | "discord"
         | "microsoft_teams"

@@ -913,6 +913,7 @@ func exchangeSalesforceOAuth(ctx context.Context, client *http.Client, clientID,
 	if err := json.NewDecoder(resp.Body).Decode(&token); err != nil {
 		return salesforceOAuthResponse{}, err
 	}
+
 	return token, nil
 }
 
@@ -942,6 +943,7 @@ func fetchSalesforceUserInfo(ctx context.Context, client *http.Client, token sal
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		return salesforceUserInfo{}, err
 	}
+
 	if info.OrganizationID == "" {
 		return salesforceUserInfo{}, fmt.Errorf("Salesforce userinfo did not include organization_id")
 	}

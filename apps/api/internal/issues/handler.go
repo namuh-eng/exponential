@@ -1065,6 +1065,10 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update issue failed", err.Error())
 		return
 	}
+	if err := h.queueSalesforceAutomations(r.Context(), tx, p.WorkspaceID, existing, updated); err != nil {
+		problem.Write(w, 500, "Update issue failed", err.Error())
+		return
+	}
 	if err := tx.Commit(r.Context()); err != nil {
 		problem.Write(w, 500, "Update issue failed", err.Error())
 		return
