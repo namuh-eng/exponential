@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -155,6 +156,72 @@ func TestJiraClientUsesServerBearerAndBuildsPreview(t *testing.T) {
 	}
 	if len(statuses) != 1 || statuses[0] != "To Do" {
 		t.Fatalf("statuses = %#v", statuses)
+	}
+}
+
+func TestJiraIssuesPaginatesAllPages(t *testing.T) {
+	// Mock server returns total=150 across two pages: startAt=0 → 100 issues,
+	// startAt=100 → 50 issues. Passing maxResults=0 must fetch all 150.
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/api/2/search" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		startAt := 0
+		if v := r.URL.Query().Get("startAt"); v != "" {
+			for _, b := range []byte(v) {
+				startAt = startAt*10 + int(b-'0')
+			}
+		}
+		calls++
+		// Build the right slice of issues for this page.
+		var issuesBuf []byte
+		issuesBuf = append(issuesBuf, '[')
+		count := 100
+		if startAt >= 100 {
+			count = 50
+		}
+		for i := 0; i < count; i++ {
+			if i > 0 {
+				issuesBuf = append(issuesBuf, ',')
+			}
+			n := startAt + i + 1
+			issuesBuf = append(issuesBuf, []byte(`{"id":"`)...)
+			issuesBuf = append(issuesBuf, []byte(strconv.Itoa(n))...)
+			issuesBuf = append(issuesBuf, []byte(`","key":"ENG-`)...)
+			issuesBuf = append(issuesBuf, []byte(strconv.Itoa(n))...)
+			issuesBuf = append(issuesBuf, []byte(`","fields":{"summary":"Issue `)...)
+			issuesBuf = append(issuesBuf, []byte(strconv.Itoa(n))...)
+			issuesBuf = append(issuesBuf, []byte(`","status":{"id":"1","name":"Open"},"comment":{"comments":[]}}}`)...)
+		}
+		issuesBuf = append(issuesBuf, ']')
+		resp := `{"startAt":` + strconv.Itoa(startAt) + `,"total":150,"issues":` + string(issuesBuf) + `}`
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(resp))
+	}))
+	defer server.Close()
+
+	client := jiraClient{credential: jiraCredential{Deployment: "server", BaseURL: server.URL, Token: "tok"}, client: server.Client()}
+	issues, err := client.issues(t.Context(), "ENG", 0)
+	if err != nil {
+		t.Fatalf("expected no error for unlimited fetch, got %v", err)
+	}
+	if len(issues) != 150 {
+		t.Fatalf("expected 150 issues, got %d", len(issues))
+	}
+	if calls != 2 {
+		t.Fatalf("expected 2 HTTP calls (2 pages), got %d", calls)
+	}
+}
+
+func TestNormalizeJiraBaseURLRejectsHTTP(t *testing.T) {
+	_, err := normalizeJiraBaseURL("http://jira.example.com")
+	if err == nil || !strings.Contains(err.Error(), "HTTPS") {
+		t.Fatalf("expected HTTPS rejection for http:// URL, got %v", err)
+	}
+	_, err = normalizeJiraBaseURL("https://jira.example.com/")
+	if err != nil {
+		t.Fatalf("valid HTTPS URL should be accepted: %v", err)
 	}
 }
 

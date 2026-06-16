@@ -350,9 +350,10 @@ func (c jiraClient) issues(ctx context.Context, projectKey string, maxResults in
 	if !jiraProjectKeyRE.MatchString(projectKey) {
 		return nil, fmt.Errorf("invalid Jira project key: %q", projectKey)
 	}
-	if maxResults <= 0 {
-		maxResults = 100
-	}
+	// maxResults <= 0 means "fetch all pages" (unlimited). A positive value is a
+	// hard cap; once reached the caller receives a jiraTruncatedError.
+	unlimited := maxResults <= 0
+	const batchSize = 100
 	// Escape any embedded double-quotes in the key to be safe, then wrap in quotes.
 	escapedKey := strings.ReplaceAll(projectKey, `"`, `\"`)
 	jql := `project = "` + escapedKey + `" ORDER BY created ASC`
@@ -360,10 +361,6 @@ func (c jiraClient) issues(ctx context.Context, projectKey string, maxResults in
 	var all []jiraIssue
 	startAt := 0
 	for {
-		batchSize := maxResults
-		if batchSize > 100 {
-			batchSize = 100
-		}
 		values := url.Values{}
 		values.Set("jql", jql)
 		values.Set("maxResults", strconv.Itoa(batchSize))
@@ -376,13 +373,19 @@ func (c jiraClient) issues(ctx context.Context, projectKey string, maxResults in
 		}
 		all = append(all, response.Issues...)
 		startAt += len(response.Issues)
-		if len(response.Issues) == 0 || startAt >= response.Total || (maxResults > 0 && len(all) >= maxResults) {
-			if response.Total > len(all) {
-				// Caller passed a cap smaller than the total; surface the warning via a
-				// sentinel so handlers can add a truncation notice to the response.
-				return all, &jiraTruncatedError{fetched: len(all), total: response.Total}
-			}
+		// Empty-page guard: a misbehaving server that never advances its Total
+		// cannot cause an infinite loop — stop immediately if no issues arrived.
+		if len(response.Issues) == 0 {
 			return all, nil
+		}
+		// All server-reported pages consumed.
+		if startAt >= response.Total {
+			return all, nil
+		}
+		// Caller imposed a hard cap and we have reached it.
+		if !unlimited && len(all) >= maxResults {
+			// Surface a truncation warning so handlers can annotate the response.
+			return all, &jiraTruncatedError{fetched: len(all), total: response.Total}
 		}
 	}
 }
@@ -657,14 +660,6 @@ func (h Handler) maxIssueNumber(ctx context.Context, tx pgx.Tx, teamID string) (
 	var max int
 	err := tx.QueryRow(ctx, `select coalesce(max(number),0)::int from issue where team_id=$1::uuid`, teamID).Scan(&max)
 	return max, err
-}
-
-func jiraTeamIdentifier(ctx context.Context, tx pgx.Tx, teamID string, number int) string {
-	var key string
-	if err := tx.QueryRow(ctx, `select key from team where id=$1::uuid`, teamID).Scan(&key); err != nil || key == "" {
-		key = "JIRA"
-	}
-	return key + "-" + strconv.Itoa(number)
 }
 
 func (h Handler) upsertJiraIssueLink(ctx context.Context, tx pgx.Tx, workspaceID string, integrationID string, credential jiraCredential, project jiraProject, source jiraIssue, issueID string, updatedAt *time.Time) error {
