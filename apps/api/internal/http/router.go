@@ -28,6 +28,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/issues"
 	"github.com/namuh-eng/exponential/apps/api/internal/issuetemplates"
 	"github.com/namuh-eng/exponential/apps/api/internal/labels"
+	"github.com/namuh-eng/exponential/apps/api/internal/mcp"
 	"github.com/namuh-eng/exponential/apps/api/internal/myissues"
 	"github.com/namuh-eng/exponential/apps/api/internal/notifications"
 	"github.com/namuh-eng/exponential/apps/api/internal/observability"
@@ -143,6 +144,17 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 		v1.Group(func(public chi.Router) {
 			public.Use(ratelimit.PublicMiddleware())
 			public.Get("/workspaces/invite-preview", workspacesHandler.PreviewInvite)
+		})
+		mcpHandler := mcp.Handler{DB: db}
+		v1.Route("/mcp", func(mcpRouter chi.Router) {
+			mcpRouter.Options("/", mcpHandler.Options)
+			mcpRouter.Group(func(protectedMCP chi.Router) {
+				protectedMCP.Use(authMiddleware.Require)
+				protectedMCP.Use(ratelimit.Middleware())
+				protectedMCP.Use(demo.SideEffectGuard{DB: db}.Block)
+				protectedMCP.Get("/", mcpHandler.Get)
+				protectedMCP.Post("/", mcpHandler.Post)
+			})
 		})
 		v1.Group(func(protected chi.Router) {
 			protected.Use(authMiddleware.Require)
