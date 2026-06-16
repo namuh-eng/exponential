@@ -116,7 +116,7 @@ func (h Handler) IntercomConnect(w http.ResponseWriter, r *http.Request) {
 	}
 	clientID, _, ok := intercomOAuthConfig()
 	if !ok {
-		problem.JSON(w, http.StatusPreconditionFailed, map[string]string{"error": "Intercom OAuth is not configured", "message": "Add AUTH_INTERCOM_ID and AUTH_INTERCOM_SECRET to enable Intercom installation for this workspace."})
+		problem.Write(w, http.StatusPreconditionFailed, "Intercom OAuth is not configured", "Add AUTH_INTERCOM_ID and AUTH_INTERCOM_SECRET to enable Intercom installation for this workspace.")
 		return
 	}
 	state, err := randomState()
@@ -265,8 +265,13 @@ func (h Handler) IntercomIssueUnlink(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusBadRequest, "Intercom unlink requires conversationId", "")
 		return
 	}
-	if _, err := h.DB.Exec(r.Context(), `update integration_thread_link set issue_id=null, updated_at=now() where workspace_integration_id=$1::uuid and provider='intercom' and external_channel_id=$2`, install.IntegrationID, action.ConversationID); err != nil {
+	tag, err := h.DB.Exec(r.Context(), `update integration_thread_link set issue_id=null, updated_at=now() where workspace_integration_id=$1::uuid and provider='intercom' and external_channel_id=$2`, install.IntegrationID, action.ConversationID)
+	if err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Unlink Intercom conversation failed", err.Error())
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		problem.Write(w, http.StatusNotFound, "No linked issue to unlink.", "")
 		return
 	}
 	_ = h.recordIntercomEvent(r.Context(), install, "issue_unlinked", "info", "Intercom conversation unlinked from its issue.", map[string]any{"conversationId": action.ConversationID})
@@ -681,10 +686,7 @@ func intercomConfigured() bool {
 }
 
 func intercomSigningSecret() string {
-	if v := strings.TrimSpace(os.Getenv("INTERCOM_SIGNING_SECRET")); v != "" {
-		return v
-	}
-	return strings.TrimSpace(os.Getenv("AUTH_INTERCOM_SECRET"))
+	return strings.TrimSpace(os.Getenv("INTERCOM_SIGNING_SECRET"))
 }
 
 func intercomRedirectURI(appURL string) string {
@@ -811,7 +813,7 @@ func intercomIssueDescriptionHTML(action intercomConversationAction) string {
 	if action.CompanyName != "" {
 		parts = append(parts, "<p>Company: "+html.EscapeString(action.CompanyName)+"</p>")
 	}
-	if action.Permalink != "" {
+	if action.Permalink != "" && strings.HasPrefix(action.Permalink, "https://") {
 		parts = append(parts, `<p><a href="`+html.EscapeString(action.Permalink)+`">View source conversation in Intercom</a></p>`)
 	}
 	return sanitizehtml.RichText(strings.Join(parts, ""))
