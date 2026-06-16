@@ -34,20 +34,20 @@ type githubSnapshotRepo struct {
 }
 
 type githubSnapshotIssue struct {
-	ExternalID   string                  `json:"externalId"`
-	Repository   string                  `json:"repository"`
-	Number       int                     `json:"number"`
-	Title        string                  `json:"title"`
-	Body         string                  `json:"body"`
-	State        string                  `json:"state"`
-	HTMLURL      string                  `json:"htmlUrl"`
-	Author       githubSnapshotUser      `json:"author"`
-	Assignees    []githubSnapshotUser    `json:"assignees"`
-	Labels       []githubSnapshotLabel   `json:"labels"`
-	Milestone    *githubSnapshotMilestone `json:"milestone,omitempty"`
-	Comments     []githubSnapshotComment `json:"comments"`
-	CreatedAt    string                  `json:"createdAt"`
-	UpdatedAt    string                  `json:"updatedAt"`
+	ExternalID string                   `json:"externalId"`
+	Repository string                   `json:"repository"`
+	Number     int                      `json:"number"`
+	Title      string                   `json:"title"`
+	Body       string                   `json:"body"`
+	State      string                   `json:"state"`
+	HTMLURL    string                   `json:"htmlUrl"`
+	Author     githubSnapshotUser       `json:"author"`
+	Assignees  []githubSnapshotUser     `json:"assignees"`
+	Labels     []githubSnapshotLabel    `json:"labels"`
+	Milestone  *githubSnapshotMilestone `json:"milestone,omitempty"`
+	Comments   []githubSnapshotComment  `json:"comments"`
+	CreatedAt  string                   `json:"createdAt"`
+	UpdatedAt  string                   `json:"updatedAt"`
 }
 
 type githubSnapshotUser struct {
@@ -182,7 +182,7 @@ func (h Handler) handleGitHubProviderConfirm(w http.ResponseWriter, r *http.Requ
 	if mapping.DefaultTeamID == "" {
 		mapping.DefaultTeamID = stringOr(body["defaultTeamId"], "")
 	}
-	includeClosed := snapshot.Scope == "all" || boolFromAny(body["includeClosed"])
+	includeClosed := snapshot.Scope == "all" || boolFromAny(body["includeClosed"], false)
 	result, err := h.importGitHubSnapshot(r.Context(), p, current.ID, jobID, snapshot, mapping, includeClosed)
 	if err != nil {
 		_ = h.markProviderImportFailed(r.Context(), current.ID, jobID, err)
@@ -718,11 +718,6 @@ func stringMap(value any) map[string]string {
 		out[key] = asStringValue(item)
 	}
 	return out
-}
-
-func boolFromAny(value any) bool {
-	b, _ := value.(bool)
-	return b
 }
 
 func repoNames(repos []githubSnapshotRepo) []string {
