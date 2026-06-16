@@ -527,7 +527,11 @@ func (h Handler) figmaSources(ctx context.Context, issueID string) ([]figma.Sour
 }
 
 func (h Handler) RefreshFigmaSource(w http.ResponseWriter, r *http.Request) {
-	p, _ := auth.FromContext(r.Context())
+	p, ok := auth.FromContext(r.Context())
+	if !ok {
+		problem.Write(w, http.StatusUnauthorized, "Unauthorized", "")
+		return
+	}
 	issue, err := h.findIssue(r.Context(), chi.URLParam(r, "id"), p.WorkspaceID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		problem.Write(w, http.StatusNotFound, "Issue not found", "")

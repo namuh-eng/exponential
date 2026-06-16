@@ -122,7 +122,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Refresh stored metadata for a linked Figma source */
+    /** Mark a linked Figma source as seen (stamps refreshed_at; does not fetch from Figma API) */
     post: operations["refreshIssueFigmaSource"];
     delete?: never;
     options?: never;

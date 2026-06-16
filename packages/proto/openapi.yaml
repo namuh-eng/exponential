@@ -164,14 +164,14 @@ paths:
       - name: id
         in: path
         required: true
-        schema: { type: string }
+        schema: { type: string, format: uuid }
       - name: sourceId
         in: path
         required: true
         schema: { type: string, format: uuid }
     post:
       operationId: refreshIssueFigmaSource
-      summary: Refresh stored metadata for a linked Figma source
+      summary: Mark a linked Figma source as seen (stamps refreshed_at; does not fetch from Figma API)
       responses:
         '200':
           description: Refreshed Figma source

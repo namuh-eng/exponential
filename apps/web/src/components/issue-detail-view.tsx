@@ -12,6 +12,8 @@ import {
   richTextHtmlToPlainText,
 } from "@/lib/issue-description";
 import { withWorkspaceSlug } from "@/lib/workspace-paths";
+import { createBrowserApiClient } from "@/lib/browser-api-client";
+import type { components } from "@namuh-eng/expn-sdk";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -22,6 +24,8 @@ import {
   useRef,
   useState,
 } from "react";
+
+const apiClient = createBrowserApiClient();
 
 interface IssueReaction {
   emoji: string;
@@ -38,20 +42,7 @@ interface IssueCommentAttachment {
   downloadUrl: string | null;
 }
 
-interface FigmaSource {
-  id: string;
-  url: string;
-  normalizedUrl: string;
-  fileKey: string;
-  nodeId: string | null;
-  kind: "file" | "design" | "proto";
-  name: string | null;
-  thumbnailUrl: string | null;
-  containerType: "issue_description" | "comment" | "document" | "plugin";
-  capturedAt: string;
-  refreshedAt: string | null;
-  lastError: string | null;
-}
+type FigmaSource = components["schemas"]["FigmaSource"];
 
 interface WorkspaceMemberOption {
   userId: string;
@@ -609,11 +600,16 @@ function FigmaPreviewCard({
   const title = source.name?.trim() || `Figma ${label.toLowerCase()}`;
   const timestamp = source.refreshedAt ?? source.capturedAt;
 
+  const safeThumbnailUrl =
+    source.thumbnailUrl?.startsWith("https://") === true
+      ? source.thumbnailUrl
+      : null;
+
   return (
     <div className="tty-row overflow-hidden border border-[var(--color-border)] bg-[var(--color-content-bg)]">
-      {source.thumbnailUrl ? (
+      {safeThumbnailUrl ? (
         <img
-          src={source.thumbnailUrl}
+          src={safeThumbnailUrl}
           alt=""
           className="h-28 w-full object-cover"
           loading="lazy"
@@ -646,11 +642,11 @@ function FigmaPreviewCard({
             disabled={refreshing}
             className="tty-row border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {refreshing ? "Refreshing..." : "Refresh"}
+            {refreshing ? "Marking..." : "Mark seen"}
           </button>
         </div>
         <div className="mt-3 text-[12px] text-[var(--color-text-secondary)]">
-          {source.refreshedAt ? "Refreshed" : "Captured"}{" "}
+          {source.refreshedAt ? "Seen" : "Captured"}{" "}
           {formatFullDate(timestamp)}
         </div>
         {source.lastError ? (
@@ -1415,27 +1411,26 @@ export function IssueDetailView({
     setRefreshingFigmaSourceId(sourceId);
     setFigmaActionStatus(null);
     try {
-      const response = await fetch(
-        `/api/issues/${issue.id}/figma-sources/${sourceId}/refresh`,
-        { method: "POST" },
+      const { data, error } = await apiClient.POST(
+        "/issues/{id}/figma-sources/{sourceId}/refresh",
+        { params: { path: { id: issue.id, sourceId } } },
       );
-      if (!response.ok) {
-        throw new Error("Failed to refresh Figma preview");
+      if (error !== undefined || data === undefined) {
+        throw new Error("Failed to mark Figma source as seen");
       }
-      const refreshed = (await response.json()) as FigmaSource;
       setIssue((current) =>
         current
           ? {
               ...current,
               figmaSources: current.figmaSources.map((source) =>
-                source.id === sourceId ? refreshed : source,
+                source.id === sourceId ? data : source,
               ),
             }
           : current,
       );
-      setFigmaActionStatus("Figma preview refreshed.");
+      setFigmaActionStatus("Figma source marked as seen.");
     } catch {
-      setFigmaActionStatus("Figma preview could not be refreshed.");
+      setFigmaActionStatus("Figma source could not be updated.");
     } finally {
       setRefreshingFigmaSourceId(null);
     }

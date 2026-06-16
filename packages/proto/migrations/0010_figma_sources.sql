@@ -13,11 +13,11 @@ CREATE TABLE IF NOT EXISTS figma_source (
   name text,
   thumbnail_url text,
   snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
-  captured_at timestamp NOT NULL DEFAULT now(),
-  refreshed_at timestamp,
+  captured_at timestamptz NOT NULL DEFAULT now(),
+  refreshed_at timestamptz,
   last_error text,
-  created_at timestamp NOT NULL DEFAULT now(),
-  updated_at timestamp NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
   CHECK (kind IN ('file','design','proto')),
   CHECK (container_type IN ('issue_description','comment','document','plugin'))
 );
