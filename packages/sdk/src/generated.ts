@@ -963,6 +963,102 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/zendesk/setup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["setupZendeskIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/zendesk/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectZendeskIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/zendesk/tickets/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["searchZendeskLinkableIssues"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/zendesk/tickets/link": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["linkZendeskTicket"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/zendesk/tickets/create": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createIssueFromZendesk"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/zendesk/tickets/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["getZendeskTicketStatus"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/microsoft-teams/disconnect": {
     parameters: {
       query?: never;
@@ -2970,6 +3066,72 @@ export interface components {
     };
     SentryIssueSearchResponse: {
       issues: components["schemas"]["SentryIssueActionResponse"][];
+    };
+    ZendeskSetupRequest: {
+      subdomain: string;
+      /** Format: email */
+      email: string;
+      apiToken: string;
+    };
+    ZendeskSetupResponse: {
+      connected: boolean;
+      /** Format: uuid */
+      integrationId: string;
+      subdomain: string;
+      /** Format: uri */
+      accountUrl: string;
+      displayName: string;
+      /** Format: uri */
+      actionBaseUrl: string;
+      actionSecret: string;
+    };
+    ZendeskTicketActionRequest: {
+      query?: string;
+      exponentialIssueId?: string;
+      issueIdentifier?: string;
+      /** Format: uuid */
+      teamId?: string;
+      teamKey?: string;
+      title?: string;
+      description?: string;
+      /** @enum {string} */
+      priority?: "none" | "urgent" | "high" | "medium" | "low";
+      subdomain?: string;
+      ticket?: {
+        id?: string;
+        /** Format: uri */
+        url?: string;
+        subject?: string;
+        description?: string;
+        status?: string;
+        requester?: {
+          [key: string]: unknown;
+        };
+        organization?: {
+          [key: string]: unknown;
+        };
+      } & {
+        [key: string]: unknown;
+      };
+    } & {
+      [key: string]: unknown;
+    };
+    ZendeskIssueActionResponse: {
+      /** Format: uri */
+      webUrl: string;
+      project: string;
+      identifier: string;
+      title?: string;
+      stateName?: string;
+      stateCategory?: string;
+    };
+    ZendeskIssueSearchResponse: {
+      issues: components["schemas"]["ZendeskIssueActionResponse"][];
+    };
+    ZendeskTicketStatusResponse: {
+      ticketId: string;
+      linked: boolean;
+      issues: components["schemas"]["ZendeskIssueActionResponse"][];
     };
     IntegrationListResponse: {
       canManageIntegrations: boolean;
@@ -6826,6 +6988,152 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SentryIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  setupZendeskIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ZendeskSetupRequest"];
+      };
+    };
+    responses: {
+      /** @description Zendesk connected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ZendeskSetupResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectZendeskIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Zendesk disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  searchZendeskLinkableIssues: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ZendeskTicketActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linkable Exponential issues for Zendesk */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ZendeskIssueSearchResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkZendeskTicket: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ZendeskTicketActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked Exponential issue descriptor for Zendesk */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ZendeskIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createIssueFromZendesk: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ZendeskTicketActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Created Exponential issue descriptor for Zendesk */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ZendeskIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getZendeskTicketStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ZendeskTicketActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked issue status for a Zendesk ticket */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ZendeskTicketStatusResponse"];
         };
       };
       default: components["responses"]["Problem"];

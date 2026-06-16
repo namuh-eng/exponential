@@ -301,6 +301,7 @@ func resetTx(ctx context.Context, tx pgx.Tx) error {
 		`delete from provider_job where workspace_id=$1::uuid`,
 		`delete from provider_credential where workspace_integration_id in (select id from workspace_integration where workspace_id=$1::uuid)`,
 		`delete from integration_thread_link where workspace_id=$1::uuid`,
+		`delete from zendesk_ticket_link where workspace_id=$1::uuid`,
 		`delete from team_notification_integration where team_id in (select id from team where workspace_id=$1::uuid)`,
 		`delete from workspace_integration where workspace_id=$1::uuid`,
 		`delete from personal_access_token_audit_log where workspace_id=$1::uuid`,

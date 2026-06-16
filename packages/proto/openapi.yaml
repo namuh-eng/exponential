@@ -1225,6 +1225,112 @@ paths:
                 $ref: '#/components/schemas/SentryIssueActionResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /integrations/zendesk/setup:
+    post:
+      operationId: setupZendeskIntegration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ZendeskSetupRequest'
+      responses:
+        '200':
+          description: Zendesk connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ZendeskSetupResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/zendesk/disconnect:
+    post:
+      operationId: disconnectZendeskIntegration
+      responses:
+        '200':
+          description: Zendesk disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/zendesk/tickets/search:
+    post:
+      operationId: searchZendeskLinkableIssues
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ZendeskTicketActionRequest'
+      responses:
+        '200':
+          description: Linkable Exponential issues for Zendesk
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ZendeskIssueSearchResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/zendesk/tickets/link:
+    post:
+      operationId: linkZendeskTicket
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ZendeskTicketActionRequest'
+      responses:
+        '200':
+          description: Linked Exponential issue descriptor for Zendesk
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ZendeskIssueActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/zendesk/tickets/create:
+    post:
+      operationId: createIssueFromZendesk
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ZendeskTicketActionRequest'
+      responses:
+        '200':
+          description: Created Exponential issue descriptor for Zendesk
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ZendeskIssueActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/zendesk/tickets/status:
+    post:
+      operationId: getZendeskTicketStatus
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ZendeskTicketActionRequest'
+      responses:
+        '200':
+          description: Linked issue status for a Zendesk ticket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ZendeskTicketStatusResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /integrations/microsoft-teams/disconnect:
     post:
       operationId: disconnectMicrosoftTeamsIntegration
@@ -4356,6 +4462,78 @@ components:
         issues:
           type: array
           items: { $ref: '#/components/schemas/SentryIssueActionResponse' }
+    ZendeskSetupRequest:
+      type: object
+      required: [subdomain, email, apiToken]
+      properties:
+        subdomain: { type: string }
+        email: { type: string, format: email }
+        apiToken: { type: string, minLength: 1 }
+    ZendeskSetupResponse:
+      type: object
+      required: [connected, integrationId, subdomain, accountUrl, displayName, actionBaseUrl, actionSecret]
+      properties:
+        connected: { type: boolean }
+        integrationId: { type: string, format: uuid }
+        subdomain: { type: string }
+        accountUrl: { type: string, format: uri }
+        displayName: { type: string }
+        actionBaseUrl: { type: string, format: uri }
+        actionSecret: { type: string }
+    ZendeskTicketActionRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        query: { type: string }
+        exponentialIssueId: { type: string }
+        issueIdentifier: { type: string }
+        teamId: { type: string, format: uuid }
+        teamKey: { type: string }
+        title: { type: string }
+        description: { type: string }
+        priority: { type: string, enum: [none, urgent, high, medium, low] }
+        subdomain: { type: string }
+        ticket:
+          type: object
+          additionalProperties: true
+          properties:
+            id: { type: string }
+            url: { type: string, format: uri }
+            subject: { type: string }
+            description: { type: string }
+            status: { type: string }
+            requester:
+              type: object
+              additionalProperties: true
+            organization:
+              type: object
+              additionalProperties: true
+    ZendeskIssueActionResponse:
+      type: object
+      required: [webUrl, project, identifier]
+      properties:
+        webUrl: { type: string, format: uri }
+        project: { type: string }
+        identifier: { type: string }
+        title: { type: string }
+        stateName: { type: string }
+        stateCategory: { type: string }
+    ZendeskIssueSearchResponse:
+      type: object
+      required: [issues]
+      properties:
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/ZendeskIssueActionResponse' }
+    ZendeskTicketStatusResponse:
+      type: object
+      required: [ticketId, linked, issues]
+      properties:
+        ticketId: { type: string }
+        linked: { type: boolean }
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/ZendeskIssueActionResponse' }
     IntegrationListResponse:
       type: object
       required: [canManageIntegrations, integrations]

@@ -47,6 +47,12 @@ type GitLabSetupDetails = {
   webhookSecret: string;
 };
 
+type ZendeskSetupDetails = {
+  accountUrl: string;
+  actionBaseUrl: string;
+  actionSecret: string;
+};
+
 type IntegrationsPayload = {
   integrations?: Integration[];
   canManageIntegrations?: boolean;
@@ -110,6 +116,11 @@ export default function IntegrationsSettingsPage() {
   const [gitLabToken, setGitLabToken] = useState("");
   const [gitLabSetupDetails, setGitLabSetupDetails] =
     useState<GitLabSetupDetails | null>(null);
+  const [zendeskSubdomain, setZendeskSubdomain] = useState("");
+  const [zendeskEmail, setZendeskEmail] = useState("");
+  const [zendeskAPIToken, setZendeskAPIToken] = useState("");
+  const [zendeskSetupDetails, setZendeskSetupDetails] =
+    useState<ZendeskSetupDetails | null>(null);
 
   const loadIntegrations = useCallback(async () => {
     setLoading(true);
@@ -231,6 +242,57 @@ export default function IntegrationsSettingsPage() {
     }
   }
 
+  async function setupZendesk() {
+    setPendingProvider("zendesk");
+    setNotice(null);
+    setError(null);
+    setZendeskSetupDetails(null);
+    try {
+      const response = await fetch("/api/integrations/zendesk/setup", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          subdomain: zendeskSubdomain,
+          email: zendeskEmail,
+          apiToken: zendeskAPIToken,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        accountUrl?: string;
+        actionBaseUrl?: string;
+        actionSecret?: string;
+        error?: string;
+        message?: string;
+      };
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Zendesk setup failed.");
+      }
+      if (data.accountUrl && data.actionBaseUrl && data.actionSecret) {
+        setZendeskSetupDetails({
+          accountUrl: data.accountUrl,
+          actionBaseUrl: data.actionBaseUrl,
+          actionSecret: data.actionSecret,
+        });
+      }
+      setZendeskAPIToken("");
+      setNotice(
+        "Zendesk connected. Copy the action URL and secret into the Zendesk app.",
+      );
+      await loadIntegrations();
+    } catch (setupError) {
+      setError(
+        setupError instanceof Error
+          ? setupError.message
+          : "Zendesk setup failed.",
+      );
+    } finally {
+      setPendingProvider(null);
+    }
+  }
+
   async function disconnect(provider: string) {
     setPendingProvider(provider);
     setNotice(null);
@@ -245,13 +307,16 @@ export default function IntegrationsSettingsPage() {
               ? "/api/integrations/microsoft-teams/disconnect"
               : provider === "sentry"
                 ? "/api/integrations/sentry/disconnect"
-                : `/api/integrations?provider=${encodeURIComponent(provider)}`;
+                : provider === "zendesk"
+                  ? "/api/integrations/zendesk/disconnect"
+                  : `/api/integrations?provider=${encodeURIComponent(provider)}`;
       const response = await fetch(endpoint, {
         method:
           provider === "slack" ||
           provider === "discord" ||
           provider === "microsoft_teams" ||
-          provider === "sentry"
+          provider === "sentry" ||
+          provider === "zendesk"
             ? "POST"
             : "DELETE",
         headers: { Accept: "application/json" },
@@ -331,6 +396,28 @@ export default function IntegrationsSettingsPage() {
           </div>
         </div>
       ) : null}
+      {zendeskSetupDetails ? (
+        <div className="mt-6 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
+          <div className="font-medium text-[var(--color-text-primary)]">
+            Zendesk app details
+          </div>
+          <div className="mt-3 grid gap-2">
+            <div className="grid gap-1">
+              <span>Action base URL</span>
+              <code className="overflow-x-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[12px] text-[var(--color-text-primary)]">
+                {zendeskSetupDetails.actionBaseUrl}
+              </code>
+            </div>
+            <div className="grid gap-1">
+              <span>Signing secret</span>
+              <code className="overflow-x-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[12px] text-[var(--color-text-primary)]">
+                {zendeskSetupDetails.actionSecret}
+              </code>
+            </div>
+            <div>Connected account: {zendeskSetupDetails.accountUrl}</div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-8">
         {installedIntegrations.length ? (
@@ -360,7 +447,8 @@ export default function IntegrationsSettingsPage() {
                   </div>
                   <div className="flex shrink-0 gap-2">
                     {integration.actions.canReconnect &&
-                    integration.provider !== "gitlab" ? (
+                    integration.provider !== "gitlab" &&
+                    integration.provider !== "zendesk" ? (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
@@ -571,6 +659,63 @@ export default function IntegrationsSettingsPage() {
                           </button>
                         </div>
                       ) : null}
+                      {integration.provider === "zendesk" &&
+                      (integration.actions.canConnect ||
+                        integration.actions.canReconnect) ? (
+                        <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Zendesk subdomain
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setZendeskSubdomain(event.target.value)
+                              }
+                              placeholder="acme"
+                              type="text"
+                              value={zendeskSubdomain}
+                            />
+                          </label>
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Admin email
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setZendeskEmail(event.target.value)
+                              }
+                              placeholder="admin@example.com"
+                              type="email"
+                              value={zendeskEmail}
+                            />
+                          </label>
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            API token
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setZendeskAPIToken(event.target.value)
+                              }
+                              placeholder="Zendesk API token"
+                              type="password"
+                              value={zendeskAPIToken}
+                            />
+                          </label>
+                          <button
+                            className="w-fit rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={
+                              pendingProvider === "zendesk" ||
+                              zendeskSubdomain.trim() === "" ||
+                              zendeskEmail.trim() === "" ||
+                              zendeskAPIToken.trim() === ""
+                            }
+                            onClick={() => void setupZendesk()}
+                            type="button"
+                          >
+                            {pendingProvider === "zendesk"
+                              ? "Validating..."
+                              : "Connect Zendesk"}
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                     {integration.actions.canDisconnect ? (
                       <button
@@ -582,7 +727,8 @@ export default function IntegrationsSettingsPage() {
                         Disconnect
                       </button>
                     ) : integration.actions.canReconnect &&
-                      integration.provider !== "gitlab" ? (
+                      integration.provider !== "gitlab" &&
+                      integration.provider !== "zendesk" ? (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
@@ -610,7 +756,8 @@ export default function IntegrationsSettingsPage() {
                           ? "Opening..."
                           : "Connect"}
                       </button>
-                    ) : integration.provider === "gitlab" ? null : (
+                    ) : integration.provider === "gitlab" ||
+                      integration.provider === "zendesk" ? null : (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-tertiary)]"
                         disabled

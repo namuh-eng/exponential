@@ -438,7 +438,9 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
             ? " from Microsoft Teams"
             : event.metadata.source === "sentry_issue"
               ? " from Sentry"
-              : "";
+              : event.metadata.source === "zendesk_ticket"
+                ? " from Zendesk"
+                : "";
       return `${actorName} created this issue${legacySuffix}${sourceSuffix}`;
     }
     case "updated":
@@ -502,6 +504,19 @@ function getSentrySourceLink(event: IssueHistoryEvent): string | null {
   }
   return typeof sentry.webUrl === "string" && sentry.webUrl.length > 0
     ? sentry.webUrl
+    : null;
+}
+
+function getZendeskSourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "zendesk_ticket") {
+    return null;
+  }
+  const zendesk = event.metadata.zendesk;
+  if (!isRecord(zendesk)) {
+    return null;
+  }
+  return typeof zendesk.ticketUrl === "string" && zendesk.ticketUrl.length > 0
+    ? zendesk.ticketUrl
     : null;
 }
 
@@ -2038,6 +2053,16 @@ export function IssueDetailView({
                             className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
                           >
                             View source issue in Sentry
+                          </a>
+                        ) : null}
+                        {getZendeskSourceLink(event) ? (
+                          <a
+                            href={getZendeskSourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source ticket in Zendesk
                           </a>
                         ) : null}
                         {getGitLabSourceLink(event) ? (

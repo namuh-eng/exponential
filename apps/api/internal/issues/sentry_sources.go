@@ -19,13 +19,26 @@ type issueExternalSource struct {
 
 func (h Handler) issueExternalSources(ctx context.Context, issueID string) ([]issueExternalSource, error) {
 	rows, err := h.DB.Query(ctx, `
-		select provider,
-			coalesce(external_permalink,''),
-			coalesce(source_event_id,''),
-			coalesce(external_channel_id,''),
-			coalesce(workspace_integration_id::text,'')
-		from integration_thread_link
-		where issue_id=$1::uuid and provider in ('sentry') and external_permalink is not null
+		select provider, url, external_id, project, integration_id
+		from (
+			select provider,
+				coalesce(external_permalink,'') as url,
+				coalesce(source_event_id,'') as external_id,
+				coalesce(external_channel_id,'') as project,
+				coalesce(workspace_integration_id::text,'') as integration_id,
+				created_at
+			from integration_thread_link
+			where issue_id=$1::uuid and provider in ('sentry') and external_permalink is not null
+			union all
+			select 'zendesk' as provider,
+				coalesce(ticket_url,'') as url,
+				ticket_id as external_id,
+				coalesce(organization_name,'') as project,
+				coalesce(workspace_integration_id::text,'') as integration_id,
+				created_at
+			from zendesk_ticket_link
+			where issue_id=$1::uuid and ticket_url is not null
+		) sources
 		order by created_at asc`, issueID)
 	if err != nil {
 		return nil, err
@@ -51,6 +64,16 @@ func sourceLabel(provider string, project string, externalID string) string {
 		}
 		if strings.TrimSpace(externalID) != "" {
 			parts = append(parts, externalID)
+		}
+		return strings.Join(parts, " · ")
+	}
+	if provider == "zendesk" {
+		parts := []string{"Zendesk"}
+		if strings.TrimSpace(project) != "" {
+			parts = append(parts, project)
+		}
+		if strings.TrimSpace(externalID) != "" {
+			parts = append(parts, "ticket "+externalID)
 		}
 		return strings.Join(parts, " · ")
 	}
@@ -101,9 +124,6 @@ func (h Handler) queueSentryAutomations(ctx context.Context, tx pgx.Tx, workspac
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	if len(links) == 0 {
-		return nil
-	}
 	category := ""
 	if stateChanged {
 		if err := tx.QueryRow(ctx, `select category::text from workflow_state where id=$1::uuid`, after.StateID).Scan(&category); err != nil {
@@ -132,6 +152,11 @@ func (h Handler) queueSentryAutomations(ctx context.Context, tx pgx.Tx, workspac
 			}
 		}
 	}
+	if stateChanged && (category == "completed" || category == "canceled") {
+		if err := h.queueZendeskAutomations(ctx, tx, workspaceID, after, category); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -141,6 +166,43 @@ func insertSentryProviderJob(ctx context.Context, tx pgx.Tx, workspaceID string,
 		return err
 	}
 	_, err = tx.Exec(ctx, `insert into provider_job (workspace_id, workspace_integration_id, provider, kind, status, payload, scheduled_at, updated_at) values ($1::uuid,$2::uuid,'sentry','outbound_delivery','queued',$3::jsonb,now(),now())`, workspaceID, integrationID, raw)
+	return err
+}
+
+func (h Handler) queueZendeskAutomations(ctx context.Context, tx pgx.Tx, workspaceID string, after Issue, category string) error {
+	rows, err := tx.Query(ctx, `
+		select ztl.workspace_integration_id::text, ztl.ticket_id, coalesce(wi.metadata,'{}'::jsonb)
+		from zendesk_ticket_link ztl
+		join workspace_integration wi on wi.id=ztl.workspace_integration_id
+		where ztl.issue_id=$1::uuid and wi.provider='zendesk' and wi.status in ('connected','degraded')`, after.ID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var integrationID, ticketID string
+		var metadataRaw []byte
+		if err := rows.Scan(&integrationID, &ticketID, &metadataRaw); err != nil {
+			return err
+		}
+		metadata := readJSONRecord(metadataRaw)
+		if !boolSetting(metadata, "autoFollowUp", true) {
+			continue
+		}
+		payload := map[string]any{"type": "ticket_followup", "ticketId": ticketID, "issueId": after.ID, "identifier": after.Identifier, "category": category, "note": stringValue(metadata["closeNoteBody"])}
+		if err := insertZendeskProviderJob(ctx, tx, workspaceID, integrationID, payload); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+func insertZendeskProviderJob(ctx context.Context, tx pgx.Tx, workspaceID string, integrationID string, payload map[string]any) error {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `insert into provider_job (workspace_id, workspace_integration_id, provider, kind, status, payload, scheduled_at, updated_at) values ($1::uuid,$2::uuid,'zendesk','outbound_delivery','queued',$3::jsonb,now(),now())`, workspaceID, integrationID, raw)
 	return err
 }
 
@@ -168,6 +230,12 @@ func sentryUserForEmail(metadata map[string]any, email string) string {
 		}
 	}
 	return ""
+}
+
+func readJSONRecord(raw []byte) map[string]any {
+	out := map[string]any{}
+	_ = json.Unmarshal(raw, &out)
+	return out
 }
 
 func stringValue(value any) string {

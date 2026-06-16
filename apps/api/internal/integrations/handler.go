@@ -128,6 +128,8 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/microsoft-teams/disconnect", h.MicrosoftTeamsDisconnect)
 	r.Post("/sentry/connect", h.SentryConnect)
 	r.Post("/sentry/disconnect", h.SentryDisconnect)
+	r.Post("/zendesk/setup", h.ZendeskSetup)
+	r.Post("/zendesk/disconnect", h.ZendeskDisconnect)
 	r.Post("/slack/disconnect", h.SlackDisconnect)
 	return r
 }
@@ -406,13 +408,10 @@ func setupRequirement(provider string) *SetupRequirement {
 	if provider == "sentry" && !sentryConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Sentry credentials are not configured. Add AUTH_SENTRY_ID, AUTH_SENTRY_SECRET, and SENTRY_WEBHOOK_SECRET to enable installation and signed issue actions."}
 	}
-	if provider == "github" || provider == "jira" || provider == "zendesk" {
+	if provider == "github" || provider == "jira" {
 		name := "GitHub"
 		if provider == "jira" {
 			name = "Jira"
-		}
-		if provider == "zendesk" {
-			name = "Zendesk"
 		}
 		return &SetupRequirement{Type: "configuration_required", Message: name + " setup is not configured in this environment yet."}
 	}
