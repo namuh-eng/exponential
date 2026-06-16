@@ -1319,7 +1319,7 @@ export function AuthPage({
   const backLabel = mode === "signup" ? "Back to signup" : "Back to login";
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <TtyTopBar hostLabel={hostLabel} />
 
       {/* Two-column grid: left = auth form, right = preflight + sessions + CLI */}
