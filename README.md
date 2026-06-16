@@ -26,6 +26,9 @@ prototype into a headless architecture:
   self-hosting path.
 - AWS ECS scripts can provision and deploy split web/API services with RDS,
   ElastiCache, S3, SES, ECR, ALB routing, smoke tests, and Secrets Manager.
+- Integration parity planning is tracked in
+  [docs/integration-parity-roadmap.md](docs/integration-parity-roadmap.md),
+  with the P0/P1/P2/P3 build order and provider issue map.
 
 ## What You Get
 
