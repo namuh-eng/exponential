@@ -70,8 +70,12 @@ func (h Handler) History(w http.ResponseWriter, r *http.Request) {
 		}
 		event.Metadata = map[string]any{}
 		_ = json.Unmarshal(metadataRaw, &event.Metadata)
-		if actorID != nil {
-			event.Actor = &historyActor{ID: *actorID, Name: firstStringPtr(currentActorName, actorName), Email: firstStringPtr(currentActorEmail, actorEmail)}
+		if actorID != nil || actorName != nil || actorEmail != nil {
+			id := ""
+			if actorID != nil {
+				id = *actorID
+			}
+			event.Actor = &historyActor{ID: id, Name: firstStringPtr(currentActorName, actorName), Email: firstStringPtr(currentActorEmail, actorEmail)}
 		}
 		event.CreatedAt = createdAt.UTC().Format(time.RFC3339Nano)
 		events = append(events, event)

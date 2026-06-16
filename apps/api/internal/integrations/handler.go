@@ -104,10 +104,12 @@ type slackOAuthResponse struct {
 
 var catalog = []CatalogItem{
 	{Provider: "github", Name: "GitHub", Description: "Sync pull requests, commits, and issue links with Linear."},
+	{Provider: "gitlab", Name: "GitLab", Description: "Link merge requests, commits, and workflow automation to issues."},
 	{Provider: "jira", Name: "Jira", Description: "Sync issue status, ownership, and cross-links with Jira projects."},
 	{Provider: "discord", Name: "Discord", Description: "Create, search, and share issues from Discord slash commands."},
 	{Provider: "microsoft_teams", Name: "Microsoft Teams", Description: "Create issues and projects from Teams conversations and post project updates."},
 	{Provider: "figma", Name: "Figma", Description: "Preview design links and connect Figma selections to issues."},
+	{Provider: "sentry", Name: "Sentry", Description: "Create, link, and resolve issues from Sentry errors."},
 	{Provider: "slack", Name: "Slack", Description: "Send issue updates and create issues from Slack messages."},
 	{Provider: "zendesk", Name: "Zendesk", Description: "Connect support tickets to product work and customer requests."},
 }
@@ -117,10 +119,16 @@ func (h Handler) Routes() chi.Router {
 	r.Get("/", h.List)
 	r.Delete("/", h.Delete)
 	r.Post("/slack/connect", h.SlackConnect)
+	r.Get("/gitlab", h.GitLabStatus)
+	r.Post("/gitlab/setup", h.GitLabSetup)
+	r.Post("/gitlab/workflows", h.GitLabWorkflow)
+	r.Post("/gitlab/disconnect", h.GitLabDisconnect)
 	r.Post("/discord/connect", h.DiscordConnect)
 	r.Post("/discord/disconnect", h.DiscordDisconnect)
 	r.Post("/microsoft-teams/connect", h.MicrosoftTeamsConnect)
 	r.Post("/microsoft-teams/disconnect", h.MicrosoftTeamsDisconnect)
+	r.Post("/sentry/connect", h.SentryConnect)
+	r.Post("/sentry/disconnect", h.SentryDisconnect)
 	r.Post("/slack/disconnect", h.SlackDisconnect)
 	return r
 }
@@ -398,6 +406,9 @@ func setupRequirement(provider string) *SetupRequirement {
 	}
 	if provider == "figma" && !figmaConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Figma OAuth credentials are not configured. Add AUTH_FIGMA_ID and AUTH_FIGMA_SECRET to enable design previews."}
+	}
+	if provider == "sentry" && !sentryConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Sentry credentials are not configured. Add AUTH_SENTRY_ID, AUTH_SENTRY_SECRET, and SENTRY_WEBHOOK_SECRET to enable installation and signed issue actions."}
 	}
 	if provider == "github" || provider == "jira" || provider == "zendesk" {
 		name := "GitHub"

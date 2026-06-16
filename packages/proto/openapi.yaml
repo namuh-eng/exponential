@@ -1013,6 +1013,84 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /integrations/gitlab:
+    get:
+      operationId: getGitLabIntegration
+      responses:
+        '200':
+          description: GitLab integration status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitLabStatusResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/gitlab/setup:
+    post:
+      operationId: setupGitLabIntegration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GitLabSetupRequest'
+      responses:
+        '200':
+          description: GitLab integration connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitLabSetupResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/gitlab/workflows:
+    post:
+      operationId: updateGitLabWorkflowAutomation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GitLabWorkflowRequest'
+      responses:
+        '200':
+          description: GitLab workflow mappings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitLabWorkflowResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/gitlab/disconnect:
+    post:
+      operationId: disconnectGitLabIntegration
+      responses:
+        '200':
+          description: GitLab disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/gitlab/webhook/{integrationId}:
+    post:
+      operationId: ingestGitLabWebhook
+      security: []
+      parameters:
+        - name: integrationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '202':
+          description: GitLab webhook accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitLabWebhookResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /integrations/slack/connect:
     post:
       operationId: connectSlackIntegration
@@ -1065,6 +1143,108 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MicrosoftTeamsConfigurationRequiredResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/sentry/connect:
+    post:
+      operationId: connectSentryIntegration
+      responses:
+        '200':
+          description: Sentry authorization URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentryConnectResponse'
+        '412':
+          description: Sentry OAuth is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentryConfigurationRequiredResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/sentry/disconnect:
+    post:
+      operationId: disconnectSentryIntegration
+      responses:
+        '200':
+          description: Sentry disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/sentry/oauth/callback:
+    get:
+      operationId: sentryOAuthCallback
+      security: []
+      parameters:
+        - name: code
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+      responses:
+        '302': { description: Redirects to integration settings }
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/sentry/issues/search:
+    post:
+      operationId: searchSentryLinkableIssues
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SentryIssueActionRequest'
+      responses:
+        '200':
+          description: Linkable Exponential issues for Sentry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentryIssueSearchResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/sentry/issues/link:
+    post:
+      operationId: linkSentryIssue
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SentryIssueActionRequest'
+      responses:
+        '200':
+          description: Linked Exponential issue descriptor for Sentry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentryIssueActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/sentry/issues/create:
+    post:
+      operationId: createIssueFromSentry
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SentryIssueActionRequest'
+      responses:
+        '200':
+          description: Created Exponential issue descriptor for Sentry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentryIssueActionResponse'
         default:
           $ref: '#/components/responses/Problem'
   /integrations/microsoft-teams/disconnect:
@@ -4043,7 +4223,7 @@ components:
       type: object
       required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions, health]
       properties:
-        provider: { type: string, enum: [github, jira, slack, zendesk, discord, microsoft_teams, figma] }
+        provider: { type: string, enum: [github, gitlab, jira, slack, sentry, zendesk, discord, microsoft_teams, figma] }
         name: { type: string }
         description: { type: string }
         id: { type: [string, 'null'], format: uuid }
@@ -4057,6 +4237,65 @@ components:
             - type: 'null'
         actions: { $ref: '#/components/schemas/IntegrationActions' }
         health: { $ref: '#/components/schemas/IntegrationHealth' }
+    GitLabWorkflowMapping:
+      type: object
+      required: [teamId, teamKey, teamName, mergeRequestMergedStateId]
+      properties:
+        teamId: { type: string, format: uuid }
+        teamKey: { type: string }
+        teamName: { type: string }
+        mergeRequestMergedStateId: { type: [string, 'null'], format: uuid }
+    GitLabStatusResponse:
+      type: object
+      required: [connected, integrationId, origin, displayName, webhookUrl, webhookSecret, workflows]
+      properties:
+        connected: { type: boolean }
+        integrationId: { type: [string, 'null'], format: uuid }
+        origin: { type: [string, 'null'], format: uri }
+        displayName: { type: [string, 'null'] }
+        webhookUrl: { type: [string, 'null'], format: uri }
+        webhookSecret: { type: [string, 'null'] }
+        workflows:
+          type: array
+          items: { $ref: '#/components/schemas/GitLabWorkflowMapping' }
+    GitLabSetupRequest:
+      type: object
+      required: [origin, token]
+      properties:
+        origin: { type: string }
+        token: { type: string, minLength: 1 }
+    GitLabSetupResponse:
+      type: object
+      required: [connected, integrationId, origin, displayName, webhookUrl, webhookSecret, workflows]
+      properties:
+        connected: { type: boolean }
+        integrationId: { type: string, format: uuid }
+        origin: { type: string, format: uri }
+        displayName: { type: string }
+        webhookUrl: { type: string, format: uri }
+        webhookSecret: { type: string }
+        workflows:
+          type: array
+          items: { $ref: '#/components/schemas/GitLabWorkflowMapping' }
+    GitLabWorkflowRequest:
+      type: object
+      required: [teamId]
+      properties:
+        teamId: { type: string, format: uuid }
+        mergeRequestMergedStateId: { type: [string, 'null'], format: uuid }
+    GitLabWorkflowResponse:
+      type: object
+      required: [workflows]
+      properties:
+        workflows:
+          type: array
+          items: { $ref: '#/components/schemas/GitLabWorkflowMapping' }
+    GitLabWebhookResponse:
+      type: object
+      required: [ok, processedIssueCount]
+      properties:
+        ok: { type: boolean }
+        processedIssueCount: { type: integer, minimum: 0 }
     SlackConnectResponse:
       type: object
       required: [authorizationUrl, state, workspaceSlug]
@@ -4072,6 +4311,13 @@ components:
         state: { type: string }
         workspaceSlug: { type: string }
     MicrosoftTeamsConnectResponse:
+      type: object
+      required: [authorizationUrl, state, workspaceSlug]
+      properties:
+        authorizationUrl: { type: string, format: uri }
+        state: { type: string }
+        workspaceSlug: { type: string }
+    SentryConnectResponse:
       type: object
       required: [authorizationUrl, state, workspaceSlug]
       properties:
@@ -4096,6 +4342,42 @@ components:
       properties:
         error: { type: string }
         message: { type: string }
+    SentryConfigurationRequiredResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error: { type: string }
+        message: { type: string }
+    SentryIssueActionRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        query: { type: string }
+        exponentialIssueId: { type: string }
+        issueIdentifier: { type: string }
+        teamId: { type: string, format: uuid }
+        teamKey: { type: string }
+        title: { type: string }
+        description: { type: string }
+        assigneeEmail: { type: string, format: email }
+        priority: { type: string, enum: [none, urgent, high, medium, low] }
+        issue:
+          type: object
+          additionalProperties: true
+    SentryIssueActionResponse:
+      type: object
+      required: [webUrl, project, identifier]
+      properties:
+        webUrl: { type: string, format: uri }
+        project: { type: string }
+        identifier: { type: string }
+    SentryIssueSearchResponse:
+      type: object
+      required: [issues]
+      properties:
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/SentryIssueActionResponse' }
     IntegrationListResponse:
       type: object
       required: [canManageIntegrations, integrations]
@@ -6275,6 +6557,16 @@ components:
         capturedAt: { type: string, format: date-time }
         refreshedAt: { type: [string, 'null'], format: date-time }
         lastError: { type: [string, 'null'] }
+    IssueExternalSource:
+      type: object
+      required: [provider, label, url, externalId, project, integrationId]
+      properties:
+        provider: { type: string }
+        label: { type: string }
+        url: { type: string, format: uri }
+        externalId: { type: string }
+        project: { type: string }
+        integrationId: { type: string, format: uuid }
     Issue:
       type: object
       required: [id, number, identifier, title, team_id, state_id, creator_id, priority, created_at, updated_at]
@@ -6304,6 +6596,9 @@ components:
         figmaSources:
           type: array
           items: { $ref: '#/components/schemas/FigmaSource' }
+        sources:
+          type: array
+          items: { $ref: '#/components/schemas/IssueExternalSource' }
     IssueListResponse:
       type: object
       required: [data]

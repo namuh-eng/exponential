@@ -79,6 +79,16 @@ const mockIssueDetail = {
   ],
   figmaSources: [],
   subIssues: [],
+  sources: [
+    {
+      provider: "sentry",
+      label: "Sentry · api · 987",
+      url: "https://sentry.example/issues/987",
+      externalId: "987",
+      project: "api",
+      integrationId: "integration-1",
+    },
+  ],
   createdAt: "2026-04-25T09:00:00Z",
   updatedAt: "2026-04-25T09:30:00Z",
 };
@@ -120,6 +130,7 @@ describe("IssueDetailView UI", () => {
       screen.queryByText(/\d+ comment from \d+ participant/),
     ).not.toBeInTheDocument();
     expect(screen.getByText("First comment")).toBeInTheDocument();
+    expect(screen.getByText("Sentry · api · 987")).toBeInTheDocument();
   });
 
   it("renders safe Figma preview cards and refreshes them", async () => {
