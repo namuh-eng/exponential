@@ -136,6 +136,7 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 			publicProvider.Post("/integrations/microsoft-teams/activities", integrationsHandler.MicrosoftTeamsActivities)
 			publicProvider.Post("/integrations/slack/events", integrationsHandler.SlackEvents)
 			publicProvider.Post("/integrations/gitlab/webhook/{integrationID}", integrationsHandler.GitLabWebhook)
+			publicProvider.Post("/integrations/gong/{integrationID}/calls", integrationsHandler.GongIngestCall)
 			publicProvider.Post("/integrations/slack/interactivity", integrationsHandler.SlackInteractivity)
 		})
 		v1.Mount("/inbound", inbound.Handler{DB: db}.Routes())

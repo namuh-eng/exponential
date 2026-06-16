@@ -225,17 +225,12 @@ func (h Handler) GongDisconnect(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h Handler) GongIngestCall(w http.ResponseWriter, r *http.Request) {
-	p, _ := auth.FromContext(r.Context())
-	if !canManage(p.Role) {
-		problem.Write(w, http.StatusForbidden, "Forbidden", "")
-		return
-	}
 	integrationID := strings.TrimSpace(chi.URLParam(r, "integrationID"))
 	if integrationID == "" {
 		problem.Write(w, http.StatusBadRequest, "integrationID is required", "")
 		return
 	}
-	install, err := h.resolveGongInstall(r.Context(), p.WorkspaceID, integrationID)
+	install, err := h.resolveGongWebhookInstall(r.Context(), integrationID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		problem.Write(w, http.StatusNotFound, "Gong integration not found", "")
 		return
@@ -414,6 +409,21 @@ func (h Handler) resolveGongInstall(ctx context.Context, workspaceID string, int
 	var install gongInstallRecord
 	var raw []byte
 	err := h.DB.QueryRow(ctx, `select workspace_id::text, id::text, coalesce(connected_by_user_id,''), coalesce(metadata,'{}'::jsonb) from workspace_integration where workspace_id=$1::uuid and provider='gong' and status in ('connected','degraded') and id=$2::uuid order by updated_at desc limit 1`, workspaceID, integrationID).Scan(&install.WorkspaceID, &install.IntegrationID, &install.ConnectedBy, &raw)
+	if err != nil {
+		return install, err
+	}
+	install.Metadata = readJSONRecord(raw)
+	return install, nil
+}
+
+func (h Handler) resolveGongWebhookInstall(ctx context.Context, integrationID string) (gongInstallRecord, error) {
+	integrationID = strings.TrimSpace(integrationID)
+	if integrationID == "" {
+		return gongInstallRecord{}, fmt.Errorf("integrationID is required")
+	}
+	var install gongInstallRecord
+	var raw []byte
+	err := h.DB.QueryRow(ctx, `select workspace_id::text, id::text, coalesce(connected_by_user_id,''), coalesce(metadata,'{}'::jsonb) from workspace_integration where id=$1::uuid and provider='gong' and status in ('connected','degraded') limit 1`, integrationID).Scan(&install.WorkspaceID, &install.IntegrationID, &install.ConnectedBy, &raw)
 	if err != nil {
 		return install, err
 	}

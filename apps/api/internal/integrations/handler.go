@@ -131,7 +131,6 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/sentry/disconnect", h.SentryDisconnect)
 	r.Post("/gong/connect", h.GongConnect)
 	r.Post("/gong/disconnect", h.GongDisconnect)
-	r.Post("/gong/{integrationID}/calls", h.GongIngestCall)
 	r.Post("/slack/disconnect", h.SlackDisconnect)
 	return r
 }
