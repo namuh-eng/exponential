@@ -39,10 +39,19 @@ export interface AgentActorContext {
   mappedUserId?: string | null;
 }
 
+export interface AgentReviewDecision {
+  status: Exclude<AgentSuggestionStatus, "open">;
+  reviewerId: string;
+  reviewerName?: string | null;
+  reviewerEmail?: string | null;
+  decidedAt: string;
+}
+
 export interface AgentReviewGate {
   required: boolean;
   reason: string;
   policy: "external_mutation_requires_approval" | "read_only_action";
+  decision?: AgentReviewDecision;
 }
 
 export interface AgentSuggestion {
@@ -447,6 +456,11 @@ export function updateAgentSuggestion(
   runId: string,
   suggestionId: string,
   status: AgentSuggestionStatus,
+  reviewer?: {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+  },
 ) {
   const run = workspaceRuns(workspaceId).find((item) => item.id === runId);
   const suggestion = run?.suggestions.find((item) => item.id === suggestionId);
@@ -455,11 +469,47 @@ export function updateAgentSuggestion(
     return null;
   }
 
+  if (suggestion.status === status) {
+    return cloneRun(run);
+  }
+
+  if (suggestion.status !== "open") {
+    return null;
+  }
+
   suggestion.status = status;
   run.updatedAt = new Date().toISOString();
-  run.logs.push(
-    `${status === "accepted" ? "Accepted" : "Declined"} suggestion: ${suggestion.title}.`,
-  );
+
+  if (status !== "open" && reviewer && run.reviewGate) {
+    run.reviewGate = {
+      ...run.reviewGate,
+      decision: {
+        status,
+        reviewerId: reviewer.id,
+        reviewerName: reviewer.name ?? null,
+        reviewerEmail: reviewer.email ?? null,
+        decidedAt: run.updatedAt,
+      },
+    };
+  }
+
+  if (
+    run.status === "needs_review" &&
+    !run.suggestions.some((item) => item.status === "open")
+  ) {
+    run.status = "completed";
+  }
+
+  if (run.source) {
+    const reviewerLabel = reviewer?.email || reviewer?.name || reviewer?.id;
+    run.logs.push(
+      `${status === "accepted" ? "Accepted" : "Declined"} external ${run.actionType ?? "action"} from ${run.source.provider}:${run.source.conversationId}${reviewerLabel ? ` by ${reviewerLabel}` : ""}.`,
+    );
+  } else {
+    run.logs.push(
+      `${status === "accepted" ? "Accepted" : "Declined"} suggestion: ${suggestion.title}.`,
+    );
+  }
 
   return cloneRun(run);
 }

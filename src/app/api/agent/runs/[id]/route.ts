@@ -4,6 +4,13 @@ import {
   updateAgentSuggestion,
 } from "@/lib/agent-runs";
 import { requireApiSession } from "@/lib/api-auth";
+import { db } from "@/lib/db";
+import { member, workspace } from "@/lib/db/schema";
+import {
+  canUseWorkspaceAgents,
+  readWorkspaceAiSettings,
+} from "@/lib/workspace-ai-settings";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 const suggestionStatuses = new Set(["accepted", "declined"]);
@@ -20,6 +27,30 @@ export async function PATCH(
   const workspaceId = await resolveActiveWorkspaceId(session.user.id);
   if (!workspaceId) {
     return NextResponse.json({ error: "No workspace" }, { status: 404 });
+  }
+
+  const [access] = await db
+    .select({ settings: workspace.settings, role: member.role })
+    .from(workspace)
+    .innerJoin(
+      member,
+      and(
+        eq(member.workspaceId, workspace.id),
+        eq(member.userId, session.user.id),
+      ),
+    )
+    .where(eq(workspace.id, workspaceId))
+    .limit(1);
+  const aiSettings = readWorkspaceAiSettings(access?.settings);
+  if (!canUseWorkspaceAgents(access?.role, aiSettings)) {
+    return NextResponse.json(
+      {
+        error: aiSettings.aiFeaturesEnabled
+          ? "You do not have permission to review agent actions in this workspace"
+          : "Workspace AI and agent features are disabled",
+      },
+      { status: 403 },
+    );
   }
 
   let body: Record<string, unknown>;
@@ -45,6 +76,11 @@ export async function PATCH(
     id,
     suggestionId,
     status as AgentSuggestionStatus,
+    {
+      id: session.user.id,
+      name: session.user.name ?? null,
+      email: session.user.email ?? null,
+    },
   );
 
   if (!run) {
