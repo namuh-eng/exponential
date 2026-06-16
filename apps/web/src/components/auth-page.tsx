@@ -255,7 +255,7 @@ function getSafeRedirectTarget(
 }
 
 function AuthLogo() {
-  return <ExponentialMark size={32} className="mb-7 text-[var(--auth-logo)]" />;
+  return <ExponentialMark size={20} className="text-[var(--auth-accent)]" />;
 }
 
 function TurnstileField() {
@@ -269,6 +269,122 @@ function getTurnstileResponse(form: HTMLFormElement): string | undefined {
     : undefined;
 }
 
+// Top chrome bar — TTY-style: eˣ exponential · auth · <host> · ● tls ok
+function TtyTopBar({ hostLabel }: { hostLabel: string }) {
+  return (
+    <header className="flex shrink-0 items-center border-b border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-4 py-2 text-[11px] text-[var(--auth-muted)]">
+      <span className="flex items-center gap-2">
+        <AuthLogo />
+        <span className="text-[var(--auth-text)]">exponential</span>
+        <span className="text-[var(--auth-faint)]">·</span>
+        <span>auth</span>
+      </span>
+      <span className="flex-1" />
+      <span className="text-[var(--auth-faint)]">{hostLabel}</span>
+      <span className="mx-2.5 text-[var(--auth-faint)]">·</span>
+      <span>
+        <span className="text-[var(--auth-accent)]">●</span>
+        {" tls ok"}
+      </span>
+    </header>
+  );
+}
+
+// Bottom vim-style hotkey bar
+function TtyHotkeyBar({ mode }: { mode: AuthMode }) {
+  const keys =
+    mode === "signup"
+      ? [
+          ["↵", "submit step"],
+          ["tab", "next field"],
+          ["esc", "cancel"],
+        ]
+      : [
+          ["↵", "sign in"],
+          ["tab", "next field"],
+          ["⌃u", "clear"],
+          ["g", "google"],
+          ["?", "help"],
+        ];
+  return (
+    <footer className="flex shrink-0 items-center gap-4 border-t border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-4 py-1.5 text-[11px] text-[var(--auth-muted)]">
+      <span className="text-[var(--auth-accent)]">:</span>
+      {keys.map(([k, label]) => (
+        <span key={k} className="inline-flex items-center gap-1.5">
+          <kbd className="border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-1.5 py-0.5 text-[10px] text-[var(--auth-text)]">
+            {k}
+          </kbd>
+          <span>{label}</span>
+        </span>
+      ))}
+      <span className="ml-auto text-[var(--auth-faint)]">INSERT</span>
+    </footer>
+  );
+}
+
+// Right-column: preflight doctor panel using real preflightChecks data
+function PreflightRail({
+  checks,
+  hasFailure,
+}: {
+  checks: PreflightCheck[];
+  hasFailure: boolean;
+}) {
+  return (
+    <section aria-label="Authentication preflight checks">
+      <div className="border-b border-[var(--auth-secondary-border)] px-3 py-2 text-[11px] text-[var(--auth-muted)]">
+        # preflight
+      </div>
+      {hasFailure ? (
+        <output className="block border-b border-[var(--auth-secondary-border)] px-3 py-2 text-[12px] text-[var(--auth-err)]">
+          One or more login dependencies need attention. You can still try to
+          log in.
+        </output>
+      ) : null}
+      <ul className="divide-y divide-[var(--auth-secondary-border)] text-[11.5px]">
+        {checks.map((check) => (
+          <li
+            key={check.name}
+            className="flex items-center justify-between px-3 py-1.5"
+          >
+            <span className="flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className={
+                  check.status === "ok"
+                    ? "text-[var(--auth-ok)]"
+                    : check.status === "warn"
+                      ? "text-[var(--auth-warn)]"
+                      : "text-[var(--auth-err)]"
+                }
+              >
+                {check.status === "ok"
+                  ? "●"
+                  : check.status === "warn"
+                    ? "▲"
+                    : "✕"}
+              </span>
+              <span className="text-[var(--auth-text)]">{check.name}</span>
+            </span>
+            <span className="text-[var(--auth-muted)]">{check.detail}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function preflightStatusClass(status: PreflightStatus): string {
+  if (status === "ok") {
+    return "text-[var(--auth-ok)]";
+  }
+  if (status === "warn") {
+    return "text-[var(--auth-warn)]";
+  }
+  return "text-[var(--auth-err)]";
+}
+
+// Right-column: recent sessions table using real recentSessions data
 function RecentSessionsRail({
   sessions,
   recognizedOrigin,
@@ -276,50 +392,75 @@ function RecentSessionsRail({
   sessions: RecentSessionEntry[];
   recognizedOrigin: boolean;
 }) {
-  if (sessions.length === 0) return null;
-
   return (
-    <aside className="hidden w-[360px] rounded-3xl border border-[var(--auth-secondary-border)] bg-[var(--auth-secondary-bg)] p-5 text-[var(--auth-text)] shadow-2xl lg:block">
-      <div className="mb-4">
-        <p className="text-[12px] font-medium uppercase tracking-[0.16em] text-[var(--auth-muted)]">
-          Recent sessions on this host
-        </p>
-        <h2 className="mt-2 text-[18px] font-medium tracking-[-0.02em]">
-          Recognized workspace activity
-        </h2>
+    <section>
+      <div className="border-b border-[var(--auth-secondary-border)] px-3 py-2 text-[11px] text-[var(--auth-muted)]">
+        # recent sessions on this host
       </div>
-      {!recognizedOrigin ? (
-        <output className="mb-4 block rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3 text-[13px] leading-5 text-amber-100">
-          Unrecognized origin. We have not seen this network in the recent
-          session list.
-        </output>
-      ) : null}
-      <div className="space-y-3">
-        {sessions.map((session) => (
-          <div
-            key={session.id}
-            className="rounded-2xl border border-[var(--auth-secondary-border)] bg-black/10 p-3"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <p className="truncate text-[14px] font-medium">
-                {session.workspaceName}
-              </p>
-              {session.currentOrigin ? (
-                <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[11px] text-emerald-200">
-                  This origin
-                </span>
-              ) : null}
-            </div>
-            <p className="mt-1 text-[12px] text-[var(--auth-muted)]">
-              {session.actor} · {session.device}
-            </p>
-            <p className="mt-2 text-[12px] text-[var(--auth-muted)]">
-              {formatRecentSessionTime(session.loggedInAt)}
-            </p>
+      <div className="divide-y divide-[var(--auth-secondary-border)] text-[11.5px]">
+        {sessions.length === 0 ? (
+          <div className="px-3 py-2 text-[var(--auth-faint)]">
+            no recent sessions
           </div>
-        ))}
+        ) : (
+          sessions.map((session) => (
+            <div
+              key={session.id}
+              className={`flex items-center gap-2 px-3 py-1.5 ${
+                session.currentOrigin
+                  ? "border-l-2 border-[var(--auth-accent)] bg-[var(--auth-input-bg)]"
+                  : "border-l-2 border-transparent"
+              }`}
+            >
+              <span
+                className={
+                  session.currentOrigin
+                    ? "text-[var(--auth-accent)]"
+                    : "text-[var(--auth-muted)]"
+                }
+              >
+                {session.currentOrigin ? "●" : "○"}
+              </span>
+              <span className="text-[var(--auth-accent)]">
+                @{session.actor}
+              </span>
+              <span className="flex-1 truncate text-[var(--auth-muted)]">
+                {session.device}
+              </span>
+              <span className="shrink-0 text-[var(--auth-faint)]">
+                {formatRecentSessionTime(session.loggedInAt)}
+              </span>
+            </div>
+          ))
+        )}
       </div>
-    </aside>
+      {!recognizedOrigin && sessions.length > 0 ? (
+        <div className="border-t border-[var(--auth-secondary-border)] px-3 py-2 text-[10.5px] text-[var(--auth-warn)]">
+          ▲ unrecognized origin · we&apos;ll email you on every new device.
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+// Right-column: CLI pairing snippet — always shown
+function CliPairingSnippet({ hostLabel }: { hostLabel: string }) {
+  return (
+    <section>
+      <div className="border-b border-[var(--auth-secondary-border)] px-3 py-2 text-[11px] text-[var(--auth-muted)]">
+        # pair from terminal
+      </div>
+      <pre className="px-3 py-3 text-[11px] leading-relaxed text-[var(--auth-muted)]">
+        {"$ exponential login --host "}
+        <span className="text-[var(--auth-text)]">{hostLabel}</span>
+        {"\n→ visit "}
+        <span className="text-[var(--auth-text)]">
+          https://{hostLabel}/auth/cli
+        </span>
+        {"\n→ paste code: "}
+        <span className="text-[var(--auth-accent)]">H7K-4QM-92T</span>
+      </pre>
+    </section>
   );
 }
 
@@ -327,28 +468,28 @@ function FooterLinks({ mode }: { mode: AuthMode }) {
   if (mode === "signup") {
     return (
       <>
-        <p className="mt-8 text-center text-[12px] leading-5 text-[var(--auth-muted)]">
+        <p className="mt-6 text-[12px] text-[var(--auth-muted)]">
           By signing up, you agree to our{" "}
           <a
             href="/terms"
-            className="text-[var(--auth-link)] transition-opacity hover:opacity-80"
+            className="text-[var(--auth-link)] underline-offset-4 hover:underline"
           >
             Terms of Service
           </a>{" "}
           and{" "}
           <a
             href="/dpa"
-            className="text-[var(--auth-link)] transition-opacity hover:opacity-80"
+            className="text-[var(--auth-link)] underline-offset-4 hover:underline"
           >
             Data Processing Agreement
           </a>
           .
         </p>
-        <p className="mt-8 text-center text-[14px] text-[var(--auth-muted)]">
+        <p className="mt-4 text-[12px] text-[var(--auth-muted)]">
           Already have an account?{" "}
           <Link
             href="/login"
-            className="font-medium text-[var(--auth-link)] transition-opacity hover:opacity-80"
+            className="text-[var(--auth-link)] underline-offset-4 hover:underline"
           >
             Log in
           </Link>
@@ -358,18 +499,18 @@ function FooterLinks({ mode }: { mode: AuthMode }) {
   }
 
   return (
-    <p className="mt-8 text-center text-[14px] text-[var(--auth-muted)]">
-      Don’t have an account?{" "}
+    <p className="mt-6 text-[12px] text-[var(--auth-muted)]">
+      <span className="sr-only">Don’t have an account? </span>
       <Link
         href="/signup"
-        className="font-medium text-[var(--auth-link)] transition-opacity hover:opacity-80"
+        className="text-[var(--auth-link)] underline-offset-4 hover:underline"
       >
         Sign up
-      </Link>{" "}
-      or{" "}
+      </Link>
+      {" · "}
       <Link
         href="/homepage"
-        className="font-medium text-[var(--auth-link)] transition-opacity hover:opacity-80"
+        className="text-[var(--auth-link)] underline-offset-4 hover:underline"
       >
         learn more
       </Link>
@@ -528,142 +669,236 @@ function SignupWizard() {
     "finish",
   ];
   return (
-    <div className="w-full max-w-[360px] px-6 py-8 sm:px-0">
-      <div className="flex flex-col items-center">
-        <AuthLogo />
-        <div className="mb-5 flex gap-2 text-[12px] text-[var(--auth-muted)]">
-          {steps.map((step) => (
-            <span
-              key={step}
-              className={step === routeStep ? "text-[var(--auth-text)]" : ""}
-            >
-              {step}
-            </span>
-          ))}
+    <div className="flex min-h-screen flex-col items-center justify-center px-6 py-8">
+      <div className="w-full max-w-[360px]">
+        <div className="mb-6 flex items-center gap-3">
+          <ExponentialMark size={20} className="text-[var(--auth-accent)]" />
+          <span className="text-[var(--auth-text)]">exponential</span>
+          <span className="text-[var(--auth-faint)]">·</span>
+          <span className="text-[var(--auth-muted)] text-[12px]">
+            {steps.map((step, i) => (
+              <span key={step}>
+                <span
+                  className={
+                    step === routeStep
+                      ? "text-[var(--auth-text)]"
+                      : "text-[var(--auth-faint)]"
+                  }
+                >
+                  {step}
+                </span>
+                {i < steps.length - 1 ? (
+                  <span className="text-[var(--auth-faint)]"> → </span>
+                ) : null}
+              </span>
+            ))}
+          </span>
         </div>
-        <h1 className="text-center text-[32px] font-[510] tracking-[-0.035em] text-[var(--auth-text)]">
-          Create your workspace
+
+        <h1 className="mb-6 text-[28px] font-semibold tracking-tight text-[var(--auth-text)]">
+          Create your account
         </h1>
-      </div>
-      {routeStep === "identity" && (
-        <form onSubmit={submitIdentity} className="mt-8 space-y-3">
-          <input
-            type="text"
-            value={state.name}
-            onChange={(e) => update({ name: e.target.value })}
-            placeholder="Your name"
-            className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none"
-          />
-          <input
-            type="email"
-            required
-            value={state.email}
-            onChange={(e) => update({ email: e.target.value })}
-            placeholder="Work email"
-            className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none"
-          />
-          <button
-            type="submit"
-            className="auth-primary-button h-11 w-full rounded-full"
-          >
-            Continue
-          </button>
-        </form>
-      )}
-      {routeStep === "workspace" && (
-        <form onSubmit={submitWorkspace} className="mt-8 space-y-3">
-          <input
-            required
-            value={state.slug}
-            onChange={(e) => update({ slug: e.target.value.toLowerCase() })}
-            placeholder="workspace-slug"
-            className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none"
-          />
-          {slugAvailable !== null && (
-            <p
-              className={`text-center text-sm ${slugAvailable ? "text-emerald-400" : "text-[var(--auth-error)]"}`}
-            >
-              {slugAvailable ? "Slug is available" : "Slug is unavailable"}
-            </p>
-          )}
-          <div className="grid grid-cols-2 gap-2">
+
+        {routeStep === "identity" && (
+          <form onSubmit={submitIdentity} className="space-y-3">
+            <div className="border border-[var(--auth-input-border)] bg-[var(--auth-input-bg)]">
+              <label className="flex items-center gap-3 px-3 py-2.5">
+                <span
+                  aria-hidden="true"
+                  className="text-[13px] text-[var(--auth-prompt)]"
+                >
+                  {">"}
+                </span>
+                <input
+                  type="text"
+                  value={state.name}
+                  onChange={(e) => update({ name: e.target.value })}
+                  placeholder="Your name"
+                  className="flex-1 bg-transparent text-[13px] text-[var(--auth-text)] outline-none placeholder:text-[var(--auth-input-placeholder)]"
+                />
+              </label>
+            </div>
+            <div className="border border-[var(--auth-input-border)] bg-[var(--auth-input-bg)]">
+              <label className="flex items-center gap-3 px-3 py-2.5">
+                <span
+                  aria-hidden="true"
+                  className="text-[13px] text-[var(--auth-prompt)]"
+                >
+                  {">"}
+                </span>
+                <input
+                  type="email"
+                  required
+                  value={state.email}
+                  onChange={(e) => update({ email: e.target.value })}
+                  placeholder="Work email"
+                  className="flex-1 bg-transparent text-[13px] text-[var(--auth-text)] outline-none placeholder:text-[var(--auth-input-placeholder)]"
+                />
+              </label>
+            </div>
             <button
-              type="button"
-              onClick={() => update({ hostingMode: "hosted" })}
-              className="auth-secondary-button rounded-full border p-3"
+              type="submit"
+              className="auth-primary-button flex h-10 w-full items-center justify-between border border-[var(--auth-primary-border)] px-3 text-[13px] text-[var(--auth-primary-text)] transition-colors hover:bg-[var(--auth-primary-bg-hover)]"
             >
-              Hosted
+              <span className="inline-flex items-center gap-3">
+                <span aria-hidden="true">{"[↵]"}</span>
+                <span>Continue</span>
+              </span>
+              <span
+                aria-hidden="true"
+                className="text-[11px] text-[var(--auth-faint)]"
+              >
+                ↵
+              </span>
             </button>
+          </form>
+        )}
+
+        {routeStep === "workspace" && (
+          <form onSubmit={submitWorkspace} className="space-y-3">
+            <div className="border border-[var(--auth-input-border)] bg-[var(--auth-input-bg)]">
+              <label className="flex items-center gap-3 px-3 py-2.5">
+                <span
+                  aria-hidden="true"
+                  className="text-[13px] text-[var(--auth-prompt)]"
+                >
+                  {">"}
+                </span>
+                <input
+                  required
+                  value={state.slug}
+                  onChange={(e) =>
+                    update({ slug: e.target.value.toLowerCase() })
+                  }
+                  placeholder="workspace-slug"
+                  className="flex-1 bg-transparent text-[13px] text-[var(--auth-text)] outline-none placeholder:text-[var(--auth-input-placeholder)]"
+                />
+              </label>
+            </div>
+            {slugAvailable !== null && (
+              <p
+                className={`text-[12px] ${slugAvailable ? "text-[var(--auth-ok)]" : "text-[var(--auth-err)]"}`}
+              >
+                {slugAvailable ? "Slug is available" : "Slug is unavailable"}
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => update({ hostingMode: "hosted" })}
+                className="auth-secondary-button border border-[var(--auth-secondary-border)] p-3 text-[13px] transition-colors hover:bg-[var(--auth-secondary-bg-hover)]"
+              >
+                Hosted
+              </button>
+              <button
+                type="button"
+                onClick={() => update({ hostingMode: "self-hosted" })}
+                className="auth-secondary-button border border-[var(--auth-secondary-border)] p-3 text-[13px] transition-colors hover:bg-[var(--auth-secondary-bg-hover)]"
+              >
+                Self-host
+              </button>
+            </div>
+            <button
+              type="submit"
+              disabled={loading || slugAvailable === false}
+              className="auth-primary-button flex h-10 w-full items-center justify-between border border-[var(--auth-primary-border)] px-3 text-[13px] text-[var(--auth-primary-text)] transition-colors hover:bg-[var(--auth-primary-bg-hover)] disabled:opacity-60"
+            >
+              <span className="inline-flex items-center gap-3">
+                <span aria-hidden="true">{"[↵]"}</span>
+                <span>{loading ? "Creating…" : "Create workspace"}</span>
+              </span>
+              <span
+                aria-hidden="true"
+                className="text-[11px] text-[var(--auth-faint)]"
+              >
+                ↵
+              </span>
+            </button>
+          </form>
+        )}
+
+        {routeStep === "invite" && (
+          <form onSubmit={verifyAndInvite} className="space-y-3">
+            <p className="text-[13px] text-[var(--auth-muted)]">
+              Enter the 6-digit code sent to {state.email} before inviting
+              teammates.
+            </p>
+            <div className="border border-[var(--auth-input-border)] bg-[var(--auth-input-bg)]">
+              <label className="flex items-center gap-3 px-3 py-2.5">
+                <span
+                  aria-hidden="true"
+                  className="text-[13px] text-[var(--auth-prompt)]"
+                >
+                  {">"}
+                </span>
+                <input
+                  inputMode="numeric"
+                  value={code}
+                  onChange={(e) =>
+                    setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  placeholder="6-digit code"
+                  className="flex-1 bg-transparent text-center text-[13px] tracking-[0.35em] text-[var(--auth-text)] outline-none placeholder:text-[var(--auth-input-placeholder)]"
+                />
+              </label>
+            </div>
+            <textarea
+              value={inviteEmails}
+              onChange={(e) => setInviteEmails(e.target.value)}
+              placeholder="teammate@company.com, another@company.com"
+              className="min-h-24 w-full border border-[var(--auth-input-border)] bg-[var(--auth-input-bg)] px-3 py-2.5 text-[13px] text-[var(--auth-text)] outline-none placeholder:text-[var(--auth-input-placeholder)]"
+            />
+            <button
+              type="submit"
+              disabled={loading || code.length !== 6}
+              className="auth-primary-button flex h-10 w-full items-center justify-between border border-[var(--auth-primary-border)] px-3 text-[13px] text-[var(--auth-primary-text)] transition-colors hover:bg-[var(--auth-primary-bg-hover)] disabled:opacity-60"
+            >
+              <span className="inline-flex items-center gap-3">
+                <span aria-hidden="true">{"[↵]"}</span>
+                <span>Verify and send invites</span>
+              </span>
+              <span
+                aria-hidden="true"
+                className="text-[11px] text-[var(--auth-faint)]"
+              >
+                ↵
+              </span>
+            </button>
+          </form>
+        )}
+
+        {routeStep === "finish" && (
+          <div className="space-y-3">
+            <p className="text-[13px] text-[var(--auth-muted)]">
+              Your workspace is ready.
+            </p>
             <button
               type="button"
-              onClick={() => update({ hostingMode: "self-hosted" })}
-              className="auth-secondary-button rounded-full border p-3"
+              onClick={() => {
+                window.localStorage.removeItem(signupStorageKey);
+                window.location.assign(`/${state.slug || ""}`);
+              }}
+              className="auth-primary-button flex h-10 w-full items-center justify-between border border-[var(--auth-primary-border)] px-3 text-[13px] text-[var(--auth-primary-text)] transition-colors hover:bg-[var(--auth-primary-bg-hover)]"
             >
-              Self-host
+              <span className="inline-flex items-center gap-3">
+                <span aria-hidden="true">{"[↵]"}</span>
+                <span>Go to dashboard</span>
+              </span>
+              <span
+                aria-hidden="true"
+                className="text-[11px] text-[var(--auth-faint)]"
+              >
+                ↵
+              </span>
             </button>
           </div>
-          <button
-            type="submit"
-            disabled={loading || slugAvailable === false}
-            className="auth-primary-button h-11 w-full rounded-full"
-          >
-            {loading ? "Creating…" : "Create workspace"}
-          </button>
-        </form>
-      )}
-      {routeStep === "invite" && (
-        <form onSubmit={verifyAndInvite} className="mt-8 space-y-3">
-          <p className="text-center text-[14px] text-[var(--auth-muted)]">
-            Enter the 6-digit code sent to {state.email} before inviting
-            teammates.
-          </p>
-          <input
-            inputMode="numeric"
-            value={code}
-            onChange={(e) =>
-              setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-            }
-            placeholder="6-digit code"
-            className="auth-input h-11 w-full rounded-full border px-4 text-center tracking-[0.35em] outline-none"
-          />
-          <textarea
-            value={inviteEmails}
-            onChange={(e) => setInviteEmails(e.target.value)}
-            placeholder="teammate@company.com, another@company.com"
-            className="auth-input min-h-24 w-full rounded-2xl border px-4 py-3 text-[14px] outline-none"
-          />
-          <button
-            type="submit"
-            disabled={loading || code.length !== 6}
-            className="auth-primary-button h-11 w-full rounded-full"
-          >
-            Verify and send invites
-          </button>
-        </form>
-      )}
-      {routeStep === "finish" && (
-        <div className="mt-8 space-y-3 text-center">
-          <p className="text-[14px] text-[var(--auth-muted)]">
-            Your workspace is ready.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              window.localStorage.removeItem(signupStorageKey);
-              window.location.assign(`/${state.slug || ""}`);
-            }}
-            className="auth-primary-button h-11 w-full rounded-full"
-          >
-            Go to dashboard
-          </button>
-        </div>
-      )}
-      {status && (
-        <p className="mt-4 text-center text-sm text-[var(--auth-error)]">
-          {status}
-        </p>
-      )}
-      <FooterLinks mode="signup" />
+        )}
+
+        {status && (
+          <p className="mt-4 text-[12px] text-[var(--auth-err)]">{status}</p>
+        )}
+        <FooterLinks mode="signup" />
+      </div>
     </div>
   );
 }
@@ -708,11 +943,22 @@ export function AuthPage({
     [],
   );
   const [recognizedOrigin, setRecognizedOrigin] = useState(true);
+  const [hostLabel, setHostLabel] = useState("host:unknown");
   const emailSubmitAttemptRef = useRef(0);
 
   useEffect(() => {
     setPasskeySupported(browserSupportsPasskeys());
     ensureRecentSessionFingerprint();
+    if (typeof window !== "undefined") {
+      const host = window.location.host;
+      if (!host) {
+        setHostLabel("host:unknown");
+      } else if (host.startsWith("localhost") || host.startsWith("127.0.0.1")) {
+        setHostLabel("local preview");
+      } else {
+        setHostLabel(host);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -1073,83 +1319,147 @@ export function AuthPage({
   const backLabel = mode === "signup" ? "Back to signup" : "Back to login";
 
   return (
-    <div className="flex w-full max-w-5xl flex-col items-center justify-center gap-8 px-6 py-8 lg:flex-row lg:items-start">
-      <div className="w-full max-w-[320px] sm:px-0">
-        <div className="flex flex-col items-center">
-          <AuthLogo />
-          <h1 className="text-center text-[32px] font-[510] tracking-[-0.035em] text-[var(--auth-text)]">
-            {title}
-          </h1>
-        </div>
+    <div className="flex h-full flex-col">
+      <TtyTopBar hostLabel={hostLabel} />
 
-        <div className="mt-8 space-y-4">
+      {/* Two-column grid: left = auth form, right = preflight + sessions + CLI */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1.05fr_1fr]">
+        {/* Left — auth actions */}
+        <div className="flex flex-col border-r border-[var(--auth-secondary-border)] px-10 py-12 lg:px-16">
+          <div className="mb-6">
+            <p className="mb-1.5 text-[11px] uppercase tracking-[0.12em] text-[var(--auth-accent)]">
+              {mode === "signup"
+                ? "// session · new workspace"
+                : "// session · open"}
+            </p>
+            <h1
+              aria-label={title}
+              className="text-[28px] font-bold leading-tight tracking-tight text-[var(--auth-text)]"
+            >
+              {title}
+            </h1>
+          </div>
+
+          {/* Error banner */}
+          {error ? (
+            <div
+              className="mb-4 border border-[var(--auth-err)]/40 bg-[var(--auth-err)]/10 px-3 py-2 text-[12px] text-[var(--auth-err)]"
+              role="alert"
+            >
+              {error}
+            </div>
+          ) : null}
+
+          {/* step: choose */}
           {step === "choose" && (
-            <div className="space-y-3">
-              {googleAllowed && (
-                <button
-                  type="button"
-                  onClick={handleGoogleLogin}
-                  disabled={loading}
-                  className="auth-primary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 18 18"
-                    role="img"
-                    aria-label="Google"
+            <div className="space-y-2.5">
+              {/* OAuth buttons — 2-col grid */}
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {googleAllowed && (
+                  <button
+                    type="button"
+                    onClick={handleGoogleLogin}
+                    disabled={loading}
+                    className="flex items-center gap-3 border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-3 py-3 text-[13px] text-[var(--auth-text)] transition-colors hover:bg-[var(--auth-secondary-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <path
-                      d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
-                      fill="#4285F4"
-                    />
-                    <path
-                      d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"
-                      fill="#34A853"
-                    />
-                    <path
-                      d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
-                      fill="#FBBC05"
-                    />
-                    <path
-                      d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
-                      fill="#EA4335"
-                    />
-                  </svg>
-                  {googleConfigured === null
-                    ? "Checking Google sign-in"
-                    : "Continue with Google"}
-                </button>
-              )}
-              {passkeyConfigured !== false && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPasskeyPending(false);
-                    setStep("email-input");
-                  }}
-                  disabled={loading}
-                  className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    role="img"
-                    aria-label="Email"
-                  >
-                    <rect width="20" height="16" x="2" y="4" rx="2" />
-                    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-                  </svg>
-                  Continue with email
-                </button>
-              )}
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 18 18"
+                      role="img"
+                      aria-label="Google"
+                    >
+                      <path
+                        d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
+                        fill="#4285F4"
+                      />
+                      <path
+                        d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"
+                        fill="#34A853"
+                      />
+                      <path
+                        d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
+                        fill="#FBBC05"
+                      />
+                      <path
+                        d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
+                        fill="#EA4335"
+                      />
+                    </svg>
+                    <span className="flex flex-col gap-0.5">
+                      <span>
+                        {googleConfigured === null
+                          ? "Checking Google sign-in"
+                          : "Continue with Google"}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className="text-[10.5px] text-[var(--auth-faint)]"
+                      >
+                        oauth · workspace email
+                      </span>
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className="ml-auto text-[10.5px] text-[var(--auth-faint)]"
+                    >
+                      g
+                    </span>
+                  </button>
+                )}
 
+                {passkeyConfigured !== false && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPasskeyPending(false);
+                      setStep("email-input");
+                    }}
+                    disabled={loading}
+                    className="flex items-center gap-3 border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-3 py-3 text-[13px] text-[var(--auth-text)] transition-colors hover:bg-[var(--auth-secondary-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      role="img"
+                      aria-label="Email"
+                    >
+                      <rect width="20" height="16" x="2" y="4" rx="2" />
+                      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                    </svg>
+                    <span className="flex flex-col gap-0.5">
+                      <span>Continue with email</span>
+                      <span
+                        aria-hidden="true"
+                        className="text-[10.5px] text-[var(--auth-faint)]"
+                      >
+                        magic link · sent to inbox
+                      </span>
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className="ml-auto text-[10.5px] text-[var(--auth-faint)]"
+                    >
+                      ↵
+                    </span>
+                  </button>
+                )}
+              </div>
+
+              {/* Divider */}
+              <div className="flex items-center gap-3 py-1 text-[10.5px] text-[var(--auth-faint)]">
+                <span className="h-px flex-1 bg-[var(--auth-secondary-border)]" />
+                <span>── or with SAML / passkey ──</span>
+                <span className="h-px flex-1 bg-[var(--auth-secondary-border)]" />
+              </div>
+
+              {/* SAML SSO */}
               <button
                 type="button"
                 onClick={() => {
@@ -1158,11 +1468,14 @@ export function AuthPage({
                   setError("");
                 }}
                 disabled={loading}
-                className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-full items-center gap-3 border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-3 py-2.5 text-[13px] text-[var(--auth-text)] transition-colors hover:bg-[var(--auth-secondary-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
               >
+                <span aria-hidden="true" className="text-[var(--auth-prompt)]">
+                  {">"}
+                </span>
                 <svg
-                  width="16"
-                  height="16"
+                  width="14"
+                  height="14"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -1177,80 +1490,164 @@ export function AuthPage({
                   <path d="M9 15h6" />
                   <path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" />
                 </svg>
-                Continue with SAML SSO
+                <span>Continue with SAML SSO</span>
+                <span
+                  aria-hidden="true"
+                  className="ml-auto text-[10.5px] text-[var(--auth-faint)]"
+                >
+                  oidc · enterprise
+                </span>
               </button>
 
               {mode === "login" && passkeyConfigured !== false && (
-                <>
-                  <button
-                    type="button"
-                    onClick={handlePasskeyLogin}
-                    disabled={loading || passkeyPending || !passkeySupported}
-                    className="auth-secondary-button flex h-11 w-full items-center justify-center gap-3 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                <button
+                  type="button"
+                  onClick={handlePasskeyLogin}
+                  disabled={loading || passkeyPending || !passkeySupported}
+                  className="flex w-full items-center gap-3 border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-3 py-2.5 text-[13px] text-[var(--auth-text)] transition-colors hover:bg-[var(--auth-secondary-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="text-[var(--auth-prompt)]"
                   >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      role="img"
-                      aria-label="Passkey"
-                    >
-                      <path d="M10 13a5 5 0 1 1 3.54 1.46L12 16h-2v2H8v2H5v-3l4.54-4.54A5 5 0 0 1 10 13Z" />
-                      <path d="M15 9h.01" />
-                    </svg>
+                    {">"}
+                  </span>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    role="img"
+                    aria-label="Passkey"
+                  >
+                    <path d="M10 13a5 5 0 1 1 3.54 1.46L12 16h-2v2H8v2H5v-3l4.54-4.54A5 5 0 0 1 10 13Z" />
+                    <path d="M15 9h.01" />
+                  </svg>
+                  <span>
                     {passkeyPending
                       ? "Waiting for passkey"
                       : "Log in with passkey"}
-                  </button>
-                  {passkeyConfigured === true && !passkeySupported ? (
-                    <p className="pt-1 text-center text-sm text-[var(--auth-error)]">
-                      This browser doesn&apos;t support passkeys. Use email or
-                      Google instead.
-                    </p>
-                  ) : null}
-                </>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className="ml-auto text-[10.5px] text-[var(--auth-faint)]"
+                  >
+                    webauthn
+                  </span>
+                </button>
               )}
 
+              {passkeyConfigured === true && !passkeySupported ? (
+                <p className="text-[12px] text-[var(--auth-err)]">
+                  This browser doesn&apos;t support passkeys. Use email or
+                  Google instead.
+                </p>
+              ) : null}
+
               {googleDisabledByWorkspace && emailConfigured === false ? (
-                <p className="pt-1 text-center text-sm text-[var(--auth-muted)]">
+                <p className="text-[12px] text-[var(--auth-muted)]">
                   Google, email, and passkey login are disabled for this
                   workspace. Continue with SAML SSO.
                 </p>
               ) : null}
 
-              {error && (
-                <p className="pt-1 text-center text-sm text-[var(--auth-error)]">
-                  {error}
-                </p>
-              )}
+              {/* # advanced auth */}
+              <details className="mt-2">
+                <summary className="flex cursor-pointer list-none items-center gap-2 py-1 text-[11px] text-[var(--auth-muted)] hover:text-[var(--auth-text)]">
+                  <span className="text-[var(--auth-accent)]">▾</span>
+                  <span># advanced auth</span>
+                  <span className="text-[var(--auth-faint)]">
+                    · ssh · oidc · cli
+                  </span>
+                </summary>
+                <div className="mt-2 space-y-1.5">
+                  {[
+                    {
+                      k: "ssh",
+                      name: "ssh key",
+                      cmd: "$ exponential auth ssh",
+                      hint: "paste public key",
+                    },
+                    {
+                      k: "oidc",
+                      name: "oidc / saml",
+                      cmd: "$ exponential auth oidc",
+                      hint: "enterprise · self-host",
+                    },
+                    {
+                      k: "cli",
+                      name: "device code",
+                      cmd: "$ exponential login",
+                      hint: "cli pairing · 6-digit",
+                    },
+                  ].map((s) => (
+                    <div
+                      key={s.k}
+                      className="grid grid-cols-[36px_1fr_1fr_70px] items-center gap-2 border border-[var(--auth-secondary-border)] px-3 py-2 text-[12px]"
+                    >
+                      <span className="text-[10.5px] text-[var(--auth-faint)]">
+                        [{s.k}]
+                      </span>
+                      <span className="text-[var(--auth-text)]">{s.name}</span>
+                      <span className="truncate text-[11px] text-[var(--auth-muted)]">
+                        {s.cmd}
+                      </span>
+                      <span className="text-right text-[10.5px] text-[var(--auth-faint)]">
+                        {s.hint}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+
+              {step === "choose" && <FooterLinks mode={mode} />}
             </div>
           )}
 
+          {/* step: email-input */}
           {step === "email-input" && (
             <form onSubmit={handleEmailSubmit} noValidate className="space-y-3">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setError("");
-                }}
-                placeholder="Enter your email address…"
-                required
-                className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none transition-colors"
-              />
+              <div className="border border-[var(--auth-input-border)] bg-[var(--auth-input-bg)] focus-within:border-[var(--auth-accent)]">
+                <label className="flex items-center gap-3 px-3 py-2.5">
+                  <span
+                    aria-hidden="true"
+                    className="select-none text-[13px] text-[var(--auth-prompt)]"
+                  >
+                    {">"}
+                  </span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setError("");
+                    }}
+                    placeholder="Enter your email address…"
+                    required
+                    className="flex-1 bg-transparent text-[13px] text-[var(--auth-text)] outline-none placeholder:text-[var(--auth-input-placeholder)]"
+                  />
+                </label>
+              </div>
               <TurnstileField />
               <button
                 type="submit"
                 disabled={loading}
-                className="auth-primary-button flex h-11 w-full items-center justify-center rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-full items-center justify-between border border-[var(--auth-primary-border)] bg-[var(--auth-primary-bg)] px-3 text-[13px] text-[var(--auth-primary-text)] transition-colors hover:bg-[var(--auth-primary-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {loading ? "Sending…" : "Continue with email"}
+                <span className="inline-flex items-center gap-3">
+                  <span aria-hidden="true">{"[↵]"}</span>
+                  <span>{loading ? "Sending…" : "Continue with email"}</span>
+                </span>
+                <span
+                  aria-hidden="true"
+                  className="text-[11px] text-[var(--auth-faint)]"
+                >
+                  ↵
+                </span>
               </button>
               <button
                 type="button"
@@ -1261,24 +1658,20 @@ export function AuthPage({
                   setError("");
                   setCode("");
                 }}
-                className="w-full pt-1 text-center text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
+                className="w-full pt-1 text-left text-[12px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
               >
                 {backLabel}
               </button>
-              {error && (
-                <p className="text-center text-sm text-[var(--auth-error)]">
-                  {error}
-                </p>
-              )}
             </form>
           )}
 
+          {/* step: email-verifying */}
           {step === "email-verifying" && (
-            <div className="space-y-5 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-[var(--auth-secondary-border)] bg-[var(--auth-secondary-bg)]">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-3 py-3">
                 <svg
-                  width="20"
-                  height="20"
+                  width="18"
+                  height="18"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="var(--auth-accent)"
@@ -1291,11 +1684,9 @@ export function AuthPage({
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
                   <path d="m9 12 2 2 4-4" />
                 </svg>
-              </div>
-              <div>
-                <p className="mt-2 text-[14px] leading-6 text-[var(--auth-muted)]">
-                  This helps us confirm this sign-in request before sending your
-                  email link and code.
+                <p className="text-[13px] text-[var(--auth-muted)]">
+                  Confirming this sign-in request before sending your email link
+                  and code.
                 </p>
               </div>
               <button
@@ -1307,32 +1698,54 @@ export function AuthPage({
                   setError("");
                   setCode("");
                 }}
-                className="w-full pt-1 text-center text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
+                className="w-full pt-1 text-left text-[12px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
               >
                 {backLabel}
               </button>
             </div>
           )}
 
+          {/* step: sso-input */}
           {step === "sso-input" && (
             <form onSubmit={handleSsoSubmit} noValidate className="space-y-3">
-              <input
-                type="email"
-                value={ssoIdentifier}
-                onChange={(e) => {
-                  setSsoIdentifier(e.target.value);
-                  setError("");
-                }}
-                placeholder="Enter your email address…"
-                required
-                className="auth-input h-11 w-full rounded-full border px-4 text-[14px] outline-none transition-colors"
-              />
+              <div className="border border-[var(--auth-input-border)] bg-[var(--auth-input-bg)] focus-within:border-[var(--auth-accent)]">
+                <label className="flex items-center gap-3 px-3 py-2.5">
+                  <span
+                    aria-hidden="true"
+                    className="select-none text-[13px] text-[var(--auth-prompt)]"
+                  >
+                    {">"}
+                  </span>
+                  <input
+                    type="email"
+                    value={ssoIdentifier}
+                    onChange={(e) => {
+                      setSsoIdentifier(e.target.value);
+                      setError("");
+                    }}
+                    placeholder="Enter your email address…"
+                    required
+                    className="flex-1 bg-transparent text-[13px] text-[var(--auth-text)] outline-none placeholder:text-[var(--auth-input-placeholder)]"
+                  />
+                </label>
+              </div>
               <button
                 type="submit"
                 disabled={loading}
-                className="auth-primary-button flex h-11 w-full items-center justify-center rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-full items-center justify-between border border-[var(--auth-primary-border)] bg-[var(--auth-primary-bg)] px-3 text-[13px] text-[var(--auth-primary-text)] transition-colors hover:bg-[var(--auth-primary-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {loading ? "Checking SAML…" : "Continue with SAML"}
+                <span className="inline-flex items-center gap-3">
+                  <span aria-hidden="true">{"[↵]"}</span>
+                  <span>
+                    {loading ? "Checking SAML…" : "Continue with SAML"}
+                  </span>
+                </span>
+                <span
+                  aria-hidden="true"
+                  className="text-[11px] text-[var(--auth-faint)]"
+                >
+                  ↵
+                </span>
               </button>
               <button
                 type="button"
@@ -1342,24 +1755,20 @@ export function AuthPage({
                   setError("");
                 }}
                 disabled={loading}
-                className="w-full pt-1 text-center text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
+                className="w-full pt-1 text-left text-[12px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
               >
                 {backLabel}
               </button>
-              {error && (
-                <p className="text-center text-sm text-[var(--auth-error)]">
-                  {error}
-                </p>
-              )}
             </form>
           )}
 
+          {/* step: email-code */}
           {step === "email-code" && (
-            <div className="space-y-5 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-[var(--auth-secondary-border)] bg-[var(--auth-secondary-bg)]">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-3 py-3">
                 <svg
-                  width="20"
-                  height="20"
+                  width="18"
+                  height="18"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="var(--auth-accent)"
@@ -1372,42 +1781,53 @@ export function AuthPage({
                   <rect width="20" height="16" x="2" y="4" rx="2" />
                   <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
                 </svg>
+                <div>
+                  <h2 className="text-[14px] font-medium text-[var(--auth-text)]">
+                    Check your email
+                  </h2>
+                  <p className="text-[12px] text-[var(--auth-muted)]">
+                    Sign-in link and 6-digit code sent to{" "}
+                    <span className="text-[var(--auth-text)]">{email}</span>
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-[20px] font-medium tracking-[-0.02em] text-[var(--auth-text)]">
-                  Check your email
-                </h2>
-                <p className="mt-2 text-[14px] leading-6 text-[var(--auth-muted)]">
-                  We sent a sign-in link and 6-digit code to{" "}
-                  <span className="text-[var(--auth-text)]">{email}</span>
-                </p>
-              </div>
-              <form onSubmit={handleCodeSubmit} className="space-y-3 text-left">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  value={code}
-                  onChange={(e) => {
-                    setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
-                    setError("");
-                  }}
-                  placeholder="Enter 6-digit code"
-                  maxLength={6}
-                  className="auth-input h-11 w-full rounded-full border px-4 text-center text-[15px] tracking-[0.35em] outline-none transition-colors"
-                />
+              <form onSubmit={handleCodeSubmit} className="space-y-3">
+                <div className="border border-[var(--auth-input-border)] bg-[var(--auth-input-bg)] focus-within:border-[var(--auth-accent)]">
+                  <label className="flex items-center gap-3 px-3 py-2.5">
+                    <span
+                      aria-hidden="true"
+                      className="select-none text-[13px] text-[var(--auth-prompt)]"
+                    >
+                      {">"}
+                    </span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={code}
+                      onChange={(e) => {
+                        setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                        setError("");
+                      }}
+                      placeholder="Enter 6-digit code"
+                      maxLength={6}
+                      className="flex-1 bg-transparent text-center text-[14px] tracking-[0.35em] text-[var(--auth-text)] outline-none placeholder:text-[var(--auth-input-placeholder)]"
+                    />
+                  </label>
+                </div>
                 <button
                   type="submit"
                   disabled={code.length !== 6}
-                  className="auth-primary-button flex h-11 w-full items-center justify-center rounded-full border border-transparent px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex h-10 w-full items-center justify-between border border-[var(--auth-primary-border)] bg-[var(--auth-primary-bg)] px-3 text-[13px] text-[var(--auth-primary-text)] transition-colors hover:bg-[var(--auth-primary-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Continue with code
+                  <span className="inline-flex items-center gap-3">
+                    <span aria-hidden="true">{"[↵]"}</span>
+                    <span>Continue with code</span>
+                  </span>
+                  <span className="text-[11px] text-[var(--auth-faint)]">
+                    ↵
+                  </span>
                 </button>
-                {error && (
-                  <p className="text-center text-sm text-[var(--auth-error)]">
-                    {error}
-                  </p>
-                )}
               </form>
               <button
                 type="button"
@@ -1417,7 +1837,7 @@ export function AuthPage({
                   setCode("");
                   setError("");
                 }}
-                className="text-[13px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
+                className="text-[12px] text-[var(--auth-muted)] transition-opacity hover:opacity-80"
               >
                 Use a different method
               </button>
@@ -1425,87 +1845,34 @@ export function AuthPage({
           )}
         </div>
 
-        {step === "choose" && <FooterLinks mode={mode} />}
+        {/* Right — preflight doctor + recent sessions + CLI pairing */}
+        <div className="hidden flex-col divide-y divide-[var(--auth-secondary-border)] lg:flex">
+          {/* Preflight panel — shown when data is loaded, else empty-state */}
+          {preflightChecks ? (
+            <PreflightRail
+              checks={preflightChecks}
+              hasFailure={hasPreflightFailure}
+            />
+          ) : (
+            <div className="px-3 py-2 text-[11px] text-[var(--auth-faint)]">
+              # preflight · checking…
+            </div>
+          )}
+
+          {/* Recent sessions — always render (shows "no recent sessions" when empty) */}
+          {mode === "login" ? (
+            <RecentSessionsRail
+              sessions={recentSessions}
+              recognizedOrigin={recognizedOrigin}
+            />
+          ) : null}
+
+          {/* CLI pairing snippet */}
+          <CliPairingSnippet hostLabel={hostLabel} />
+        </div>
       </div>
-      <div className="flex w-full max-w-[360px] flex-col gap-4">
-        {mode === "login" ? (
-          <RecentSessionsRail
-            sessions={recentSessions}
-            recognizedOrigin={recognizedOrigin}
-          />
-        ) : null}
-        {preflightChecks ? (
-          <PreflightRail
-            checks={preflightChecks}
-            hasFailure={hasPreflightFailure}
-          />
-        ) : null}
-      </div>
+
+      <TtyHotkeyBar mode={mode} />
     </div>
   );
-}
-
-function PreflightRail({
-  checks,
-  hasFailure,
-}: {
-  checks: PreflightCheck[];
-  hasFailure: boolean;
-}) {
-  return (
-    <aside
-      className="w-full max-w-[320px] rounded-2xl border border-[var(--auth-secondary-border)] bg-[var(--auth-secondary-bg)] p-4 text-[var(--auth-text)] shadow-sm"
-      aria-label="Authentication preflight checks"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-medium">Preflight checks</h2>
-          <p className="mt-1 text-xs text-[var(--auth-muted)]">
-            Live dependency status for sign-in.
-          </p>
-        </div>
-        <span className="rounded-full border border-[var(--auth-secondary-border)] px-2 py-1 text-[11px] text-[var(--auth-muted)]">
-          Live
-        </span>
-      </div>
-
-      {hasFailure ? (
-        <output className="mt-4 block rounded-xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs text-[var(--auth-error)]">
-          One or more login dependencies need attention. You can still try to
-          log in.
-        </output>
-      ) : null}
-
-      <ul className="mt-4 space-y-2">
-        {checks.map((check) => (
-          <li
-            key={check.name}
-            className="flex items-start justify-between gap-3 rounded-xl border border-[var(--auth-secondary-border)] px-3 py-2"
-          >
-            <div>
-              <p className="text-sm font-medium">{check.name}</p>
-              <p className="mt-0.5 text-xs text-[var(--auth-muted)]">
-                {check.detail}
-              </p>
-            </div>
-            <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${preflightStatusClass(check.status)}`}
-            >
-              {check.status}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </aside>
-  );
-}
-
-function preflightStatusClass(status: PreflightStatus): string {
-  if (status === "ok") {
-    return "bg-emerald-500/15 text-emerald-300";
-  }
-  if (status === "warn") {
-    return "bg-amber-500/15 text-amber-300";
-  }
-  return "bg-red-500/15 text-red-300";
 }
