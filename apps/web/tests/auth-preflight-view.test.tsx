@@ -61,7 +61,7 @@ describe("AuthPage preflight panel", () => {
       screen.getByText(/One or more login dependencies need attention/i),
     ).toBeDefined();
     expect(
-      screen.getByRole("button", { name: /Continue with email/i }),
+      screen.getByRole("button", { name: /Continue with Google/i }),
     ).toBeEnabled();
   });
 
@@ -89,7 +89,7 @@ describe("AuthPage preflight panel", () => {
       screen.queryByLabelText("Authentication preflight checks"),
     ).toBeNull();
     expect(
-      screen.getByRole("button", { name: /Continue with email/i }),
+      screen.getByRole("button", { name: /Continue with Google/i }),
     ).toBeEnabled();
   });
 
@@ -99,7 +99,7 @@ describe("AuthPage preflight panel", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: /Continue with email/i }),
+        screen.getByRole("button", { name: /Continue with Google/i }),
       ).toBeEnabled();
     });
 

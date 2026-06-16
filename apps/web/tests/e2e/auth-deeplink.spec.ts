@@ -8,13 +8,6 @@ const workspaceDeepLinks = [
   "/foreverbrowsing/roadmap?view=list",
 ];
 
-async function openEmailStep(page: import("@playwright/test").Page) {
-  await page.getByRole("button", { name: "Continue with email" }).click();
-  const emailInput = page.getByPlaceholder("Enter your email address…");
-  await expect(emailInput).toBeVisible();
-  return emailInput;
-}
-
 test.describe("Unauthenticated workspace deep links", () => {
   for (const deepLink of workspaceDeepLinks) {
     test(`renders login in place for ${deepLink}`, async ({ page }) => {
@@ -37,48 +30,6 @@ test.describe("Unauthenticated workspace deep links", () => {
       });
     });
   }
-
-  test("magic link from workspace root uses the root as callback URL", async ({
-    page,
-  }) => {
-    let magicLinkPayload: Record<string, unknown> | undefined;
-
-    await page.route("**/api/auth/magic-link", async (route) => {
-      magicLinkPayload = route.request().postDataJSON() as Record<
-        string,
-        unknown
-      >;
-      await route.fulfill({
-        status: 202,
-        contentType: "application/json",
-        body: JSON.stringify({ ok: true }),
-      });
-    });
-
-    await page.goto("/foreverbrowsing");
-    await expect(
-      page.getByRole("heading", { name: "Log in to exponential" }),
-    ).toBeVisible();
-    await expect(
-      page.getByText(
-        "Google sign-in is not configured. Use email or SAML SSO instead.",
-      ),
-    ).toHaveCount(0);
-
-    const emailInput = await openEmailStep(page);
-    await emailInput.fill("test@example.com");
-    await expect(emailInput).toHaveValue("test@example.com");
-    await page.getByRole("button", { name: "Continue with email" }).click();
-    await expect.poll(() => magicLinkPayload).not.toBeUndefined();
-
-    expect(magicLinkPayload).toMatchObject({
-      email: "test@example.com",
-      callbackURL: "/foreverbrowsing",
-    });
-    await expect(
-      page.getByRole("heading", { name: "Check your email" }),
-    ).toBeVisible();
-  });
 
   test("public marketing routes render unauthenticated with local navigation", async ({
     page,
@@ -208,69 +159,24 @@ test.describe("Unauthenticated workspace deep links", () => {
     ).toHaveAttribute("href", "/login");
   });
 
-  test("login email empty submit stays on the email step for click and Enter", async ({
-    page,
-  }) => {
-    const consoleErrors: string[] = [];
-    page.on("console", (message) => {
-      if (message.type() === "error") {
-        consoleErrors.push(message.text());
-      }
-    });
-
-    await page.goto("/login");
-
-    const emailInput = await openEmailStep(page);
-    consoleErrors.length = 0;
-    const submitButton = page.getByRole("button", {
-      name: "Continue with email",
-    });
-    await expect(submitButton).toBeEnabled();
-
-    await submitButton.click();
-    await expect(
-      page.getByText("Please enter an email address for login."),
-    ).toBeVisible();
-    expect(
-      await emailInput.evaluate(
-        (input) => (input as HTMLInputElement).validity.valueMissing,
-      ),
-    ).toBe(true);
-    await expect(
-      page.getByRole("heading", { name: "What’s your email address?" }),
-    ).toBeVisible();
-
-    await emailInput.focus();
-    await page.keyboard.press("Enter");
-    await expect(
-      page.getByText("Please enter an email address for login."),
-    ).toBeVisible();
-    expect(
-      await emailInput.evaluate(
-        (input) => (input as HTMLInputElement).validity.valueMissing,
-      ),
-    ).toBe(true);
-    expect(consoleErrors).toEqual([]);
-  });
-
-  test("login invalid email uses native validation without inline custom text", async ({
+  test("only Google is active; other methods show coming soon", async ({
     page,
   }) => {
     await page.goto("/login");
 
-    const emailInput = await openEmailStep(page);
-    await emailInput.fill("not-an-email");
-    await page.getByRole("button", { name: "Continue with email" }).click();
-
     await expect(
-      page.getByRole("heading", { name: "What’s your email address?" }),
-    ).toBeVisible();
-    expect(
-      await emailInput.evaluate(
-        (input) => (input as HTMLInputElement).validity.typeMismatch,
-      ),
-    ).toBe(true);
-    await expect(page.getByText("Enter a valid email address.")).toHaveCount(0);
+      page.getByRole("button", { name: "Continue with Google" }),
+    ).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: "Continue with email" }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Continue with SAML SSO" }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Log in with passkey" }),
+    ).toBeDisabled();
+    await expect(page.getByText("coming soon")).toHaveCount(3);
   });
 
   test("first-party Go auth renders the provider chooser", async ({ page }) => {
