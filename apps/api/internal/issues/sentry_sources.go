@@ -3,6 +3,8 @@ package issues
 import (
 	"context"
 	"encoding/json"
+	"net/url"
+	"os"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -25,7 +27,7 @@ func (h Handler) issueExternalSources(ctx context.Context, issueID string) ([]is
 			coalesce(external_channel_id,''),
 			coalesce(workspace_integration_id::text,'')
 		from integration_thread_link
-		where issue_id=$1::uuid and provider in ('sentry') and external_permalink is not null
+		where issue_id=$1::uuid and provider in ('sentry','front') and external_permalink is not null
 		order by created_at asc`, issueID)
 	if err != nil {
 		return nil, err
@@ -47,6 +49,16 @@ func sourceLabel(provider string, project string, externalID string) string {
 	if provider == "sentry" {
 		parts := []string{"Sentry"}
 		if strings.TrimSpace(project) != "" && project != "sentry" {
+			parts = append(parts, project)
+		}
+		if strings.TrimSpace(externalID) != "" {
+			parts = append(parts, externalID)
+		}
+		return strings.Join(parts, " · ")
+	}
+	if provider == "front" {
+		parts := []string{"Front"}
+		if strings.TrimSpace(project) != "" {
 			parts = append(parts, project)
 		}
 		if strings.TrimSpace(externalID) != "" {
@@ -135,6 +147,80 @@ func (h Handler) queueSentryAutomations(ctx context.Context, tx pgx.Tx, workspac
 	return nil
 }
 
+func (h Handler) queueFrontAutomations(ctx context.Context, tx pgx.Tx, workspaceID string, before Issue, after Issue) error {
+	if before.StateID == after.StateID {
+		return nil
+	}
+	var category string
+	if err := tx.QueryRow(ctx, `select category::text from workflow_state where id=$1::uuid`, after.StateID).Scan(&category); err != nil {
+		return err
+	}
+	if category != "completed" && category != "canceled" {
+		return nil
+	}
+	var teamKey string
+	if err := tx.QueryRow(ctx, `select key from team where id=$1::uuid`, after.TeamID).Scan(&teamKey); err != nil {
+		return err
+	}
+	rows, err := tx.Query(ctx, `
+		select itl.workspace_integration_id::text,
+			itl.external_thread_ts,
+			coalesce(itl.external_permalink,''),
+			coalesce(wi.metadata,'{}'::jsonb)
+		from integration_thread_link itl
+		join workspace_integration wi on wi.id=itl.workspace_integration_id
+		where itl.issue_id=$1::uuid and itl.provider='front' and wi.provider='front' and wi.status in ('connected','degraded')`, after.ID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var integrationID, conversationID, permalink string
+		var metadataRaw []byte
+		if err := rows.Scan(&integrationID, &conversationID, &permalink, &metadataRaw); err != nil {
+			return err
+		}
+		metadata := readJSONRecord(metadataRaw)
+		if !boolSetting(metadata, "reopenOnDone", true) {
+			continue
+		}
+		payload := map[string]any{
+			"type":           "reopen_conversation",
+			"conversationId": conversationID,
+			"permalink":      permalink,
+			"issueId":        after.ID,
+			"identifier":     after.Identifier,
+			"title":          after.Title,
+			"category":       category,
+			"issueUrl":       issueWebURL(teamKey, after.Identifier),
+		}
+		if err := insertFrontProviderJob(ctx, tx, workspaceID, integrationID, payload); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+func insertFrontProviderJob(ctx context.Context, tx pgx.Tx, workspaceID string, integrationID string, payload map[string]any) error {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `insert into provider_job (workspace_id, workspace_integration_id, provider, kind, status, payload, scheduled_at, updated_at) values ($1::uuid,$2::uuid,'front','outbound_delivery','queued',$3::jsonb,now(),now())`, workspaceID, integrationID, raw)
+	return err
+}
+
+func issueWebURL(teamKey string, identifier string) string {
+	baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("EXPONENTIAL_APP_URL")), "/")
+	if baseURL == "" {
+		baseURL = strings.TrimRight(strings.TrimSpace(os.Getenv("NEXT_PUBLIC_APP_URL")), "/")
+	}
+	if baseURL == "" {
+		baseURL = "http://localhost:7015"
+	}
+	return baseURL + "/team/" + url.PathEscape(teamKey) + "/issue/" + url.PathEscape(identifier)
+}
+
 func insertSentryProviderJob(ctx context.Context, tx pgx.Tx, workspaceID string, integrationID string, payload map[string]any) error {
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -142,6 +228,12 @@ func insertSentryProviderJob(ctx context.Context, tx pgx.Tx, workspaceID string,
 	}
 	_, err = tx.Exec(ctx, `insert into provider_job (workspace_id, workspace_integration_id, provider, kind, status, payload, scheduled_at, updated_at) values ($1::uuid,$2::uuid,'sentry','outbound_delivery','queued',$3::jsonb,now(),now())`, workspaceID, integrationID, raw)
 	return err
+}
+
+func readJSONRecord(raw []byte) map[string]any {
+	out := map[string]any{}
+	_ = json.Unmarshal(raw, &out)
+	return out
 }
 
 func boolSetting(metadata map[string]any, key string, defaultValue bool) bool {

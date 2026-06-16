@@ -110,6 +110,9 @@ export default function IntegrationsSettingsPage() {
   const [gitLabToken, setGitLabToken] = useState("");
   const [gitLabSetupDetails, setGitLabSetupDetails] =
     useState<GitLabSetupDetails | null>(null);
+  const [frontCompanyId, setFrontCompanyId] = useState("");
+  const [frontApiToken, setFrontApiToken] = useState("");
+  const [frontBaseUrl, setFrontBaseUrl] = useState("https://api2.frontapp.com");
 
   const loadIntegrations = useCallback(async () => {
     setLoading(true);
@@ -231,6 +234,46 @@ export default function IntegrationsSettingsPage() {
     }
   }
 
+  async function setupFront() {
+    setPendingProvider("front");
+    setNotice(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/integrations/front/setup", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          apiToken: frontApiToken,
+          companyId: frontCompanyId,
+          baseUrl: frontBaseUrl,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+      };
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Front setup failed.");
+      }
+      setFrontApiToken("");
+      setNotice(
+        "Front connected. Add the Front sidebar plugin URL from this app to Front.",
+      );
+      await loadIntegrations();
+    } catch (setupError) {
+      setError(
+        setupError instanceof Error
+          ? setupError.message
+          : "Front setup failed.",
+      );
+    } finally {
+      setPendingProvider(null);
+    }
+  }
+
   async function disconnect(provider: string) {
     setPendingProvider(provider);
     setNotice(null);
@@ -245,13 +288,16 @@ export default function IntegrationsSettingsPage() {
               ? "/api/integrations/microsoft-teams/disconnect"
               : provider === "sentry"
                 ? "/api/integrations/sentry/disconnect"
-                : `/api/integrations?provider=${encodeURIComponent(provider)}`;
+                : provider === "front"
+                  ? "/api/integrations/front/disconnect"
+                  : `/api/integrations?provider=${encodeURIComponent(provider)}`;
       const response = await fetch(endpoint, {
         method:
           provider === "slack" ||
           provider === "discord" ||
           provider === "microsoft_teams" ||
-          provider === "sentry"
+          provider === "sentry" ||
+          provider === "front"
             ? "POST"
             : "DELETE",
         headers: { Accept: "application/json" },
@@ -360,7 +406,8 @@ export default function IntegrationsSettingsPage() {
                   </div>
                   <div className="flex shrink-0 gap-2">
                     {integration.actions.canReconnect &&
-                    integration.provider !== "gitlab" ? (
+                    integration.provider !== "gitlab" &&
+                    integration.provider !== "front" ? (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
@@ -571,6 +618,60 @@ export default function IntegrationsSettingsPage() {
                           </button>
                         </div>
                       ) : null}
+                      {integration.provider === "front" &&
+                      (integration.actions.canConnect ||
+                        integration.actions.canReconnect) ? (
+                        <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Front company ID
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setFrontCompanyId(event.target.value)
+                              }
+                              placeholder="Optional company identifier"
+                              value={frontCompanyId}
+                            />
+                          </label>
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Front API base URL
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setFrontBaseUrl(event.target.value)
+                              }
+                              placeholder="https://api2.frontapp.com"
+                              type="url"
+                              value={frontBaseUrl}
+                            />
+                          </label>
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Front API token
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setFrontApiToken(event.target.value)
+                              }
+                              placeholder="Bearer token with conversations/comments permissions"
+                              type="password"
+                              value={frontApiToken}
+                            />
+                          </label>
+                          <button
+                            className="w-fit rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={
+                              pendingProvider === "front" ||
+                              frontApiToken.trim() === ""
+                            }
+                            onClick={() => void setupFront()}
+                            type="button"
+                          >
+                            {pendingProvider === "front"
+                              ? "Validating..."
+                              : "Connect Front"}
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                     {integration.actions.canDisconnect ? (
                       <button
@@ -582,7 +683,8 @@ export default function IntegrationsSettingsPage() {
                         Disconnect
                       </button>
                     ) : integration.actions.canReconnect &&
-                      integration.provider !== "gitlab" ? (
+                      integration.provider !== "gitlab" &&
+                      integration.provider !== "front" ? (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
