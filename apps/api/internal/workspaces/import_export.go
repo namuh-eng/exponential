@@ -42,11 +42,18 @@ func (h Handler) GetCurrentImportExport(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	state := readImportExportStateGo(current.Settings)
+	imports := append([]map[string]any{}, state.Imports...)
+	providerImports, err := h.providerImportJobs(r.Context(), current.ID)
+	if err != nil {
+		problem.Write(w, 500, "Load provider imports failed", err.Error())
+		return
+	}
+	imports = append(providerImports, imports...)
 	problem.JSON(w, 200, map[string]any{
 		"workspace":    map[string]any{"id": current.ID, "name": current.Name, "urlSlug": current.URLSlug},
 		"capabilities": map[string]bool{"canExport": true, "canImportCsv": true, "canConfigureProviders": true},
 		"teams":        teams,
-		"imports":      state.Imports,
+		"imports":      imports,
 		"exports":      state.Exports,
 	})
 }
@@ -70,6 +77,12 @@ func (h Handler) MutateCurrentImportExport(w http.ResponseWriter, r *http.Reques
 		h.handleCurrentCSVPreview(w, body)
 	case "prepare_provider":
 		h.handleProviderPrepare(w, r, current, body)
+	case "fetch_provider_snapshot":
+		h.handleGitHubProviderSnapshot(w, r, current, p, body)
+	case "confirm_provider_import":
+		h.handleGitHubProviderConfirm(w, r, current, p, body)
+	case "cancel_provider_import":
+		h.handleProviderImportCancel(w, r, current, body)
 	case "start_csv_import":
 		h.handleCurrentCSVImport(w, r, current, p, body)
 	default:
@@ -150,7 +163,14 @@ func (h Handler) ListLegacyImports(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Load imports failed", err.Error())
 		return
 	}
-	problem.JSON(w, 200, map[string]any{"imports": readImportExportStateGo(current.Settings).Imports, "teams": teams})
+	imports := readImportExportStateGo(current.Settings).Imports
+	providerImports, err := h.providerImportJobs(r.Context(), current.ID)
+	if err != nil {
+		problem.Write(w, 500, "Load imports failed", err.Error())
+		return
+	}
+	imports = append(providerImports, imports...)
+	problem.JSON(w, 200, map[string]any{"imports": imports, "teams": teams})
 }
 
 func (h Handler) CreateLegacyImport(w http.ResponseWriter, r *http.Request) {
@@ -244,20 +264,25 @@ func (h Handler) handleProviderPrepare(w http.ResponseWriter, r *http.Request, c
 		problem.Write(w, 400, "Unsupported provider", "")
 		return
 	}
-	id := importExportJobID("import")
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	label := "Jira"
-	if providerName == "github" {
-		label = "GitHub"
+	if providerName == "jira" {
+		id := importExportJobID("import")
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		job := map[string]any{"id": id, "type": "import", "provider": providerName, "status": "queued", "createdAt": now, "message": "Jira guided imports are planned after the GitHub importer foundation."}
+		state := readImportExportStateGo(current.Settings)
+		state.Imports = prependJob(job, state.Imports, 25)
+		if err := h.saveImportExportState(r.Context(), current, state); err != nil {
+			problem.Write(w, 500, "Prepare provider import failed", err.Error())
+			return
+		}
+		problem.JSON(w, 201, map[string]any{"import": state.Imports[0], "setupUrl": "/settings/integrations"})
+		return
 	}
-	job := map[string]any{"id": id, "type": "import", "provider": providerName, "status": "queued", "createdAt": now, "message": label + " import setup is ready. Connect the integration to choose projects and start a guided import."}
-	state := readImportExportStateGo(current.Settings)
-	state.Imports = prependJob(job, state.Imports, 25)
-	if err := h.saveImportExportState(r.Context(), current, state); err != nil {
+	job, err := h.createProviderImportJob(r.Context(), current.ID, providerName, "setup", "GitHub import setup is ready. Add a token, fetch repositories, review mappings, then confirm.", map[string]any{"scope": stringOr(body["scope"], "open")}, nil)
+	if err != nil {
 		problem.Write(w, 500, "Prepare provider import failed", err.Error())
 		return
 	}
-	problem.JSON(w, 201, map[string]any{"import": state.Imports[0], "setupUrl": "/settings/integrations"})
+	problem.JSON(w, 201, map[string]any{"import": job, "setupUrl": "/settings/import-export"})
 }
 
 func (h Handler) handleCurrentCSVImport(w http.ResponseWriter, r *http.Request, current importExportWorkspace, p auth.Principal, body map[string]any) {

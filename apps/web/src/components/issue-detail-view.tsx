@@ -438,7 +438,9 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
             ? " from Microsoft Teams"
             : event.metadata.source === "sentry_issue"
               ? " from Sentry"
-              : "";
+              : event.metadata.source === "github_issue"
+                ? " from GitHub"
+                : "";
       return `${actorName} created this issue${legacySuffix}${sourceSuffix}`;
     }
     case "updated":
@@ -502,6 +504,19 @@ function getSentrySourceLink(event: IssueHistoryEvent): string | null {
   }
   return typeof sentry.webUrl === "string" && sentry.webUrl.length > 0
     ? sentry.webUrl
+    : null;
+}
+
+function getGitHubSourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "github_issue") {
+    return null;
+  }
+  const github = event.metadata.github;
+  if (!isRecord(github)) {
+    return null;
+  }
+  return typeof github.url === "string" && github.url.length > 0
+    ? github.url
     : null;
 }
 
@@ -2038,6 +2053,16 @@ export function IssueDetailView({
                             className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
                           >
                             View source issue in Sentry
+                          </a>
+                        ) : null}
+                        {getGitHubSourceLink(event) ? (
+                          <a
+                            href={getGitHubSourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source issue in GitHub
                           </a>
                         ) : null}
                         {getGitLabSourceLink(event) ? (
