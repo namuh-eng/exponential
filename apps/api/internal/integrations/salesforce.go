@@ -386,7 +386,7 @@ func (h Handler) salesforceSignedAction(w http.ResponseWriter, r *http.Request) 
 		problem.Write(w, http.StatusBadRequest, "Salesforce request body could not be read", err.Error())
 		return salesforceInstallRecord{}, salesforceCaseActionRequest{}, false
 	}
-	if !verifySalesforceSignature(secret, r.Header.Get("X-Salesforce-Signature"), body) && strings.TrimSpace(r.Header.Get("Authorization")) != "Bearer "+secret {
+	if !verifySalesforceSignature(secret, r.Header.Get("X-Salesforce-Signature"), body) {
 		problem.Write(w, http.StatusUnauthorized, "Invalid Salesforce signature", "")
 		return salesforceInstallRecord{}, salesforceCaseActionRequest{}, false
 	}
@@ -905,12 +905,13 @@ func exchangeSalesforceOAuth(ctx context.Context, client *http.Client, clientID,
 		return salesforceOAuthResponse{}, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		body, _ := io.ReadAll(resp.Body)
+		return salesforceOAuthResponse{}, fmt.Errorf("Salesforce OAuth returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
 	var token salesforceOAuthResponse
 	if err := json.NewDecoder(resp.Body).Decode(&token); err != nil {
 		return salesforceOAuthResponse{}, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return salesforceOAuthResponse{}, fmt.Errorf("Salesforce OAuth returned HTTP %d", resp.StatusCode)
 	}
 	return token, nil
 }
@@ -919,6 +920,9 @@ func fetchSalesforceUserInfo(ctx context.Context, client *http.Client, token sal
 	endpoint := strings.TrimSpace(token.ID)
 	if endpoint == "" {
 		endpoint = strings.TrimRight(firstNonEmpty(token.InstanceURL, salesforceOAuthBaseURL()), "/") + "/services/oauth2/userinfo"
+	}
+	if !strings.HasPrefix(endpoint, salesforceOAuthBaseURL()) {
+		return salesforceUserInfo{}, fmt.Errorf("unexpected Salesforce userinfo endpoint")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -930,12 +934,13 @@ func fetchSalesforceUserInfo(ctx context.Context, client *http.Client, token sal
 		return salesforceUserInfo{}, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		body, _ := io.ReadAll(resp.Body)
+		return salesforceUserInfo{}, fmt.Errorf("Salesforce userinfo returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
 	var info salesforceUserInfo
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		return salesforceUserInfo{}, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return salesforceUserInfo{}, fmt.Errorf("Salesforce userinfo returned HTTP %d", resp.StatusCode)
 	}
 	if info.OrganizationID == "" {
 		return salesforceUserInfo{}, fmt.Errorf("Salesforce userinfo did not include organization_id")
