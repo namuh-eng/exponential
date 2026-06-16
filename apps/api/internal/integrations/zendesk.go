@@ -256,7 +256,7 @@ func (h Handler) ZendeskTicketCreate(w http.ResponseWriter, r *http.Request) {
 	issue, err := h.createZendeskIssue(r.Context(), install, input)
 	if err != nil {
 		_ = h.recordZendeskEvent(r.Context(), install, "issue_creation_failed", "error", err.Error(), input.Raw)
-		problem.Write(w, http.StatusBadRequest, "Create Zendesk issue failed", err.Error())
+		problem.Write(w, http.StatusInternalServerError, "Create Zendesk issue failed", err.Error())
 		return
 	}
 	_ = h.recordZendeskEvent(r.Context(), install, "issue_created", "info", "Zendesk ticket created an Exponential issue.", map[string]any{"issueId": issue.ID, "ticketId": input.Ticket.ID})
@@ -503,19 +503,26 @@ func zendeskHistoryMetadata(ticket zendeskTicketRef) map[string]any {
 
 func (h Handler) resolveZendeskInstall(ctx context.Context, input zendeskTicketActionRequest) (zendeskInstallRecord, error) {
 	integrationID := firstNonEmpty(stringValue(input.Raw["integrationId"]), stringValue(input.Raw["workspaceIntegrationId"]), stringValue(recordValue(input.Raw["data"])["integrationId"]))
-	args := []any{}
-	where := "wi.provider='zendesk' and wi.status in ('connected','degraded')"
-	if integrationID != "" {
-		args = append(args, integrationID)
-		where += " and wi.id=$1::uuid"
-	} else if input.Subdomain != "" {
-		args = append(args, strings.ToLower(strings.TrimSpace(input.Subdomain)))
-		where += " and (wi.external_id=$1 or wi.metadata->>'subdomain'=$1)"
-	}
 	var install zendeskInstallRecord
 	var metadataRaw []byte
 	var credentialRaw []byte
-	err := h.DB.QueryRow(ctx, `select wi.workspace_id::text,wi.id::text,coalesce(wi.connected_by_user_id,''),coalesce(wi.external_id,''),coalesce(wi.display_name,''),coalesce(wi.metadata,'{}'::jsonb),pc.encrypted_payload from workspace_integration wi join provider_credential pc on pc.workspace_integration_id=wi.id and pc.provider='zendesk' and pc.active where `+where+` order by wi.connected_at desc limit 1`, args...).Scan(&install.WorkspaceID, &install.IntegrationID, &install.ConnectedBy, &install.Subdomain, &install.DisplayName, &metadataRaw, &credentialRaw)
+	var err error
+	if integrationID != "" {
+		err = h.DB.QueryRow(ctx, `
+			select wi.workspace_id::text,wi.id::text,coalesce(wi.connected_by_user_id,''),coalesce(wi.external_id,''),coalesce(wi.display_name,''),coalesce(wi.metadata,'{}'::jsonb),pc.encrypted_payload
+			from workspace_integration wi
+			join provider_credential pc on pc.workspace_integration_id=wi.id and pc.provider='zendesk' and pc.active
+			where wi.provider='zendesk' and wi.status in ('connected','degraded') and wi.id=$1::uuid
+			order by wi.connected_at desc limit 1`, integrationID).Scan(&install.WorkspaceID, &install.IntegrationID, &install.ConnectedBy, &install.Subdomain, &install.DisplayName, &metadataRaw, &credentialRaw)
+	} else {
+		subdomain := strings.ToLower(strings.TrimSpace(input.Subdomain))
+		err = h.DB.QueryRow(ctx, `
+			select wi.workspace_id::text,wi.id::text,coalesce(wi.connected_by_user_id,''),coalesce(wi.external_id,''),coalesce(wi.display_name,''),coalesce(wi.metadata,'{}'::jsonb),pc.encrypted_payload
+			from workspace_integration wi
+			join provider_credential pc on pc.workspace_integration_id=wi.id and pc.provider='zendesk' and pc.active
+			where wi.provider='zendesk' and wi.status in ('connected','degraded') and (wi.external_id=$1 or wi.metadata->>'subdomain'=$1)
+			order by wi.connected_at desc limit 1`, subdomain).Scan(&install.WorkspaceID, &install.IntegrationID, &install.ConnectedBy, &install.Subdomain, &install.DisplayName, &metadataRaw, &credentialRaw)
+	}
 	if err != nil {
 		return install, err
 	}

@@ -2055,16 +2055,19 @@ export function IssueDetailView({
                             View source issue in Sentry
                           </a>
                         ) : null}
-                        {getZendeskSourceLink(event) ? (
-                          <a
-                            href={getZendeskSourceLink(event) ?? undefined}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
-                          >
-                            View source ticket in Zendesk
-                          </a>
-                        ) : null}
+                        {(() => {
+                          const zendeskLink = getZendeskSourceLink(event);
+                          return zendeskLink ? (
+                            <a
+                              href={zendeskLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                            >
+                              View source ticket in Zendesk
+                            </a>
+                          ) : null;
+                        })()}
                         {getGitLabSourceLink(event) ? (
                           <a
                             href={getGitLabSourceLink(event) ?? undefined}

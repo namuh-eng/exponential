@@ -124,6 +124,9 @@ func (h Handler) queueSentryAutomations(ctx context.Context, tx pgx.Tx, workspac
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	if len(links) == 0 {
+		return nil
+	}
 	category := ""
 	if stateChanged {
 		if err := tx.QueryRow(ctx, `select category::text from workflow_state where id=$1::uuid`, after.StateID).Scan(&category); err != nil {
