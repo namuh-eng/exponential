@@ -43,9 +43,7 @@ async function fetchRunners(page = 1) {
     // GH_RUNNER_STATUS_TOKEN (repo Administration: read) to re-enable the gate.
     if (response.status === 401 || response.status === 403) {
       console.warn(
-        `::warning::Skipping self-hosted runner precheck: cannot read runner status ` +
-          `(${response.status} ${response.statusText}). Set GH_RUNNER_STATUS_TOKEN ` +
-          `(repository Administration: read) to re-enable this gate. See ${runbook}.${details}`,
+        `::warning::Skipping self-hosted runner precheck: cannot read runner status (${response.status} ${response.statusText}). Set GH_RUNNER_STATUS_TOKEN (repository Administration: read) to re-enable this gate. See ${runbook}.${details}`,
       );
       process.exit(0);
     }

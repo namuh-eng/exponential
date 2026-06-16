@@ -739,6 +739,86 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/gitlab": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getGitLabIntegration"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gitlab/setup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["setupGitLabIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gitlab/workflows": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["updateGitLabWorkflowAutomation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gitlab/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectGitLabIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gitlab/webhook/{integrationId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["ingestGitLabWebhook"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/slack/connect": {
     parameters: {
       query?: never;
@@ -749,6 +829,166 @@ export interface paths {
     get?: never;
     put?: never;
     post: operations["connectSlackIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/discord/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectDiscordIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/microsoft-teams/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectMicrosoftTeamsIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/sentry/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectSentryIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/sentry/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectSentryIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/sentry/oauth/callback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["sentryOAuthCallback"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/sentry/issues/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["searchSentryLinkableIssues"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/sentry/issues/link": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["linkSentryIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/sentry/issues/create": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createIssueFromSentry"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/microsoft-teams/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectMicrosoftTeamsIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/discord/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectDiscordIntegration"];
     delete?: never;
     options?: never;
     head?: never;
@@ -2614,7 +2854,15 @@ export interface components {
     };
     Integration: {
       /** @enum {string} */
-      provider: "github" | "jira" | "slack" | "zendesk";
+      provider:
+        | "github"
+        | "gitlab"
+        | "jira"
+        | "slack"
+        | "sentry"
+        | "zendesk"
+        | "discord"
+        | "microsoft_teams";
       name: string;
       description: string;
       /** Format: uuid */
@@ -2638,15 +2886,122 @@ export interface components {
       actions: components["schemas"]["IntegrationActions"];
       health: components["schemas"]["IntegrationHealth"];
     };
+    GitLabWorkflowMapping: {
+      /** Format: uuid */
+      teamId: string;
+      teamKey: string;
+      teamName: string;
+      /** Format: uuid */
+      mergeRequestMergedStateId: string | null;
+    };
+    GitLabStatusResponse: {
+      connected: boolean;
+      /** Format: uuid */
+      integrationId: string | null;
+      /** Format: uri */
+      origin: string | null;
+      displayName: string | null;
+      /** Format: uri */
+      webhookUrl: string | null;
+      webhookSecret: string | null;
+      workflows: components["schemas"]["GitLabWorkflowMapping"][];
+    };
+    GitLabSetupRequest: {
+      origin: string;
+      token: string;
+    };
+    GitLabSetupResponse: {
+      connected: boolean;
+      /** Format: uuid */
+      integrationId: string;
+      /** Format: uri */
+      origin: string;
+      displayName: string;
+      /** Format: uri */
+      webhookUrl: string;
+      webhookSecret: string;
+      workflows: components["schemas"]["GitLabWorkflowMapping"][];
+    };
+    GitLabWorkflowRequest: {
+      /** Format: uuid */
+      teamId: string;
+      /** Format: uuid */
+      mergeRequestMergedStateId?: string | null;
+    };
+    GitLabWorkflowResponse: {
+      workflows: components["schemas"]["GitLabWorkflowMapping"][];
+    };
+    GitLabWebhookResponse: {
+      ok: boolean;
+      processedIssueCount: number;
+    };
     SlackConnectResponse: {
       /** Format: uri */
       authorizationUrl: string;
       state: string;
       workspaceSlug: string;
     };
+    DiscordConnectResponse: {
+      /** Format: uri */
+      authorizationUrl: string;
+      state: string;
+      workspaceSlug: string;
+    };
+    MicrosoftTeamsConnectResponse: {
+      /** Format: uri */
+      authorizationUrl: string;
+      state: string;
+      workspaceSlug: string;
+    };
+    SentryConnectResponse: {
+      /** Format: uri */
+      authorizationUrl: string;
+      state: string;
+      workspaceSlug: string;
+    };
+    DiscordConfigurationRequiredResponse: {
+      error: string;
+      message: string;
+    };
     SlackConfigurationRequiredResponse: {
       error: string;
       message: string;
+    };
+    MicrosoftTeamsConfigurationRequiredResponse: {
+      error: string;
+      message: string;
+    };
+    SentryConfigurationRequiredResponse: {
+      error: string;
+      message: string;
+    };
+    SentryIssueActionRequest: {
+      query?: string;
+      exponentialIssueId?: string;
+      issueIdentifier?: string;
+      /** Format: uuid */
+      teamId?: string;
+      teamKey?: string;
+      title?: string;
+      description?: string;
+      /** Format: email */
+      assigneeEmail?: string;
+      /** @enum {string} */
+      priority?: "none" | "urgent" | "high" | "medium" | "low";
+      issue?: {
+        [key: string]: unknown;
+      };
+    } & {
+      [key: string]: unknown;
+    };
+    SentryIssueActionResponse: {
+      /** Format: uri */
+      webUrl: string;
+      project: string;
+      identifier: string;
+    };
+    SentryIssueSearchResponse: {
+      issues: components["schemas"]["SentryIssueActionResponse"][];
     };
     IntegrationListResponse: {
       canManageIntegrations: boolean;
@@ -4470,6 +4825,16 @@ export interface components {
     };
     /** @enum {string} */
     IssuePriority: "none" | "urgent" | "high" | "medium" | "low";
+    IssueExternalSource: {
+      provider: string;
+      label: string;
+      /** Format: uri */
+      url: string;
+      externalId: string;
+      project: string;
+      /** Format: uuid */
+      integrationId: string;
+    };
     Issue: {
       /** Format: uuid */
       id: string;
@@ -4506,6 +4871,7 @@ export interface components {
       canceled_at?: string | null;
       /** Format: date-time */
       completed_at?: string | null;
+      sources?: components["schemas"]["IssueExternalSource"][];
     };
     IssueListResponse: {
       data: components["schemas"]["Issue"][];
@@ -6161,6 +6527,121 @@ export interface operations {
       default: components["responses"]["Problem"];
     };
   };
+  getGitLabIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description GitLab integration status */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitLabStatusResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  setupGitLabIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["GitLabSetupRequest"];
+      };
+    };
+    responses: {
+      /** @description GitLab integration connected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitLabSetupResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateGitLabWorkflowAutomation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["GitLabWorkflowRequest"];
+      };
+    };
+    responses: {
+      /** @description GitLab workflow mappings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitLabWorkflowResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectGitLabIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description GitLab disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  ingestGitLabWebhook: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        integrationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description GitLab webhook accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitLabWebhookResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   connectSlackIntegration: {
     parameters: {
       query?: never;
@@ -6186,6 +6667,256 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SlackConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  connectDiscordIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Discord authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DiscordConnectResponse"];
+        };
+      };
+      /** @description Discord OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DiscordConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  connectMicrosoftTeamsIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Microsoft Teams authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MicrosoftTeamsConnectResponse"];
+        };
+      };
+      /** @description Microsoft Teams OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MicrosoftTeamsConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  connectSentryIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sentry authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SentryConnectResponse"];
+        };
+      };
+      /** @description Sentry OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SentryConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectSentryIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sentry disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  sentryOAuthCallback: {
+    parameters: {
+      query?: {
+        code?: string;
+        state?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Redirects to integration settings */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  searchSentryLinkableIssues: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SentryIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linkable Exponential issues for Sentry */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SentryIssueSearchResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkSentryIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SentryIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked Exponential issue descriptor for Sentry */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SentryIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createIssueFromSentry: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SentryIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Created Exponential issue descriptor for Sentry */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SentryIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectMicrosoftTeamsIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Microsoft Teams disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectDiscordIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Discord disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
         };
       };
       default: components["responses"]["Problem"];

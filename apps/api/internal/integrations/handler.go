@@ -115,7 +115,11 @@ type slackOAuthResponse struct {
 
 var catalog = []CatalogItem{
 	{Provider: "github", Name: "GitHub", Description: "Sync pull requests, commits, and issue links with Linear."},
+	{Provider: "gitlab", Name: "GitLab", Description: "Link merge requests, commits, and workflow automation to issues."},
 	{Provider: "jira", Name: "Jira", Description: "Sync issue status, ownership, and cross-links with Jira projects."},
+	{Provider: "discord", Name: "Discord", Description: "Create, search, and share issues from Discord slash commands."},
+	{Provider: "microsoft_teams", Name: "Microsoft Teams", Description: "Create issues and projects from Teams conversations and post project updates."},
+	{Provider: "sentry", Name: "Sentry", Description: "Create, link, and resolve issues from Sentry errors."},
 	{Provider: "slack", Name: "Slack", Description: "Send issue updates and create issues from Slack messages."},
 	{Provider: "zendesk", Name: "Zendesk", Description: "Connect support tickets to product work and customer requests."},
 }
@@ -125,6 +129,16 @@ func (h Handler) Routes() chi.Router {
 	r.Get("/", h.List)
 	r.Delete("/", h.Delete)
 	r.Post("/slack/connect", h.SlackConnect)
+	r.Get("/gitlab", h.GitLabStatus)
+	r.Post("/gitlab/setup", h.GitLabSetup)
+	r.Post("/gitlab/workflows", h.GitLabWorkflow)
+	r.Post("/gitlab/disconnect", h.GitLabDisconnect)
+	r.Post("/discord/connect", h.DiscordConnect)
+	r.Post("/discord/disconnect", h.DiscordDisconnect)
+	r.Post("/microsoft-teams/connect", h.MicrosoftTeamsConnect)
+	r.Post("/microsoft-teams/disconnect", h.MicrosoftTeamsDisconnect)
+	r.Post("/sentry/connect", h.SentryConnect)
+	r.Post("/sentry/disconnect", h.SentryDisconnect)
 	r.Post("/slack/disconnect", h.SlackDisconnect)
 	return r
 }
@@ -406,6 +420,15 @@ func setupRequirement(provider string) *SetupRequirement {
 	if provider == "slack" && !slackConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Slack OAuth credentials are not configured. Add AUTH_SLACK_ID and AUTH_SLACK_SECRET to enable installation."}
 	}
+	if provider == "discord" && !discordConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Discord OAuth credentials and public key are not configured. Add AUTH_DISCORD_ID, AUTH_DISCORD_SECRET, and DISCORD_PUBLIC_KEY to enable installation."}
+	}
+	if provider == "microsoft_teams" && !microsoftTeamsConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Microsoft Teams credentials are not configured. Add AUTH_MICROSOFT_ID, AUTH_MICROSOFT_SECRET, and MICROSOFT_TEAMS_BOT_SECRET to enable tenant installation."}
+	}
+	if provider == "sentry" && !sentryConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Sentry credentials are not configured. Add AUTH_SENTRY_ID, AUTH_SENTRY_SECRET, and SENTRY_WEBHOOK_SECRET to enable installation and signed issue actions."}
+	}
 	if provider == "github" || provider == "jira" || provider == "zendesk" {
 		name := "GitHub"
 		if provider == "jira" {
@@ -421,6 +444,14 @@ func setupRequirement(provider string) *SetupRequirement {
 
 func slackConfigured() bool {
 	return strings.TrimSpace(os.Getenv("AUTH_SLACK_ID")) != "" && strings.TrimSpace(os.Getenv("AUTH_SLACK_SECRET")) != ""
+}
+
+func discordConfigured() bool {
+	return strings.TrimSpace(os.Getenv("AUTH_DISCORD_ID")) != "" && strings.TrimSpace(os.Getenv("AUTH_DISCORD_SECRET")) != "" && strings.TrimSpace(os.Getenv("DISCORD_PUBLIC_KEY")) != ""
+}
+
+func microsoftTeamsConfigured() bool {
+	return strings.TrimSpace(os.Getenv("AUTH_MICROSOFT_ID")) != "" && strings.TrimSpace(os.Getenv("AUTH_MICROSOFT_SECRET")) != "" && strings.TrimSpace(os.Getenv("MICROSOFT_TEAMS_BOT_SECRET")) != ""
 }
 
 func formatTime(value *time.Time) *string {

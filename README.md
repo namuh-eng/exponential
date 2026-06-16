@@ -51,13 +51,27 @@ Full self-hosting guide: [docs/self-hosting.md](docs/self-hosting.md)
 | **Self-hostable** | Yes — Docker Compose or ECS | No (Cloud only) | Server edition (EOL) | Yes |
 | **Open / source-available** | Yes (ELv2) | No | No | Yes (AGPL) |
 | **Go headless API** | Yes — OpenAPI contract + SDK | No | No | No |
-| **MCP server (local)** | Yes — stdio, read-only | No | No | No |
+| **MCP server** | Yes — hosted HTTP + local stdio | No | No | No |
 | **Keyboard-first UI** | Yes — command palette + shortcuts | Yes | Limited | Limited |
 | **Cycles (sprints)** | Yes | Yes | Yes (Scrum) | Yes |
 | **Initiatives / roadmap** | Yes | Yes | Roadmap plugin | Yes |
 | **AI integrations** | OpenAI summaries, MCP | Yes (Ask Linear) | Atlassian Intelligence | Limited |
 | **CLI** | Yes (TypeScript, npm) | Limited | Limited | No |
 | **License** | Elastic 2.0 — use + modify, no resale | Proprietary | Proprietary | AGPL |
+
+## Current architecture
+
+- Go API owns business endpoints, auth, OpenAPI strict stubs, sqlc queries, SQL
+  migrations, RED metrics, and Stripe webhook processing.
+- Next.js 16 web is UI-only and talks to the Go API through the generated SDK
+  and same-origin `/api/*` rewrites.
+- Docker Compose runs web, API, migrations, Postgres, and Redis as the default
+  self-hosting path.
+- AWS ECS scripts can provision and deploy split web/API services with RDS,
+  ElastiCache, S3, SES, ECR, ALB routing, smoke tests, and Secrets Manager.
+- Integration parity planning is tracked in
+  [docs/integration-parity-roadmap.md](docs/integration-parity-roadmap.md),
+  with the P0/P1/P2/P3 build order and provider issue map.
 
 ---
 
@@ -164,7 +178,8 @@ Web: `http://localhost:7015` · API: `http://localhost:7016`
 
 ## CLI and MCP
 
-After creating a personal access token in Workspace → Settings → API:
+After creating a personal access token in Workspace → Settings → API, use the
+CLI, hosted remote MCP endpoint, or local MCP server against the same Go API:
 
 ```bash
 export EXPONENTIAL_TOKEN=pat_your_token
@@ -175,6 +190,10 @@ pnpm --filter @namuh-eng/expn-cli cli -- issue ls --json
 
 # Local MCP server (read-only, stdio)
 pnpm --filter @exponential/mcp exec exponential-mcp
+curl -H "Authorization: Bearer $EXPONENTIAL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+  http://localhost:7016/v1/mcp
 ```
 
 - CLI docs: [docs/cli.md](docs/cli.md)
@@ -204,7 +223,7 @@ exponential/
 ├── apps/cli/             # TypeScript CLI over the generated SDK
 ├── apps/mcp/             # Local stdio MCP runtime
 ├── apps/web/             # Next.js UI-only app
-├── packages/mcp-server/  # Read-only MCP tool package
+├── packages/mcp-server/  # MCP tool package used by local clients
 ├── packages/proto/       # OpenAPI contract and SQL migrations
 ├── packages/sdk/         # Generated TypeScript SDK
 ├── infra/                # Dockerfiles and ECS task definitions

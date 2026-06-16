@@ -1,4 +1,10 @@
-type SocialLinkProvider = "google" | "github" | "gitlab" | "slack";
+type SocialLinkProvider =
+  | "google"
+  | "github"
+  | "gitlab"
+  | "slack"
+  | "discord"
+  | "microsoft";
 
 type SocialSignInOptions = {
   provider: SocialLinkProvider;
@@ -90,18 +96,40 @@ function googleStartURL(callbackURL: string) {
   return `/api/auth/google/start?${params.toString()}`;
 }
 
+function discordStartURL(callbackURL: string) {
+  const params = new URLSearchParams({
+    callback_url: localPathFromCallback(callbackURL),
+  });
+  return `/api/auth/discord/start?${params.toString()}`;
+}
+
+function microsoftStartURL(callbackURL: string) {
+  const params = new URLSearchParams({
+    callback_url: localPathFromCallback(callbackURL),
+  });
+  return `/api/auth/microsoft/start?${params.toString()}`;
+}
+
 export const signIn = {
   async social(options: SocialSignInOptions): Promise<LinkSocialAccountResult> {
-    if (options.provider !== "google") {
-      return {
-        error: {
-          code: "unsupported_provider",
-          message: `${options.provider} sign-in is not configured.`,
-        },
-      };
+    if (options.provider === "google") {
+      const url = googleStartURL(options.callbackURL);
+      return { data: { url, redirect: true }, url };
     }
-    const url = googleStartURL(options.callbackURL);
-    return { data: { url, redirect: true }, url };
+    if (options.provider === "discord") {
+      const url = discordStartURL(options.callbackURL);
+      return { data: { url, redirect: true }, url };
+    }
+    if (options.provider === "microsoft") {
+      const url = microsoftStartURL(options.callbackURL);
+      return { data: { url, redirect: true }, url };
+    }
+    return {
+      error: {
+        code: "unsupported_provider",
+        message: `${options.provider} sign-in is not configured.`,
+      },
+    };
   },
   async magicLink(options: MagicLinkOptions): Promise<unknown> {
     const response = await fetch("/api/auth/magic-link", {
