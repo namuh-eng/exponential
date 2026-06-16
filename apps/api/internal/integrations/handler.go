@@ -108,6 +108,7 @@ var catalog = []CatalogItem{
 	{Provider: "jira", Name: "Jira", Description: "Sync issue status, ownership, and cross-links with Jira projects."},
 	{Provider: "discord", Name: "Discord", Description: "Create, search, and share issues from Discord slash commands."},
 	{Provider: "microsoft_teams", Name: "Microsoft Teams", Description: "Create issues and projects from Teams conversations and post project updates."},
+	{Provider: "intercom", Name: "Intercom", Description: "Create and link issues from support conversations and sync customer feedback status."},
 	{Provider: "sentry", Name: "Sentry", Description: "Create, link, and resolve issues from Sentry errors."},
 	{Provider: "slack", Name: "Slack", Description: "Send issue updates and create issues from Slack messages."},
 	{Provider: "zendesk", Name: "Zendesk", Description: "Connect support tickets to product work and customer requests."},
@@ -128,6 +129,8 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/microsoft-teams/disconnect", h.MicrosoftTeamsDisconnect)
 	r.Post("/sentry/connect", h.SentryConnect)
 	r.Post("/sentry/disconnect", h.SentryDisconnect)
+	r.Post("/intercom/connect", h.IntercomConnect)
+	r.Post("/intercom/disconnect", h.IntercomDisconnect)
 	r.Post("/slack/disconnect", h.SlackDisconnect)
 	return r
 }
@@ -405,6 +408,9 @@ func setupRequirement(provider string) *SetupRequirement {
 	}
 	if provider == "sentry" && !sentryConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Sentry credentials are not configured. Add AUTH_SENTRY_ID, AUTH_SENTRY_SECRET, and SENTRY_WEBHOOK_SECRET to enable installation and signed issue actions."}
+	}
+	if provider == "intercom" && !intercomConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Intercom credentials are not configured. Add AUTH_INTERCOM_ID, AUTH_INTERCOM_SECRET, and INTERCOM_SIGNING_SECRET to enable installation and signed conversation actions."}
 	}
 	if provider == "github" || provider == "jira" || provider == "zendesk" {
 		name := "GitHub"
