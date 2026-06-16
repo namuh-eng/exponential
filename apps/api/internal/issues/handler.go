@@ -710,7 +710,8 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create issue failed", err.Error())
 		return
 	}
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "issue", issue.ID, "created", issue, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "issue", issue.ID, "created", issue, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Create issue failed", err.Error())
 		return
 	}
@@ -718,6 +719,7 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create issue failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	h.storeIdempotency(r, p, http.StatusCreated, issue)
 	problem.JSON(w, http.StatusCreated, issue)
 }
@@ -821,7 +823,8 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update issue failed", err.Error())
 		return
 	}
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "issue", updated.ID, "updated", updated, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "issue", updated.ID, "updated", updated, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Update issue failed", err.Error())
 		return
 	}
@@ -833,6 +836,7 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update issue failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	h.storeIdempotency(r, p, http.StatusOK, updated)
 	problem.JSON(w, http.StatusOK, updated)
 }
@@ -862,7 +866,8 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete issue failed", err.Error())
 		return
 	}
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "issue", existing.ID, "deleted", existing, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "issue", existing.ID, "deleted", existing, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Delete issue failed", err.Error())
 		return
 	}
@@ -870,6 +875,7 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete issue failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	body := map[string]bool{"success": true}
 	h.storeIdempotency(r, p, http.StatusOK, body)
 	problem.JSON(w, http.StatusOK, body)
@@ -1132,7 +1138,7 @@ func assertStateForTeam(ctx context.Context, q queryer, stateID, teamID string) 
 	return q.QueryRow(ctx, `select id::text from workflow_state where id=$1::uuid and team_id=$2::uuid`, stateID, teamID).Scan(&found)
 }
 
-func insertOperation(ctx context.Context, exec syncapi.OperationStore, workspaceID, entityType, entityID, opType string, payload any, userID string) error {
+func insertOperation(ctx context.Context, exec syncapi.OperationStore, workspaceID, entityType, entityID, opType string, payload any, userID string) (syncapi.Operation, error) {
 	return syncapi.InsertOperation(ctx, exec, workspaceID, entityType, entityID, opType, payload, userID)
 }
 

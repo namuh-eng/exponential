@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  SYNC_OPERATIONS_EVENT,
+  type SyncOperationsEvent,
+} from "@/app/(app)/sync-subscription";
 import { CreateIssueModal } from "@/components/create-issue-modal";
 import { EmptyState } from "@/components/empty-state";
 import {
@@ -160,6 +164,17 @@ export default function TeamTriagePage() {
 
   useEffect(() => {
     fetchTriage();
+  }, [fetchTriage]);
+
+  useEffect(() => {
+    const handleSync = (event: Event) => {
+      const operations = (event as SyncOperationsEvent).detail.operations;
+      if (operations.some((operation) => operation.entity_type === "issue")) {
+        void fetchTriage();
+      }
+    };
+    window.addEventListener(SYNC_OPERATIONS_EVENT, handleSync);
+    return () => window.removeEventListener(SYNC_OPERATIONS_EVENT, handleSync);
   }, [fetchTriage]);
 
   useEffect(() => {

@@ -8,6 +8,36 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /sync/status:
+    get:
+      operationId: getSyncStatus
+      summary: Get current workspace sync version and replay status
+      responses:
+        '200':
+          description: Sync status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [currentVersion]
+                properties:
+                  currentVersion:
+                    type: integer
+                    format: int64
+                  lastReplay:
+                    type: object
+                    required: [requestedVersion, operationCount, replayedAt]
+                    properties:
+                      requestedVersion:
+                        type: integer
+                        format: int64
+                      operationCount:
+                        type: integer
+                      replayedAt:
+                        type: string
+                        format: date-time
+        default:
+          $ref: '#/components/responses/Problem'
   /attachments:
     get:
       operationId: attachmentsNamespace

@@ -2,6 +2,10 @@
 
 import { useAppShellContext } from "@/app/(app)/app-shell";
 import {
+  SYNC_OPERATIONS_EVENT,
+  type SyncOperationsEvent,
+} from "@/app/(app)/sync-subscription";
+import {
   IssueProperties,
   type IssuePropertyUpdate,
 } from "@/components/issue-properties";
@@ -787,6 +791,22 @@ export function IssueDetailView({
   useEffect(() => {
     void fetchHistory();
   }, [fetchHistory]);
+
+  useEffect(() => {
+    const handleSync = (event: Event) => {
+      const operations = (event as SyncOperationsEvent).detail.operations;
+      if (
+        operations.some((operation) =>
+          ["issue", "comment"].includes(operation.entity_type),
+        )
+      ) {
+        void fetchIssue();
+        void fetchHistory();
+      }
+    };
+    window.addEventListener(SYNC_OPERATIONS_EVENT, handleSync);
+    return () => window.removeEventListener(SYNC_OPERATIONS_EVENT, handleSync);
+  }, [fetchHistory, fetchIssue]);
 
   useEffect(() => {
     let cancelled = false;
