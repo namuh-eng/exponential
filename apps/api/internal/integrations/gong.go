@@ -2,7 +2,9 @@ package integrations
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -18,6 +20,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
 )
@@ -135,7 +138,7 @@ func (h Handler) GongConnect(w http.ResponseWriter, r *http.Request) {
 	}
 	clientID, _, ok := gongOAuthConfig()
 	if !ok {
-		problem.JSON(w, http.StatusPreconditionFailed, map[string]string{"error": "Gong OAuth is not configured", "message": "Add AUTH_GONG_ID and AUTH_GONG_SECRET to enable Gong installation for this workspace."})
+		problem.Write(w, http.StatusPreconditionFailed, "Gong OAuth is not configured", "Add AUTH_GONG_ID and AUTH_GONG_SECRET to enable Gong installation for this workspace.")
 		return
 	}
 	var input gongConnectRequest
@@ -228,6 +231,10 @@ func (h Handler) GongIngestCall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	integrationID := strings.TrimSpace(chi.URLParam(r, "integrationID"))
+	if integrationID == "" {
+		problem.Write(w, http.StatusBadRequest, "integrationID is required", "")
+		return
+	}
 	install, err := h.resolveGongInstall(r.Context(), p.WorkspaceID, integrationID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		problem.Write(w, http.StatusNotFound, "Gong integration not found", "")
@@ -237,8 +244,22 @@ func (h Handler) GongIngestCall(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusInternalServerError, "Resolve Gong integration failed", err.Error())
 		return
 	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		problem.Write(w, http.StatusBadRequest, "Gong call body could not be read", err.Error())
+		return
+	}
+	sharedSecret := strings.TrimSpace(stringValue(install.Metadata["sharedSecret"]))
+	if sharedSecret == "" {
+		problem.Write(w, http.StatusServiceUnavailable, "Gong integration is missing shared secret", "Reconnect the Gong integration to generate a new shared secret.")
+		return
+	}
+	if !verifyGongSignature(sharedSecret, r.Header.Get("X-Gong-Signature"), body) {
+		problem.Write(w, http.StatusUnauthorized, "Invalid Gong signature", "")
+		return
+	}
 	var input gongIngestRequest
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	if err := json.Unmarshal(body, &input); err != nil {
 		problem.Write(w, http.StatusBadRequest, "Invalid Gong call payload", err.Error())
 		return
 	}
@@ -263,6 +284,10 @@ func (h Handler) resolveGongDestinationTeam(ctx context.Context, workspaceID, re
 }
 
 func (h Handler) saveGongOAuthState(ctx context.Context, workspaceID string, userID string, teamID string, state string, input gongConnectRequest) error {
+	sharedSecret, err := randomState()
+	if err != nil {
+		return err
+	}
 	metadata := map[string]any{
 		"oauthStateHash":      hashSlackSecret(state),
 		"oauthStateExpiresAt": time.Now().UTC().Add(15 * time.Minute).Format(time.RFC3339Nano),
@@ -271,6 +296,7 @@ func (h Handler) saveGongOAuthState(ctx context.Context, workspaceID string, use
 		"mentionParticipants": input.MentionParticipants,
 		"pollingCursor":       strings.TrimSpace(input.PollingCursor),
 		"minimumDurationSec":  gongMinimumRecordingSeconds,
+		"sharedSecret":        sharedSecret,
 	}
 	raw, err := json.Marshal(metadata)
 	if err != nil {
@@ -330,6 +356,7 @@ func (h Handler) completeGongInstall(ctx context.Context, install gongOAuthInsta
 		"pollingCursor":       stringValue(install.Metadata["pollingCursor"]),
 		"minimumDurationSec":  gongMinimumRecordingSeconds,
 		"statusWriteback":     "unsupported",
+		"sharedSecret":        stringValue(install.Metadata["sharedSecret"]),
 	}
 	metadataRaw, err := json.Marshal(metadata)
 	if err != nil {
@@ -380,16 +407,13 @@ func (h Handler) recordGongInstallFailure(ctx context.Context, integrationID str
 }
 
 func (h Handler) resolveGongInstall(ctx context.Context, workspaceID string, integrationID string) (gongInstallRecord, error) {
+	integrationID = strings.TrimSpace(integrationID)
+	if integrationID == "" {
+		return gongInstallRecord{}, fmt.Errorf("integrationID is required")
+	}
 	var install gongInstallRecord
 	var raw []byte
-	query := `select workspace_id::text, id::text, coalesce(connected_by_user_id,''), coalesce(metadata,'{}'::jsonb) from workspace_integration where workspace_id=$1::uuid and provider='gong' and status in ('connected','degraded')`
-	args := []any{workspaceID}
-	if strings.TrimSpace(integrationID) != "" {
-		query += ` and id=$2::uuid`
-		args = append(args, integrationID)
-	}
-	query += ` order by updated_at desc limit 1`
-	err := h.DB.QueryRow(ctx, query, args...).Scan(&install.WorkspaceID, &install.IntegrationID, &install.ConnectedBy, &raw)
+	err := h.DB.QueryRow(ctx, `select workspace_id::text, id::text, coalesce(connected_by_user_id,''), coalesce(metadata,'{}'::jsonb) from workspace_integration where workspace_id=$1::uuid and provider='gong' and status in ('connected','degraded') and id=$2::uuid order by updated_at desc limit 1`, workspaceID, integrationID).Scan(&install.WorkspaceID, &install.IntegrationID, &install.ConnectedBy, &raw)
 	if err != nil {
 		return install, err
 	}
@@ -444,6 +468,20 @@ func (h Handler) createOrLinkGongFinding(ctx context.Context, install gongInstal
 			return gongFindingResult{}, err
 		}
 	}
+	for attempt := 0; attempt < 3; attempt++ {
+		result, err := h.tryCreateGongFinding(ctx, install, call, finding, teamID, creatorID)
+		if err == nil {
+			return result, nil
+		}
+		if isGongUniqueViolation(err) {
+			continue
+		}
+		return gongFindingResult{}, err
+	}
+	return gongFindingResult{}, fmt.Errorf("failed to allocate issue number after retries")
+}
+
+func (h Handler) tryCreateGongFinding(ctx context.Context, install gongInstallRecord, call gongCall, finding gongFinding, teamID string, creatorID string) (gongFindingResult, error) {
 	tx, err := h.DB.Begin(ctx)
 	if err != nil {
 		return gongFindingResult{}, err
@@ -461,7 +499,7 @@ func (h Handler) createOrLinkGongFinding(ctx context.Context, install gongInstal
 		}
 	}
 	var nextNumber int32
-	if err := tx.QueryRow(ctx, `select coalesce(max(number),0)+1 from issue where team_id=$1::uuid`, teamID).Scan(&nextNumber); err != nil {
+	if err := tx.QueryRow(ctx, `select coalesce(max(number),0)+1 from issue where team_id=$1::uuid for update`, teamID).Scan(&nextNumber); err != nil {
 		return gongFindingResult{}, err
 	}
 	identifier := fmt.Sprintf("%s-%d", team.Key, nextNumber)
@@ -588,7 +626,7 @@ func gongExternalSpeaker(call gongCall, line gongTranscriptLine) bool {
 			return participant.External || strings.EqualFold(participant.Role, "customer") || strings.EqualFold(participant.Role, "external")
 		}
 	}
-	return true
+	return false
 }
 
 func gongFindingID(callID string, timestampMs int, excerpt string) string {
@@ -731,4 +769,23 @@ func exchangeGongOAuth(ctx context.Context, client *http.Client, clientSecret st
 		return gongOAuthResponse{}, err
 	}
 	return token, nil
+}
+
+// verifyGongSignature verifies the HMAC-SHA256 signature of a Gong webhook
+// payload using the per-integration shared secret. The header value may be
+// a raw hex digest or prefixed with "sha256=".
+func verifyGongSignature(sharedSecret string, signature string, body []byte) bool {
+	if sharedSecret == "" || signature == "" {
+		return false
+	}
+	signature = strings.TrimPrefix(signature, "sha256=")
+	mac := hmac.New(sha256.New, []byte(sharedSecret))
+	_, _ = mac.Write(body)
+	expected := hex.EncodeToString(mac.Sum(nil))
+	return subtle.ConstantTimeCompare([]byte(expected), []byte(signature)) == 1
+}
+
+func isGongUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
