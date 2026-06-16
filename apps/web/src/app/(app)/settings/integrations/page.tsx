@@ -167,6 +167,30 @@ export default function IntegrationsSettingsPage() {
     void loadIntegrations();
   }, [loadIntegrations]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const githubParam = params.get("github");
+    if (githubParam === "connected") {
+      setNotice("GitHub connected successfully.");
+      const cleanUrl =
+        window.location.pathname +
+        (params
+          .toString()
+          .replace(/[&?]?github=[^&]*/g, "")
+          .replace(/^&/, "?") || "");
+      window.history.replaceState(null, "", cleanUrl);
+    } else if (githubParam === "canceled") {
+      setError("GitHub installation was canceled.");
+      const cleanUrl =
+        window.location.pathname +
+        (params
+          .toString()
+          .replace(/[&?]?github=[^&]*/g, "")
+          .replace(/^&/, "?") || "");
+      window.history.replaceState(null, "", cleanUrl);
+    }
+  }, []);
+
   async function connectIntegration(
     provider: "github" | "slack" | "discord" | "microsoft_teams" | "sentry",
   ) {
@@ -189,11 +213,16 @@ export default function IntegrationsSettingsPage() {
       });
       const data = (await response.json().catch(() => ({}))) as {
         authorizationUrl?: string;
+        installationUrl?: string;
         error?: string;
         message?: string;
       };
       if (!response.ok) {
         throw new Error(data.message || data.error || `${label} setup failed.`);
+      }
+      if (provider === "github" && data.installationUrl) {
+        window.location.assign(data.installationUrl);
+        return;
       }
       if (data.authorizationUrl) {
         window.location.assign(data.authorizationUrl);

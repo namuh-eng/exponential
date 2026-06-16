@@ -233,7 +233,15 @@ func (h Handler) GitHubWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	installationID := githubInstallationID(payload)
 	if installationID == "" {
-		problem.Write(w, http.StatusBadRequest, "GitHub webhook payload is missing installation.id", "")
+		if duplicate, recordErr := h.recordIgnoredGitHubDelivery(r.Context(), deliveryID, eventType, "no_installation_context", body); recordErr != nil {
+			problem.Write(w, http.StatusInternalServerError, "GitHub webhook delivery could not be recorded", recordErr.Error())
+			return
+		} else if duplicate {
+			problem.JSON(w, http.StatusOK, githubWebhookResponse{OK: true, Duplicate: true})
+			return
+		}
+		ignored := "no_installation_context"
+		problem.JSON(w, http.StatusAccepted, githubWebhookResponse{OK: false, Ignored: &ignored})
 		return
 	}
 	install, err := h.resolveGitHubInstall(r.Context(), installationID)
