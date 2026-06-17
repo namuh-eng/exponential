@@ -4645,6 +4645,9 @@ export interface components {
       metadataOptions?: {
         [key: string]: unknown;
       };
+      defaults?: {
+        [key: string]: unknown;
+      };
     } & {
       [key: string]: unknown;
     };
@@ -4668,6 +4671,8 @@ export interface components {
       projectMilestoneId?: string | null;
       assigneeId?: string | null;
       comment?: string | null;
+      /** Format: date */
+      dueDate?: string | null;
       subscribe?: boolean;
     } & {
       [key: string]: unknown;
