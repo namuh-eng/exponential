@@ -53,6 +53,7 @@ func main() {
 	go (integrations.SlackWorker{DB: db}).Start(workerCtx)
 	go (integrations.MicrosoftTeamsWorker{DB: db}).Start(workerCtx)
 	go (integrations.SentryWorker{DB: db}).Start(workerCtx)
+	go (integrations.IntercomWorker{DB: db}).Start(workerCtx)
 	go (integrations.ZendeskWorker{DB: db}).Start(workerCtx)
 
 	server := &http.Server{

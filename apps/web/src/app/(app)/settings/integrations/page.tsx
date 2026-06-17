@@ -120,14 +120,15 @@ function integrationDetailSummary(integration: Integration) {
 
 function isConnectableProvider(
   provider: string,
-): provider is "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong" {
+): provider is "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong" | "intercom" {
   return (
     provider === "github" ||
     provider === "slack" ||
     provider === "discord" ||
     provider === "microsoft_teams" ||
     provider === "sentry" ||
-    provider === "gong"
+    provider === "gong" ||
+    provider === "intercom"
   );
 }
 
@@ -204,7 +205,7 @@ export default function IntegrationsSettingsPage() {
   }, []);
 
   async function connectIntegration(
-    provider: "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong",
+    provider: "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong" | "intercom",
   ) {
     setPendingProvider(provider);
     setNotice(null);
@@ -215,6 +216,7 @@ export default function IntegrationsSettingsPage() {
     if (provider === "microsoft_teams") label = "Microsoft Teams";
     if (provider === "sentry") label = "Sentry";
     if (provider === "gong") label = "Gong";
+    if (provider === "intercom") label = "Intercom";
     const endpoint =
       provider === "microsoft_teams"
         ? "/api/integrations/microsoft-teams/connect"
@@ -371,6 +373,8 @@ export default function IntegrationsSettingsPage() {
                     ? "/api/integrations/gong/disconnect"
                     : provider === "zendesk"
                       ? "/api/integrations/zendesk/disconnect"
+                      : provider === "intercom"
+                        ? "/api/integrations/intercom/disconnect"
                   : `/api/integrations?provider=${encodeURIComponent(provider)}`;
       const response = await fetch(endpoint, {
         method:
@@ -380,7 +384,8 @@ export default function IntegrationsSettingsPage() {
           provider === "microsoft_teams" ||
           provider === "sentry" ||
           provider === "gong" ||
-          provider === "zendesk"
+          provider === "zendesk" ||
+          provider === "intercom"
             ? "POST"
             : "DELETE",
         headers: { Accept: "application/json" },

@@ -963,6 +963,134 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/intercom/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectIntercomIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectIntercomIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/oauth/callback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["intercomOAuthCallback"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/issues/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["searchIntercomLinkableIssues"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/issues/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["getIntercomLinkedIssueStatus"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/issues/link": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["linkIntercomIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/issues/unlink": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["unlinkIntercomIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/issues/create": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createIssueFromIntercom"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/sentry/disconnect": {
     parameters: {
       query?: never;
@@ -3203,6 +3331,7 @@ export interface components {
       state: string;
       workspaceSlug: string;
     };
+    IntercomConnectResponse: never;
     GongConnectRequest: {
       /** Format: uuid */
       destinationTeamId?: string;
@@ -3254,6 +3383,10 @@ export interface components {
       error: string;
       message: string;
     };
+    IntercomConfigurationRequiredResponse: {
+      error: string;
+      message: string;
+    };
     SentryIssueActionRequest: {
       query?: string;
       exponentialIssueId?: string;
@@ -3281,6 +3414,42 @@ export interface components {
     };
     SentryIssueSearchResponse: {
       issues: components["schemas"]["SentryIssueActionResponse"][];
+    };
+    IntercomIssueActionRequest: {
+      appId?: string;
+      conversationId?: string;
+      issueId?: string;
+      /** Format: uuid */
+      teamId?: string;
+      title?: string;
+      description?: string;
+      contactId?: string;
+      contactEmail?: string;
+      companyId?: string;
+    } & {
+      [key: string]: unknown;
+    };
+    IntercomIssue: {
+      /** Format: uuid */
+      id: string;
+      identifier: string;
+      title: string;
+      /** Format: uri */
+      webUrl: string;
+      status: string;
+      assignee: string;
+    };
+    IntercomIssueActionResponse: {
+      ok: boolean;
+      message?: string;
+      issue?: components["schemas"]["IntercomIssue"] | null;
+      meta?: {
+        [key: string]: unknown;
+      };
+    };
+    IntercomIssueSearchResponse: {
+      ok: boolean;
+      issues: components["schemas"]["IntercomIssue"][];
     };
     ZendeskSetupRequest: {
       subdomain: string;
@@ -7215,6 +7384,204 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SentryConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  connectIntercomIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Intercom authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomConnectResponse"];
+        };
+      };
+      /** @description Intercom OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectIntercomIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Intercom disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  intercomOAuthCallback: {
+    parameters: {
+      query?: {
+        code?: string;
+        state?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Redirects to integration settings */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  searchIntercomLinkableIssues: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntercomIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linkable Exponential issues for Intercom */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomIssueSearchResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getIntercomLinkedIssueStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntercomIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked issue status for an Intercom conversation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkIntercomIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntercomIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked issue for an Intercom conversation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  unlinkIntercomIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntercomIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Unlinked issue for an Intercom conversation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createIssueFromIntercom: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntercomIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Created issue from an Intercom conversation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomIssueActionResponse"];
         };
       };
       default: components["responses"]["Problem"];

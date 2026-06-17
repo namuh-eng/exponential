@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -49,6 +50,18 @@ func TestSetupRequirement(t *testing.T) {
 	t.Setenv("MICROSOFT_TEAMS_BOT_SECRET", "bot-secret")
 	if got := setupRequirement("microsoft_teams"); got != nil {
 		t.Fatalf("configured microsoft teams requirement = %#v", got)
+	}
+	t.Setenv("AUTH_INTERCOM_ID", "")
+	t.Setenv("AUTH_INTERCOM_SECRET", "")
+	t.Setenv("INTERCOM_SIGNING_SECRET", "")
+	if got := setupRequirement("intercom"); got == nil || got.Type != "configuration_required" {
+		t.Fatalf("intercom requirement = %#v", got)
+	}
+	t.Setenv("AUTH_INTERCOM_ID", "id")
+	t.Setenv("AUTH_INTERCOM_SECRET", "secret")
+	t.Setenv("INTERCOM_SIGNING_SECRET", "signing-secret")
+	if got := setupRequirement("intercom"); got != nil {
+		t.Fatalf("configured intercom requirement = %#v", got)
 	}
 	if got := setupRequirement("github"); got == nil || got.Message == "" {
 		t.Fatalf("github requirement = %#v", got)
@@ -127,6 +140,58 @@ func TestSlackSignatureVerification(t *testing.T) {
 	stale := strconv.FormatInt(now.Add(-10*time.Minute).Unix(), 10)
 	if verifySlackSignature("secret", stale, slackTestSignature("secret", stale, body), body, now) {
 		t.Fatal("stale Slack timestamp was accepted")
+	}
+}
+
+func TestIntercomAuthorizationURL(t *testing.T) {
+	got := intercomAuthorizationURL("client", "https://app.example/", "state-token")
+	if !strings.HasPrefix(got, "https://app.intercom.com/oauth?") {
+		t.Fatalf("unexpected URL = %q", got)
+	}
+	if !strings.Contains(got, "client_id=client") || !strings.Contains(got, "state=state-token") {
+		t.Fatalf("missing auth params = %q", got)
+	}
+	if !strings.Contains(got, "redirect_uri=https%3A%2F%2Fapp.example%2Fapi%2Fintegrations%2Fintercom%2Foauth%2Fcallback") {
+		t.Fatalf("missing redirect uri = %q", got)
+	}
+}
+
+func TestIntercomSignatureVerification(t *testing.T) {
+	body := []byte(`{"app_id":"app_123","conversation":{"id":"conv_123"}}`)
+	macSHA1 := hmac.New(sha1.New, []byte("secret"))
+	_, _ = macSHA1.Write(body)
+	hubSignature := "sha1=" + hex.EncodeToString(macSHA1.Sum(nil))
+	if !verifyIntercomSignature("secret", hubSignature, "", body) {
+		t.Fatal("valid Intercom sha1 signature was rejected")
+	}
+	macSHA256 := hmac.New(sha256.New, []byte("secret"))
+	_, _ = macSHA256.Write(body)
+	intercomSignature := hex.EncodeToString(macSHA256.Sum(nil))
+	if !verifyIntercomSignature("secret", "", intercomSignature, body) {
+		t.Fatal("valid Intercom sha256 signature was rejected")
+	}
+	if verifyIntercomSignature("secret", hubSignature, "", []byte(`{"app_id":"tampered"}`)) {
+		t.Fatal("tampered Intercom body was accepted")
+	}
+}
+
+func TestIntercomActionFromPayload(t *testing.T) {
+	payload := map[string]any{
+		"app_id": "app_123",
+		"conversation": map[string]any{
+			"id":        "conv_123",
+			"subject":   "Refund feedback",
+			"permalink": "https://app.intercom.com/a/inbox/inbox/conversation/conv_123",
+		},
+		"contact": map[string]any{"id": "contact_1", "name": "Ada", "email": "ada@example.com"},
+		"company": map[string]any{"id": "company_1", "name": "Acme"},
+	}
+	got := intercomActionFromPayload(payload)
+	if got.AppID != "app_123" || got.ConversationID != "conv_123" || got.Title != "Refund feedback" {
+		t.Fatalf("action = %#v", got)
+	}
+	if got.ContactEmail != "ada@example.com" || got.CompanyName != "Acme" {
+		t.Fatalf("customer mapping = %#v", got)
 	}
 }
 

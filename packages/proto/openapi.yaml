@@ -1240,6 +1240,146 @@ paths:
                 $ref: '#/components/schemas/SentryConfigurationRequiredResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /integrations/intercom/connect:
+    post:
+      operationId: connectIntercomIntegration
+      responses:
+        '200':
+          description: Intercom authorization URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntercomConnectResponse'
+        '412':
+          description: Intercom OAuth is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntercomConfigurationRequiredResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/intercom/disconnect:
+    post:
+      operationId: disconnectIntercomIntegration
+      responses:
+        '200':
+          description: Intercom disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/intercom/oauth/callback:
+    get:
+      operationId: intercomOAuthCallback
+      security: []
+      parameters:
+        - name: code
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+      responses:
+        '302': { description: Redirects to integration settings }
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/intercom/issues/search:
+    post:
+      operationId: searchIntercomLinkableIssues
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntercomIssueActionRequest'
+      responses:
+        '200':
+          description: Linkable Exponential issues for Intercom
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntercomIssueSearchResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/intercom/issues/status:
+    post:
+      operationId: getIntercomLinkedIssueStatus
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntercomIssueActionRequest'
+      responses:
+        '200':
+          description: Linked issue status for an Intercom conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntercomIssueActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/intercom/issues/link:
+    post:
+      operationId: linkIntercomIssue
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntercomIssueActionRequest'
+      responses:
+        '200':
+          description: Linked issue for an Intercom conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntercomIssueActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/intercom/issues/unlink:
+    post:
+      operationId: unlinkIntercomIssue
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntercomIssueActionRequest'
+      responses:
+        '200':
+          description: Unlinked issue for an Intercom conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntercomIssueActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/intercom/issues/create:
+    post:
+      operationId: createIssueFromIntercom
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntercomIssueActionRequest'
+      responses:
+        '200':
+          description: Created issue from an Intercom conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntercomIssueActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /integrations/sentry/disconnect:
     post:
       operationId: disconnectSentryIntegration
@@ -4633,6 +4773,7 @@ components:
         authorizationUrl: { type: string, format: uri }
         state: { type: string }
         workspaceSlug: { type: string }
+    IntercomConnectResponse:
     GongConnectRequest:
       type: object
       properties:
@@ -4641,6 +4782,7 @@ components:
         mentionParticipants: { type: boolean }
         pollingCursor: { type: string }
     GongConnectResponse:
+
       type: object
       required: [authorizationUrl, state, workspaceSlug]
       properties:
@@ -4678,6 +4820,7 @@ components:
         findings:
           type: array
           items: { $ref: '#/components/schemas/GongFindingResult' }
+
     DiscordConfigurationRequiredResponse:
       type: object
       required: [error, message]
@@ -4697,6 +4840,12 @@ components:
         error: { type: string }
         message: { type: string }
     SentryConfigurationRequiredResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error: { type: string }
+        message: { type: string }
+    IntercomConfigurationRequiredResponse:
       type: object
       required: [error, message]
       properties:
@@ -4732,6 +4881,50 @@ components:
         issues:
           type: array
           items: { $ref: '#/components/schemas/SentryIssueActionResponse' }
+    IntercomIssueActionRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        appId: { type: string }
+        conversationId: { type: string }
+        issueId: { type: string }
+        teamId: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string }
+        contactId: { type: string }
+        contactEmail: { type: string }
+        companyId: { type: string }
+    IntercomIssue:
+      type: object
+      required: [id, identifier, title, webUrl, status, assignee]
+      properties:
+        id: { type: string, format: uuid }
+        identifier: { type: string }
+        title: { type: string }
+        webUrl: { type: string, format: uri }
+        status: { type: string }
+        assignee: { type: string }
+    IntercomIssueActionResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        message: { type: string }
+        issue:
+          anyOf:
+            - $ref: '#/components/schemas/IntercomIssue'
+            - type: 'null'
+        meta:
+          type: object
+          additionalProperties: true
+    IntercomIssueSearchResponse:
+      type: object
+      required: [ok, issues]
+      properties:
+        ok: { type: boolean }
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/IntercomIssue' }
     ZendeskSetupRequest:
       type: object
       required: [subdomain, email, apiToken]
@@ -4804,6 +4997,7 @@ components:
         issues:
           type: array
           items: { $ref: '#/components/schemas/ZendeskIssueActionResponse' }
+
     IntegrationListResponse:
       type: object
       required: [canManageIntegrations, integrations]
