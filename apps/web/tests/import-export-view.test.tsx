@@ -296,6 +296,9 @@ describe("ImportExportPage component", () => {
       await screen.findByRole("button", { name: "Start import" }),
     );
     fireEvent.click(screen.getByRole("button", { name: /Jira/ }));
+    fireEvent.change(screen.getByLabelText("Base URL"), {
+      target: { value: "https://acme.atlassian.net" },
+    });
     fireEvent.change(screen.getByLabelText("Atlassian email"), {
       target: { value: "admin@example.com" },
     });

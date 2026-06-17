@@ -178,14 +178,16 @@ describe("IssueDetailView UI", () => {
       "https://www.figma.com/design/file123?node-id=1%3A2",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark seen" }));
 
     await waitFor(() => {
       expect(fetchSpy).toHaveBeenCalledWith(
         "/api/issues/iss-1/figma-sources/figma-1/refresh",
         { method: "POST" },
       );
-      expect(screen.getByText("Figma preview refreshed.")).toBeInTheDocument();
+      expect(
+        screen.getByText("Figma source marked as seen."),
+      ).toBeInTheDocument();
     });
   });
 
