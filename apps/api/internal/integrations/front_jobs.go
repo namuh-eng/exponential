@@ -119,7 +119,7 @@ func (w FrontWorker) activeFrontCredential(ctx context.Context, integrationID st
 		return frontCredential{}, err
 	}
 	var credential frontCredential
-	if err := json.Unmarshal(payloadRaw, &credential); err != nil {
+	if err := decryptProviderCredentialJSON(ctx, w.DB, integrationID, "front", payloadRaw, &credential); err != nil {
 		return frontCredential{}, err
 	}
 	if credential.APIToken == "" {

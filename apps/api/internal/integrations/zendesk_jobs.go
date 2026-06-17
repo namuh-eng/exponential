@@ -119,7 +119,7 @@ func (w ZendeskWorker) activeZendeskCredential(ctx context.Context, integrationI
 		return zendeskCredential{}, err
 	}
 	var credential zendeskCredential
-	if err := json.Unmarshal(payloadRaw, &credential); err != nil {
+	if err := decryptProviderCredentialJSON(ctx, w.DB, integrationID, "zendesk", payloadRaw, &credential); err != nil {
 		return zendeskCredential{}, err
 	}
 	return credential, nil

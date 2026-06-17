@@ -127,7 +127,7 @@ func (w SalesforceWorker) activeSalesforceCredential(ctx context.Context, integr
 		return salesforceCredential{}, err
 	}
 	var credential salesforceCredential
-	if err := json.Unmarshal(payloadRaw, &credential); err != nil {
+	if err := decryptProviderCredentialJSON(ctx, w.DB, integrationID, "salesforce", payloadRaw, &credential); err != nil {
 		return salesforceCredential{}, err
 	}
 	if credential.AccessToken == "" || credential.InstanceURL == "" {
@@ -198,7 +198,6 @@ func salesforceFollowUpField() string {
 func getenvSalesforceField(name string) string {
 	return strings.TrimSpace(os.Getenv(name))
 }
-
 
 func (w SalesforceWorker) succeedSalesforceJob(ctx context.Context, job salesforceJob) error {
 	return pgx.BeginFunc(ctx, w.DB, func(tx pgx.Tx) error {

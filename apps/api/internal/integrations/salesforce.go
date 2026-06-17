@@ -94,15 +94,15 @@ type salesforceCaseActionRequest struct {
 }
 
 type salesforceIssueActionResponse struct {
-	WebURL        string `json:"webUrl"`
-	IssueID       string `json:"issueId,omitempty"`
-	Project       string `json:"project"`
-	Identifier    string `json:"identifier"`
-	Status        string `json:"status"`
+	WebURL         string `json:"webUrl"`
+	IssueID        string `json:"issueId,omitempty"`
+	Project        string `json:"project"`
+	Identifier     string `json:"identifier"`
+	Status         string `json:"status"`
 	StatusCategory string `json:"statusCategory"`
-	Priority      string `json:"priority"`
-	CaseID        string `json:"caseId,omitempty"`
-	CaseNumber    string `json:"caseNumber,omitempty"`
+	Priority       string `json:"priority"`
+	CaseID         string `json:"caseId,omitempty"`
+	CaseNumber     string `json:"caseNumber,omitempty"`
 }
 
 type salesforceIssueSearchResponse struct {
@@ -808,7 +808,7 @@ func (h Handler) completeSalesforceInstall(ctx context.Context, install salesfor
 		return err
 	}
 	credential := map[string]any{"accessToken": token.AccessToken, "refreshToken": token.RefreshToken, "tokenType": token.TokenType, "instanceUrl": token.InstanceURL, "scope": token.Scope, "orgId": info.OrganizationID, "apiVersion": salesforceAPIVersion()}
-	credentialRaw, err := json.Marshal(credential)
+	credentialRaw, err := encryptedProviderCredentialJSON(credential)
 	if err != nil {
 		return err
 	}

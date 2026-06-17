@@ -62,6 +62,10 @@
         {
           "name": "S3_ENDPOINT",
           "value": "${S3_ENDPOINT}"
+        },
+        {
+          "name": "EXPONENTIAL_PROVIDER_CREDENTIAL_ENCRYPTION_KEY_ID",
+          "value": "${PROVIDER_CREDENTIAL_ENCRYPTION_KEY_ID}"
         }
       ],
       "secrets": [
@@ -76,6 +80,10 @@
         {
           "name": "EXPONENTIAL_SESSION_SECRET",
           "valueFrom": "${SESSION_SECRET_SECRET_ARN}"
+        },
+        {
+          "name": "EXPONENTIAL_PROVIDER_CREDENTIAL_ENCRYPTION_KEY",
+          "valueFrom": "${PROVIDER_CREDENTIAL_ENCRYPTION_KEY_SECRET_ARN}"
         },
         {
           "name": "AUTH_GOOGLE_ID",

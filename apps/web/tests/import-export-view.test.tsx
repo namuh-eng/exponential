@@ -371,6 +371,13 @@ describe("ImportExportPage component", () => {
             }),
           });
         }
+
+        if (body.action === "pause_jira_sync") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ success: true, paused: true }),
+          });
+        }
       }
       return Promise.resolve({
         ok: true,
@@ -418,6 +425,11 @@ describe("ImportExportPage component", () => {
 
     expect(
       await screen.findByText(/Jira import completed with 1 created/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Pause project sync" }));
+    expect(
+      await screen.findByText("Jira forward sync paused for this project."),
     ).toBeInTheDocument();
   });
 });

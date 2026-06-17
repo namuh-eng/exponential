@@ -622,7 +622,7 @@ func (h Handler) completeDiscordInstall(ctx context.Context, install discordOAut
 		return err
 	}
 	credential := map[string]any{"botToken": strings.TrimSpace(os.Getenv("DISCORD_BOT_TOKEN")), "guildId": token.Guild.ID, "accessToken": token.AccessToken, "tokenType": token.TokenType, "scopes": strings.Fields(token.Scope)}
-	credentialRaw, err := json.Marshal(credential)
+	credentialRaw, err := encryptedProviderCredentialJSON(credential)
 	if err != nil {
 		return err
 	}
