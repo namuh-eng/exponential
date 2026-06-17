@@ -991,6 +991,105 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /integrations/github/connect:
+    post:
+      operationId: connectGitHubIntegration
+      responses:
+        '200':
+          description: GitHub App installation URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubConnectResponse'
+        '412':
+          description: GitHub App is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubConfigurationRequiredResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/github/register:
+    post:
+      operationId: registerGitHubIntegration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GitHubRegisterRequest'
+      responses:
+        '200':
+          description: GitHub App installation registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubRegisterResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/github/disconnect:
+    post:
+      operationId: disconnectGitHubIntegration
+      responses:
+        '200':
+          description: GitHub disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/github/setup/callback:
+    get:
+      operationId: githubSetupCallback
+      security: []
+      parameters:
+        - name: installation_id
+          in: query
+          schema: { type: string }
+        - name: setup_action
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+      responses:
+        '302': { description: Redirects to integration settings }
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/github/webhook:
+    post:
+      operationId: ingestGitHubWebhook
+      security: []
+      parameters:
+        - name: X-Hub-Signature-256
+          in: header
+          required: true
+          schema: { type: string }
+        - name: X-GitHub-Delivery
+          in: header
+          required: true
+          schema: { type: string }
+        - name: X-GitHub-Event
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '202':
+          description: GitHub webhook accepted or deterministically ignored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubWebhookResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /integrations/gitlab:
     get:
       operationId: getGitLabIntegration
@@ -4258,7 +4357,7 @@ components:
           items: { $ref: '#/components/schemas/IntegrationAuditEvent' }
     Integration:
       type: object
-      required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions, health]
+      required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions, health, details]
       properties:
         provider: { type: string, enum: [github, gitlab, jira, slack, sentry, zendesk, discord, microsoft_teams] }
         name: { type: string }
@@ -4274,6 +4373,73 @@ components:
             - type: 'null'
         actions: { $ref: '#/components/schemas/IntegrationActions' }
         health: { $ref: '#/components/schemas/IntegrationHealth' }
+        details:
+          type: object
+          additionalProperties: true
+    GitHubAccount:
+      type: object
+      required: [id, login, type]
+      properties:
+        id: { type: string }
+        login: { type: string }
+        type: { type: string }
+    GitHubRepository:
+      type: object
+      required: [id, name, fullName, private, active]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        fullName: { type: string }
+        private: { type: boolean }
+        active: { type: boolean }
+    GitHubConnectResponse:
+      type: object
+      required: [installationUrl, state, workspaceSlug]
+      properties:
+        installationUrl: { type: string, format: uri }
+        state: { type: string }
+        workspaceSlug: { type: string }
+    GitHubRegisterRequest:
+      type: object
+      required: [installationId, account, repositorySelection, repositories, permissions]
+      properties:
+        installationId: { type: string }
+        account: { $ref: '#/components/schemas/GitHubAccount' }
+        repositorySelection: { type: string, enum: [all, selected, unknown] }
+        repositories:
+          type: array
+          items: { $ref: '#/components/schemas/GitHubRepository' }
+        permissions:
+          type: object
+          additionalProperties: { type: string }
+        setupAction: { type: string }
+        metadata:
+          type: object
+          additionalProperties: true
+    GitHubRegisterResponse:
+      type: object
+      required: [connected, integrationId, installationId, account, repositories]
+      properties:
+        connected: { type: boolean }
+        integrationId: { type: string, format: uuid }
+        installationId: { type: string }
+        account: { $ref: '#/components/schemas/GitHubAccount' }
+        repositories:
+          type: array
+          items: { $ref: '#/components/schemas/GitHubRepository' }
+    GitHubWebhookResponse:
+      type: object
+      required: [ok, duplicate, ignored]
+      properties:
+        ok: { type: boolean }
+        duplicate: { type: boolean }
+        ignored: { type: [string, 'null'] }
+    GitHubConfigurationRequiredResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error: { type: string }
+        message: { type: string }
     GitLabWorkflowMapping:
       type: object
       required: [teamId, teamKey, teamName, mergeRequestMergedStateId]

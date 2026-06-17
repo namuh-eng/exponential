@@ -130,6 +130,9 @@ func TestScopesAllowRequest(t *testing.T) {
 	if !scopesAllowRequest([]string{"write"}, httptest.NewRequest("PATCH", "/v1/issues/1", nil)) {
 		t.Fatal("write scope should allow state-changing requests")
 	}
+	if !scopesAllowRequest([]string{"read"}, httptest.NewRequest("POST", "/v1/mcp", nil)) {
+		t.Fatal("read scope should reach MCP handler for per-tool enforcement")
+	}
 }
 
 func TestRequestedWorkspaceID(t *testing.T) {
