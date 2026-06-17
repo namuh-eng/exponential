@@ -1043,6 +1043,9 @@ func TestSalesforceCasePatchBody(t *testing.T) {
 	}
 	if body["Exponential_Issue_URL__c"] == "" || body["Exponential_Follow_Up__c"] == "" {
 		t.Fatalf("missing backlink/follow-up fields = %#v", body)
+	}
+}
+
 func TestFrontSignatureVerification(t *testing.T) {
 	body := []byte(`{"workspaceSlug":"acme","conversation":{"id":"cnv_123"}}`)
 	mac := hmac.New(sha256.New, []byte("secret"))

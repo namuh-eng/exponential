@@ -4951,7 +4951,14 @@ export interface components {
         | "request_export"
         | "preview_csv"
         | "start_csv_import"
-        | "prepare_provider";
+        | "prepare_provider"
+        | "configure_jira"
+        | "preview_jira_import"
+        | "start_jira_import"
+        | "retry_jira_import"
+        | "sync_jira_project"
+        | "pause_jira_sync"
+        | "resume_jira_sync";
       fileName?: string;
       csv?: string;
       /** @enum {string} */
@@ -4961,6 +4968,23 @@ export interface components {
       mapping?: {
         [key: string]: unknown;
       };
+      /** @enum {string} */
+      deployment?: "cloud" | "server";
+      /** Format: uri */
+      baseUrl?: string;
+      /** Format: email */
+      email?: string;
+      /** @description API token or personal access token for authenticating with the provider. Write-only: never returned in responses. */
+      token?: string;
+      projectKey?: string;
+      /** Format: uuid */
+      teamId?: string;
+      statusMapping?: {
+        [key: string]: string;
+      };
+      importComments?: boolean;
+      importLabels?: boolean;
+      forwardSyncEnabled?: boolean;
     } & {
       [key: string]: unknown;
     };
