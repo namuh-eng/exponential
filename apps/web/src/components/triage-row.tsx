@@ -5,6 +5,14 @@ import {
   differenceInMinutes,
 } from "date-fns";
 
+interface TriageSourceContext {
+  label?: string;
+  sender?: string;
+  title?: string;
+  identifier?: string;
+  recipient?: string;
+}
+
 interface TriageIssue {
   id: string;
   identifier: string;
@@ -14,6 +22,7 @@ interface TriageIssue {
   createdAt: string;
   priority: string;
   labels: { name: string; color: string }[];
+  sourceContext?: TriageSourceContext | null;
 }
 
 interface TriageRowProps {
@@ -68,6 +77,15 @@ function formatDate(dateStr: string): string {
   return `${MONTHS[date.getMonth()]} ${date.getDate()}`;
 }
 
+function formatSourceContext(
+  context?: TriageSourceContext | null,
+): string | null {
+  if (!context?.label) return null;
+  const detail =
+    context.title ?? context.identifier ?? context.sender ?? context.recipient;
+  return detail ? `${context.label}: ${detail}` : context.label;
+}
+
 export function TriageRow({
   issue,
   selected = false,
@@ -78,6 +96,7 @@ export function TriageRow({
   onAccept,
   onDecline,
 }: TriageRowProps) {
+  const sourceContext = formatSourceContext(issue.sourceContext);
   return (
     <div
       className={`group flex items-center gap-3 border-b border-[var(--color-border)] pr-4 transition-colors hover:bg-[var(--color-surface-hover)] focus-within:bg-[var(--color-surface-hover)] ${
@@ -135,10 +154,15 @@ export function TriageRow({
           {issue.identifier}
         </span>
 
-        {/* Title */}
         <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--color-text-primary)]">
           {issue.title}
         </span>
+
+        {sourceContext ? (
+          <span className="max-w-[160px] shrink truncate rounded border border-[var(--color-border)] px-1.5 py-0.5 text-[11px] text-[var(--color-text-tertiary)]">
+            {sourceContext}
+          </span>
+        ) : null}
 
         {/* Creator */}
         <span className="flex shrink-0 items-center gap-1.5">

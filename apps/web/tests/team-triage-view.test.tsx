@@ -68,6 +68,7 @@ const mockTriageData = {
       createdAt: "2026-04-25T10:00:00.000Z",
       labels: [],
       labelIds: [],
+      sourceContext: { label: "Email", title: "Need help" },
     },
     {
       id: "iss-2",
@@ -110,6 +111,17 @@ describe("TeamTriagePage UI", () => {
 
     // Triage count check (look for text that is unique to the count display)
     expect(screen.getAllByText(/issues to triage/i).length).toBeGreaterThan(0);
+  });
+
+  it("shows source context for imported triage issues", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => mockTriageData,
+    } as Response);
+
+    render(<TeamTriagePage />);
+
+    expect(await screen.findByText("Email: Need help")).toBeInTheDocument();
   });
 
   it("opens issue detail by row click and keyboard Enter", async () => {

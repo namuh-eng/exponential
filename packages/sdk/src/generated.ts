@@ -4630,30 +4630,113 @@ export interface components {
       enabled?: boolean;
       events?: string[];
     };
-    TeamTriageResponse: {
-      team: {
-        [key: string]: unknown;
-      };
-      issues: {
-        [key: string]: unknown;
+    TriageTeamSummary: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      key: string;
+      /** Format: uuid */
+      workspaceId: string;
+      triageEnabled: boolean;
+    };
+    TriageDestinationState: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      category: string;
+      color?: string;
+      position?: number;
+      isDefault?: boolean | null;
+    };
+    TriageSourceContext: {
+      source?: string;
+      label?: string;
+      backlink?: string;
+      url?: string;
+      recipient?: string;
+      sender?: string;
+      title?: string;
+      identifier?: string;
+    };
+    TriageIssue: {
+      /** Format: uuid */
+      id: string;
+      identifier: string;
+      title: string;
+      description?: string | null;
+      /** @enum {string} */
+      priority: "none" | "urgent" | "high" | "medium" | "low";
+      /** Format: uuid */
+      stateId: string;
+      stateName: string;
+      stateColor: string;
+      creatorId?: string | null;
+      creatorName: string;
+      creatorImage?: string | null;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+      labelIds: string[];
+      labels: components["schemas"]["CreateIssueOptionLabel"][];
+      assigneeId?: string | null;
+      /** Format: uuid */
+      projectId?: string | null;
+      projectName?: string | null;
+      /** Format: uuid */
+      projectMilestoneId?: string | null;
+      /** Format: uuid */
+      cycleId?: string | null;
+      /** Format: date-time */
+      dueDate?: string | null;
+      estimate?: number | null;
+      /** Format: uuid */
+      teamId?: string | null;
+      sourceContext?: components["schemas"]["TriageSourceContext"] | null;
+    };
+    TriageMetadataOptions: {
+      labels: components["schemas"]["CreateIssueOptionLabel"][];
+      cycles: components["schemas"]["CreateIssueOptionCycle"][];
+      projects: components["schemas"]["CreateIssueOptionProject"][];
+      projectMilestones: {
+        /** Format: uuid */
+        id: string;
+        name: string;
+        /** Format: uuid */
+        projectId: string;
       }[];
+      members: {
+        id: string;
+        name?: string | null;
+        email?: string | null;
+        image?: string | null;
+      }[];
+      templates: components["schemas"]["CreateIssueOptionTemplate"][];
+    };
+    TriageDefaults: {
+      /** Format: uuid */
+      acceptDestinationStateId: string | null;
+      /** Format: uuid */
+      declineDestinationStateId: string | null;
+      assigneeId: string | null;
+      labelIds: string[];
+      /** Format: uuid */
+      projectId: string | null;
+      /** Format: uuid */
+      cycleId: string | null;
+    };
+    TeamTriageResponse: {
+      team: components["schemas"]["TriageTeamSummary"];
+      issues: components["schemas"]["TriageIssue"][];
       count: number;
       /** Format: uuid */
       createStateId: string | null;
       createStateName: string | null;
       triageEnabled: boolean;
-      acceptDestinationStates?: {
-        [key: string]: unknown;
-      }[];
-      declineDestinationStates?: {
-        [key: string]: unknown;
-      }[];
-      metadataOptions?: {
-        [key: string]: unknown;
-      };
-      defaults?: {
-        [key: string]: unknown;
-      };
+      acceptDestinationStates?: components["schemas"]["TriageDestinationState"][];
+      declineDestinationStates?: components["schemas"]["TriageDestinationState"][];
+      metadataOptions?: components["schemas"]["TriageMetadataOptions"];
+      defaults?: components["schemas"]["TriageDefaults"];
     } & {
       [key: string]: unknown;
     };
@@ -4684,6 +4767,22 @@ export interface components {
       [key: string]: unknown;
     };
     TriageDecisionResponse: {
+      updatedCount?: number;
+      conflictCount?: number;
+      results?: {
+        /** Format: uuid */
+        issueId: string;
+        /** @enum {string} */
+        status: "updated" | "conflict";
+        error?: string;
+      }[];
+      issue?: {
+        [key: string]: unknown;
+      };
+      decision?: {
+        [key: string]: unknown;
+      };
+    } & {
       [key: string]: unknown;
     };
     RecurringIssue: {
