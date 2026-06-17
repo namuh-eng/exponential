@@ -63,7 +63,6 @@ type gitHubStatusResponse struct {
 	InstallationID *string                   `json:"installationId"`
 	DisplayName    *string                   `json:"displayName"`
 	WebhookURL     *string                   `json:"webhookUrl"`
-	WebhookSecret  *string                   `json:"webhookSecret"`
 	Repositories   []gitHubRepositoryMapping `json:"repositories"`
 	Workflows      []gitHubWorkflowMapping   `json:"workflows"`
 }
@@ -316,7 +315,11 @@ func (h Handler) GitHubSetup(w http.ResponseWriter, r *http.Request) {
 
 func (h Handler) GitHubStatus(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
-	row, credential, err := h.gitHubIntegrationStatus(r.Context(), p.WorkspaceID)
+	if !canManage(p.Role) {
+		problem.Write(w, http.StatusForbidden, "Forbidden", "")
+		return
+	}
+	row, _, err := h.gitHubIntegrationStatus(r.Context(), p.WorkspaceID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		problem.JSON(w, http.StatusOK, gitHubStatusResponse{Connected: false, Repositories: []gitHubRepositoryMapping{}, Workflows: []gitHubWorkflowMapping{}})
 		return
@@ -336,7 +339,7 @@ func (h Handler) GitHubStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	webhookURL := gitHubWebhookURL(row.ID)
-	problem.JSON(w, http.StatusOK, gitHubStatusResponse{Connected: row.Status == "connected" || row.Status == "degraded", IntegrationID: &row.ID, InstallationID: row.ExternalID, DisplayName: row.DisplayName, WebhookURL: &webhookURL, WebhookSecret: stringPtr(credential.WebhookSecret), Repositories: repos, Workflows: workflows})
+	problem.JSON(w, http.StatusOK, gitHubStatusResponse{Connected: row.Status == "connected" || row.Status == "degraded", IntegrationID: &row.ID, InstallationID: row.ExternalID, DisplayName: row.DisplayName, WebhookURL: &webhookURL, Repositories: repos, Workflows: workflows})
 }
 
 func (h Handler) GitHubWorkflow(w http.ResponseWriter, r *http.Request) {
@@ -887,9 +890,6 @@ func (h Handler) handleGitHubCommitEvents(ctx context.Context, install gitHubIns
 				return 0, err
 			}
 			if changed {
-				if event.ActorID == "" {
-					event.ActorID = gitHubActorIDByEmail(ctx, tx, install.WorkspaceID, event.ActorEmail)
-				}
 				if err := insertGitHubCommitHistory(ctx, tx, issue.ID, event); err != nil {
 					return 0, err
 				}
@@ -1110,14 +1110,6 @@ func gitHubActorIDByProvider(ctx context.Context, tx pgx.Tx, workspaceID string,
 	return userID
 }
 
-func gitHubActorIDByEmail(ctx context.Context, tx pgx.Tx, workspaceID string, email string) string {
-	if strings.TrimSpace(email) == "" {
-		return ""
-	}
-	var userID string
-	_ = tx.QueryRow(ctx, `select u.id from "user" u join member m on m.user_id=u.id and m.workspace_id=$1::uuid where lower(u.email)=lower($2) limit 1`, workspaceID, strings.TrimSpace(email)).Scan(&userID)
-	return userID
-}
 
 func (h Handler) recordGitHubEvent(ctx context.Context, install gitHubInstall, eventType, severity, message string, payload map[string]any) error {
 	raw, _ := json.Marshal(payload)
