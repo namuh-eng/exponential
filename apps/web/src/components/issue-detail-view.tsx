@@ -10,13 +10,13 @@ import {
   type IssuePropertyUpdate,
 } from "@/components/issue-properties";
 import { SidebarFavoriteButton } from "@/components/sidebar-favorite-button";
+import { createBrowserApiClient } from "@/lib/browser-api-client";
 import { LAST_ISSUE_STORAGE_KEY } from "@/lib/command-palette";
 import {
   normalizeIssueDescriptionHtml,
   richTextHtmlToPlainText,
 } from "@/lib/issue-description";
 import { withWorkspaceSlug } from "@/lib/workspace-paths";
-import { createBrowserApiClient } from "@/lib/browser-api-client";
 import type { components } from "@namuh-eng/expn-sdk";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -470,11 +470,11 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
               ? " from Sentry"
               : event.metadata.source === "github_issue"
                 ? " from GitHub"
-              : event.metadata.source === "salesforce_case"
-                ? " from Salesforce"
-              : event.metadata.source === "zendesk_ticket"
-                ? " from Zendesk"
-                : "";
+                : event.metadata.source === "salesforce_case"
+                  ? " from Salesforce"
+                  : event.metadata.source === "zendesk_ticket"
+                    ? " from Zendesk"
+                    : "";
       return `${actorName} created this issue${legacySuffix}${sourceSuffix}`;
     }
     case "updated":
@@ -781,8 +781,7 @@ function FigmaPreviewCard({
           </button>
         </div>
         <div className="mt-3 text-[12px] text-[var(--color-text-secondary)]">
-          {source.refreshedAt ? "Seen" : "Captured"}{" "}
-          {formatFullDate(timestamp)}
+          {source.refreshedAt ? "Seen" : "Captured"} {formatFullDate(timestamp)}
         </div>
         {source.lastError ? (
           <div className="mt-2 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[12px] text-red-600 dark:text-red-300">
@@ -2892,6 +2891,21 @@ export function IssueDetailView({
                           {request.important ? "★ " : ""}
                           {request.title}
                         </p>
+                        {request.body ? (
+                          <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+                            {request.body}
+                          </p>
+                        ) : null}
+                        {request.sourceUrl ? (
+                          <a
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                            href={request.sourceUrl}
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            Open {request.source ?? "source"}
+                          </a>
+                        ) : null}
                       </div>
                       <span className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-text-tertiary)]">
                         {request.customer.domain ?? "customer"}

@@ -74,7 +74,7 @@ type Integration struct {
 	SetupRequirement *SetupRequirement `json:"setupRequirement"`
 	Actions          Actions           `json:"actions"`
 	Health           Health            `json:"health"`
-	Details          map[string]any     `json:"details,omitempty"`
+	Details          map[string]any    `json:"details,omitempty"`
 }
 
 type response struct {
@@ -367,7 +367,6 @@ type row struct {
 	PendingJobCount    int
 	FailedJobCount     int
 	AuditEvents        []AuditEvent
-
 }
 
 func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error) {

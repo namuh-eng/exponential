@@ -274,11 +274,7 @@ func (w GongWorker) failGongJob(ctx context.Context, job gongJob, cause error) e
 		if _, err := tx.Exec(ctx, `update provider_job set status=$2, last_error=$3, next_run_at=$4, completed_at=case when $2='dead' then $5 else completed_at end, updated_at=$5 where id=$1::uuid`, job.ID, status, cause.Error(), nextRunAt, now); err != nil {
 			return err
 		}
-		integrationStatus := "degraded"
-		if isGongPermissionFailure(cause) {
-			integrationStatus = "error"
-		}
-		if _, err := tx.Exec(ctx, `update workspace_integration set status=$2, last_failure_at=$3, last_failure_message=$4, last_event_at=$3, updated_at=$3 where id=$1::uuid`, job.IntegrationID, integrationStatus, now, cause.Error()); err != nil {
+		if _, err := tx.Exec(ctx, `update workspace_integration set status='degraded', last_failure_at=$2, last_failure_message=$3, last_event_at=$2, updated_at=$2 where id=$1::uuid`, job.IntegrationID, now, cause.Error()); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `insert into provider_event (workspace_id, workspace_integration_id, provider, job_id, event_type, severity, message, payload, created_at) values ($1::uuid,$2::uuid,'gong',$3::uuid,'sync_failed','error',$4,'{}'::jsonb,$5)`, job.WorkspaceID, job.IntegrationID, job.ID, cause.Error(), now)

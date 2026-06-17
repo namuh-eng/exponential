@@ -146,3 +146,28 @@ func TestRetrieveGongCallsUsesExtensiveEndpoint(t *testing.T) {
 		t.Fatalf("calls=%#v cursor=%q", calls, cursor)
 	}
 }
+
+func TestGongIntegrationDetailsExposeAdminConfiguration(t *testing.T) {
+	details := gongIntegrationDetails(map[string]any{
+		"destinationTeamId":   "team-1",
+		"minimumDurationSec":  600,
+		"statusWriteback":     "unsupported",
+		"mentionParticipants": true,
+		"tenantId":            "tenant-1",
+	})
+	if details["destinationTeamId"] != "team-1" || details["minimumDurationSec"] != "600" {
+		t.Fatalf("details = %#v", details)
+	}
+	if details["statusWriteback"] != "unsupported" || details["mentionParticipants"] != true {
+		t.Fatalf("writeback details = %#v", details)
+	}
+}
+
+func TestGongPermissionFailureDetection(t *testing.T) {
+	if !isGongPermissionFailure(gongAPIError{StatusCode: http.StatusForbidden, Message: "missing scope"}) {
+		t.Fatal("403 provider error should degrade as a permission failure")
+	}
+	if isGongPermissionFailure(gongAPIError{StatusCode: http.StatusTooManyRequests, Message: "rate limit"}) {
+		t.Fatal("rate-limit errors should not be classified as permission failures")
+	}
+}

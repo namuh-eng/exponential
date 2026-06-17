@@ -359,6 +359,16 @@ export function CustomerDetailPage() {
                           {request.body}
                         </p>
                       ) : null}
+                      {request.sourceUrl ? (
+                        <a
+                          className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          href={request.sourceUrl}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          Open {request.source ?? "source"}
+                        </a>
+                      ) : null}
                     </div>
                     <span className="text-[11px] text-[var(--color-text-tertiary)]">
                       {formatDate(request.createdAt)}

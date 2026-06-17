@@ -300,8 +300,9 @@ export function ProjectDetailPage() {
         return false;
       }
 
-      setData(json);
-      setDescriptionDraft(json.project.description ?? "");
+      const normalized = normalizeProjectResponse(json);
+      setData(normalized);
+      setDescriptionDraft(normalized.project.description ?? "");
       return true;
     } catch {
       setErrorMessage("Unable to update project.");
@@ -973,6 +974,21 @@ export function ProjectDetailPage() {
                                 {request.important ? "★ " : ""}
                                 {request.title}
                               </p>
+                              {request.body ? (
+                                <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+                                  {request.body}
+                                </p>
+                              ) : null}
+                              {request.sourceUrl ? (
+                                <a
+                                  className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                                  href={request.sourceUrl}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                >
+                                  Open {request.source ?? "source"}
+                                </a>
+                              ) : null}
                             </div>
                             <span className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-text-tertiary)]">
                               {request.customer.domain ?? "customer"}
