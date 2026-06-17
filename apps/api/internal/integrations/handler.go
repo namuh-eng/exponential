@@ -110,9 +110,15 @@ var catalog = []CatalogItem{
 	{Provider: "discord", Name: "Discord", Description: "Create, search, and share issues from Discord slash commands."},
 	{Provider: "google_sheets", Name: "Google Sheets", Description: "Create an hourly analytics spreadsheet for issues, projects, and initiatives."},
 	{Provider: "microsoft_teams", Name: "Microsoft Teams", Description: "Create issues and projects from Teams conversations and post project updates."},
+	{Provider: "figma", Name: "Figma", Description: "Preview design links and connect Figma selections to issues."},
+	{Provider: "intercom", Name: "Intercom", Description: "Create and link issues from support conversations and sync customer feedback status."},
+
 	{Provider: "sentry", Name: "Sentry", Description: "Create, link, and resolve issues from Sentry errors."},
+	{Provider: "salesforce", Name: "Salesforce", Description: "Link cases to issues and projects, then sync status and priority back to support."},
 	{Provider: "slack", Name: "Slack", Description: "Send issue updates and create issues from Slack messages."},
+	{Provider: "gong", Name: "Gong", Description: "Connect customer call excerpts to issues and customer requests."},
 	{Provider: "zendesk", Name: "Zendesk", Description: "Connect support tickets to product work and customer requests."},
+	{Provider: "front", Name: "Front", Description: "Create, link, and reopen issues from Front conversations."},
 }
 
 func (h Handler) Routes() chi.Router {
@@ -123,6 +129,9 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/google-sheets/connect", h.GoogleSheetsConnect)
 	r.Post("/google-sheets/refresh", h.GoogleSheetsRefresh)
 	r.Post("/google-sheets/disconnect", h.GoogleSheetsDisconnect)
+	r.Post("/github/connect", h.GitHubConnect)
+	r.Post("/github/register", h.GitHubRegister)
+	r.Post("/github/disconnect", h.GitHubDisconnect)
 	r.Get("/gitlab", h.GitLabStatus)
 	r.Post("/gitlab/setup", h.GitLabSetup)
 	r.Post("/gitlab/workflows", h.GitLabWorkflow)
@@ -133,6 +142,17 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/microsoft-teams/disconnect", h.MicrosoftTeamsDisconnect)
 	r.Post("/sentry/connect", h.SentryConnect)
 	r.Post("/sentry/disconnect", h.SentryDisconnect)
+	r.Post("/salesforce/connect", h.SalesforceConnect)
+	r.Post("/salesforce/disconnect", h.SalesforceDisconnect)
+	r.Post("/front/setup", h.FrontSetup)
+	r.Post("/front/disconnect", h.FrontDisconnect)
+	r.Post("/intercom/connect", h.IntercomConnect)
+	r.Post("/intercom/disconnect", h.IntercomDisconnect)
+	r.Post("/zendesk/setup", h.ZendeskSetup)
+	r.Post("/zendesk/disconnect", h.ZendeskDisconnect)
+	r.Post("/gong/connect", h.GongConnect)
+	r.Post("/gong/disconnect", h.GongDisconnect)
+
 	r.Post("/slack/disconnect", h.SlackDisconnect)
 	return r
 }
@@ -342,7 +362,7 @@ type row struct {
 	LastFailureAt      *time.Time
 	LastFailureMessage *string
 	TokenExpiresAt     *time.Time
-	Metadata           []byte
+	Metadata           map[string]any
 	PendingJobCount    int
 	FailedJobCount     int
 	AuditEvents        []AuditEvent
@@ -361,7 +381,7 @@ func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error
 			wi.last_failure_at,
 			wi.last_failure_message,
 			wi.token_expires_at,
-			coalesce(wi.metadata,'{}'::jsonb),
+			wi.metadata,
 			coalesce(count(pj.id) filter (where pj.status in ('queued','running')),0)::int,
 			coalesce(count(pj.id) filter (where pj.status in ('failed','dead')),0)::int
 		from workspace_integration wi
@@ -375,9 +395,12 @@ func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error
 	out := []row{}
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.ID, &r.Provider, &r.Status, &r.DisplayName, &r.ExternalID, &r.ConnectedAt, &r.LastEventAt, &r.LastSuccessAt, &r.LastFailureAt, &r.LastFailureMessage, &r.TokenExpiresAt, &r.Metadata, &r.PendingJobCount, &r.FailedJobCount); err != nil {
+		var metadataRaw []byte
+		if err := rows.Scan(&r.ID, &r.Provider, &r.Status, &r.DisplayName, &r.ExternalID, &r.ConnectedAt, &r.LastEventAt, &r.LastSuccessAt, &r.LastFailureAt, &r.LastFailureMessage, &r.TokenExpiresAt, &metadataRaw, &r.PendingJobCount, &r.FailedJobCount); err != nil {
 			return nil, err
 		}
+		r.Metadata = map[string]any{}
+		_ = json.Unmarshal(metadataRaw, &r.Metadata)
 		events, err := h.auditEvents(ctx, r.ID)
 		if err != nil {
 			return nil, err
@@ -413,18 +436,23 @@ func setupRequirement(provider string) *SetupRequirement {
 	if provider == "microsoft_teams" && !microsoftTeamsConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Microsoft Teams credentials are not configured. Add AUTH_MICROSOFT_ID, AUTH_MICROSOFT_SECRET, and MICROSOFT_TEAMS_BOT_SECRET to enable tenant installation."}
 	}
+	if provider == "figma" && !figmaConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Figma OAuth credentials are not configured. Add AUTH_FIGMA_ID and AUTH_FIGMA_SECRET to enable design previews."}
+	}
 	if provider == "sentry" && !sentryConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Sentry credentials are not configured. Add AUTH_SENTRY_ID, AUTH_SENTRY_SECRET, and SENTRY_WEBHOOK_SECRET to enable installation and signed issue actions."}
 	}
-	if provider == "github" || provider == "jira" || provider == "zendesk" {
-		name := "GitHub"
-		if provider == "jira" {
-			name = "Jira"
-		}
-		if provider == "zendesk" {
-			name = "Zendesk"
-		}
-		return &SetupRequirement{Type: "configuration_required", Message: name + " setup is not configured in this environment yet."}
+	if provider == "salesforce" && !salesforceConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Salesforce OAuth credentials and component secret are not configured. Add AUTH_SALESFORCE_ID, AUTH_SALESFORCE_SECRET, and SALESFORCE_COMPONENT_SECRET to enable installation and signed case actions."}
+	}
+	if provider == "intercom" && !intercomConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Intercom credentials are not configured. Add AUTH_INTERCOM_ID, AUTH_INTERCOM_SECRET, and INTERCOM_SIGNING_SECRET to enable installation and signed conversation actions."}
+	}
+	if provider == "gong" && !gongConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Gong OAuth credentials are not configured. Add AUTH_GONG_ID and AUTH_GONG_SECRET to enable call ingestion."}
+	}
+	if provider == "github" && !githubConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "GitHub App credentials are not configured. Add GITHUB_APP_ID, GITHUB_CLIENT_ID, GITHUB_PRIVATE_KEY, and GITHUB_WEBHOOK_SECRET to enable installation."}
 	}
 	return nil
 }
@@ -433,12 +461,21 @@ func slackConfigured() bool {
 	return strings.TrimSpace(os.Getenv("AUTH_SLACK_ID")) != "" && strings.TrimSpace(os.Getenv("AUTH_SLACK_SECRET")) != ""
 }
 
+func githubConfigured() bool {
+	_, ok := loadGitHubConfig()
+	return ok
+}
+
 func discordConfigured() bool {
 	return strings.TrimSpace(os.Getenv("AUTH_DISCORD_ID")) != "" && strings.TrimSpace(os.Getenv("AUTH_DISCORD_SECRET")) != "" && strings.TrimSpace(os.Getenv("DISCORD_PUBLIC_KEY")) != ""
 }
 
 func microsoftTeamsConfigured() bool {
 	return strings.TrimSpace(os.Getenv("AUTH_MICROSOFT_ID")) != "" && strings.TrimSpace(os.Getenv("AUTH_MICROSOFT_SECRET")) != "" && strings.TrimSpace(os.Getenv("MICROSOFT_TEAMS_BOT_SECRET")) != ""
+}
+
+func figmaConfigured() bool {
+	return strings.TrimSpace(os.Getenv("AUTH_FIGMA_ID")) != "" && strings.TrimSpace(os.Getenv("AUTH_FIGMA_SECRET")) != ""
 }
 
 func formatTime(value *time.Time) *string {
@@ -466,7 +503,11 @@ func (r row) Health() Health {
 
 func integrationDetails(value row) map[string]any {
 	if value.Provider == googleSheetsProvider {
-		return googleSheetsDetails(value.Metadata)
+		raw, _ := json.Marshal(value.Metadata)
+		return googleSheetsDetails(raw)
+	}
+	if value.Provider == "github" {
+		return githubIntegrationDetails(value.Metadata)
 	}
 	return nil
 }

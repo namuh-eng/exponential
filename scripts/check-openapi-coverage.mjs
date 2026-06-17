@@ -17,6 +17,7 @@ const nonContractProviderCallbacks = new Set([
   "/integrations/discord/interactions",
   "/integrations/microsoft-teams/oauth/callback",
   "/integrations/microsoft-teams/activities",
+  "/integrations/gong/oauth/callback",
 ]);
 
 for (const file of routerFiles) {
