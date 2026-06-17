@@ -12,15 +12,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const fetchMock = vi.fn();
 
+const integrationBase = {
+  connectedAt: null,
+  health: {
+    lastEventAt: null,
+    lastSuccessAt: null,
+    lastFailureAt: null,
+    lastFailureMessage: null,
+    tokenExpiresAt: null,
+    pendingJobCount: 0,
+    failedJobCount: 0,
+    auditEvents: [],
+  },
+};
+
 const integrations = [
   {
+    ...integrationBase,
     provider: "github",
     name: "GitHub",
     description:
       "Sync pull requests, commits, and issue links with exponential.",
     status: "configuration_required",
     displayName: null,
-    connectedAt: null,
     setupRequirement: {
       type: "configuration_required",
       message: "GitHub setup is not configured in this environment yet.",
@@ -31,24 +45,14 @@ const integrations = [
       canDisconnect: false,
       canReconnect: false,
     },
-    health: {
-      lastEventAt: null,
-      lastSuccessAt: null,
-      lastFailureAt: null,
-      lastFailureMessage: null,
-      tokenExpiresAt: null,
-      pendingJobCount: 0,
-      failedJobCount: 0,
-      auditEvents: [],
-    },
   },
   {
+    ...integrationBase,
     provider: "slack",
     name: "Slack",
     description: "Send issue updates and create issues from Slack messages.",
     status: "configuration_required",
     displayName: null,
-    connectedAt: null,
     setupRequirement: {
       type: "configuration_required",
       message: "Slack OAuth credentials are not configured.",
@@ -59,24 +63,14 @@ const integrations = [
       canDisconnect: false,
       canReconnect: false,
     },
-    health: {
-      lastEventAt: null,
-      lastSuccessAt: null,
-      lastFailureAt: null,
-      lastFailureMessage: null,
-      tokenExpiresAt: null,
-      pendingJobCount: 0,
-      failedJobCount: 0,
-      auditEvents: [],
-    },
   },
   {
+    ...integrationBase,
     provider: "sentry",
     name: "Sentry",
     description: "Create, link, and resolve issues from Sentry errors.",
     status: "configuration_required",
     displayName: null,
-    connectedAt: null,
     setupRequirement: {
       type: "configuration_required",
       message: "Sentry credentials are not configured.",
@@ -87,25 +81,15 @@ const integrations = [
       canDisconnect: false,
       canReconnect: false,
     },
-    health: {
-      lastEventAt: null,
-      lastSuccessAt: null,
-      lastFailureAt: null,
-      lastFailureMessage: null,
-      tokenExpiresAt: null,
-      pendingJobCount: 0,
-      failedJobCount: 0,
-      auditEvents: [],
-    },
   },
   {
+    ...integrationBase,
     provider: "salesforce",
     name: "Salesforce",
     description:
       "Link cases to issues and projects, then sync status and priority back to support.",
     status: "configuration_required",
     displayName: null,
-    connectedAt: null,
     setupRequirement: {
       type: "configuration_required",
       message:
@@ -113,28 +97,24 @@ const integrations = [
     },
     actions: {
       canConnect: false,
+      canManage: false,
+      canDisconnect: false,
+      canReconnect: false,
+    },
+  },
+  {
+    ...integrationBase,
     provider: "front",
     name: "Front",
     description: "Create, link, and reopen issues from Front conversations.",
     status: "not_connected",
     displayName: null,
-    connectedAt: null,
     setupRequirement: null,
     actions: {
       canConnect: true,
       canManage: false,
       canDisconnect: false,
       canReconnect: false,
-    },
-    health: {
-      lastEventAt: null,
-      lastSuccessAt: null,
-      lastFailureAt: null,
-      lastFailureMessage: null,
-      tokenExpiresAt: null,
-      pendingJobCount: 0,
-      failedJobCount: 0,
-      auditEvents: [],
     },
   },
 ];
@@ -289,37 +269,13 @@ describe("IntegrationsSettingsPage component", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ id: "front-id", provider: "front" }),
-  it("connects Zendesk from the catalog setup form", async () => {
-    const zendesk = {
-      ...integrations[0],
-      provider: "zendesk",
-      name: "Zendesk",
-      description:
-        "Connect support tickets to product work and customer requests.",
-      status: "not_connected",
-      setupRequirement: null,
-      actions: {
-        canConnect: true,
-        canManage: false,
-        canDisconnect: false,
-        canReconnect: false,
-      },
-    };
-    fetchMock
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          integrations: [zendesk],
-          canManageIntegrations: true,
-        }),
-
       })
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           integrations: [
             {
-              ...integrations[3],
+              ...integrations[4],
               status: "connected",
               displayName: "Front cmp_123",
               actions: {
@@ -330,16 +286,6 @@ describe("IntegrationsSettingsPage component", () => {
               },
             },
           ],
-          accountUrl: "https://acme.zendesk.com",
-          actionBaseUrl: "https://app.example/api/integrations/zendesk/tickets",
-          actionSecret: "secret",
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          integrations: [degradedSlack],
-
           canManageIntegrations: true,
         }),
       });
@@ -351,9 +297,7 @@ describe("IntegrationsSettingsPage component", () => {
     );
     fireEvent.change(
       screen.getByPlaceholderText("Optional company identifier"),
-      {
-        target: { value: "cmp_123" },
-      },
+      { target: { value: "cmp_123" } },
     );
     fireEvent.change(
       screen.getByPlaceholderText(
@@ -377,6 +321,66 @@ describe("IntegrationsSettingsPage component", () => {
       );
     });
     expect(await screen.findByText(/Front connected/)).toBeInTheDocument();
+  });
+
+  it("connects Zendesk from the catalog setup form", async () => {
+    const zendesk = {
+      ...integrationBase,
+      provider: "zendesk",
+      name: "Zendesk",
+      description:
+        "Connect support tickets to product work and customer requests.",
+      status: "not_connected",
+      displayName: null,
+      setupRequirement: null,
+      actions: {
+        canConnect: true,
+        canManage: false,
+        canDisconnect: false,
+        canReconnect: false,
+      },
+    };
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          integrations: [zendesk],
+          canManageIntegrations: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          accountUrl: "https://acme.zendesk.com",
+          actionBaseUrl: "https://app.example/api/integrations/zendesk/tickets",
+          actionSecret: "secret",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          integrations: [
+            {
+              ...zendesk,
+              status: "connected",
+              displayName: "acme.zendesk.com",
+              actions: {
+                canConnect: false,
+                canManage: true,
+                canDisconnect: true,
+                canReconnect: false,
+              },
+            },
+          ],
+          canManageIntegrations: true,
+        }),
+      });
+
+    render(<IntegrationsSettingsPage />);
+    await screen.findByText("No active integrations");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Explore integrations" }),
+    );
     fireEvent.change(screen.getByLabelText("Zendesk subdomain"), {
       target: { value: "acme" },
     });
@@ -403,6 +407,5 @@ describe("IntegrationsSettingsPage component", () => {
     );
     expect(await screen.findByText("Zendesk app details")).toBeInTheDocument();
     expect(screen.getByText("secret")).toBeInTheDocument();
-
   });
 });

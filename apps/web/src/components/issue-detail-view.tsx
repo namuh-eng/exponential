@@ -12,8 +12,6 @@ import {
   richTextHtmlToPlainText,
 } from "@/lib/issue-description";
 import { withWorkspaceSlug } from "@/lib/workspace-paths";
-import { createBrowserApiClient } from "@/lib/browser-api-client";
-import type { components } from "@namuh-eng/expn-sdk";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -24,8 +22,6 @@ import {
   useRef,
   useState,
 } from "react";
-
-const apiClient = createBrowserApiClient();
 
 interface IssueReaction {
   emoji: string;
@@ -42,7 +38,22 @@ interface IssueCommentAttachment {
   downloadUrl: string | null;
 }
 
-type FigmaSource = components["schemas"]["FigmaSource"];
+interface FigmaSource {
+  id: string;
+  url: string;
+  normalizedUrl: string;
+  fileKey: string;
+  nodeId?: string | null;
+  name?: string | null;
+  title?: string | null;
+  thumbnailUrl?: string | null;
+  kind: "proto" | "design" | "file" | string;
+  containerType: "description" | "comment" | string;
+  containerId?: string | null;
+  capturedAt: string;
+  refreshedAt?: string | null;
+  lastError?: string | null;
+}
 
 interface WorkspaceMemberOption {
   userId: string;
@@ -447,9 +458,9 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
               ? " from Sentry"
               : event.metadata.source === "salesforce_case"
                 ? " from Salesforce"
-              : event.metadata.source === "zendesk_ticket"
-                ? " from Zendesk"
-                : "";
+                : event.metadata.source === "zendesk_ticket"
+                  ? " from Zendesk"
+                  : "";
       return `${actorName} created this issue${legacySuffix}${sourceSuffix}`;
     }
     case "updated":
@@ -526,6 +537,9 @@ function getSalesforceSourceLink(event: IssueHistoryEvent): string | null {
   }
   return typeof salesforce.caseUrl === "string" && salesforce.caseUrl.length > 0
     ? salesforce.caseUrl
+    : null;
+}
+
 function getZendeskSourceLink(event: IssueHistoryEvent): string | null {
   if (event.metadata.source !== "zendesk_ticket") {
     return null;
@@ -678,6 +692,8 @@ function getFigmaKindLabel(kind: FigmaSource["kind"]): string {
       return "Design";
     case "file":
       return "File";
+    default:
+      return "Figma";
   }
 }
 
@@ -740,8 +756,7 @@ function FigmaPreviewCard({
           </button>
         </div>
         <div className="mt-3 text-[12px] text-[var(--color-text-secondary)]">
-          {source.refreshedAt ? "Seen" : "Captured"}{" "}
-          {formatFullDate(timestamp)}
+          {source.refreshedAt ? "Seen" : "Captured"} {formatFullDate(timestamp)}
         </div>
         {source.lastError ? (
           <div className="mt-2 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[12px] text-red-600 dark:text-red-300">
@@ -1506,13 +1521,14 @@ export function IssueDetailView({
     setRefreshingFigmaSourceId(sourceId);
     setFigmaActionStatus(null);
     try {
-      const { data, error } = await apiClient.POST(
-        "/issues/{id}/figma-sources/{sourceId}/refresh",
-        { params: { path: { id: issue.id, sourceId } } },
+      const response = await fetch(
+        `/api/issues/${encodeURIComponent(issue.id)}/figma-sources/${encodeURIComponent(sourceId)}/refresh`,
+        { method: "POST" },
       );
-      if (error !== undefined || data === undefined) {
+      if (!response.ok) {
         throw new Error("Failed to mark Figma source as seen");
       }
+      const data = (await response.json()) as FigmaSource;
       setIssue((current) =>
         current
           ? {
@@ -2241,6 +2257,15 @@ export function IssueDetailView({
                           return salesforceLink ? (
                             <a
                               href={salesforceLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                            >
+                              View source case in Salesforce
+                            </a>
+                          ) : null;
+                        })()}
+                        {(() => {
                           const zendeskLink = getZendeskSourceLink(event);
                           return zendeskLink ? (
                             <a
@@ -2249,7 +2274,6 @@ export function IssueDetailView({
                               rel="noreferrer"
                               className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
                             >
-                              View source case in Salesforce
                               View source ticket in Zendesk
                             </a>
                           ) : null;

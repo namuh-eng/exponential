@@ -548,6 +548,10 @@ func (h Handler) auditEvents(ctx context.Context, integrationID string) ([]Audit
 // disconnectProvider revokes an integration by marking lifecycle/status as revoked,
 // clearing active credentials, cancelling pending jobs, and disabling team
 // notification integrations without deleting historical links.
+func (h Handler) revokeProvider(ctx context.Context, workspaceID, provider, userID string) error {
+	return h.disconnectProvider(ctx, workspaceID, userID, provider)
+}
+
 func (h Handler) disconnectProvider(ctx context.Context, workspaceID, userID, provider string) error {
 	tx, err := h.DB.Begin(ctx)
 	if err != nil {
