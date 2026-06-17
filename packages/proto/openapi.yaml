@@ -370,6 +370,28 @@ paths:
         - name: team_id
           in: query
           schema: { type: string, format: uuid }
+        - name: customer_count
+          in: query
+          schema: { type: integer, minimum: 0 }
+        - name: customer
+          in: query
+          description: Case-insensitive customer name or domain search.
+          schema: { type: string }
+        - name: customer_name
+          in: query
+          schema: { type: string }
+        - name: customer_domain
+          in: query
+          schema: { type: string }
+        - name: customer_tier
+          in: query
+          schema: { type: string }
+        - name: customer_status
+          in: query
+          schema: { type: string }
+        - name: important_customer_requests
+          in: query
+          schema: { type: boolean }
       responses:
         '200':
           description: Issues page
@@ -2912,6 +2934,29 @@ paths:
     get:
       operationId: listProjects
       summary: List projects in the authenticated workspace
+      parameters:
+        - name: customer_count
+          in: query
+          schema: { type: integer, minimum: 0 }
+        - name: customer
+          in: query
+          description: Case-insensitive customer name or domain search.
+          schema: { type: string }
+        - name: customer_name
+          in: query
+          schema: { type: string }
+        - name: customer_domain
+          in: query
+          schema: { type: string }
+        - name: customer_tier
+          in: query
+          schema: { type: string }
+        - name: customer_status
+          in: query
+          schema: { type: string }
+        - name: important_customer_requests
+          in: query
+          schema: { type: boolean }
       responses:
         '200':
           description: Projects

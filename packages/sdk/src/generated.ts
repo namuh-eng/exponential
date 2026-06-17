@@ -6818,6 +6818,14 @@ export interface operations {
         cursor?: components["parameters"]["Cursor"];
         limit?: components["parameters"]["Limit"];
         team_id?: string;
+        customer_count?: number;
+        /** @description Case-insensitive customer name or domain search. */
+        customer?: string;
+        customer_name?: string;
+        customer_domain?: string;
+        customer_tier?: string;
+        customer_status?: string;
+        important_customer_requests?: boolean;
       };
       header?: never;
       path?: never;
@@ -10477,7 +10485,16 @@ export interface operations {
   };
   listProjects: {
     parameters: {
-      query?: never;
+      query?: {
+        customer_count?: number;
+        /** @description Case-insensitive customer name or domain search. */
+        customer?: string;
+        customer_name?: string;
+        customer_domain?: string;
+        customer_tier?: string;
+        customer_status?: string;
+        important_customer_requests?: boolean;
+      };
       header?: never;
       path?: never;
       cookie?: never;

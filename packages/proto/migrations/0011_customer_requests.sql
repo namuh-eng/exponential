@@ -10,6 +10,9 @@ CREATE TABLE IF NOT EXISTS customer (
   status varchar(80),
   owner_id text REFERENCES "user"(id) ON DELETE SET NULL,
   source varchar(120),
+  source_provider varchar(120),
+  source_external_id text,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_by_user_id text REFERENCES "user"(id) ON DELETE SET NULL,
   created_at timestamp NOT NULL DEFAULT now(),
   updated_at timestamp NOT NULL DEFAULT now()
@@ -22,6 +25,11 @@ ALTER TABLE customer ADD COLUMN IF NOT EXISTS tier varchar(80);
 ALTER TABLE customer ADD COLUMN IF NOT EXISTS status varchar(80);
 ALTER TABLE customer ADD COLUMN IF NOT EXISTS owner_id text REFERENCES "user"(id) ON DELETE SET NULL;
 ALTER TABLE customer ADD COLUMN IF NOT EXISTS source varchar(120);
+ALTER TABLE customer ADD COLUMN IF NOT EXISTS source_provider varchar(120);
+ALTER TABLE customer ADD COLUMN IF NOT EXISTS source_external_id text;
+ALTER TABLE customer ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE customer ALTER COLUMN source_provider DROP NOT NULL;
+ALTER TABLE customer ALTER COLUMN source_external_id DROP NOT NULL;
 ALTER TABLE customer ADD COLUMN IF NOT EXISTS created_by_user_id text REFERENCES "user"(id) ON DELETE SET NULL;
 ALTER TABLE customer ADD COLUMN IF NOT EXISTS created_at timestamp NOT NULL DEFAULT now();
 ALTER TABLE customer ADD COLUMN IF NOT EXISTS updated_at timestamp NOT NULL DEFAULT now();
@@ -29,18 +37,26 @@ ALTER TABLE customer ADD COLUMN IF NOT EXISTS updated_at timestamp NOT NULL DEFA
 CREATE INDEX IF NOT EXISTS customer_workspace_idx ON customer (workspace_id, name);
 CREATE UNIQUE INDEX IF NOT EXISTS customer_workspace_domain_unique_idx
   ON customer (workspace_id, lower(domain)) WHERE domain IS NOT NULL AND btrim(domain) <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS customer_source_idx
+  ON customer (workspace_id, source_provider, source_external_id)
+  WHERE source_provider IS NOT NULL AND source_external_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS customer_request (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id uuid NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
   customer_id uuid NOT NULL REFERENCES customer(id) ON DELETE CASCADE,
-  title varchar(255) NOT NULL,
+  title varchar(500) NOT NULL,
   body text,
   source varchar(120),
   source_url text,
   external_provider varchar(120),
   external_id text,
   important boolean NOT NULL DEFAULT false,
+  issue_id uuid REFERENCES issue(id) ON DELETE SET NULL,
+  source_provider varchar(120),
+  source_external_id text,
+  excerpt text,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_by_user_id text REFERENCES "user"(id) ON DELETE SET NULL,
   created_at timestamp NOT NULL DEFAULT now(),
   updated_at timestamp NOT NULL DEFAULT now()
@@ -52,6 +68,14 @@ ALTER TABLE customer_request ADD COLUMN IF NOT EXISTS source_url text;
 ALTER TABLE customer_request ADD COLUMN IF NOT EXISTS external_provider varchar(120);
 ALTER TABLE customer_request ADD COLUMN IF NOT EXISTS external_id text;
 ALTER TABLE customer_request ADD COLUMN IF NOT EXISTS important boolean NOT NULL DEFAULT false;
+ALTER TABLE customer_request ADD COLUMN IF NOT EXISTS issue_id uuid REFERENCES issue(id) ON DELETE SET NULL;
+ALTER TABLE customer_request ADD COLUMN IF NOT EXISTS source_provider varchar(120);
+ALTER TABLE customer_request ADD COLUMN IF NOT EXISTS source_external_id text;
+ALTER TABLE customer_request ADD COLUMN IF NOT EXISTS excerpt text;
+ALTER TABLE customer_request ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE customer_request ALTER COLUMN source_provider DROP NOT NULL;
+ALTER TABLE customer_request ALTER COLUMN source_external_id DROP NOT NULL;
+ALTER TABLE customer_request ALTER COLUMN excerpt DROP NOT NULL;
 ALTER TABLE customer_request ADD COLUMN IF NOT EXISTS created_by_user_id text REFERENCES "user"(id) ON DELETE SET NULL;
 ALTER TABLE customer_request ADD COLUMN IF NOT EXISTS created_at timestamp NOT NULL DEFAULT now();
 ALTER TABLE customer_request ADD COLUMN IF NOT EXISTS updated_at timestamp NOT NULL DEFAULT now();
@@ -61,6 +85,9 @@ CREATE INDEX IF NOT EXISTS customer_request_customer_idx ON customer_request (cu
 CREATE UNIQUE INDEX IF NOT EXISTS customer_request_external_unique_idx
   ON customer_request (workspace_id, external_provider, external_id)
   WHERE external_provider IS NOT NULL AND external_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS customer_request_source_idx
+  ON customer_request (workspace_id, source_provider, source_external_id)
+  WHERE source_provider IS NOT NULL AND source_external_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS issue_customer_request (
   issue_id uuid NOT NULL REFERENCES issue(id) ON DELETE CASCADE,

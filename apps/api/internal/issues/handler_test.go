@@ -1,6 +1,8 @@
 package issues
 
 import (
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -52,5 +54,39 @@ func TestIsUUIDLike(t *testing.T) {
 	}
 	if isUUIDLike("ENG-123") || isUUIDLike("00000000000040008000000000000001") {
 		t.Fatal("invalid uuid accepted")
+	}
+}
+
+func TestApplyCustomerIssueFilters(t *testing.T) {
+	req := httptest.NewRequest(
+		"GET",
+		"/issues?customer_count=2&customer=Acme_%25&customer_tier=enterprise&customer_status=active&important_customer_requests=true",
+		nil,
+	)
+	where := "where i.workspace_id=$1"
+	args := []any{"workspace-1"}
+
+	if !customerFilterRequested(req) {
+		t.Fatal("customer filters should be detected")
+	}
+	applyCustomerIssueFilters(req, &where, &args)
+
+	if len(args) != 5 {
+		t.Fatalf("args len = %d, args = %#v", len(args), args)
+	}
+	if args[1] != 2 || args[2] != `%Acme\_\%%` ||
+		args[3] != "enterprise" || args[4] != "active" {
+		t.Fatalf("unexpected args: %#v", args)
+	}
+	for _, snippet := range []string{
+		"count(distinct cr.customer_id)",
+		"c.name ilike $3",
+		"c.tier=$4",
+		"c.status=$5",
+		"cr.important=true",
+	} {
+		if !strings.Contains(where, snippet) {
+			t.Fatalf("where clause missing %q: %s", snippet, where)
+		}
 	}
 }
