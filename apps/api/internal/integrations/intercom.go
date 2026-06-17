@@ -265,13 +265,27 @@ func (h Handler) IntercomIssueUnlink(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusBadRequest, "Intercom unlink requires conversationId", "")
 		return
 	}
-	tag, err := h.DB.Exec(r.Context(), `update integration_thread_link set issue_id=null, updated_at=now() where workspace_integration_id=$1::uuid and provider='intercom' and external_channel_id=$2`, install.IntegrationID, action.ConversationID)
+	tx, err := h.DB.Begin(r.Context())
+	if err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Unlink Intercom conversation failed", err.Error())
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	tag, err := tx.Exec(r.Context(), `update integration_thread_link set issue_id=null, updated_at=now() where workspace_integration_id=$1::uuid and provider='intercom' and external_channel_id=$2`, install.IntegrationID, action.ConversationID)
 	if err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Unlink Intercom conversation failed", err.Error())
 		return
 	}
 	if tag.RowsAffected() == 0 {
 		problem.Write(w, http.StatusNotFound, "No linked issue to unlink.", "")
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `update customer_request set issue_id=null, updated_at=now() where workspace_id=$1::uuid and source_provider='intercom' and source_external_id=$2`, install.WorkspaceID, action.ConversationID); err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Unlink Intercom conversation failed", err.Error())
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Unlink Intercom conversation failed", err.Error())
 		return
 	}
 	_ = h.recordIntercomEvent(r.Context(), install, "issue_unlinked", "info", "Intercom conversation unlinked from its issue.", map[string]any{"conversationId": action.ConversationID})
@@ -522,6 +536,9 @@ func (h Handler) createIntercomIssue(ctx context.Context, install intercomInstal
 	if err := h.upsertIntercomConversationLinkTx(ctx, tx, install, action, issueID); err != nil {
 		return intercomIssueDescriptor{}, err
 	}
+	if err := h.upsertIntercomCustomerRequestTx(ctx, tx, install, action, issueID); err != nil {
+		return intercomIssueDescriptor{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return intercomIssueDescriptor{}, err
 	}
@@ -644,6 +661,9 @@ func (h Handler) upsertIntercomConversationLink(ctx context.Context, install int
 	if err := h.upsertIntercomConversationLinkTx(ctx, tx, install, action, issueID); err != nil {
 		return err
 	}
+	if err := h.upsertIntercomCustomerRequestTx(ctx, tx, install, action, issueID); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 
@@ -656,6 +676,81 @@ func (h Handler) upsertIntercomConversationLinkTx(ctx context.Context, q interfa
 		on conflict (workspace_integration_id, external_channel_id, external_message_ts) where workspace_integration_id is not null
 		do update set issue_id=excluded.issue_id, external_permalink=excluded.external_permalink, updated_at=now()`, install.WorkspaceID, install.IntegrationID, issueID, firstNonEmpty(action.CompanyID, action.AppID), action.ConversationID, action.Permalink)
 	return err
+}
+
+func (h Handler) upsertIntercomCustomerRequestTx(ctx context.Context, tx pgx.Tx, install intercomInstallRecord, action intercomConversationAction, issueID string) error {
+	if strings.TrimSpace(action.ConversationID) == "" {
+		return nil
+	}
+	customer := intercomCustomerIdentityForAction(action)
+	metadataRaw, _ := json.Marshal(customer.Metadata)
+	var customerID string
+	if err := tx.QueryRow(ctx, `insert into customer (workspace_id, name, domain, source_provider, source_external_id, metadata, created_at, updated_at) values ($1::uuid,$2,$3,'intercom',$4,$5::jsonb,now(),now()) on conflict (workspace_id, source_provider, source_external_id) do update set name=excluded.name, domain=coalesce(nullif(excluded.domain,''), customer.domain), metadata=customer.metadata || excluded.metadata, updated_at=now() returning id::text`, install.WorkspaceID, customer.Name, customer.Domain, customer.ExternalID, metadataRaw).Scan(&customerID); err != nil {
+		return err
+	}
+	requestMetadataRaw, _ := json.Marshal(intercomCustomerRequestMetadata(action))
+	_, err := tx.Exec(ctx, `insert into customer_request (workspace_id, customer_id, issue_id, source_provider, source_external_id, source_url, title, excerpt, metadata, created_at, updated_at) values ($1::uuid,$2::uuid,$3::uuid,'intercom',$4,$5,$6,$7,$8::jsonb,now(),now()) on conflict (workspace_id, source_provider, source_external_id) do update set issue_id=excluded.issue_id, customer_id=excluded.customer_id, source_url=excluded.source_url, title=excluded.title, excerpt=excluded.excerpt, metadata=customer_request.metadata || excluded.metadata, updated_at=now()`, install.WorkspaceID, customerID, issueID, action.ConversationID, action.Permalink, intercomCustomerRequestTitle(action), intercomCustomerRequestExcerpt(action), requestMetadataRaw)
+	return err
+}
+
+type intercomCustomerIdentity struct {
+	Name       string
+	Domain     string
+	ExternalID string
+	Metadata   map[string]any
+}
+
+func intercomCustomerIdentityForAction(action intercomConversationAction) intercomCustomerIdentity {
+	domain := domainFromEmail(action.ContactEmail)
+	externalID := firstNonEmpty(action.CompanyID, domain, action.ContactID, strings.ToLower(strings.TrimSpace(action.ContactEmail)), action.ConversationID)
+	name := firstNonEmpty(action.CompanyName, action.ContactName, domain, strings.ToLower(strings.TrimSpace(action.ContactEmail)), "Unknown customer")
+	return intercomCustomerIdentity{
+		Name:       truncateSlackText(name, 255),
+		Domain:     domain,
+		ExternalID: externalID,
+		Metadata: map[string]any{
+			"intercomCompanyId": action.CompanyID,
+			"intercomContactId": action.ContactID,
+			"contactEmail":      strings.ToLower(strings.TrimSpace(action.ContactEmail)),
+			"companyName":       action.CompanyName,
+		},
+	}
+}
+
+func intercomCustomerRequestTitle(action intercomConversationAction) string {
+	title := normalizeWhitespace(action.Title)
+	if title == "" {
+		title = normalizeWhitespace(action.Description)
+	}
+	if title == "" {
+		title = "Intercom conversation " + action.ConversationID
+	}
+	return truncateSlackText(title, 500)
+}
+
+func intercomCustomerRequestExcerpt(action intercomConversationAction) string {
+	excerpt := normalizeWhitespace(action.Description)
+	if excerpt == "" {
+		excerpt = normalizeWhitespace(action.Title)
+	}
+	if excerpt == "" {
+		excerpt = "Intercom conversation " + action.ConversationID
+	}
+	return excerpt
+}
+
+func intercomCustomerRequestMetadata(action intercomConversationAction) map[string]any {
+	return map[string]any{
+		"appId":          action.AppID,
+		"conversationId": action.ConversationID,
+		"contactId":      action.ContactID,
+		"contactName":    action.ContactName,
+		"contactEmail":   strings.ToLower(strings.TrimSpace(action.ContactEmail)),
+		"companyId":      action.CompanyID,
+		"companyName":    action.CompanyName,
+		"permalink":      action.Permalink,
+		"raw":            action.Raw,
+	}
 }
 
 func (h Handler) queueIntercomNote(ctx context.Context, install intercomInstallRecord, conversationID string, body string) error {

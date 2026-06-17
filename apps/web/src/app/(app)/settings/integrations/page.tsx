@@ -120,7 +120,14 @@ function integrationDetailSummary(integration: Integration) {
 
 function isConnectableProvider(
   provider: string,
-): provider is "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong" | "intercom" {
+): provider is
+  | "github"
+  | "slack"
+  | "discord"
+  | "microsoft_teams"
+  | "sentry"
+  | "gong"
+  | "intercom" {
   return (
     provider === "github" ||
     provider === "slack" ||
@@ -205,7 +212,14 @@ export default function IntegrationsSettingsPage() {
   }, []);
 
   async function connectIntegration(
-    provider: "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong" | "intercom",
+    provider:
+      | "github"
+      | "slack"
+      | "discord"
+      | "microsoft_teams"
+      | "sentry"
+      | "gong"
+      | "intercom",
   ) {
     setPendingProvider(provider);
     setNotice(null);
@@ -375,7 +389,7 @@ export default function IntegrationsSettingsPage() {
                       ? "/api/integrations/zendesk/disconnect"
                       : provider === "intercom"
                         ? "/api/integrations/intercom/disconnect"
-                  : `/api/integrations?provider=${encodeURIComponent(provider)}`;
+                        : `/api/integrations?provider=${encodeURIComponent(provider)}`;
       const response = await fetch(endpoint, {
         method:
           provider === "slack" ||

@@ -195,6 +195,48 @@ func TestIntercomActionFromPayload(t *testing.T) {
 	}
 }
 
+func TestIntercomCustomerRequestMapping(t *testing.T) {
+	action := intercomConversationAction{
+		AppID:          "app_123",
+		ConversationID: "conv_123",
+		Permalink:      "https://app.intercom.com/a/inbox/conversation/conv_123",
+		Title:          "Refund feedback",
+		Description:    "  First line\n\nsecond line  ",
+		ContactID:      "contact_1",
+		ContactName:    "Ada Lovelace",
+		ContactEmail:   "ADA@Customer.Example",
+		CompanyID:      "company_1",
+		CompanyName:    "Acme",
+		Raw:            map[string]any{"conversation": map[string]any{"id": "conv_123"}},
+	}
+
+	customer := intercomCustomerIdentityForAction(action)
+	if customer.ExternalID != "company_1" || customer.Name != "Acme" || customer.Domain != "customer.example" {
+		t.Fatalf("customer identity = %#v", customer)
+	}
+	if got := customer.Metadata["contactEmail"]; got != "ada@customer.example" {
+		t.Fatalf("contact email metadata = %#v", got)
+	}
+	if got := intercomCustomerRequestExcerpt(action); got != "First line second line" {
+		t.Fatalf("request excerpt = %q", got)
+	}
+	metadata := intercomCustomerRequestMetadata(action)
+	if metadata["conversationId"] != "conv_123" || metadata["companyId"] != "company_1" || metadata["raw"] == nil {
+		t.Fatalf("request metadata = %#v", metadata)
+	}
+}
+
+func TestIntercomCustomerIdentityFallsBackToConversation(t *testing.T) {
+	action := intercomConversationAction{ConversationID: "conv_123", Title: ""}
+	customer := intercomCustomerIdentityForAction(action)
+	if customer.ExternalID != "conv_123" || customer.Name != "Unknown customer" || customer.Domain != "" {
+		t.Fatalf("fallback customer identity = %#v", customer)
+	}
+	if got := intercomCustomerRequestExcerpt(action); got != "Intercom conversation conv_123" {
+		t.Fatalf("fallback request excerpt = %q", got)
+	}
+}
+
 func TestSlackTeamID(t *testing.T) {
 	if got := slackTeamID(map[string]any{"team_id": "T123"}); got != "T123" {
 		t.Fatalf("top-level team id = %q", got)
