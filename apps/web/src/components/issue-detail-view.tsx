@@ -438,6 +438,8 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
             ? " from Microsoft Teams"
             : event.metadata.source === "sentry_issue"
               ? " from Sentry"
+              : event.metadata.source === "salesforce_case"
+                ? " from Salesforce"
               : event.metadata.source === "zendesk_ticket"
                 ? " from Zendesk"
                 : "";
@@ -507,6 +509,16 @@ function getSentrySourceLink(event: IssueHistoryEvent): string | null {
     : null;
 }
 
+function getSalesforceSourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "salesforce_case") {
+    return null;
+  }
+  const salesforce = event.metadata.salesforce;
+  if (!isRecord(salesforce)) {
+    return null;
+  }
+  return typeof salesforce.caseUrl === "string" && salesforce.caseUrl.length > 0
+    ? salesforce.caseUrl
 function getZendeskSourceLink(event: IssueHistoryEvent): string | null {
   if (event.metadata.source !== "zendesk_ticket") {
     return null;
@@ -2056,6 +2068,10 @@ export function IssueDetailView({
                           </a>
                         ) : null}
                         {(() => {
+                          const salesforceLink = getSalesforceSourceLink(event);
+                          return salesforceLink ? (
+                            <a
+                              href={salesforceLink}
                           const zendeskLink = getZendeskSourceLink(event);
                           return zendeskLink ? (
                             <a
@@ -2064,6 +2080,7 @@ export function IssueDetailView({
                               rel="noreferrer"
                               className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
                             >
+                              View source case in Salesforce
                               View source ticket in Zendesk
                             </a>
                           ) : null;

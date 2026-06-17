@@ -967,6 +967,82 @@ func TestSentryIssueActionFromPayload(t *testing.T) {
 	}
 }
 
+func TestSalesforceSetupRequirementAndAuthorizationURL(t *testing.T) {
+	t.Setenv("AUTH_SALESFORCE_ID", "")
+	t.Setenv("AUTH_SALESFORCE_SECRET", "")
+	t.Setenv("SALESFORCE_COMPONENT_SECRET", "")
+	if got := setupRequirement("salesforce"); got == nil || got.Type != "configuration_required" {
+		t.Fatalf("salesforce requirement = %#v", got)
+	}
+	t.Setenv("AUTH_SALESFORCE_ID", "salesforce-id")
+	t.Setenv("AUTH_SALESFORCE_SECRET", "salesforce-secret")
+	t.Setenv("SALESFORCE_COMPONENT_SECRET", "component-secret")
+	if got := setupRequirement("salesforce"); got != nil {
+		t.Fatalf("configured salesforce requirement = %#v", got)
+	}
+	got := salesforceAuthorizationURL("client", "https://app.example/", "state-token")
+	if !strings.HasPrefix(got, "https://login.salesforce.com/services/oauth2/authorize?") {
+		t.Fatalf("unexpected Salesforce URL = %q", got)
+	}
+	if !strings.Contains(got, "client_id=client") || !strings.Contains(got, "state=state-token") {
+		t.Fatalf("missing query params = %q", got)
+	}
+	if !strings.Contains(got, "api+refresh_token+id+openid") {
+		t.Fatalf("missing Salesforce scopes = %q", got)
+	}
+	if !strings.Contains(got, "redirect_uri=https%3A%2F%2Fapp.example%2Fapi%2Fintegrations%2Fsalesforce%2Foauth%2Fcallback") {
+		t.Fatalf("missing redirect uri = %q", got)
+	}
+}
+
+func TestSalesforceSignatureVerification(t *testing.T) {
+	body := []byte(`{"case":{"Id":"500xx"}}`)
+	signature := salesforceSignature("secret", body)
+	if !verifySalesforceSignature("secret", signature, body) {
+		t.Fatal("valid Salesforce signature was rejected")
+	}
+	if verifySalesforceSignature("secret", signature, []byte(`{"case":{"Id":"500yy"}}`)) {
+		t.Fatal("tampered Salesforce body was accepted")
+	}
+}
+
+func TestSalesforceCaseActionFromPayload(t *testing.T) {
+	payload := map[string]any{
+		"orgId":           "00Dxx",
+		"query":           "ENG",
+		"teamKey":         "ENG",
+		"issueIdentifier": "ENG-42",
+		"case": map[string]any{
+			"Id":           "500xx",
+			"CaseNumber":   "00001042",
+			"Subject":      "Customer cannot export",
+			"AccountId":    "001xx",
+			"AccountName":  "Acme",
+			"ContactEmail": "CUSTOMER@EXAMPLE.COM",
+		},
+	}
+	got := salesforceCaseActionFromPayload(payload)
+	if got.OrganizationID != "00Dxx" || got.Query != "ENG" || got.IssueID != "ENG-42" {
+		t.Fatalf("parsed action = %#v", got)
+	}
+	if got.Case.ID != "500xx" || got.Case.Number != "00001042" || got.Case.ContactEmail != "customer@example.com" {
+		t.Fatalf("parsed case = %#v", got.Case)
+	}
+}
+
+func TestSalesforceCasePatchBody(t *testing.T) {
+	t.Setenv("SALESFORCE_STATUS_FIELD", "Linear_Status__c")
+	body := salesforceCasePatchBody(map[string]any{
+		"status":   "Done",
+		"priority": "high",
+		"issueUrl": "https://app.example/team/ENG/issue/ENG-42",
+		"followUp": "Issue completed.",
+	})
+	if body["Linear_Status__c"] != "Done" || body["Exponential_Priority__c"] != "high" {
+		t.Fatalf("patch body = %#v", body)
+	}
+	if body["Exponential_Issue_URL__c"] == "" || body["Exponential_Follow_Up__c"] == "" {
+		t.Fatalf("missing backlink/follow-up fields = %#v", body)
 func TestFrontSignatureVerification(t *testing.T) {
 	body := []byte(`{"workspaceSlug":"acme","conversation":{"id":"cnv_123"}}`)
 	mac := hmac.New(sha256.New, []byte("secret"))

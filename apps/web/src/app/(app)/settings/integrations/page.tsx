@@ -120,6 +120,12 @@ function integrationDetailSummary(integration: Integration) {
 
 function isConnectableProvider(
   provider: string,
+): provider is
+  | "slack"
+  | "discord"
+  | "microsoft_teams"
+  | "sentry"
+  | "salesforce" {
 ): provider is "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong" | "intercom" {
   return (
     provider === "github" ||
@@ -127,6 +133,7 @@ function isConnectableProvider(
     provider === "discord" ||
     provider === "microsoft_teams" ||
     provider === "sentry" ||
+    provider === "salesforce"
     provider === "gong" ||
     provider === "intercom"
   );
@@ -209,6 +216,7 @@ export default function IntegrationsSettingsPage() {
   }, []);
 
   async function connectIntegration(
+    provider: "slack" | "discord" | "microsoft_teams" | "sentry" | "salesforce",
     provider: "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong" | "intercom",
   ) {
     setPendingProvider(provider);
@@ -219,6 +227,7 @@ export default function IntegrationsSettingsPage() {
     if (provider === "slack") label = "Slack";
     if (provider === "microsoft_teams") label = "Microsoft Teams";
     if (provider === "sentry") label = "Sentry";
+    if (provider === "salesforce") label = "Salesforce";
     if (provider === "gong") label = "Gong";
     if (provider === "intercom") label = "Intercom";
     const endpoint =
@@ -393,6 +402,8 @@ export default function IntegrationsSettingsPage() {
               ? "/api/integrations/microsoft-teams/disconnect"
               : provider === "sentry"
                 ? "/api/integrations/sentry/disconnect"
+                : provider === "salesforce"
+                  ? "/api/integrations/salesforce/disconnect"
                 : provider === "front"
                   ? "/api/integrations/front/disconnect"
             : provider === "github"
@@ -416,6 +427,7 @@ export default function IntegrationsSettingsPage() {
           provider === "github" ||
           provider === "microsoft_teams" ||
           provider === "sentry" ||
+          provider === "salesforce"
           provider === "front"
           provider === "gong" ||
           provider === "zendesk" ||

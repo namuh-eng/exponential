@@ -111,6 +111,7 @@ var catalog = []CatalogItem{
 	{Provider: "microsoft_teams", Name: "Microsoft Teams", Description: "Create issues and projects from Teams conversations and post project updates."},
 	{Provider: "intercom", Name: "Intercom", Description: "Create and link issues from support conversations and sync customer feedback status."},
 	{Provider: "sentry", Name: "Sentry", Description: "Create, link, and resolve issues from Sentry errors."},
+	{Provider: "salesforce", Name: "Salesforce", Description: "Link cases to issues and projects, then sync status and priority back to support."},
 	{Provider: "slack", Name: "Slack", Description: "Send issue updates and create issues from Slack messages."},
 	{Provider: "gong", Name: "Gong", Description: "Connect customer call excerpts to issues and customer requests."},
 	{Provider: "zendesk", Name: "Zendesk", Description: "Connect support tickets to product work and customer requests."},
@@ -135,6 +136,8 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/microsoft-teams/disconnect", h.MicrosoftTeamsDisconnect)
 	r.Post("/sentry/connect", h.SentryConnect)
 	r.Post("/sentry/disconnect", h.SentryDisconnect)
+	r.Post("/salesforce/connect", h.SalesforceConnect)
+	r.Post("/salesforce/disconnect", h.SalesforceDisconnect)
 	r.Post("/front/setup", h.FrontSetup)
 	r.Post("/front/disconnect", h.FrontDisconnect)
 	r.Post("/intercom/connect", h.IntercomConnect)
@@ -430,6 +433,9 @@ func setupRequirement(provider string) *SetupRequirement {
 	}
 	if provider == "sentry" && !sentryConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Sentry credentials are not configured. Add AUTH_SENTRY_ID, AUTH_SENTRY_SECRET, and SENTRY_WEBHOOK_SECRET to enable installation and signed issue actions."}
+	}
+	if provider == "salesforce" && !salesforceConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Salesforce OAuth credentials and component secret are not configured. Add AUTH_SALESFORCE_ID, AUTH_SALESFORCE_SECRET, and SALESFORCE_COMPONENT_SECRET to enable installation and signed case actions."}
 	}
 	if provider == "intercom" && !intercomConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Intercom credentials are not configured. Add AUTH_INTERCOM_ID, AUTH_INTERCOM_SECRET, and INTERCOM_SIGNING_SECRET to enable installation and signed conversation actions."}

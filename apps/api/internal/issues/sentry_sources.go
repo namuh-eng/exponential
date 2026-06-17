@@ -30,7 +30,7 @@ func (h Handler) issueExternalSources(ctx context.Context, issueID string) ([]is
 				coalesce(workspace_integration_id::text,'') as integration_id,
 				created_at
 			from integration_thread_link
-			where issue_id=$1::uuid and provider in ('sentry','gong','front') and external_permalink is not null
+			where issue_id=$1::uuid and provider in ('sentry','gong','front','salesforce') and external_permalink is not null
 			union all
 			select 'zendesk' as provider,
 				coalesce(ticket_url,'') as url,
@@ -93,6 +93,13 @@ func sourceLabel(provider string, project string, externalID string) string {
 		}
 		if strings.TrimSpace(externalID) != "" {
 			parts = append(parts, externalID)
+		}
+		return strings.Join(parts, " · ")
+	}
+	if provider == "salesforce" {
+		parts := []string{"Salesforce"}
+		if strings.TrimSpace(externalID) != "" {
+			parts = append(parts, "Case "+externalID)
 		}
 		return strings.Join(parts, " · ")
 	}

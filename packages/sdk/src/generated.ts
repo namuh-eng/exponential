@@ -1315,6 +1315,134 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/salesforce/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectSalesforceIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/salesforce/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectSalesforceIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/salesforce/oauth/callback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["salesforceOAuthCallback"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/salesforce/issues/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["searchSalesforceLinkableIssues"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/salesforce/issues/link": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["linkSalesforceCaseToIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/salesforce/issues/create": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createIssueFromSalesforceCase"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/salesforce/projects/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["searchSalesforceLinkableProjects"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/salesforce/projects/link": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["linkSalesforceCaseToProject"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/zendesk/setup": {
     parameters: {
       query?: never;
@@ -3610,6 +3738,69 @@ export interface components {
     };
     FrontIssueSearchResponse: {
       issues: components["schemas"]["FrontIssueActionResponse"][];
+    };
+    SalesforceConnectResponse: {
+      /** Format: uri */
+      authorizationUrl: string;
+      state: string;
+      workspaceSlug: string;
+    };
+    SalesforceConfigurationRequiredResponse: {
+      error: string;
+      message: string;
+    };
+    SalesforceCaseActionRequest: {
+      organizationId?: string;
+      orgId?: string;
+      query?: string;
+      exponentialIssueId?: string;
+      issueIdentifier?: string;
+      /** Format: uuid */
+      projectId?: string;
+      projectSlug?: string;
+      /** Format: uuid */
+      teamId?: string;
+      teamKey?: string;
+      title?: string;
+      description?: string;
+      /** @enum {string} */
+      priority?: "none" | "urgent" | "high" | "medium" | "low";
+      case?: {
+        [key: string]: unknown;
+      };
+    } & {
+      [key: string]: unknown;
+    };
+    SalesforceIssueActionResponse: {
+      /** Format: uri */
+      webUrl: string;
+      /** Format: uuid */
+      issueId?: string;
+      project: string;
+      identifier: string;
+      status: string;
+      statusCategory: string;
+      priority: string;
+      caseId?: string;
+      caseNumber?: string;
+    };
+    SalesforceIssueSearchResponse: {
+      issues: components["schemas"]["SalesforceIssueActionResponse"][];
+    };
+    SalesforceProjectActionResponse: {
+      /** Format: uri */
+      webUrl: string;
+      /** Format: uuid */
+      projectId: string;
+      name: string;
+      slug: string;
+      status: string;
+      priority: string;
+      caseId?: string;
+      caseNumber?: string;
+    };
+    SalesforceProjectSearchResponse: {
+      projects: components["schemas"]["SalesforceProjectActionResponse"][];
     };
     ZendeskSetupRequest: {
       subdomain: string;
@@ -8088,6 +8279,204 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["FrontIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  connectSalesforceIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Salesforce authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SalesforceConnectResponse"];
+        };
+      };
+      /** @description Salesforce OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SalesforceConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectSalesforceIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Salesforce disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  salesforceOAuthCallback: {
+    parameters: {
+      query?: {
+        code?: string;
+        state?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Redirects to integration settings */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  searchSalesforceLinkableIssues: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SalesforceCaseActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linkable Exponential issues for Salesforce cases */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SalesforceIssueSearchResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkSalesforceCaseToIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SalesforceCaseActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked Exponential issue descriptor for Salesforce */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SalesforceIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createIssueFromSalesforceCase: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SalesforceCaseActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Created Exponential issue descriptor for Salesforce */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SalesforceIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  searchSalesforceLinkableProjects: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SalesforceCaseActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linkable Exponential projects for Salesforce cases */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SalesforceProjectSearchResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkSalesforceCaseToProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SalesforceCaseActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked Exponential project descriptor for Salesforce */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SalesforceProjectActionResponse"];
         };
       };
       default: components["responses"]["Problem"];
