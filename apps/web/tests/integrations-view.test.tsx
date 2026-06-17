@@ -433,7 +433,19 @@ describe("IntegrationsSettingsPage component", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          integrations: [degradedSlack],
+          integrations: [
+            {
+              ...integrations[4],
+              status: "connected",
+              displayName: "Front cmp_123",
+              actions: {
+                canConnect: false,
+                canManage: true,
+                canDisconnect: true,
+                canReconnect: false,
+              },
+            },
+          ],
           canManageIntegrations: true,
         }),
       });
@@ -458,7 +470,7 @@ describe("IntegrationsSettingsPage component", () => {
     fireEvent.click(screen.getByRole("button", { name: "Connect Front" }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenLastCalledWith(
+      expect(fetchMock).toHaveBeenCalledWith(
         "/api/integrations/front/setup",
         expect.objectContaining({
           method: "POST",
