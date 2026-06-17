@@ -2,6 +2,7 @@ package teams
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -244,10 +245,22 @@ func (h Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	if settings == nil {
 		settings = map[string]any{}
 	}
-	for _, k := range []string{"emailEnabled", "detailedHistory", "agentGuidance", "autoAssignment", "autoAssignMode", "defaultAssigneeId", "gitBranchFormat", "gitPrAutomationEnabled", "gitPrMergeTargetStatusId", "gitBranchCreateTargetStatusId", "statusTransitionRules", "workflowAutomation", "discussionSummariesEnabled", "discussionSummaryMinComments", "discussionSummaryRefreshMode", "triageAcceptDestinationStateId", "triageDeclineDestinationStateId"} {
+	for _, k := range []string{"emailEnabled", "detailedHistory", "agentGuidance", "autoAssignment", "autoAssignMode", "defaultAssigneeId", "gitBranchFormat", "gitPrAutomationEnabled", "gitPrMergeTargetStatusId", "gitBranchCreateTargetStatusId", "statusTransitionRules", "workflowAutomation", "discussionSummariesEnabled", "discussionSummaryMinComments", "discussionSummaryRefreshMode", "triageAcceptDestinationStateId", "triageDeclineDestinationStateId", "triageDefaultAssigneeId", "triageDefaultLabelIds", "triageDefaultProjectId", "triageDefaultCycleId"} {
 		if v, ok := body[k]; ok {
 			settings[k] = v
 		}
+	}
+	if err := h.validateTriageDefaultSettings(r.Context(), triageTeam{ID: team.ID, WorkspaceID: team.WorkspaceID, Settings: settings}); err != nil {
+		// triageValidationError carries a safe static message suitable for a
+		// 400 title. Any other error is a DB failure and must become a 500 so
+		// raw DB internals never appear in the response title.
+		var ve *triageValidationError
+		if errors.As(err, &ve) {
+			problem.Write(w, 400, ve.msg, "")
+		} else {
+			problem.Write(w, 500, "Update team settings failed", "")
+		}
+		return
 	}
 	tx, err := h.DB.Begin(r.Context())
 	if err != nil {
@@ -409,7 +422,9 @@ func (h Handler) teamSettingsResponse(r *http.Request, team teamRecord, userID s
 	if estimateType == "not_in_use" {
 		estimateType = "none"
 	}
-	return map[string]any{"id": team.ID, "name": team.Name, "key": team.Key, "icon": stringPtrVal(team.Icon, "•"), "timezone": stringPtrVal(team.Timezone, ""), "estimateType": estimateType, "triageEnabled": boolPtrVal(team.TriageEnabled, true), "cyclesEnabled": boolPtrVal(team.CyclesEnabled, false), "cycleStartDay": intPtrVal(team.CycleStartDay, 1), "cycleDurationWeeks": intPtrVal(team.CycleDurationWeeks, 2), "memberCount": memberCount, "labelCount": labelCount, "statusCount": statusCount, "settings": team.Settings, "emailEnabled": team.Settings["emailEnabled"], "detailedHistory": team.Settings["detailedHistory"], "agentGuidance": team.Settings["agentGuidance"]}
+	accept, decline, _ := h.triageDecisionStates(r, team.ID, team.Settings)
+	metadata, _ := h.triageMetadataOptions(r, triageTeam{ID: team.ID, WorkspaceID: team.WorkspaceID, Settings: team.Settings})
+	return map[string]any{"id": team.ID, "name": team.Name, "key": team.Key, "icon": stringPtrVal(team.Icon, "•"), "timezone": stringPtrVal(team.Timezone, ""), "estimateType": estimateType, "triageEnabled": boolPtrVal(team.TriageEnabled, true), "cyclesEnabled": boolPtrVal(team.CyclesEnabled, false), "cycleStartDay": intPtrVal(team.CycleStartDay, 1), "cycleDurationWeeks": intPtrVal(team.CycleDurationWeeks, 2), "memberCount": memberCount, "labelCount": labelCount, "statusCount": statusCount, "settings": team.Settings, "emailEnabled": team.Settings["emailEnabled"], "detailedHistory": team.Settings["detailedHistory"], "agentGuidance": team.Settings["agentGuidance"], "triageAcceptDestinationStateId": defaultTriageDestination(team.Settings, "accept"), "triageDeclineDestinationStateId": defaultTriageDestination(team.Settings, "decline"), "triageDefaultAssigneeId": settingString(team.Settings, triageDefaultAssigneeKey), "triageDefaultLabelIds": settingStringSlice(team.Settings, triageDefaultLabelIDsKey), "triageDefaultProjectId": settingString(team.Settings, triageDefaultProjectKey), "triageDefaultCycleId": settingString(team.Settings, triageDefaultCycleKey), "acceptDestinationStates": accept, "declineDestinationStates": decline, "metadataOptions": metadata}
 }
 func uniqueStringsLocal(in []string) []string {
 	seen := map[string]bool{}

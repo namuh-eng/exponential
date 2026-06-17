@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { expandAppSidebar } from "./sidebar-helpers";
 
 test.describe("Agent dashboard", () => {
-  test("opens from sidebar More, creates a mock run, and reviews suggestions", async ({
+  test("opens from sidebar More, creates a workspace-aware run, and reviews suggestions", async ({
     page,
   }) => {
     const runTitle = `Audit agent sidebar route ${Date.now().toString(36)}`;
@@ -31,16 +31,18 @@ test.describe("Agent dashboard", () => {
     ).toHaveAttribute("href", "/foreverbrowsing/settings/ai");
 
     await page.getByLabel("Task title").fill(runTitle);
-    await page.getByLabel("Issue, PR, or project context").fill("EXP-300");
+    await page.getByLabel("Issue, project, or team context").fill("ENG-1");
     await page
       .getByLabel("Instructions")
-      .fill("Create a mock agent run and summarize the required UI work.");
-    await page.getByRole("button", { name: "Start mock agent run" }).click();
+      .fill(
+        "Summarize workspace evidence and propose the required UI issue update.",
+      );
+    await page.getByRole("button", { name: "Start agent run" }).click();
 
     await expect(
       page.getByRole("button", { name: new RegExp(runTitle) }),
     ).toBeVisible();
-    await expect(page.getByText("Mock agent run queued")).toBeVisible();
+    await expect(page.getByText("Workspace summary generated")).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Suggestions" }),
     ).toBeVisible();
@@ -49,7 +51,7 @@ test.describe("Agent dashboard", () => {
     ).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Open context" }).first(),
-    ).toHaveAttribute("href", "/foreverbrowsing/team/ENG/issue/EXP-300");
+    ).toHaveAttribute("href", "/foreverbrowsing/team/ENG/issue/ENG-1");
 
     await page.getByRole("button", { name: "Accept" }).first().click();
     await expect(page.getByText("Accepted", { exact: true })).toBeVisible();
