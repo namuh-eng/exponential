@@ -739,6 +739,86 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/github/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectGitHubIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/github/register": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["registerGitHubIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/github/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectGitHubIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/github/setup/callback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["githubSetupCallback"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/github/webhook": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["ingestGitHubWebhook"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/gitlab": {
     parameters: {
       query?: never;
@@ -893,6 +973,54 @@ export interface paths {
     get?: never;
     put?: never;
     post: operations["disconnectSentryIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gong/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectGongIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gong/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectGongIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gong/{integrationId}/calls": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["ingestGongCall"];
     delete?: never;
     options?: never;
     head?: never;
@@ -2949,6 +3077,58 @@ export interface components {
         | null;
       actions: components["schemas"]["IntegrationActions"];
       health: components["schemas"]["IntegrationHealth"];
+      details: {
+        [key: string]: unknown;
+      };
+    };
+    GitHubAccount: {
+      id: string;
+      login: string;
+      type: string;
+    };
+    GitHubRepository: {
+      id: string;
+      name: string;
+      fullName: string;
+      private: boolean;
+      active: boolean;
+    };
+    GitHubConnectResponse: {
+      /** Format: uri */
+      installationUrl: string;
+      state: string;
+      workspaceSlug: string;
+    };
+    GitHubRegisterRequest: {
+      installationId: string;
+      account: components["schemas"]["GitHubAccount"];
+      /** @enum {string} */
+      repositorySelection: "all" | "selected" | "unknown";
+      repositories: components["schemas"]["GitHubRepository"][];
+      permissions: {
+        [key: string]: string;
+      };
+      setupAction?: string;
+      metadata?: {
+        [key: string]: unknown;
+      };
+    };
+    GitHubRegisterResponse: {
+      connected: boolean;
+      /** Format: uuid */
+      integrationId: string;
+      installationId: string;
+      account: components["schemas"]["GitHubAccount"];
+      repositories: components["schemas"]["GitHubRepository"][];
+    };
+    GitHubWebhookResponse: {
+      ok: boolean;
+      duplicate: boolean;
+      ignored: string | null;
+    };
+    GitHubConfigurationRequiredResponse: {
+      error: string;
+      message: string;
     };
     GitLabWorkflowMapping: {
       /** Format: uuid */
@@ -3022,6 +3202,41 @@ export interface components {
       authorizationUrl: string;
       state: string;
       workspaceSlug: string;
+    };
+    GongConnectRequest: {
+      /** Format: uuid */
+      destinationTeamId?: string;
+      routingGuidance?: string;
+      mentionParticipants?: boolean;
+      pollingCursor?: string;
+    };
+    GongConnectResponse: {
+      /** Format: uri */
+      authorizationUrl: string;
+      state: string;
+      workspaceSlug: string;
+    };
+    GongConfigurationRequiredResponse: {
+      error: string;
+      message: string;
+    };
+    GongIngestCallRequest: {
+      call: {
+        [key: string]: unknown;
+      };
+    };
+    GongFindingResult: {
+      findingId: string;
+      /** Format: uuid */
+      issueId: string;
+      identifier: string;
+      linked: boolean;
+    };
+    GongIngestCallResponse: {
+      processed: boolean;
+      skipped: boolean;
+      reason?: string;
+      findings: components["schemas"]["GongFindingResult"][];
     };
     DiscordConfigurationRequiredResponse: {
       error: string;
@@ -6640,6 +6855,136 @@ export interface operations {
       default: components["responses"]["Problem"];
     };
   };
+  connectGitHubIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description GitHub App installation URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitHubConnectResponse"];
+        };
+      };
+      /** @description GitHub App is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitHubConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  registerGitHubIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["GitHubRegisterRequest"];
+      };
+    };
+    responses: {
+      /** @description GitHub App installation registered */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitHubRegisterResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectGitHubIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description GitHub disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  githubSetupCallback: {
+    parameters: {
+      query?: {
+        installation_id?: string;
+        setup_action?: string;
+        state?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Redirects to integration settings */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  ingestGitHubWebhook: {
+    parameters: {
+      query?: never;
+      header: {
+        "X-Hub-Signature-256": string;
+        "X-GitHub-Delivery": string;
+        "X-GitHub-Event": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          [key: string]: unknown;
+        };
+      };
+    };
+    responses: {
+      /** @description GitHub webhook accepted or deterministically ignored */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitHubWebhookResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   getGitLabIntegration: {
     parameters: {
       query?: never;
@@ -6891,6 +7236,88 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  connectGongIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["GongConnectRequest"];
+      };
+    };
+    responses: {
+      /** @description Gong authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GongConnectResponse"];
+        };
+      };
+      /** @description Gong OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GongConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectGongIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Gong disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  ingestGongCall: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        integrationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["GongIngestCallRequest"];
+      };
+    };
+    responses: {
+      /** @description Gong call ingestion result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GongIngestCallResponse"];
         };
       };
       default: components["responses"]["Problem"];

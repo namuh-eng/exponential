@@ -74,6 +74,7 @@ type Integration struct {
 	SetupRequirement *SetupRequirement `json:"setupRequirement"`
 	Actions          Actions           `json:"actions"`
 	Health           Health            `json:"health"`
+	Details          map[string]any     `json:"details"`
 }
 
 type response struct {
@@ -110,6 +111,7 @@ var catalog = []CatalogItem{
 	{Provider: "microsoft_teams", Name: "Microsoft Teams", Description: "Create issues and projects from Teams conversations and post project updates."},
 	{Provider: "sentry", Name: "Sentry", Description: "Create, link, and resolve issues from Sentry errors."},
 	{Provider: "slack", Name: "Slack", Description: "Send issue updates and create issues from Slack messages."},
+	{Provider: "gong", Name: "Gong", Description: "Connect customer call excerpts to issues and customer requests."},
 	{Provider: "zendesk", Name: "Zendesk", Description: "Connect support tickets to product work and customer requests."},
 }
 
@@ -118,6 +120,9 @@ func (h Handler) Routes() chi.Router {
 	r.Get("/", h.List)
 	r.Delete("/", h.Delete)
 	r.Post("/slack/connect", h.SlackConnect)
+	r.Post("/github/connect", h.GitHubConnect)
+	r.Post("/github/register", h.GitHubRegister)
+	r.Post("/github/disconnect", h.GitHubDisconnect)
 	r.Get("/gitlab", h.GitLabStatus)
 	r.Post("/gitlab/setup", h.GitLabSetup)
 	r.Post("/gitlab/workflows", h.GitLabWorkflow)
@@ -130,6 +135,8 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/sentry/disconnect", h.SentryDisconnect)
 	r.Post("/zendesk/setup", h.ZendeskSetup)
 	r.Post("/zendesk/disconnect", h.ZendeskDisconnect)
+	r.Post("/gong/connect", h.GongConnect)
+	r.Post("/gong/disconnect", h.GongDisconnect)
 	r.Post("/slack/disconnect", h.SlackDisconnect)
 	return r
 }
@@ -168,7 +175,11 @@ func (h Handler) List(w http.ResponseWriter, r *http.Request) {
 		if ok {
 			health = connected.Health()
 		}
-		out = append(out, Integration{CatalogItem: item, ID: id, Status: status, DisplayName: displayName, ExternalID: externalID, ConnectedAt: connectedAt, SetupRequirement: requirement, Actions: integrationActions(canManage, ok, status, requirement), Health: health})
+		details := map[string]any{}
+		if ok && item.Provider == "github" {
+			details = githubIntegrationDetails(connected.Metadata)
+		}
+		out = append(out, Integration{CatalogItem: item, ID: id, Status: status, DisplayName: displayName, ExternalID: externalID, ConnectedAt: connectedAt, SetupRequirement: requirement, Actions: integrationActions(canManage, ok, status, requirement), Health: health, Details: details})
 	}
 	problem.JSON(w, 200, response{CanManageIntegrations: canManage, Integrations: out})
 }
@@ -342,6 +353,7 @@ type row struct {
 	PendingJobCount    int
 	FailedJobCount     int
 	AuditEvents        []AuditEvent
+	Metadata          map[string]any
 }
 
 func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error) {
@@ -357,6 +369,7 @@ func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error
 			wi.last_failure_at,
 			wi.last_failure_message,
 			wi.token_expires_at,
+			wi.metadata,
 			coalesce(count(pj.id) filter (where pj.status in ('queued','running')),0)::int,
 			coalesce(count(pj.id) filter (where pj.status in ('failed','dead')),0)::int
 		from workspace_integration wi
@@ -370,9 +383,12 @@ func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error
 	out := []row{}
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.ID, &r.Provider, &r.Status, &r.DisplayName, &r.ExternalID, &r.ConnectedAt, &r.LastEventAt, &r.LastSuccessAt, &r.LastFailureAt, &r.LastFailureMessage, &r.TokenExpiresAt, &r.PendingJobCount, &r.FailedJobCount); err != nil {
+		var metadataRaw []byte
+		if err := rows.Scan(&r.ID, &r.Provider, &r.Status, &r.DisplayName, &r.ExternalID, &r.ConnectedAt, &r.LastEventAt, &r.LastSuccessAt, &r.LastFailureAt, &r.LastFailureMessage, &r.TokenExpiresAt, &metadataRaw, &r.PendingJobCount, &r.FailedJobCount); err != nil {
 			return nil, err
 		}
+		r.Metadata = map[string]any{}
+		_ = json.Unmarshal(metadataRaw, &r.Metadata)
 		events, err := h.auditEvents(ctx, r.ID)
 		if err != nil {
 			return nil, err
@@ -408,10 +424,16 @@ func setupRequirement(provider string) *SetupRequirement {
 	if provider == "sentry" && !sentryConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Sentry credentials are not configured. Add AUTH_SENTRY_ID, AUTH_SENTRY_SECRET, and SENTRY_WEBHOOK_SECRET to enable installation and signed issue actions."}
 	}
-	if provider == "github" || provider == "jira" {
-		name := "GitHub"
-		if provider == "jira" {
-			name = "Jira"
+	if provider == "gong" && !gongConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Gong OAuth credentials are not configured. Add AUTH_GONG_ID and AUTH_GONG_SECRET to enable call ingestion."}
+	}
+	if provider == "github" && !githubConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "GitHub App credentials are not configured. Add GITHUB_APP_ID, GITHUB_CLIENT_ID, GITHUB_PRIVATE_KEY, and GITHUB_WEBHOOK_SECRET to enable installation."}
+	}
+	if provider == "jira" || provider == "zendesk" {
+		name := "Jira"
+		if provider == "zendesk" {
+			name = "Zendesk"
 		}
 		return &SetupRequirement{Type: "configuration_required", Message: name + " setup is not configured in this environment yet."}
 	}
@@ -420,6 +442,11 @@ func setupRequirement(provider string) *SetupRequirement {
 
 func slackConfigured() bool {
 	return strings.TrimSpace(os.Getenv("AUTH_SLACK_ID")) != "" && strings.TrimSpace(os.Getenv("AUTH_SLACK_SECRET")) != ""
+}
+
+func githubConfigured() bool {
+	_, ok := loadGitHubConfig()
+	return ok
 }
 
 func discordConfigured() bool {

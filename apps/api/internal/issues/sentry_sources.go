@@ -28,7 +28,7 @@ func (h Handler) issueExternalSources(ctx context.Context, issueID string) ([]is
 				coalesce(workspace_integration_id::text,'') as integration_id,
 				created_at
 			from integration_thread_link
-			where issue_id=$1::uuid and provider in ('sentry') and external_permalink is not null
+			where issue_id=$1::uuid and provider in ('sentry','gong') and external_permalink is not null
 			union all
 			select 'zendesk' as provider,
 				coalesce(ticket_url,'') as url,
@@ -77,7 +77,21 @@ func sourceLabel(provider string, project string, externalID string) string {
 		}
 		return strings.Join(parts, " · ")
 	}
+	if provider == "gong" {
+		parts := []string{"Gong call"}
+		if strings.TrimSpace(externalID) != "" {
+			parts = append(parts, externalID)
+		}
+		return strings.Join(parts, " · ")
+	}
 	return provider
+}
+
+func (h Handler) queueProviderAutomations(ctx context.Context, tx pgx.Tx, workspaceID string, before Issue, after Issue) error {
+	if err := h.queueSentryAutomations(ctx, tx, workspaceID, before, after); err != nil {
+		return err
+	}
+	return h.queueGongAutomations(ctx, tx, workspaceID, before, after)
 }
 
 func (h Handler) queueSentryAutomations(ctx context.Context, tx pgx.Tx, workspaceID string, before Issue, after Issue) error {
@@ -161,6 +175,55 @@ func (h Handler) queueSentryAutomations(ctx context.Context, tx pgx.Tx, workspac
 		}
 	}
 	return nil
+}
+
+func (h Handler) queueGongAutomations(ctx context.Context, tx pgx.Tx, workspaceID string, before Issue, after Issue) error {
+	if before.StateID == after.StateID {
+		return nil
+	}
+	var category string
+	if err := tx.QueryRow(ctx, `select category::text from workflow_state where id=$1::uuid`, after.StateID).Scan(&category); err != nil {
+		return err
+	}
+	if category != "completed" && category != "canceled" {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `
+		select itl.workspace_integration_id::text,
+			coalesce(itl.source_event_id,''),
+			coalesce(itl.external_permalink,'')
+		from integration_thread_link itl
+		join workspace_integration wi on wi.id=itl.workspace_integration_id
+		where itl.issue_id=$1::uuid and itl.provider='gong' and wi.provider='gong' and wi.status in ('connected','degraded')`, after.ID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var integrationID, findingID, sourceURL string
+		if err := rows.Scan(&integrationID, &findingID, &sourceURL); err != nil {
+			return err
+		}
+		payload := map[string]any{"type": "followup_unsupported", "issueId": after.ID, "identifier": after.Identifier, "category": category, "findingId": findingID, "sourceUrl": sourceURL}
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			insert into provider_event (workspace_id, workspace_integration_id, provider, event_type, severity, message, payload)
+			select $1::uuid,$2::uuid,'gong','followup_unsupported','info','Gong status writeback is not supported for this workspace.', $3::jsonb
+			where not exists (
+				select 1 from provider_event
+				where workspace_integration_id=$2::uuid
+					and provider='gong'
+					and event_type='followup_unsupported'
+					and payload->>'issueId'=$4
+					and payload->>'category'=$5
+			)`, workspaceID, integrationID, raw, after.ID, category); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
 func insertSentryProviderJob(ctx context.Context, tx pgx.Tx, workspaceID string, integrationID string, payload map[string]any) error {

@@ -39,6 +39,13 @@ type Integration = {
       createdAt: string;
     }[];
   };
+  details: {
+    installationId?: string;
+    accountLogin?: string;
+    repositorySelection?: "all" | "selected" | "unknown";
+    selectedRepositoryCount?: number;
+    selectedRepositories?: { id: string; fullName: string; active: boolean }[];
+  };
 };
 
 type GitLabSetupDetails = {
@@ -94,14 +101,33 @@ function statusClassName(status: Integration["status"]) {
   return "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-tertiary)]";
 }
 
+function integrationDetailSummary(integration: Integration) {
+  if (integration.provider !== "github") return null;
+  if (integration.details.repositorySelection === "all") {
+    return "All repositories enabled";
+  }
+  if (
+    integration.details.repositorySelection === "selected" &&
+    typeof integration.details.selectedRepositoryCount === "number"
+  ) {
+    return `${integration.details.selectedRepositoryCount} selected repositories enabled`;
+  }
+  if (integration.status === "connected") {
+    return "Repository selection pending from GitHub";
+  }
+  return null;
+}
+
 function isConnectableProvider(
   provider: string,
-): provider is "slack" | "discord" | "microsoft_teams" | "sentry" {
+): provider is "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong" {
   return (
+    provider === "github" ||
     provider === "slack" ||
     provider === "discord" ||
     provider === "microsoft_teams" ||
-    provider === "sentry"
+    provider === "sentry" ||
+    provider === "gong"
   );
 }
 
@@ -153,15 +179,42 @@ export default function IntegrationsSettingsPage() {
     void loadIntegrations();
   }, [loadIntegrations]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const githubParam = params.get("github");
+    if (githubParam === "connected") {
+      setNotice("GitHub connected successfully.");
+      const cleanUrl =
+        window.location.pathname +
+        (params
+          .toString()
+          .replace(/[&?]?github=[^&]*/g, "")
+          .replace(/^&/, "?") || "");
+      window.history.replaceState(null, "", cleanUrl);
+    } else if (githubParam === "canceled") {
+      setError("GitHub installation was canceled.");
+      const cleanUrl =
+        window.location.pathname +
+        (params
+          .toString()
+          .replace(/[&?]?github=[^&]*/g, "")
+          .replace(/^&/, "?") || "");
+      window.history.replaceState(null, "", cleanUrl);
+    }
+  }, []);
+
   async function connectIntegration(
-    provider: "slack" | "discord" | "microsoft_teams" | "sentry",
+    provider: "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong",
   ) {
     setPendingProvider(provider);
     setNotice(null);
     setError(null);
-    let label = provider === "discord" ? "Discord" : "Slack";
+    let label = "GitHub";
+    if (provider === "discord") label = "Discord";
+    if (provider === "slack") label = "Slack";
     if (provider === "microsoft_teams") label = "Microsoft Teams";
     if (provider === "sentry") label = "Sentry";
+    if (provider === "gong") label = "Gong";
     const endpoint =
       provider === "microsoft_teams"
         ? "/api/integrations/microsoft-teams/connect"
@@ -173,11 +226,16 @@ export default function IntegrationsSettingsPage() {
       });
       const data = (await response.json().catch(() => ({}))) as {
         authorizationUrl?: string;
+        installationUrl?: string;
         error?: string;
         message?: string;
       };
       if (!response.ok) {
         throw new Error(data.message || data.error || `${label} setup failed.`);
+      }
+      if (provider === "github" && data.installationUrl) {
+        window.location.assign(data.installationUrl);
+        return;
       }
       if (data.authorizationUrl) {
         window.location.assign(data.authorizationUrl);
@@ -303,19 +361,25 @@ export default function IntegrationsSettingsPage() {
           ? "/api/integrations/slack/disconnect"
           : provider === "discord"
             ? "/api/integrations/discord/disconnect"
-            : provider === "microsoft_teams"
-              ? "/api/integrations/microsoft-teams/disconnect"
-              : provider === "sentry"
-                ? "/api/integrations/sentry/disconnect"
-                : provider === "zendesk"
-                  ? "/api/integrations/zendesk/disconnect"
+            : provider === "github"
+              ? "/api/integrations/github/disconnect"
+              : provider === "microsoft_teams"
+                ? "/api/integrations/microsoft-teams/disconnect"
+                : provider === "sentry"
+                  ? "/api/integrations/sentry/disconnect"
+                  : provider === "gong"
+                    ? "/api/integrations/gong/disconnect"
+                    : provider === "zendesk"
+                      ? "/api/integrations/zendesk/disconnect"
                   : `/api/integrations?provider=${encodeURIComponent(provider)}`;
       const response = await fetch(endpoint, {
         method:
           provider === "slack" ||
           provider === "discord" ||
+          provider === "github" ||
           provider === "microsoft_teams" ||
           provider === "sentry" ||
+          provider === "gong" ||
           provider === "zendesk"
             ? "POST"
             : "DELETE",
@@ -444,6 +508,11 @@ export default function IntegrationsSettingsPage() {
                         ? "Disconnected locally; historical links are preserved."
                         : `Connected to ${integration.displayName || integration.name}`}
                     </p>
+                    {integrationDetailSummary(integration) ? (
+                      <span className="mt-1 block text-[12px] text-[var(--color-text-tertiary)]">
+                        {integrationDetailSummary(integration)}
+                      </span>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 gap-2">
                     {integration.actions.canReconnect &&
@@ -611,6 +680,11 @@ export default function IntegrationsSettingsPage() {
                           ? ` · ${integration.displayName}`
                           : ""}
                       </p>
+                      {integrationDetailSummary(integration) ? (
+                        <p className="mt-2 text-[12px] text-[var(--color-text-tertiary)]">
+                          {integrationDetailSummary(integration)}
+                        </p>
+                      ) : null}
                       {integration.setupRequirement ? (
                         <p className="mt-2 text-[12px] text-amber-300">
                           {integration.setupRequirement.message}
