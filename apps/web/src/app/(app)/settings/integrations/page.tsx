@@ -114,13 +114,14 @@ function integrationDetailSummary(integration: Integration) {
 
 function isConnectableProvider(
   provider: string,
-): provider is "github" | "slack" | "discord" | "microsoft_teams" | "sentry" {
+): provider is "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong" {
   return (
     provider === "github" ||
     provider === "slack" ||
     provider === "discord" ||
     provider === "microsoft_teams" ||
-    provider === "sentry"
+    provider === "sentry" ||
+    provider === "gong"
   );
 }
 
@@ -192,7 +193,7 @@ export default function IntegrationsSettingsPage() {
   }, []);
 
   async function connectIntegration(
-    provider: "github" | "slack" | "discord" | "microsoft_teams" | "sentry",
+    provider: "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong",
   ) {
     setPendingProvider(provider);
     setNotice(null);
@@ -202,6 +203,7 @@ export default function IntegrationsSettingsPage() {
     if (provider === "slack") label = "Slack";
     if (provider === "microsoft_teams") label = "Microsoft Teams";
     if (provider === "sentry") label = "Sentry";
+    if (provider === "gong") label = "Gong";
     const endpoint =
       provider === "microsoft_teams"
         ? "/api/integrations/microsoft-teams/connect"
@@ -303,6 +305,8 @@ export default function IntegrationsSettingsPage() {
                 ? "/api/integrations/microsoft-teams/disconnect"
                 : provider === "sentry"
                   ? "/api/integrations/sentry/disconnect"
+                  : provider === "gong"
+                    ? "/api/integrations/gong/disconnect"
                   : `/api/integrations?provider=${encodeURIComponent(provider)}`;
       const response = await fetch(endpoint, {
         method:
@@ -310,7 +314,8 @@ export default function IntegrationsSettingsPage() {
           provider === "discord" ||
           provider === "github" ||
           provider === "microsoft_teams" ||
-          provider === "sentry"
+          provider === "sentry" ||
+          provider === "gong"
             ? "POST"
             : "DELETE",
         headers: { Accept: "application/json" },

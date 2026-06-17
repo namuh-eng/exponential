@@ -979,6 +979,54 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/gong/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectGongIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gong/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectGongIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gong/{integrationId}/calls": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["ingestGongCall"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/sentry/oauth/callback": {
     parameters: {
       query?: never;
@@ -3058,6 +3106,41 @@ export interface components {
       authorizationUrl: string;
       state: string;
       workspaceSlug: string;
+    };
+    GongConnectRequest: {
+      /** Format: uuid */
+      destinationTeamId?: string;
+      routingGuidance?: string;
+      mentionParticipants?: boolean;
+      pollingCursor?: string;
+    };
+    GongConnectResponse: {
+      /** Format: uri */
+      authorizationUrl: string;
+      state: string;
+      workspaceSlug: string;
+    };
+    GongConfigurationRequiredResponse: {
+      error: string;
+      message: string;
+    };
+    GongIngestCallRequest: {
+      call: {
+        [key: string]: unknown;
+      };
+    };
+    GongFindingResult: {
+      findingId: string;
+      /** Format: uuid */
+      issueId: string;
+      identifier: string;
+      linked: boolean;
+    };
+    GongIngestCallResponse: {
+      processed: boolean;
+      skipped: boolean;
+      reason?: string;
+      findings: components["schemas"]["GongFindingResult"][];
     };
     DiscordConfigurationRequiredResponse: {
       error: string;
@@ -6991,6 +7074,88 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  connectGongIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["GongConnectRequest"];
+      };
+    };
+    responses: {
+      /** @description Gong authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GongConnectResponse"];
+        };
+      };
+      /** @description Gong OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GongConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectGongIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Gong disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  ingestGongCall: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        integrationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["GongIngestCallRequest"];
+      };
+    };
+    responses: {
+      /** @description Gong call ingestion result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GongIngestCallResponse"];
         };
       };
       default: components["responses"]["Problem"];

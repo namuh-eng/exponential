@@ -1252,6 +1252,65 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /integrations/gong/connect:
+    post:
+      operationId: connectGongIntegration
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GongConnectRequest'
+      responses:
+        '200':
+          description: Gong authorization URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GongConnectResponse'
+        '412':
+          description: Gong OAuth is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GongConfigurationRequiredResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/gong/disconnect:
+    post:
+      operationId: disconnectGongIntegration
+      responses:
+        '200':
+          description: Gong disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/gong/{integrationId}/calls:
+    post:
+      operationId: ingestGongCall
+      parameters:
+        - name: integrationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GongIngestCallRequest'
+      responses:
+        '200':
+          description: Gong call ingestion result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GongIngestCallResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /integrations/sentry/oauth/callback:
     get:
       operationId: sentryOAuthCallback
@@ -4468,6 +4527,51 @@ components:
         authorizationUrl: { type: string, format: uri }
         state: { type: string }
         workspaceSlug: { type: string }
+    GongConnectRequest:
+      type: object
+      properties:
+        destinationTeamId: { type: string, format: uuid }
+        routingGuidance: { type: string }
+        mentionParticipants: { type: boolean }
+        pollingCursor: { type: string }
+    GongConnectResponse:
+      type: object
+      required: [authorizationUrl, state, workspaceSlug]
+      properties:
+        authorizationUrl: { type: string, format: uri }
+        state: { type: string }
+        workspaceSlug: { type: string }
+    GongConfigurationRequiredResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error: { type: string }
+        message: { type: string }
+    GongIngestCallRequest:
+      type: object
+      required: [call]
+      properties:
+        call:
+          type: object
+          additionalProperties: true
+    GongFindingResult:
+      type: object
+      required: [findingId, issueId, identifier, linked]
+      properties:
+        findingId: { type: string }
+        issueId: { type: string, format: uuid }
+        identifier: { type: string }
+        linked: { type: boolean }
+    GongIngestCallResponse:
+      type: object
+      required: [processed, skipped, findings]
+      properties:
+        processed: { type: boolean }
+        skipped: { type: boolean }
+        reason: { type: string }
+        findings:
+          type: array
+          items: { $ref: '#/components/schemas/GongFindingResult' }
     DiscordConfigurationRequiredResponse:
       type: object
       required: [error, message]
