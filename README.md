@@ -26,6 +26,9 @@ prototype into a headless architecture:
   self-hosting path.
 - AWS ECS scripts can provision and deploy split web/API services with RDS,
   ElastiCache, S3, SES, ECR, ALB routing, smoke tests, and Secrets Manager.
+- Integration parity planning is tracked in
+  [docs/integration-parity-roadmap.md](docs/integration-parity-roadmap.md),
+  with the P0/P1/P2/P3 build order and provider issue map.
 
 ## What You Get
 
@@ -110,8 +113,8 @@ The local web app runs on `http://localhost:7015`; the Go API runs on
 
 ### Headless CLI and MCP
 
-After creating a personal access token, use the CLI and local MCP server against
-the same Go API:
+After creating a personal access token, use the CLI, hosted remote MCP endpoint,
+or local MCP server against the same Go API:
 
 ```bash
 export EXPONENTIAL_TOKEN=pat_your_token
@@ -119,6 +122,10 @@ export EXPONENTIAL_API_URL=http://localhost:7016/v1
 
 pnpm --filter @namuh-eng/expn-cli cli -- issue ls --json
 pnpm --filter @exponential/mcp exec exponential-mcp
+curl -H "Authorization: Bearer $EXPONENTIAL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+  http://localhost:7016/v1/mcp
 ```
 
 See [docs/cli.md](docs/cli.md) and [docs/mcp.md](docs/mcp.md).
@@ -160,7 +167,7 @@ exponential/
 ├── apps/cli/             # TypeScript CLI over the generated SDK
 ├── apps/mcp/             # Local stdio MCP runtime
 ├── apps/web/             # Next.js UI-only app
-├── packages/mcp-server/  # Read-only MCP tool package
+├── packages/mcp-server/  # MCP tool package used by local clients
 ├── packages/proto/       # OpenAPI contract and SQL migrations
 ├── packages/sdk/         # Generated TypeScript SDK
 ├── infra/                # Dockerfiles and ECS task definitions

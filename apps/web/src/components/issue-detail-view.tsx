@@ -445,7 +445,11 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
             ? " from Microsoft Teams"
             : event.metadata.source === "sentry_issue"
               ? " from Sentry"
-              : "";
+              : event.metadata.source === "salesforce_case"
+                ? " from Salesforce"
+              : event.metadata.source === "zendesk_ticket"
+                ? " from Zendesk"
+                : "";
       return `${actorName} created this issue${legacySuffix}${sourceSuffix}`;
     }
     case "updated":
@@ -509,6 +513,29 @@ function getSentrySourceLink(event: IssueHistoryEvent): string | null {
   }
   return typeof sentry.webUrl === "string" && sentry.webUrl.length > 0
     ? sentry.webUrl
+    : null;
+}
+
+function getSalesforceSourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "salesforce_case") {
+    return null;
+  }
+  const salesforce = event.metadata.salesforce;
+  if (!isRecord(salesforce)) {
+    return null;
+  }
+  return typeof salesforce.caseUrl === "string" && salesforce.caseUrl.length > 0
+    ? salesforce.caseUrl
+function getZendeskSourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "zendesk_ticket") {
+    return null;
+  }
+  const zendesk = event.metadata.zendesk;
+  if (!isRecord(zendesk)) {
+    return null;
+  }
+  return typeof zendesk.ticketUrl === "string" && zendesk.ticketUrl.length > 0
+    ? zendesk.ticketUrl
     : null;
 }
 
@@ -2209,6 +2236,24 @@ export function IssueDetailView({
                             View source issue in Sentry
                           </a>
                         ) : null}
+                        {(() => {
+                          const salesforceLink = getSalesforceSourceLink(event);
+                          return salesforceLink ? (
+                            <a
+                              href={salesforceLink}
+                          const zendeskLink = getZendeskSourceLink(event);
+                          return zendeskLink ? (
+                            <a
+                              href={zendeskLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                            >
+                              View source case in Salesforce
+                              View source ticket in Zendesk
+                            </a>
+                          ) : null;
+                        })()}
                         {getGitLabSourceLink(event) ? (
                           <a
                             href={getGitLabSourceLink(event) ?? undefined}

@@ -214,7 +214,14 @@ func (h Handler) workspaceAPIPayload(r *http.Request, p auth.Principal, settings
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"permissionLevel": permission, "viewerRole": p.Role, "canManageWorkspaceApi": isManager(p.Role), "canCreateApiKeys": canAPIKeyRole(p.Role, permission), "docs": map[string]string{"graphql": "/docs/graphql", "oauthApplications": "/docs/oauth-applications", "webhooks": "/docs/webhooks"}, "oauthApplications": readOAuthApplications(settings), "webhooks": webhooks, "apiKeys": keys}, nil
+	mcpAuditLog := []map[string]any{}
+	if isManager(p.Role) {
+		mcpAuditLog, err = h.workspaceMCPAuditLog(r, p.WorkspaceID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return map[string]any{"permissionLevel": permission, "viewerRole": p.Role, "canManageWorkspaceApi": isManager(p.Role), "canCreateApiKeys": canAPIKeyRole(p.Role, permission), "docs": map[string]string{"graphql": "/docs/graphql", "oauthApplications": "/docs/oauth-applications", "webhooks": "/docs/webhooks"}, "oauthApplications": readOAuthApplications(settings), "webhooks": webhooks, "apiKeys": keys, "mcpAuditLog": mcpAuditLog}, nil
 }
 
 func (h Handler) workspaceWebhooks(r *http.Request, workspaceID string) ([]map[string]any, error) {
@@ -258,6 +265,30 @@ func (h Handler) workspaceAPIKeys(r *http.Request, workspaceID string) ([]map[st
 			lastAt = last.UTC().Format(time.RFC3339Nano)
 		}
 		out = append(out, map[string]any{"id": id, "name": name, "keyPrefix": prefix, "accessLevel": "Member", "createdAt": created.UTC().Format(time.RFC3339Nano), "lastUsedAt": lastAt, "creator": map[string]any{"name": creatorName, "email": creatorEmail, "image": creatorImage}})
+	}
+	return out, rows.Err()
+}
+
+func (h Handler) workspaceMCPAuditLog(r *http.Request, workspaceID string) ([]map[string]any, error) {
+	rows, err := h.DB.Query(r.Context(), `select id::text, token_id::text, metadata, created_at from personal_access_token_audit_log where workspace_id=$1::uuid and action='mcp_tool_call' order by created_at desc limit 100`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	for rows.Next() {
+		var id string
+		var tokenID *string
+		var raw []byte
+		var created time.Time
+		if err := rows.Scan(&id, &tokenID, &raw, &created); err != nil {
+			return nil, err
+		}
+		metadata := map[string]any{}
+		_ = json.Unmarshal(raw, &metadata)
+		toolName, _ := metadata["toolName"].(string)
+		errorText, _ := metadata["error"].(string)
+		out = append(out, map[string]any{"id": id, "toolName": toolName, "credentialId": tokenID, "success": metadata["success"] == true, "error": nullString(errorText), "createdAt": created.UTC().Format(time.RFC3339Nano)})
 	}
 	return out, rows.Err()
 }
