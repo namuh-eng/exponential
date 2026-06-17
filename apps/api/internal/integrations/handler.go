@@ -451,13 +451,6 @@ func setupRequirement(provider string) *SetupRequirement {
 	if provider == "github" && !githubConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "GitHub App credentials are not configured. Add GITHUB_APP_ID, GITHUB_CLIENT_ID, GITHUB_PRIVATE_KEY, and GITHUB_WEBHOOK_SECRET to enable installation."}
 	}
-	if provider == "jira" || provider == "zendesk" {
-		name := "Jira"
-		if provider == "zendesk" {
-			name = "Zendesk"
-		}
-		return &SetupRequirement{Type: "configuration_required", Message: name + " setup is not configured in this environment yet."}
-	}
 	return nil
 }
 

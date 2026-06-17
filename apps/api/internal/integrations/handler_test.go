@@ -60,6 +60,7 @@ func TestSetupRequirement(t *testing.T) {
 	t.Setenv("AUTH_FIGMA_SECRET", "secret")
 	if got := setupRequirement("figma"); got != nil {
 		t.Fatalf("configured figma requirement = %#v", got)
+	}
 	t.Setenv("AUTH_INTERCOM_ID", "")
 	t.Setenv("AUTH_INTERCOM_SECRET", "")
 	t.Setenv("INTERCOM_SIGNING_SECRET", "")
@@ -1113,7 +1114,10 @@ func TestPostFrontJSONReopensConversation(t *testing.T) {
 func TestFrontReopenCommentBody(t *testing.T) {
 	body := frontReopenCommentBody(map[string]any{"identifier": "ENG-7", "title": "Fix exports", "category": "canceled", "issueUrl": "https://app.example/team/ENG/issue/ENG-7"})
 	if !strings.Contains(body, "ENG-7 Fix exports was canceled") || !strings.Contains(body, "https://app.example/team/ENG/issue/ENG-7") {
-		t.Fatalf("body = %q", body)
+			t.Fatalf("body = %q", body)
+	}
+}
+
 func TestZendeskSetupRequirementAndSubdomain(t *testing.T) {
 	if got := setupRequirement("zendesk"); got != nil {
 		t.Fatalf("zendesk should be configurable from admin setup, got %#v", got)
