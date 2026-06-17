@@ -110,6 +110,26 @@ export interface paths {
     patch: operations["updateIssue"];
     trace?: never;
   };
+  "/issues/{id}/figma-sources/{sourceId}/refresh": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Mark a linked Figma source as seen (stamps refreshed_at; does not fetch from Figma API) */
+    post: operations["refreshIssueFigmaSource"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/issues/{id}/comments": {
     parameters: {
       query?: never;
@@ -3406,7 +3426,8 @@ export interface components {
         | "sentry"
         | "zendesk"
         | "discord"
-        | "microsoft_teams";
+        | "microsoft_teams"
+        | "figma";
       name: string;
       description: string;
       /** Format: uuid */
@@ -5697,6 +5718,28 @@ export interface components {
     };
     /** @enum {string} */
     IssuePriority: "none" | "urgent" | "high" | "medium" | "low";
+    FigmaSource: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uri */
+      url: string;
+      /** Format: uri */
+      normalizedUrl: string;
+      fileKey: string;
+      nodeId?: string | null;
+      /** @enum {string} */
+      kind: "file" | "design" | "proto";
+      name?: string | null;
+      /** Format: uri */
+      thumbnailUrl?: string | null;
+      /** @enum {string} */
+      containerType: "issue_description" | "comment" | "document" | "plugin";
+      /** Format: date-time */
+      capturedAt: string;
+      /** Format: date-time */
+      refreshedAt?: string | null;
+      lastError?: string | null;
+    };
     IssueExternalSource: {
       provider: string;
       label: string;
@@ -5743,6 +5786,7 @@ export interface components {
       canceled_at?: string | null;
       /** Format: date-time */
       completed_at?: string | null;
+      figmaSources?: components["schemas"]["FigmaSource"][];
       sources?: components["schemas"]["IssueExternalSource"][];
     };
     IssueListResponse: {
@@ -6172,6 +6216,30 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Issue"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  refreshIssueFigmaSource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Refreshed Figma source */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FigmaSource"];
         };
       };
       default: components["responses"]["Problem"];
