@@ -14,6 +14,7 @@ import type {
   ProjectActivityEntry,
   ProjectResource,
 } from "@/lib/project-detail";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -67,6 +68,18 @@ interface StateGroup {
   issues: IssueData[];
 }
 
+interface ProjectCustomerRequest {
+  id: string;
+  customerId: string;
+  customer: { id: string; name: string; domain: string | null };
+  title: string;
+  body: string | null;
+  important: boolean;
+  source: string | null;
+  sourceUrl: string | null;
+  createdAt: string;
+}
+
 interface ProjectResponse {
   project: ProjectDetail;
   lead: { id: string; name: string; image?: string | null } | null;
@@ -94,6 +107,7 @@ interface ProjectResponse {
   activity: ProjectActivityEntry[];
   milestones: MilestoneData[];
   issueGroups: StateGroup[];
+  customerRequests: ProjectCustomerRequest[];
   progress: {
     total: number;
     completed: number;
@@ -902,6 +916,57 @@ export function ProjectDetailPage() {
                   )}
                 </SectionCard>
 
+                <SectionCard
+                  title="Customer requests"
+                  action={
+                    data.customerRequests.length > 0 ? (
+                      <a
+                        href={`/api/projects/${encodeURIComponent(project.slug)}/customer-requests.csv`}
+                        className="text-[12px] text-[var(--color-accent)] hover:underline"
+                      >
+                        Export CSV
+                      </a>
+                    ) : null
+                  }
+                >
+                  {data.customerRequests.length === 0 ? (
+                    <p className="text-[13px] text-[var(--color-text-secondary)]">
+                      No customer requests linked to this project yet.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {data.customerRequests.map((request) => (
+                        <div
+                          key={request.id}
+                          className="tty-row border border-[var(--color-border)] px-3 py-2 text-[13px]"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <Link
+                                href={
+                                  params.workspaceSlug
+                                    ? `/${params.workspaceSlug}/customers/${request.customerId}`
+                                    : `/customers/${request.customerId}`
+                                }
+                                className="font-medium text-[var(--color-text-primary)] hover:underline"
+                              >
+                                {request.customer.name}
+                              </Link>
+                              <p className="mt-1 text-[var(--color-text-secondary)]">
+                                {request.important ? "★ " : ""}
+                                {request.title}
+                              </p>
+                            </div>
+                            <span className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-text-tertiary)]">
+                              {request.customer.domain ?? "customer"}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </SectionCard>
+
                 <SectionCard title="Project updates">
                   {showUpdateComposer ? (
                     <div className="space-y-3">
@@ -1167,6 +1232,7 @@ function normalizeProjectResponse(input: ApiProjectResponse): ProjectResponse {
     activity: input.activity ?? [],
     milestones: input.milestones ?? [],
     issueGroups: input.issueGroups ?? [],
+    customerRequests: input.customerRequests ?? [],
     progress,
   };
 }

@@ -243,6 +243,7 @@ function SidebarCustomizeModal({
     { key: "inbox", label: "Inbox", group: "Personal" },
     { key: "myIssues", label: "My Issues", group: "Personal" },
     { key: "projects", label: "Projects", group: "Workspace" },
+    { key: "customers", label: "Customers", group: "Workspace" },
     { key: "views", label: "Views", group: "Workspace" },
     { key: "initiatives", label: "Initiatives", group: "Workspace" },
     { key: "cycles", label: "Cycles", group: "Workspace" },
@@ -983,6 +984,34 @@ export function Sidebar({
                   <path d="M2 17 12 22 22 17" />
                   <path d="M2 12 12 17 22 12" />
                   <path d="M12 2 2 7 12 12 22 7Z" />
+                </svg>
+              }
+            />
+          )}
+          {isVisible("customers") && (
+            <SidebarLink
+              href="/customers"
+              label="Customers"
+              active={
+                pathname === "/customers" || pathname.startsWith("/customers/")
+              }
+              icon={
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  role="img"
+                  aria-label="Customers icon"
+                >
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
               }
             />

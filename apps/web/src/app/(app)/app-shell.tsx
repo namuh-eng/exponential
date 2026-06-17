@@ -174,6 +174,10 @@ function getRouteStatus(pathname: string) {
     return "inbox";
   }
 
+  if (pathname.startsWith("/customers")) {
+    return "customers";
+  }
+
   if (pathname.startsWith("/projects") || pathname.startsWith("/project/")) {
     return "projects";
   }
@@ -196,6 +200,9 @@ function getActiveBuffer(pathname: string): TtyBufferId {
     return "road";
   }
 
+  if (pathname.startsWith("/customers")) {
+    return "prj";
+  }
   if (pathname.startsWith("/projects") || pathname.startsWith("/project/")) {
     return "prj";
   }
@@ -619,6 +626,7 @@ export function AppShell({
           m: "/my-issues",
           v: "/views",
           p: "/projects",
+          c: "/customers",
         };
         const targetPath = navigationTargets[key];
         navigationShortcutRef.current = null;
