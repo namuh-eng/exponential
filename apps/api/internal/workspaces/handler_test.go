@@ -2,6 +2,9 @@ package workspaces
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -102,6 +105,130 @@ func TestParseImportCSV(t *testing.T) {
 	}
 	if rows[0].row != 2 || rows[0].get("Title") != "Fix bug" || rows[0].get("Status") != "Todo" {
 		t.Fatalf("first row = %#v", rows[0])
+	}
+}
+
+func TestJiraCredentialValidation(t *testing.T) {
+	_, err := readJiraCredentialInput(map[string]any{"deployment": "cloud", "baseUrl": "https://acme.atlassian.net", "token": "secret"})
+	if err == nil || !strings.Contains(err.Error(), "email") {
+		t.Fatalf("expected cloud email validation, got %v", err)
+	}
+	credential, err := readJiraCredentialInput(map[string]any{"deployment": "server", "baseUrl": "https://jira.example.com/", "token": "pat"})
+	if err != nil {
+		t.Fatalf("server credential should be valid: %v", err)
+	}
+	if credential.BaseURL != "https://jira.example.com" || credential.Deployment != "server" {
+		t.Fatalf("credential normalized incorrectly: %#v", credential)
+	}
+}
+
+func TestJiraClientUsesServerBearerAndBuildsPreview(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer pat-token" {
+			t.Fatalf("authorization = %q", r.Header.Get("Authorization"))
+		}
+		switch r.URL.Path {
+		case "/rest/api/2/project":
+			_, _ = w.Write([]byte(`[{"id":"100","key":"ENG","name":"Engineering"}]`))
+		case "/rest/api/2/search":
+			if r.URL.Query().Get("jql") != `project = "ENG" ORDER BY created ASC` {
+				t.Fatalf("jql = %q", r.URL.Query().Get("jql"))
+			}
+			_, _ = w.Write([]byte(`{"startAt":0,"total":1,"issues":[{"id":"10001","key":"ENG-1","fields":{"summary":"Ship importer","description":"Move Jira issues","status":{"id":"1","name":"To Do"},"priority":{"id":"2","name":"High"},"assignee":{"displayName":"Ada"},"labels":["migration"],"project":{"id":"100","key":"ENG","name":"Engineering"},"comment":{"comments":[{"id":"c1","body":"Looks good","author":{"displayName":"Ada"}}]}}}]}`))
+		default:
+			t.Fatalf("unexpected path = %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := jiraClient{credential: jiraCredential{Deployment: "server", BaseURL: server.URL, Token: "pat-token"}, client: server.Client()}
+	projects, err := client.projects(t.Context())
+	if err != nil || len(projects) != 1 || projects[0].Key != "ENG" {
+		t.Fatalf("projects = %#v err=%v", projects, err)
+	}
+	issues, err := client.issues(t.Context(), "ENG", 50)
+	if err != nil || len(issues) != 1 {
+		t.Fatalf("issues = %#v err=%v", issues, err)
+	}
+	preview, statuses := buildJiraPreview(client.credential, issues)
+	if len(preview) != 1 || preview[0].Key != "ENG-1" || preview[0].CommentCount != 1 || preview[0].SourceURL != server.URL+"/browse/ENG-1" {
+		t.Fatalf("preview = %#v", preview)
+	}
+	if len(statuses) != 1 || statuses[0] != "To Do" {
+		t.Fatalf("statuses = %#v", statuses)
+	}
+}
+
+func TestJiraIssuesPaginatesAllPages(t *testing.T) {
+	// Mock server returns total=150 across two pages: startAt=0 → 100 issues,
+	// startAt=100 → 50 issues. Passing maxResults=0 must fetch all 150.
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/api/2/search" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		startAt := 0
+		if v := r.URL.Query().Get("startAt"); v != "" {
+			for _, b := range []byte(v) {
+				startAt = startAt*10 + int(b-'0')
+			}
+		}
+		calls++
+		// Build the right slice of issues for this page.
+		var issuesBuf []byte
+		issuesBuf = append(issuesBuf, '[')
+		count := 100
+		if startAt >= 100 {
+			count = 50
+		}
+		for i := 0; i < count; i++ {
+			if i > 0 {
+				issuesBuf = append(issuesBuf, ',')
+			}
+			n := startAt + i + 1
+			issuesBuf = append(issuesBuf, []byte(`{"id":"`)...)
+			issuesBuf = append(issuesBuf, []byte(strconv.Itoa(n))...)
+			issuesBuf = append(issuesBuf, []byte(`","key":"ENG-`)...)
+			issuesBuf = append(issuesBuf, []byte(strconv.Itoa(n))...)
+			issuesBuf = append(issuesBuf, []byte(`","fields":{"summary":"Issue `)...)
+			issuesBuf = append(issuesBuf, []byte(strconv.Itoa(n))...)
+			issuesBuf = append(issuesBuf, []byte(`","status":{"id":"1","name":"Open"},"comment":{"comments":[]}}}`)...)
+		}
+		issuesBuf = append(issuesBuf, ']')
+		resp := `{"startAt":` + strconv.Itoa(startAt) + `,"total":150,"issues":` + string(issuesBuf) + `}`
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(resp))
+	}))
+	defer server.Close()
+
+	client := jiraClient{credential: jiraCredential{Deployment: "server", BaseURL: server.URL, Token: "tok"}, client: server.Client()}
+	issues, err := client.issues(t.Context(), "ENG", 0)
+	if err != nil {
+		t.Fatalf("expected no error for unlimited fetch, got %v", err)
+	}
+	if len(issues) != 150 {
+		t.Fatalf("expected 150 issues, got %d", len(issues))
+	}
+	if calls != 2 {
+		t.Fatalf("expected 2 HTTP calls (2 pages), got %d", calls)
+	}
+}
+
+func TestNormalizeJiraBaseURLRejectsHTTP(t *testing.T) {
+	_, err := normalizeJiraBaseURL("http://jira.example.com")
+	if err == nil || !strings.Contains(err.Error(), "HTTPS") {
+		t.Fatalf("expected HTTPS rejection for http:// URL, got %v", err)
+	}
+	_, err = normalizeJiraBaseURL("https://jira.example.com/")
+	if err != nil {
+		t.Fatalf("valid HTTPS URL should be accepted: %v", err)
+	}
+}
+
+func TestJiraTextValueExtractsAtlassianDocumentText(t *testing.T) {
+	input := map[string]any{"content": []any{map[string]any{"content": []any{map[string]any{"text": "Line one"}}}, map[string]any{"content": []any{map[string]any{"text": "Line two"}}}}}
+	if got := jiraTextValue(input); got != "Line one\nLine two" {
+		t.Fatalf("text = %q", got)
 	}
 }
 

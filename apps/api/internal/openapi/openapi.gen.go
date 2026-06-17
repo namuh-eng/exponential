@@ -688,10 +688,23 @@ const (
 
 // Defines values for WorkspaceImportExportActionRequestAction.
 const (
-	PrepareProvider WorkspaceImportExportActionRequestAction = "prepare_provider"
-	PreviewCsv      WorkspaceImportExportActionRequestAction = "preview_csv"
-	RequestExport   WorkspaceImportExportActionRequestAction = "request_export"
-	StartCsvImport  WorkspaceImportExportActionRequestAction = "start_csv_import"
+	ConfigureJira     WorkspaceImportExportActionRequestAction = "configure_jira"
+	PauseJiraSync     WorkspaceImportExportActionRequestAction = "pause_jira_sync"
+	PrepareProvider   WorkspaceImportExportActionRequestAction = "prepare_provider"
+	PreviewCsv        WorkspaceImportExportActionRequestAction = "preview_csv"
+	PreviewJiraImport WorkspaceImportExportActionRequestAction = "preview_jira_import"
+	RequestExport     WorkspaceImportExportActionRequestAction = "request_export"
+	ResumeJiraSync    WorkspaceImportExportActionRequestAction = "resume_jira_sync"
+	RetryJiraImport   WorkspaceImportExportActionRequestAction = "retry_jira_import"
+	StartCsvImport    WorkspaceImportExportActionRequestAction = "start_csv_import"
+	StartJiraImport   WorkspaceImportExportActionRequestAction = "start_jira_import"
+	SyncJiraProject   WorkspaceImportExportActionRequestAction = "sync_jira_project"
+)
+
+// Defines values for WorkspaceImportExportActionRequestDeployment.
+const (
+	Cloud  WorkspaceImportExportActionRequestDeployment = "cloud"
+	Server WorkspaceImportExportActionRequestDeployment = "server"
 )
 
 // Defines values for WorkspaceImportExportActionRequestProvider.
@@ -3581,17 +3594,32 @@ type WorkspaceExportsResponse struct {
 
 // WorkspaceImportExportActionRequest defines model for WorkspaceImportExportActionRequest.
 type WorkspaceImportExportActionRequest struct {
-	Action               WorkspaceImportExportActionRequestAction    `json:"action"`
-	Csv                  *string                                     `json:"csv,omitempty"`
-	DefaultTeamId        *openapi_types.UUID                         `json:"defaultTeamId,omitempty"`
-	FileName             *string                                     `json:"fileName,omitempty"`
-	Mapping              *map[string]interface{}                     `json:"mapping,omitempty"`
-	Provider             *WorkspaceImportExportActionRequestProvider `json:"provider,omitempty"`
-	AdditionalProperties map[string]interface{}                      `json:"-"`
+	Action             WorkspaceImportExportActionRequestAction      `json:"action"`
+	BaseUrl            *string                                       `json:"baseUrl,omitempty"`
+	Csv                *string                                       `json:"csv,omitempty"`
+	DefaultTeamId      *openapi_types.UUID                           `json:"defaultTeamId,omitempty"`
+	Deployment         *WorkspaceImportExportActionRequestDeployment `json:"deployment,omitempty"`
+	Email              *openapi_types.Email                          `json:"email,omitempty"`
+	FileName           *string                                       `json:"fileName,omitempty"`
+	ForwardSyncEnabled *bool                                         `json:"forwardSyncEnabled,omitempty"`
+	ImportComments     *bool                                         `json:"importComments,omitempty"`
+	ImportLabels       *bool                                         `json:"importLabels,omitempty"`
+	Mapping            *map[string]interface{}                       `json:"mapping,omitempty"`
+	ProjectKey         *string                                       `json:"projectKey,omitempty"`
+	Provider           *WorkspaceImportExportActionRequestProvider   `json:"provider,omitempty"`
+	StatusMapping      *map[string]openapi_types.UUID                `json:"statusMapping,omitempty"`
+	TeamId             *openapi_types.UUID                           `json:"teamId,omitempty"`
+
+	// Token API token or personal access token for authenticating with the provider. Write-only: never returned in responses.
+	Token                *string                `json:"token,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
 }
 
 // WorkspaceImportExportActionRequestAction defines model for WorkspaceImportExportActionRequest.Action.
 type WorkspaceImportExportActionRequestAction string
+
+// WorkspaceImportExportActionRequestDeployment defines model for WorkspaceImportExportActionRequest.Deployment.
+type WorkspaceImportExportActionRequestDeployment string
 
 // WorkspaceImportExportActionRequestProvider defines model for WorkspaceImportExportActionRequest.Provider.
 type WorkspaceImportExportActionRequestProvider string
@@ -6805,6 +6833,14 @@ func (a *WorkspaceImportExportActionRequest) UnmarshalJSON(b []byte) error {
 		delete(object, "action")
 	}
 
+	if raw, found := object["baseUrl"]; found {
+		err = json.Unmarshal(raw, &a.BaseUrl)
+		if err != nil {
+			return fmt.Errorf("error reading 'baseUrl': %w", err)
+		}
+		delete(object, "baseUrl")
+	}
+
 	if raw, found := object["csv"]; found {
 		err = json.Unmarshal(raw, &a.Csv)
 		if err != nil {
@@ -6821,12 +6857,52 @@ func (a *WorkspaceImportExportActionRequest) UnmarshalJSON(b []byte) error {
 		delete(object, "defaultTeamId")
 	}
 
+	if raw, found := object["deployment"]; found {
+		err = json.Unmarshal(raw, &a.Deployment)
+		if err != nil {
+			return fmt.Errorf("error reading 'deployment': %w", err)
+		}
+		delete(object, "deployment")
+	}
+
+	if raw, found := object["email"]; found {
+		err = json.Unmarshal(raw, &a.Email)
+		if err != nil {
+			return fmt.Errorf("error reading 'email': %w", err)
+		}
+		delete(object, "email")
+	}
+
 	if raw, found := object["fileName"]; found {
 		err = json.Unmarshal(raw, &a.FileName)
 		if err != nil {
 			return fmt.Errorf("error reading 'fileName': %w", err)
 		}
 		delete(object, "fileName")
+	}
+
+	if raw, found := object["forwardSyncEnabled"]; found {
+		err = json.Unmarshal(raw, &a.ForwardSyncEnabled)
+		if err != nil {
+			return fmt.Errorf("error reading 'forwardSyncEnabled': %w", err)
+		}
+		delete(object, "forwardSyncEnabled")
+	}
+
+	if raw, found := object["importComments"]; found {
+		err = json.Unmarshal(raw, &a.ImportComments)
+		if err != nil {
+			return fmt.Errorf("error reading 'importComments': %w", err)
+		}
+		delete(object, "importComments")
+	}
+
+	if raw, found := object["importLabels"]; found {
+		err = json.Unmarshal(raw, &a.ImportLabels)
+		if err != nil {
+			return fmt.Errorf("error reading 'importLabels': %w", err)
+		}
+		delete(object, "importLabels")
 	}
 
 	if raw, found := object["mapping"]; found {
@@ -6837,12 +6913,44 @@ func (a *WorkspaceImportExportActionRequest) UnmarshalJSON(b []byte) error {
 		delete(object, "mapping")
 	}
 
+	if raw, found := object["projectKey"]; found {
+		err = json.Unmarshal(raw, &a.ProjectKey)
+		if err != nil {
+			return fmt.Errorf("error reading 'projectKey': %w", err)
+		}
+		delete(object, "projectKey")
+	}
+
 	if raw, found := object["provider"]; found {
 		err = json.Unmarshal(raw, &a.Provider)
 		if err != nil {
 			return fmt.Errorf("error reading 'provider': %w", err)
 		}
 		delete(object, "provider")
+	}
+
+	if raw, found := object["statusMapping"]; found {
+		err = json.Unmarshal(raw, &a.StatusMapping)
+		if err != nil {
+			return fmt.Errorf("error reading 'statusMapping': %w", err)
+		}
+		delete(object, "statusMapping")
+	}
+
+	if raw, found := object["teamId"]; found {
+		err = json.Unmarshal(raw, &a.TeamId)
+		if err != nil {
+			return fmt.Errorf("error reading 'teamId': %w", err)
+		}
+		delete(object, "teamId")
+	}
+
+	if raw, found := object["token"]; found {
+		err = json.Unmarshal(raw, &a.Token)
+		if err != nil {
+			return fmt.Errorf("error reading 'token': %w", err)
+		}
+		delete(object, "token")
 	}
 
 	if len(object) != 0 {
@@ -6869,6 +6977,13 @@ func (a WorkspaceImportExportActionRequest) MarshalJSON() ([]byte, error) {
 		return nil, fmt.Errorf("error marshaling 'action': %w", err)
 	}
 
+	if a.BaseUrl != nil {
+		object["baseUrl"], err = json.Marshal(a.BaseUrl)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'baseUrl': %w", err)
+		}
+	}
+
 	if a.Csv != nil {
 		object["csv"], err = json.Marshal(a.Csv)
 		if err != nil {
@@ -6883,10 +6998,45 @@ func (a WorkspaceImportExportActionRequest) MarshalJSON() ([]byte, error) {
 		}
 	}
 
+	if a.Deployment != nil {
+		object["deployment"], err = json.Marshal(a.Deployment)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'deployment': %w", err)
+		}
+	}
+
+	if a.Email != nil {
+		object["email"], err = json.Marshal(a.Email)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'email': %w", err)
+		}
+	}
+
 	if a.FileName != nil {
 		object["fileName"], err = json.Marshal(a.FileName)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling 'fileName': %w", err)
+		}
+	}
+
+	if a.ForwardSyncEnabled != nil {
+		object["forwardSyncEnabled"], err = json.Marshal(a.ForwardSyncEnabled)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'forwardSyncEnabled': %w", err)
+		}
+	}
+
+	if a.ImportComments != nil {
+		object["importComments"], err = json.Marshal(a.ImportComments)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'importComments': %w", err)
+		}
+	}
+
+	if a.ImportLabels != nil {
+		object["importLabels"], err = json.Marshal(a.ImportLabels)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'importLabels': %w", err)
 		}
 	}
 
@@ -6897,10 +7047,38 @@ func (a WorkspaceImportExportActionRequest) MarshalJSON() ([]byte, error) {
 		}
 	}
 
+	if a.ProjectKey != nil {
+		object["projectKey"], err = json.Marshal(a.ProjectKey)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'projectKey': %w", err)
+		}
+	}
+
 	if a.Provider != nil {
 		object["provider"], err = json.Marshal(a.Provider)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling 'provider': %w", err)
+		}
+	}
+
+	if a.StatusMapping != nil {
+		object["statusMapping"], err = json.Marshal(a.StatusMapping)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'statusMapping': %w", err)
+		}
+	}
+
+	if a.TeamId != nil {
+		object["teamId"], err = json.Marshal(a.TeamId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'teamId': %w", err)
+		}
+	}
+
+	if a.Token != nil {
+		object["token"], err = json.Marshal(a.Token)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'token': %w", err)
 		}
 	}
 

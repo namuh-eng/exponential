@@ -6654,7 +6654,7 @@ components:
       properties:
         action:
           type: string
-          enum: [request_export, preview_csv, start_csv_import, prepare_provider]
+          enum: [request_export, preview_csv, start_csv_import, prepare_provider, configure_jira, preview_jira_import, start_jira_import, retry_jira_import, sync_jira_project, pause_jira_sync, resume_jira_sync]
         fileName: { type: string }
         csv: { type: string }
         provider: { type: string, enum: [github, jira] }
@@ -6662,6 +6662,18 @@ components:
         mapping:
           type: object
           additionalProperties: true
+        deployment: { type: string, enum: [cloud, server] }
+        baseUrl: { type: string, format: uri }
+        email: { type: string, format: email }
+        token: { type: string, writeOnly: true, description: "API token or personal access token for authenticating with the provider. Write-only: never returned in responses." }
+        projectKey: { type: string }
+        teamId: { type: string, format: uuid }
+        statusMapping:
+          type: object
+          additionalProperties: { type: string, format: uuid }
+        importComments: { type: boolean }
+        importLabels: { type: boolean }
+        forwardSyncEnabled: { type: boolean }
     WorkspaceExportsResponse:
       type: object
       required: [export, exports]

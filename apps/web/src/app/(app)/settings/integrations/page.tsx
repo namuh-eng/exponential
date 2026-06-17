@@ -54,10 +54,15 @@ type GitLabSetupDetails = {
   webhookSecret: string;
 };
 
+type JiraSetupDetails = {
+  integrationId: string;
+  displayName: string;
+  projectCount: number;
 type ZendeskSetupDetails = {
   accountUrl: string;
   actionBaseUrl: string;
   actionSecret: string;
+
 };
 
 type IntegrationsPayload = {
@@ -150,6 +155,14 @@ export default function IntegrationsSettingsPage() {
   const [gitLabToken, setGitLabToken] = useState("");
   const [gitLabSetupDetails, setGitLabSetupDetails] =
     useState<GitLabSetupDetails | null>(null);
+  const [jiraDeployment, setJiraDeployment] = useState<"cloud" | "server">(
+    "cloud",
+  );
+  const [jiraBaseUrl, setJiraBaseUrl] = useState("https://acme.atlassian.net");
+  const [jiraEmail, setJiraEmail] = useState("");
+  const [jiraToken, setJiraToken] = useState("");
+  const [jiraSetupDetails, setJiraSetupDetails] =
+    useState<JiraSetupDetails | null>(null);
   const [frontCompanyId, setFrontCompanyId] = useState("");
   const [frontApiToken, setFrontApiToken] = useState("");
   const [frontBaseUrl, setFrontBaseUrl] = useState("https://api2.frontapp.com");
@@ -158,6 +171,7 @@ export default function IntegrationsSettingsPage() {
   const [zendeskAPIToken, setZendeskAPIToken] = useState("");
   const [zendeskSetupDetails, setZendeskSetupDetails] =
     useState<ZendeskSetupDetails | null>(null);
+
 
 
   const loadIntegrations = useCallback(async () => {
@@ -315,6 +329,13 @@ export default function IntegrationsSettingsPage() {
     }
   }
 
+  async function setupJira() {
+    setPendingProvider("jira");
+    setNotice(null);
+    setError(null);
+    setJiraSetupDetails(null);
+    try {
+      const response = await fetch("/api/workspaces/current/import-export", {
   async function setupFront() {
     setPendingProvider("front");
     setNotice(null);
@@ -329,12 +350,24 @@ export default function IntegrationsSettingsPage() {
     try {
       const response = await fetch("/api/integrations/zendesk/setup", {
 
+
         method: "POST",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          action: "configure_jira",
+          deployment: jiraDeployment,
+          baseUrl: jiraBaseUrl,
+          email: jiraDeployment === "cloud" ? jiraEmail : undefined,
+          token: jiraToken,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        integrationId?: string;
+        displayName?: string;
+        projects?: { id: string; key: string; name: string }[];
           apiToken: frontApiToken,
           companyId: frontCompanyId,
           baseUrl: frontBaseUrl,
@@ -351,10 +384,21 @@ export default function IntegrationsSettingsPage() {
         actionBaseUrl?: string;
         actionSecret?: string;
 
+
         error?: string;
         message?: string;
       };
       if (!response.ok) {
+        throw new Error(data.message || data.error || "Jira setup failed.");
+      }
+      setJiraSetupDetails({
+        integrationId: data.integrationId ?? "",
+        displayName: data.displayName ?? "Jira",
+        projectCount: data.projects?.length ?? 0,
+      });
+      setJiraToken("");
+      setNotice(
+        "Jira connected. Use Import & export to preview projects and mappings.",
         throw new Error(data.message || data.error || "Front setup failed.");
       }
       setFrontApiToken("");
@@ -373,14 +417,17 @@ export default function IntegrationsSettingsPage() {
       setNotice(
         "Zendesk connected. Copy the action URL and secret into the Zendesk app.",
 
+
       );
       await loadIntegrations();
     } catch (setupError) {
       setError(
+        setupError instanceof Error ? setupError.message : "Jira setup failed.",
         setupError instanceof Error
           ? setupError.message
           : "Front setup failed.",
           : "Zendesk setup failed.",
+
 
       );
     } finally {
@@ -512,6 +559,15 @@ export default function IntegrationsSettingsPage() {
           </div>
         </div>
       ) : null}
+      {jiraSetupDetails ? (
+        <div className="mt-6 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
+          <div className="font-medium text-[var(--color-text-primary)]">
+            Jira connection ready
+          </div>
+          <p className="mt-2">
+            {jiraSetupDetails.displayName} returned{" "}
+            {jiraSetupDetails.projectCount} projects for guided import.
+          </p>
       {zendeskSetupDetails ? (
         <div className="mt-6 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
           <div className="font-medium text-[var(--color-text-primary)]">
@@ -532,6 +588,7 @@ export default function IntegrationsSettingsPage() {
             </div>
             <div>Connected account: {zendeskSetupDetails.accountUrl}</div>
           </div>
+
         </div>
       ) : null}
 
@@ -569,8 +626,10 @@ export default function IntegrationsSettingsPage() {
                   <div className="flex shrink-0 gap-2">
                     {integration.actions.canReconnect &&
                     integration.provider !== "gitlab" &&
+                    integration.provider !== "jira" ? (
                     integration.provider !== "front" ? (
                     integration.provider !== "zendesk" ? (
+
 
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
@@ -787,13 +846,73 @@ export default function IntegrationsSettingsPage() {
                           </button>
                         </div>
                       ) : null}
+                      {integration.provider === "jira" &&
                       {integration.provider === "front" &&
                       {integration.provider === "zendesk" &&
+
 
                       (integration.actions.canConnect ||
                         integration.actions.canReconnect) ? (
                         <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
                           <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Jira deployment
+                            <select
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setJiraDeployment(
+                                  event.target.value === "server"
+                                    ? "server"
+                                    : "cloud",
+                                )
+                              }
+                              value={jiraDeployment}
+                            >
+                              <option value="cloud">Jira Cloud</option>
+                              <option value="server">
+                                Jira Server/Data Center
+                              </option>
+                            </select>
+                          </label>
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Base URL
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setJiraBaseUrl(event.target.value)
+                              }
+                              placeholder="https://acme.atlassian.net"
+                              type="url"
+                              value={jiraBaseUrl}
+                            />
+                          </label>
+                          {jiraDeployment === "cloud" ? (
+                            <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                              Atlassian email
+                              <input
+                                className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                                onChange={(event) =>
+                                  setJiraEmail(event.target.value)
+                                }
+                                placeholder="admin@example.com"
+                                type="email"
+                                value={jiraEmail}
+                              />
+                            </label>
+                          ) : null}
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            API token or PAT
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setJiraToken(event.target.value)
+                              }
+                              placeholder={
+                                jiraDeployment === "cloud"
+                                  ? "Atlassian API token"
+                                  : "Jira personal access token"
+                              }
+                              type="password"
+                              value={jiraToken}
                             Front company ID
                             <input
                               className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
@@ -860,11 +979,24 @@ export default function IntegrationsSettingsPage() {
                               type="password"
                               value={zendeskAPIToken}
 
+
                             />
                           </label>
                           <button
                             className="w-fit rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
                             disabled={
+                              pendingProvider === "jira" ||
+                              jiraBaseUrl.trim() === "" ||
+                              jiraToken.trim() === "" ||
+                              (jiraDeployment === "cloud" &&
+                                jiraEmail.trim() === "")
+                            }
+                            onClick={() => void setupJira()}
+                            type="button"
+                          >
+                            {pendingProvider === "jira"
+                              ? "Validating..."
+                              : "Connect Jira"}
                               pendingProvider === "front" ||
                               frontApiToken.trim() === ""
                             }
@@ -886,6 +1018,7 @@ export default function IntegrationsSettingsPage() {
                               ? "Validating..."
                               : "Connect Zendesk"}
 
+
                           </button>
                         </div>
                       ) : null}
@@ -901,8 +1034,10 @@ export default function IntegrationsSettingsPage() {
                       </button>
                     ) : integration.actions.canReconnect &&
                       integration.provider !== "gitlab" &&
+                      integration.provider !== "jira" ? (
                       integration.provider !== "front" ? (
                       integration.provider !== "zendesk" ? (
+
 
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
@@ -932,7 +1067,9 @@ export default function IntegrationsSettingsPage() {
                           : "Connect"}
                       </button>
                     ) : integration.provider === "gitlab" ||
+                      integration.provider === "jira" ? null : (
                       integration.provider === "zendesk" ? null : (
+
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-tertiary)]"
                         disabled

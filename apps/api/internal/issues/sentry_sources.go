@@ -30,7 +30,7 @@ func (h Handler) issueExternalSources(ctx context.Context, issueID string) ([]is
 				coalesce(workspace_integration_id::text,'') as integration_id,
 				created_at
 			from integration_thread_link
-			where issue_id=$1::uuid and provider in ('sentry','gong','front','salesforce') and external_permalink is not null
+			where issue_id=$1::uuid and provider in ('sentry','gong','front','salesforce','jira') and external_permalink is not null
 			union all
 			select 'zendesk' as provider,
 				coalesce(ticket_url,'') as url,
@@ -41,6 +41,7 @@ func (h Handler) issueExternalSources(ctx context.Context, issueID string) ([]is
 			from zendesk_ticket_link
 			where issue_id=$1::uuid and ticket_url is not null
 		) sources
+
 		order by created_at asc`, issueID)
 	if err != nil {
 		return nil, err
@@ -89,6 +90,7 @@ func sourceLabel(provider string, project string, externalID string) string {
 	if provider == "front" {
 		parts := []string{"Front"}
 		if strings.TrimSpace(project) != "" {
+
 			parts = append(parts, project)
 		}
 		if strings.TrimSpace(externalID) != "" {
@@ -100,6 +102,17 @@ func sourceLabel(provider string, project string, externalID string) string {
 		parts := []string{"Salesforce"}
 		if strings.TrimSpace(externalID) != "" {
 			parts = append(parts, "Case "+externalID)
+		}
+		return strings.Join(parts, " · ")
+	}
+
+	if provider == "jira" {
+		parts := []string{"Jira"}
+		if strings.TrimSpace(project) != "" && project != "jira" {
+			parts = append(parts, project)
+		}
+		if strings.TrimSpace(externalID) != "" {
+			parts = append(parts, externalID)
 		}
 		return strings.Join(parts, " · ")
 	}
