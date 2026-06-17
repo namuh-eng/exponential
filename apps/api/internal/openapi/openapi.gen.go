@@ -25,6 +25,7 @@ const (
 const (
 	AgentRunStatusCompleted   AgentRunStatus = "completed"
 	AgentRunStatusNeedsReview AgentRunStatus = "needs_review"
+	AgentRunStatusFailed      AgentRunStatus = "failed"
 	AgentRunStatusQueued      AgentRunStatus = "queued"
 	AgentRunStatusRunning     AgentRunStatus = "running"
 )
@@ -874,6 +875,7 @@ type AgentRun struct {
 	Id           string    `json:"id"`
 	Logs         []string  `json:"logs"`
 	Output       string    `json:"output"`
+	FailureReason *string   `json:"failureReason,omitempty"`
 	Owner        string    `json:"owner"`
 	Prompt       string    `json:"prompt"`
 	PromptConfig struct {
@@ -892,8 +894,10 @@ type AgentRunStatus string
 
 // AgentRunListResponse defines model for AgentRunListResponse.
 type AgentRunListResponse struct {
-	CanCreateRuns bool       `json:"canCreateRuns"`
-	Runs          []AgentRun `json:"runs"`
+	CanCreateRuns      bool       `json:"canCreateRuns"`
+	DisabledReason     *string    `json:"disabledReason,omitempty"`
+	ProviderConfigured bool       `json:"providerConfigured"`
+	Runs               []AgentRun `json:"runs"`
 }
 
 // AgentRunResponse defines model for AgentRunResponse.
@@ -907,6 +911,8 @@ type AgentSuggestion struct {
 	Id                string                `json:"id"`
 	IsExternalContext *bool                 `json:"isExternalContext,omitempty"`
 	Status            AgentSuggestionStatus `json:"status"`
+	ReviewedAt        *time.Time            `json:"reviewedAt,omitempty"`
+	ReviewedBy        *string               `json:"reviewedBy,omitempty"`
 	Summary           string                `json:"summary"`
 	Target            string                `json:"target"`
 	Title             string                `json:"title"`

@@ -16,7 +16,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
 	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
 )
@@ -106,16 +108,16 @@ type jiraSearchResponse struct {
 }
 
 type jiraPreviewIssue struct {
-	ID          string   `json:"id"`
-	Key         string   `json:"key"`
-	Title       string   `json:"title"`
-	Status      string   `json:"status"`
-	Priority    string   `json:"priority"`
-	Assignee    string   `json:"assignee"`
-	Labels      []string `json:"labels"`
-	CommentCount int     `json:"commentCount"`
-	SourceURL   string   `json:"sourceUrl"`
-	Errors      []string `json:"errors"`
+	ID           string   `json:"id"`
+	Key          string   `json:"key"`
+	Title        string   `json:"title"`
+	Status       string   `json:"status"`
+	Priority     string   `json:"priority"`
+	Assignee     string   `json:"assignee"`
+	Labels       []string `json:"labels"`
+	CommentCount int      `json:"commentCount"`
+	SourceURL    string   `json:"sourceUrl"`
+	Errors       []string `json:"errors"`
 }
 
 type jiraImportSummary struct {
@@ -233,6 +235,7 @@ func (h Handler) handleJiraPreview(w http.ResponseWriter, r *http.Request, curre
 }
 
 func (h Handler) handleJiraImport(w http.ResponseWriter, r *http.Request, current importExportWorkspace, p auth.Principal, body map[string]any, action string) {
+
 	install, ok := h.requireJiraInstall(w, r.Context(), current.ID)
 	if !ok {
 		return
@@ -247,6 +250,7 @@ func (h Handler) handleJiraImport(w http.ResponseWriter, r *http.Request, curren
 		problem.Write(w, 400, "Choose a valid target team.", "")
 		return
 	}
+
 	statusMappingInput := recordFromAny(body["statusMapping"])
 	forwardSyncEnabled := boolFromAnyDefault(body["forwardSyncEnabled"], false)
 	upsertMapping := true
@@ -275,6 +279,7 @@ func (h Handler) handleJiraImport(w http.ResponseWriter, r *http.Request, curren
 		jobKind = "forward_sync"
 	}
 	mapping, err := h.validateJiraStatusMapping(r.Context(), teamID, statusMappingInput)
+
 	if err != nil {
 		problem.Write(w, 400, "Invalid Jira status mapping", err.Error())
 		return
@@ -289,17 +294,21 @@ func (h Handler) handleJiraImport(w http.ResponseWriter, r *http.Request, curren
 		problem.Write(w, 400, "No Jira issues matched this project.", "")
 		return
 	}
+
 	summary, err := h.importJiraIssues(r.Context(), p, install, teamID, mapping, issues, jiraImportOptions{ImportComments: boolFromAnyDefault(body["importComments"], true), ImportLabels: boolFromAnyDefault(body["importLabels"], true), ForwardSyncEnabled: forwardSyncEnabled, UpsertMapping: upsertMapping, JobKind: jobKind})
+
 	if err != nil {
 		problem.Write(w, 500, "Jira import failed", err.Error())
 		return
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+
 	message := fmt.Sprintf("Jira import completed with %d created and %d updated issues.", summary.ImportedCount, summary.UpdatedCount)
 	if action == "sync_jira_project" {
 		message = fmt.Sprintf("Jira sync completed with %d created and %d updated issues.", summary.ImportedCount, summary.UpdatedCount)
 	}
 	job := map[string]any{"id": importExportJobID("import"), "type": "import", "provider": "jira", "status": "completed", "createdAt": now, "completedAt": now, "message": message, "rowCount": len(issues), "importedCount": summary.ImportedCount, "updatedCount": summary.UpdatedCount, "commentCount": summary.CommentCount, "errorCount": 0}
+
 	state := readImportExportStateGo(current.Settings)
 	state.Imports = prependJob(job, state.Imports, 25)
 	if err := h.saveImportExportState(r.Context(), current, state); err != nil {
@@ -324,17 +333,20 @@ func (h Handler) handleJiraSyncPause(w http.ResponseWriter, r *http.Request, cur
 		problem.Write(w, 400, "Jira project and team are required.", "")
 		return
 	}
+
 	var tag pgconn.CommandTag
 	var err error
 	if paused {
 		tag, err = h.DB.Exec(r.Context(), `update jira_project_mapping set paused_at=now(), paused_by_user_id=$4, updated_by_user_id=$4, updated_at=now() where workspace_id=$1::uuid and workspace_integration_id=$2::uuid and jira_project_key=$3 and team_id=$5::uuid`, current.ID, install.ID, projectKey, p.UserID, teamID)
 	} else {
 		tag, err = h.DB.Exec(r.Context(), `update jira_project_mapping set paused_at=null, paused_by_user_id=null, updated_by_user_id=$4, updated_at=now() where workspace_id=$1::uuid and workspace_integration_id=$2::uuid and jira_project_key=$3 and team_id=$5::uuid`, current.ID, install.ID, projectKey, p.UserID, teamID)
+
 	}
 	if err != nil {
 		problem.Write(w, 500, "Update Jira sync pause failed", err.Error())
 		return
 	}
+
 	if tag.RowsAffected() == 0 {
 		problem.Write(w, 404, "Jira sync mapping not found", "Import this Jira project before pausing or resuming sync.")
 		return
@@ -628,6 +640,7 @@ func (h Handler) validateJiraStatusMapping(ctx context.Context, teamID string, i
 }
 
 func (h Handler) importJiraIssues(ctx context.Context, p auth.Principal, install jiraInstall, teamID string, statusMapping map[string]string, issues []jiraIssue, opts jiraImportOptions) (jiraImportSummary, error) {
+
 	states, err := h.importStates(ctx, teamID)
 	if err != nil {
 		return jiraImportSummary{}, err
@@ -667,10 +680,12 @@ func (h Handler) importJiraIssues(ctx context.Context, p auth.Principal, install
 			project.Name = project.Key
 		}
 		statusRaw, _ := json.Marshal(statusMapping)
+
 		if opts.UpsertMapping {
 			if _, err := tx.Exec(ctx, `insert into jira_project_mapping (workspace_id, workspace_integration_id, deployment_type, jira_project_id, jira_project_key, jira_project_name, team_id, status_mapping, forward_sync_enabled, paused_at, paused_by_user_id, updated_by_user_id, updated_at) values ($1::uuid,$2::uuid,$3,$4,$5,$6,$7::uuid,$8::jsonb,$9,null,null,$10,now()) on conflict (workspace_integration_id, jira_project_id, team_id) do update set jira_project_key=excluded.jira_project_key, jira_project_name=excluded.jira_project_name, status_mapping=excluded.status_mapping, forward_sync_enabled=excluded.forward_sync_enabled, paused_at=null, paused_by_user_id=null, updated_by_user_id=excluded.updated_by_user_id, updated_at=now()`, p.WorkspaceID, install.ID, install.Credential.Deployment, project.ID, project.Key, project.Name, teamID, statusRaw, opts.ForwardSyncEnabled, p.UserID); err != nil {
 				return err
 			}
+
 		}
 		for _, source := range issues {
 			stateID := statusMapping[strings.TrimSpace(source.Fields.Status.Name)]
@@ -708,12 +723,16 @@ func (h Handler) importJiraIssues(ctx context.Context, p auth.Principal, install
 			if err := h.upsertJiraIssueLink(ctx, tx, p.WorkspaceID, install.ID, install.Credential, project, source, issueID, updatedAt); err != nil {
 				return err
 			}
+
 			if opts.ImportLabels {
+
 				if err := h.importJiraLabels(ctx, tx, p.WorkspaceID, teamID, issueID, source.Fields.Labels); err != nil {
 					return err
 				}
 			}
+
 			if opts.ImportComments {
+
 				count, err := h.importJiraComments(ctx, tx, p, install, members, source, issueID)
 				if err != nil {
 					return err
@@ -723,6 +742,7 @@ func (h Handler) importJiraIssues(ctx context.Context, p auth.Principal, install
 		}
 		var jobID string
 		now := time.Now().UTC()
+
 		jobKind := opts.JobKind
 		if jobKind == "" {
 			jobKind = "backfill"
@@ -737,6 +757,7 @@ func (h Handler) importJiraIssues(ctx context.Context, p auth.Principal, install
 			message = "Jira project synced."
 		}
 		if _, err := tx.Exec(ctx, `insert into provider_event (workspace_id, workspace_integration_id, provider, job_id, event_type, severity, message, payload, created_at) values ($1::uuid,$2::uuid,'jira',$3::uuid,$4,'info',$5,$6::jsonb,$7)`, p.WorkspaceID, install.ID, jobID, eventType, message, mustJSON(map[string]any{"projectKey": project.Key, "teamId": teamID, "forwardSyncEnabled": opts.ForwardSyncEnabled}), now); err != nil {
+
 			return err
 		}
 		_, err = tx.Exec(ctx, `update workspace_integration set last_event_at=$2, last_success_at=$2, updated_at=$2 where id=$1::uuid`, install.ID, now)

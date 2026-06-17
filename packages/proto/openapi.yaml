@@ -159,6 +159,28 @@ paths:
                   success: { type: boolean }
         default:
           $ref: '#/components/responses/Problem'
+  /issues/{id}/figma-sources/{sourceId}/refresh:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: sourceId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: refreshIssueFigmaSource
+      summary: Mark a linked Figma source as seen (stamps refreshed_at; does not fetch from Figma API)
+      responses:
+        '200':
+          description: Refreshed Figma source
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FigmaSource'
+        default:
+          $ref: '#/components/responses/Problem'
   /issues/{id}/comments:
     parameters:
       - name: id
@@ -4565,6 +4587,8 @@ components:
         contextUrl: { type: string }
         isExternalContext: { type: boolean }
         status: { type: string, enum: [open, accepted, declined] }
+        reviewedBy: { type: string }
+        reviewedAt: { type: string, format: date-time }
     AgentRun:
       type: object
       required: [id, title, prompt, teamKey, promptConfig, context, status, owner, target, createdAt, updatedAt, output, logs, suggestions]
@@ -4579,12 +4603,13 @@ components:
           properties:
             guidance: { $ref: '#/components/schemas/AgentGuidance' }
         context: { type: string }
-        status: { type: string, enum: [queued, running, needs_review, completed] }
+        status: { type: string, enum: [queued, running, needs_review, completed, failed] }
         owner: { type: string }
         target: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         output: { type: string }
+        failureReason: { type: string }
         logs:
           type: array
           items: { type: string }
@@ -4593,12 +4618,14 @@ components:
           items: { $ref: '#/components/schemas/AgentSuggestion' }
     AgentRunListResponse:
       type: object
-      required: [runs, canCreateRuns]
+      required: [runs, canCreateRuns, providerConfigured]
       properties:
         runs:
           type: array
           items: { $ref: '#/components/schemas/AgentRun' }
         canCreateRuns: { type: boolean }
+        providerConfigured: { type: boolean }
+        disabledReason: { type: string }
     AgentRunResponse:
       type: object
       required: [run]
@@ -4851,7 +4878,7 @@ components:
       type: object
       required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions, health, details]
       properties:
-        provider: { type: string, enum: [github, gitlab, jira, slack, sentry, zendesk, discord, microsoft_teams] }
+        provider: { type: string, enum: [github, gitlab, jira, slack, sentry, zendesk, discord, microsoft_teams, figma] }
         name: { type: string }
         description: { type: string }
         id: { type: [string, 'null'], format: uuid }
@@ -6278,6 +6305,9 @@ components:
         metadataOptions:
           type: object
           additionalProperties: true
+        defaults:
+          type: object
+          additionalProperties: true
     TriageDecisionRequest:
       type: object
       additionalProperties: true
@@ -6299,6 +6329,7 @@ components:
         projectMilestoneId: { type: [string, 'null'], format: uuid }
         assigneeId: { type: [string, 'null'] }
         comment: { type: [string, 'null'] }
+        dueDate: { type: [string, 'null'], format: date }
         subscribe: { type: boolean }
     TriageDecisionResponse:
       type: object
@@ -7554,6 +7585,22 @@ components:
     IssuePriority:
       type: string
       enum: [none, urgent, high, medium, low]
+    FigmaSource:
+      type: object
+      required: [id, url, normalizedUrl, fileKey, kind, containerType, capturedAt]
+      properties:
+        id: { type: string, format: uuid }
+        url: { type: string, format: uri }
+        normalizedUrl: { type: string, format: uri }
+        fileKey: { type: string }
+        nodeId: { type: [string, 'null'] }
+        kind: { type: string, enum: [file, design, proto] }
+        name: { type: [string, 'null'] }
+        thumbnailUrl: { type: [string, 'null'], format: uri }
+        containerType: { type: string, enum: [issue_description, comment, document, plugin] }
+        capturedAt: { type: string, format: date-time }
+        refreshedAt: { type: [string, 'null'], format: date-time }
+        lastError: { type: [string, 'null'] }
     IssueExternalSource:
       type: object
       required: [provider, label, url, externalId, project, integrationId]
@@ -7590,6 +7637,9 @@ components:
         archived_at: { type: [string, 'null'], format: date-time }
         canceled_at: { type: [string, 'null'], format: date-time }
         completed_at: { type: [string, 'null'], format: date-time }
+        figmaSources:
+          type: array
+          items: { $ref: '#/components/schemas/FigmaSource' }
         sources:
           type: array
           items: { $ref: '#/components/schemas/IssueExternalSource' }

@@ -309,6 +309,88 @@ describe("TeamTriagePage UI", () => {
     });
   });
 
+  it("bulk accepts with metadata and reports partial errors", async () => {
+    const dataWithOptions = {
+      ...mockTriageData,
+      defaults: {
+        acceptDestinationStateId: "s-backlog",
+        assigneeId: "user-ada",
+        labelIds: ["label-bug"],
+        projectId: "project-1",
+        cycleId: "cycle-1",
+      },
+      metadataOptions: {
+        labels: [{ id: "label-bug", name: "Bug", color: "#f00" }],
+        cycles: [{ id: "cycle-1", name: "Cycle 1", number: 1 }],
+        projects: [{ id: "project-1", name: "Website" }],
+        projectMilestones: [
+          { id: "milestone-1", name: "M1", projectId: "project-1" },
+        ],
+        members: [{ id: "user-ada", name: "Ada", email: "ada@example.com" }],
+      },
+    };
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      const requestUrl = url.toString();
+      if (requestUrl === "/api/teams/ENG/triage") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => dataWithOptions,
+        } as Response);
+      }
+      if (requestUrl === "/api/teams/ENG/triage/bulk") {
+        return Promise.resolve({
+          ok: false,
+          status: 207,
+          json: async () => ({
+            updatedCount: 1,
+            conflictCount: 1,
+            results: [
+              { issueId: "iss-2", status: "updated" },
+              { issueId: "iss-1", status: "conflict", error: "Wrong team" },
+            ],
+          }),
+        } as Response);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
+    });
+
+    render(<TeamTriagePage />);
+    await screen.findByText("Incoming request 2");
+
+    fireEvent.click(screen.getByLabelText("Select all visible triage issues"));
+    fireEvent.click(screen.getByRole("button", { name: "Bulk accept" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(within(dialog).getByLabelText("Accept assignee")).toHaveValue(
+      "user-ada",
+    );
+    fireEvent.change(within(dialog).getByLabelText("Accept due date"), {
+      target: { value: "2026-07-01" },
+    });
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Accept issue" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("1 updated, 1 conflicts")).toBeInTheDocument();
+    });
+    const patchCall = fetchSpy.mock.calls.find(
+      ([requestUrl, init]) =>
+        requestUrl.toString() === "/api/teams/ENG/triage/bulk" &&
+        init?.method === "PATCH",
+    );
+    expect(patchCall).toBeDefined();
+    expect(JSON.parse(String(patchCall?.[1]?.body))).toMatchObject({
+      action: "accept",
+      issueIds: ["iss-2", "iss-1"],
+      assigneeId: "user-ada",
+      labelIds: ["label-bug"],
+      projectId: "project-1",
+      cycleId: "cycle-1",
+      dueDate: "2026-07-01",
+    });
+  });
+
   it("shows empty state when no issues to triage", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,

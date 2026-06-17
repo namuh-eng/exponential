@@ -51,6 +51,16 @@ func TestSetupRequirement(t *testing.T) {
 	if got := setupRequirement("microsoft_teams"); got != nil {
 		t.Fatalf("configured microsoft teams requirement = %#v", got)
 	}
+	t.Setenv("AUTH_FIGMA_ID", "")
+	t.Setenv("AUTH_FIGMA_SECRET", "")
+	if got := setupRequirement("figma"); got == nil || !strings.Contains(got.Message, "AUTH_FIGMA_ID") {
+		t.Fatalf("figma requirement = %#v", got)
+	}
+	t.Setenv("AUTH_FIGMA_ID", "id")
+	t.Setenv("AUTH_FIGMA_SECRET", "secret")
+	if got := setupRequirement("figma"); got != nil {
+		t.Fatalf("configured figma requirement = %#v", got)
+	}
 	t.Setenv("AUTH_INTERCOM_ID", "")
 	t.Setenv("AUTH_INTERCOM_SECRET", "")
 	t.Setenv("INTERCOM_SIGNING_SECRET", "")
@@ -62,6 +72,7 @@ func TestSetupRequirement(t *testing.T) {
 	t.Setenv("INTERCOM_SIGNING_SECRET", "signing-secret")
 	if got := setupRequirement("intercom"); got != nil {
 		t.Fatalf("configured intercom requirement = %#v", got)
+
 	}
 	if got := setupRequirement("github"); got == nil || got.Message == "" {
 		t.Fatalf("github requirement = %#v", got)
@@ -1043,6 +1054,9 @@ func TestSalesforceCasePatchBody(t *testing.T) {
 	}
 	if body["Exponential_Issue_URL__c"] == "" || body["Exponential_Follow_Up__c"] == "" {
 		t.Fatalf("missing backlink/follow-up fields = %#v", body)
+	}
+}
+
 func TestFrontSignatureVerification(t *testing.T) {
 	body := []byte(`{"workspaceSlug":"acme","conversation":{"id":"cnv_123"}}`)
 	mac := hmac.New(sha256.New, []byte("secret"))
@@ -1100,7 +1114,10 @@ func TestPostFrontJSONReopensConversation(t *testing.T) {
 func TestFrontReopenCommentBody(t *testing.T) {
 	body := frontReopenCommentBody(map[string]any{"identifier": "ENG-7", "title": "Fix exports", "category": "canceled", "issueUrl": "https://app.example/team/ENG/issue/ENG-7"})
 	if !strings.Contains(body, "ENG-7 Fix exports was canceled") || !strings.Contains(body, "https://app.example/team/ENG/issue/ENG-7") {
-		t.Fatalf("body = %q", body)
+			t.Fatalf("body = %q", body)
+	}
+}
+
 func TestZendeskSetupRequirementAndSubdomain(t *testing.T) {
 	if got := setupRequirement("zendesk"); got != nil {
 		t.Fatalf("zendesk should be configurable from admin setup, got %#v", got)
