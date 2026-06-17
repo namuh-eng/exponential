@@ -6275,19 +6275,137 @@ components:
         events:
           type: array
           items: { type: string }
+    TriageTeamSummary:
+      type: object
+      additionalProperties: false
+      required: [id, name, key, workspaceId, triageEnabled]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        key: { type: string }
+        workspaceId: { type: string, format: uuid }
+        triageEnabled: { type: boolean }
+    TriageDestinationState:
+      type: object
+      additionalProperties: false
+      required: [id, name, category]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        category: { type: string }
+        color: { type: string }
+        position: { type: number }
+        isDefault: { type: [boolean, 'null'] }
+    TriageSourceContext:
+      type: object
+      additionalProperties: false
+      properties:
+        source: { type: string }
+        label: { type: string }
+        backlink: { type: string }
+        url: { type: string }
+        recipient: { type: string }
+        sender: { type: string }
+        title: { type: string }
+        identifier: { type: string }
+    TriageIssue:
+      type: object
+      additionalProperties: false
+      required: [id, identifier, title, priority, stateId, stateName, stateColor, creatorName, createdAt, updatedAt, labelIds, labels]
+      properties:
+        id: { type: string, format: uuid }
+        identifier: { type: string }
+        title: { type: string }
+        description: { type: [string, 'null'] }
+        priority: { type: string, enum: [none, urgent, high, medium, low] }
+        stateId: { type: string, format: uuid }
+        stateName: { type: string }
+        stateColor: { type: string }
+        creatorId: { type: [string, 'null'] }
+        creatorName: { type: string }
+        creatorImage: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        labelIds:
+          type: array
+          items: { type: string, format: uuid }
+        labels:
+          type: array
+          items: { $ref: '#/components/schemas/CreateIssueOptionLabel' }
+        assigneeId: { type: [string, 'null'] }
+        projectId: { type: [string, 'null'], format: uuid }
+        projectName: { type: [string, 'null'] }
+        projectMilestoneId: { type: [string, 'null'], format: uuid }
+        cycleId: { type: [string, 'null'], format: uuid }
+        dueDate: { type: [string, 'null'], format: date-time }
+        estimate: { type: [number, 'null'] }
+        teamId: { type: [string, 'null'], format: uuid }
+        sourceContext:
+          oneOf:
+            - $ref: '#/components/schemas/TriageSourceContext'
+            - type: 'null'
+    TriageMetadataOptions:
+      type: object
+      additionalProperties: false
+      required: [labels, cycles, projects, projectMilestones, members, templates]
+      properties:
+        labels:
+          type: array
+          items: { $ref: '#/components/schemas/CreateIssueOptionLabel' }
+        cycles:
+          type: array
+          items: { $ref: '#/components/schemas/CreateIssueOptionCycle' }
+        projects:
+          type: array
+          items: { $ref: '#/components/schemas/CreateIssueOptionProject' }
+        projectMilestones:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, projectId]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              projectId: { type: string, format: uuid }
+        members:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id]
+            properties:
+              id: { type: string }
+              name: { type: [string, 'null'] }
+              email: { type: [string, 'null'] }
+              image: { type: [string, 'null'] }
+        templates:
+          type: array
+          items: { $ref: '#/components/schemas/CreateIssueOptionTemplate' }
+    TriageDefaults:
+      type: object
+      additionalProperties: false
+      required: [acceptDestinationStateId, declineDestinationStateId, assigneeId, labelIds, projectId, cycleId]
+      properties:
+        acceptDestinationStateId: { type: [string, 'null'], format: uuid }
+        declineDestinationStateId: { type: [string, 'null'], format: uuid }
+        assigneeId: { type: [string, 'null'] }
+        labelIds:
+          type: array
+          items: { type: string, format: uuid }
+        projectId: { type: [string, 'null'], format: uuid }
+        cycleId: { type: [string, 'null'], format: uuid }
     TeamTriageResponse:
       type: object
       additionalProperties: true
       required: [team, issues, count, createStateId, createStateName, triageEnabled]
       properties:
         team:
-          type: object
-          additionalProperties: true
+          $ref: '#/components/schemas/TriageTeamSummary'
         issues:
           type: array
           items:
-            type: object
-            additionalProperties: true
+            $ref: '#/components/schemas/TriageIssue'
         count: { type: integer }
         createStateId: { type: [string, 'null'], format: uuid }
         createStateName: { type: [string, 'null'] }
@@ -6295,19 +6413,15 @@ components:
         acceptDestinationStates:
           type: array
           items:
-            type: object
-            additionalProperties: true
+            $ref: '#/components/schemas/TriageDestinationState'
         declineDestinationStates:
           type: array
           items:
-            type: object
-            additionalProperties: true
+            $ref: '#/components/schemas/TriageDestinationState'
         metadataOptions:
-          type: object
-          additionalProperties: true
+          $ref: '#/components/schemas/TriageMetadataOptions'
         defaults:
-          type: object
-          additionalProperties: true
+          $ref: '#/components/schemas/TriageDefaults'
     TriageDecisionRequest:
       type: object
       additionalProperties: true
@@ -6334,6 +6448,25 @@ components:
     TriageDecisionResponse:
       type: object
       additionalProperties: true
+      properties:
+        updatedCount: { type: integer }
+        conflictCount: { type: integer }
+        results:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [issueId, status]
+            properties:
+              issueId: { type: string, format: uuid }
+              status: { type: string, enum: [updated, conflict] }
+              error: { type: string }
+        issue:
+          type: object
+          additionalProperties: true
+        decision:
+          type: object
+          additionalProperties: true
     RecurringIssue:
       type: object
       required: [id, workspaceId, teamId, title, priority, labelIds, cadenceConfig, timezone, nextRunAt, enabled, createdAt, updatedAt, cadenceLabel]

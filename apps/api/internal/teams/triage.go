@@ -272,7 +272,15 @@ func (h Handler) applyTriageDecision(r *http.Request, team triageTeam, userID, i
 		return nil, 500
 	}
 	defer func() { _ = tx.Rollback(r.Context()) }()
-	if _, err := tx.Exec(r.Context(), `update issue set state_id=$1::uuid, updated_at=now(), canceled_at=$2, completed_at=$3, priority=coalesce($4,priority), estimate=coalesce($5,estimate), assignee_id=$6, project_id=$7::uuid, project_milestone_id=$8::uuid, cycle_id=$9::uuid, due_date=coalesce($10,due_date) where id=$11::uuid and team_id=$12::uuid and state_id=$13::uuid`, dest.ID, canceledAt, completedAt, priority, estimate, nullableTrim(input.AssigneeID), nullableTrim(input.ProjectID), nullableTrim(input.ProjectMilestoneID), nullableTrim(input.CycleID), dueDate, issueID, team.ID, current.StateID); err != nil {
+	setPriority := input.hasField("priority") && input.Priority != nil
+	setEstimate := input.hasField("estimate")
+	setAssignee := input.hasField("assigneeId")
+	setProject := input.hasField("projectId")
+	setMilestone := input.hasField("projectMilestoneId") || setProject
+	setCycle := input.hasField("cycleId")
+	setDueDate := input.hasField("dueDate")
+	_, err = tx.Exec(r.Context(), `update issue set state_id=$1::uuid, updated_at=now(), canceled_at=$2, completed_at=$3, priority=case when $4 then $5::issue_priority else priority end, estimate=case when $6 then $7 else estimate end, assignee_id=case when $8 then $9 else assignee_id end, project_id=case when $10 then $11::uuid else project_id end, project_milestone_id=case when $12 then $13::uuid else project_milestone_id end, cycle_id=case when $14 then $15::uuid else cycle_id end, due_date=case when $16 then $17::timestamp else due_date end where id=$18::uuid and team_id=$19::uuid and state_id=$20::uuid`, dest.ID, canceledAt, completedAt, setPriority, priority, setEstimate, estimate, setAssignee, nullableTrim(input.AssigneeID), setProject, nullableTrim(input.ProjectID), setMilestone, nullableTrim(input.ProjectMilestoneID), setCycle, nullableTrim(input.CycleID), setDueDate, dueDate, issueID, team.ID, current.StateID)
+	if err != nil {
 		return nil, 500
 	}
 	if input.Action == "accept" && input.LabelIDs != nil {
@@ -451,7 +459,7 @@ func (h Handler) triageMetadataOptions(r *http.Request, team triageTeam) (map[st
 }
 
 func (h Handler) triageProjectMilestones(ctx context.Context, workspaceID string) ([]map[string]any, error) {
-	rows, err := h.DB.Query(ctx, `select pm.id::text,pm.name,pm.project_id::text from project_milestone pm join project p on p.id=pm.project_id where p.workspace_id=$1::uuid order by p.name asc, pm.sort_order asc, pm.name asc`, workspaceID)
+	rows, err := h.DB.Query(ctx, `select pm.id::text,pm.name,pm.project_id::text from project_milestone pm join project p on p.id=pm.project_id where p.workspace_id=$1::uuid and p.completed_at is null and p.canceled_at is null order by p.name asc, pm.sort_order asc, pm.name asc`, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -594,17 +602,33 @@ func triageDefaultSettings(settings map[string]any) map[string]any {
 }
 
 func applyTriageDefaultMetadata(settings map[string]any, input *triageDecisionRequest) {
+	if input.fieldsPresent == nil {
+		input.fieldsPresent = map[string]bool{}
+	}
 	if !input.hasField("assigneeId") {
-		input.AssigneeID = stringPtrOrNil(settingString(settings, triageDefaultAssigneeKey))
+		if value := settingString(settings, triageDefaultAssigneeKey); value != "" {
+			input.AssigneeID = &value
+			input.fieldsPresent["assigneeId"] = true
+		}
 	}
 	if !input.hasField("labelIds") {
-		input.LabelIDs = settingStringSlice(settings, triageDefaultLabelIDsKey)
+		labels := settingStringSlice(settings, triageDefaultLabelIDsKey)
+		if labels != nil {
+			input.LabelIDs = labels
+			input.fieldsPresent["labelIds"] = true
+		}
 	}
 	if !input.hasField("projectId") {
-		input.ProjectID = stringPtrOrNil(settingString(settings, triageDefaultProjectKey))
+		if value := settingString(settings, triageDefaultProjectKey); value != "" {
+			input.ProjectID = &value
+			input.fieldsPresent["projectId"] = true
+		}
 	}
 	if !input.hasField("cycleId") {
-		input.CycleID = stringPtrOrNil(settingString(settings, triageDefaultCycleKey))
+		if value := settingString(settings, triageDefaultCycleKey); value != "" {
+			input.CycleID = &value
+			input.fieldsPresent["cycleId"] = true
+		}
 	}
 }
 
@@ -651,8 +675,7 @@ func (h Handler) validateTriageDecisionResources(ctx context.Context, team triag
 
 func (h Handler) validateTriageAssignee(ctx context.Context, team triageTeam, userID string) error {
 	var ok bool
-	// $2::uuid cast added for consistency with other UUID parameters.
-	err := h.DB.QueryRow(ctx, `select exists(select 1 from team_member tm join member m on m.user_id=tm.user_id and m.workspace_id=$3::uuid where tm.team_id=$1::uuid and tm.user_id=$2::uuid)`, team.ID, userID, team.WorkspaceID).Scan(&ok)
+	err := h.DB.QueryRow(ctx, `select exists(select 1 from team_member tm join member m on m.user_id=tm.user_id and m.workspace_id=$3::uuid where tm.team_id=$1::uuid and tm.user_id=$2)`, team.ID, userID, team.WorkspaceID).Scan(&ok)
 	if err != nil {
 		return err
 	}

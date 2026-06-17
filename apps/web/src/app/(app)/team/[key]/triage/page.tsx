@@ -28,6 +28,17 @@ const PRIORITY_OPTIONS = [
   { value: "none", label: "No priority" },
 ] as const;
 
+interface TriageSourceContext {
+  source?: string;
+  label?: string;
+  backlink?: string;
+  url?: string;
+  recipient?: string;
+  sender?: string;
+  title?: string;
+  identifier?: string;
+}
+
 interface TriageIssue {
   id: string;
   identifier: string;
@@ -52,6 +63,7 @@ interface TriageIssue {
   estimate?: number | null;
   updatedAt?: string;
   teamId?: string | null;
+  sourceContext?: TriageSourceContext | null;
 }
 
 interface TriageDestinationState {
