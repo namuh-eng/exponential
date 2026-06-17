@@ -85,6 +85,7 @@ type Integration struct {
 	SetupRequirement *SetupRequirement `json:"setupRequirement"`
 	Actions          Actions           `json:"actions"`
 	Health           Health            `json:"health"`
+	Details          map[string]any    `json:"details"`
 }
 
 type response struct {
@@ -115,7 +116,11 @@ type slackOAuthResponse struct {
 
 var catalog = []CatalogItem{
 	{Provider: "github", Name: "GitHub", Description: "Sync pull requests, commits, and issue links with Linear."},
+	{Provider: "gitlab", Name: "GitLab", Description: "Link merge requests, commits, and workflow automation to issues."},
 	{Provider: "jira", Name: "Jira", Description: "Sync issue status, ownership, and cross-links with Jira projects."},
+	{Provider: "discord", Name: "Discord", Description: "Create, search, and share issues from Discord slash commands."},
+	{Provider: "microsoft_teams", Name: "Microsoft Teams", Description: "Create issues and projects from Teams conversations and post project updates."},
+	{Provider: "sentry", Name: "Sentry", Description: "Create, link, and resolve issues from Sentry errors."},
 	{Provider: "slack", Name: "Slack", Description: "Send issue updates and create issues from Slack messages."},
 	{Provider: "zendesk", Name: "Zendesk", Description: "Connect support tickets to product work and customer requests."},
 }
@@ -125,6 +130,19 @@ func (h Handler) Routes() chi.Router {
 	r.Get("/", h.List)
 	r.Delete("/", h.Delete)
 	r.Post("/slack/connect", h.SlackConnect)
+	r.Post("/github/connect", h.GitHubConnect)
+	r.Post("/github/register", h.GitHubRegister)
+	r.Post("/github/disconnect", h.GitHubDisconnect)
+	r.Get("/gitlab", h.GitLabStatus)
+	r.Post("/gitlab/setup", h.GitLabSetup)
+	r.Post("/gitlab/workflows", h.GitLabWorkflow)
+	r.Post("/gitlab/disconnect", h.GitLabDisconnect)
+	r.Post("/discord/connect", h.DiscordConnect)
+	r.Post("/discord/disconnect", h.DiscordDisconnect)
+	r.Post("/microsoft-teams/connect", h.MicrosoftTeamsConnect)
+	r.Post("/microsoft-teams/disconnect", h.MicrosoftTeamsDisconnect)
+	r.Post("/sentry/connect", h.SentryConnect)
+	r.Post("/sentry/disconnect", h.SentryDisconnect)
 	r.Post("/slack/disconnect", h.SlackDisconnect)
 	return r
 }
@@ -166,7 +184,11 @@ func (h Handler) List(w http.ResponseWriter, r *http.Request) {
 		if ok {
 			health = connected.Health()
 		}
-		out = append(out, Integration{CatalogItem: item, ID: id, Status: status, DisplayName: displayName, ExternalID: externalID, ConnectedAt: connectedAt, SetupRequirement: requirement, Actions: integrationActions(canManage, ok, status, requirement), Health: health})
+		details := map[string]any{}
+		if ok && item.Provider == "github" {
+			details = githubIntegrationDetails(connected.Metadata)
+		}
+		out = append(out, Integration{CatalogItem: item, ID: id, Status: status, DisplayName: displayName, ExternalID: externalID, ConnectedAt: connectedAt, SetupRequirement: requirement, Actions: integrationActions(canManage, ok, status, requirement), Health: health, Details: details})
 	}
 	problem.JSON(w, 200, response{CanManageIntegrations: canManage, Integrations: out})
 }
@@ -342,6 +364,7 @@ type row struct {
 	FailedJobCount     int
 	AuditEvents        []AuditEvent
 	HealthSummary      *string
+	Metadata           map[string]any
 }
 
 func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error) {
@@ -358,7 +381,8 @@ func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error
 			wi.last_failure_at,
 			wi.last_failure_message,
 			wi.health_summary,
-			null::timestamp as token_expires_at,
+			wi.token_expires_at,
+			wi.metadata,
 			coalesce(count(pj.id) filter (where pj.status in ('queued','running')),0)::int,
 			coalesce(count(pj.id) filter (where pj.status in ('failed','dead')),0)::int
 		from workspace_integration wi
@@ -372,14 +396,17 @@ func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error
 	out := []row{}
 	for rows.Next() {
 		var r row
+		var metadataRaw []byte
 		if err := rows.Scan(
 			&r.ID, &r.Provider, &r.Status, &r.DisplayName, &r.ExternalID, &r.ConnectedAt,
 			&r.LifecycleState, &r.LastEventAt, &r.LastSuccessAt,
 			&r.LastFailureAt, &r.LastFailureMessage, &r.HealthSummary,
-			&r.TokenExpiresAt, &r.PendingJobCount, &r.FailedJobCount,
+			&r.TokenExpiresAt, &metadataRaw, &r.PendingJobCount, &r.FailedJobCount,
 		); err != nil {
 			return nil, err
 		}
+		r.Metadata = map[string]any{}
+		_ = json.Unmarshal(metadataRaw, &r.Metadata)
 		events, err := h.auditEvents(ctx, r.ID)
 		if err != nil {
 			return nil, err
@@ -406,11 +433,20 @@ func setupRequirement(provider string) *SetupRequirement {
 	if provider == "slack" && !slackConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Slack OAuth credentials are not configured. Add AUTH_SLACK_ID and AUTH_SLACK_SECRET to enable installation."}
 	}
-	if provider == "github" || provider == "jira" || provider == "zendesk" {
-		name := "GitHub"
-		if provider == "jira" {
-			name = "Jira"
-		}
+	if provider == "discord" && !discordConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Discord OAuth credentials and public key are not configured. Add AUTH_DISCORD_ID, AUTH_DISCORD_SECRET, and DISCORD_PUBLIC_KEY to enable installation."}
+	}
+	if provider == "microsoft_teams" && !microsoftTeamsConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Microsoft Teams credentials are not configured. Add AUTH_MICROSOFT_ID, AUTH_MICROSOFT_SECRET, and MICROSOFT_TEAMS_BOT_SECRET to enable tenant installation."}
+	}
+	if provider == "sentry" && !sentryConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Sentry credentials are not configured. Add AUTH_SENTRY_ID, AUTH_SENTRY_SECRET, and SENTRY_WEBHOOK_SECRET to enable installation and signed issue actions."}
+	}
+	if provider == "github" && !githubConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "GitHub App credentials are not configured. Add GITHUB_APP_ID, GITHUB_CLIENT_ID, GITHUB_PRIVATE_KEY, and GITHUB_WEBHOOK_SECRET to enable installation."}
+	}
+	if provider == "jira" || provider == "zendesk" {
+		name := "Jira"
 		if provider == "zendesk" {
 			name = "Zendesk"
 		}
@@ -421,6 +457,19 @@ func setupRequirement(provider string) *SetupRequirement {
 
 func slackConfigured() bool {
 	return strings.TrimSpace(os.Getenv("AUTH_SLACK_ID")) != "" && strings.TrimSpace(os.Getenv("AUTH_SLACK_SECRET")) != ""
+}
+
+func githubConfigured() bool {
+	_, ok := loadGitHubConfig()
+	return ok
+}
+
+func discordConfigured() bool {
+	return strings.TrimSpace(os.Getenv("AUTH_DISCORD_ID")) != "" && strings.TrimSpace(os.Getenv("AUTH_DISCORD_SECRET")) != "" && strings.TrimSpace(os.Getenv("DISCORD_PUBLIC_KEY")) != ""
+}
+
+func microsoftTeamsConfigured() bool {
+	return strings.TrimSpace(os.Getenv("AUTH_MICROSOFT_ID")) != "" && strings.TrimSpace(os.Getenv("AUTH_MICROSOFT_SECRET")) != "" && strings.TrimSpace(os.Getenv("MICROSOFT_TEAMS_BOT_SECRET")) != ""
 }
 
 func formatTime(value *time.Time) *string {

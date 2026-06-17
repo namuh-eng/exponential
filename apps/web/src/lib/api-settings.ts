@@ -96,6 +96,15 @@ export type WorkspaceApiKeyRecord = {
   };
 };
 
+export type McpAuditLogEntry = {
+  id: string;
+  toolName: string;
+  credentialId: string | null;
+  success: boolean;
+  error: string | null;
+  createdAt: string;
+};
+
 export type ApiSettingsPayload = {
   permissionLevel: PermissionLevel;
   viewerRole: WorkspaceMemberRole;
@@ -109,6 +118,7 @@ export type ApiSettingsPayload = {
   oauthApplications: OAuthApplicationRecord[];
   webhooks: WorkspaceWebhookRecord[];
   apiKeys: WorkspaceApiKeyRecord[];
+  mcpAuditLog: McpAuditLogEntry[];
 };
 
 export const GRAPHQL_DOCS_URL = "https://exponential.app/developers/graphql";

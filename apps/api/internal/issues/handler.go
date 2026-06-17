@@ -372,6 +372,10 @@ func (h Handler) issueDetail(ctx context.Context, issue Issue, userID string) (m
 	if err != nil {
 		return nil, err
 	}
+	sources, err := h.issueExternalSources(ctx, issue.ID)
+	if err != nil {
+		return nil, err
+	}
 	return map[string]any{
 		"id":                   issue.ID,
 		"number":               issue.Number,
@@ -397,6 +401,7 @@ func (h Handler) issueDetail(ctx context.Context, issue Issue, userID string) (m
 		"discussionSummary":    map[string]any{"enabled": false, "status": "disabled", "text": nil, "generatedAt": nil, "sourceCommentCount": 0},
 		"comments":             []any{},
 		"subIssues":            subIssues,
+		"sources":              sources,
 		"team_id":              issue.TeamID,
 		"state_id":             issue.StateID,
 		"assignee_id":          issue.AssigneeID,
@@ -869,6 +874,10 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "issue", updated.ID, "updated", updated, p.UserID); err != nil {
+		problem.Write(w, 500, "Update issue failed", err.Error())
+		return
+	}
+	if err := h.queueSentryAutomations(r.Context(), tx, p.WorkspaceID, existing, updated); err != nil {
 		problem.Write(w, 500, "Update issue failed", err.Error())
 		return
 	}

@@ -28,6 +28,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/issues"
 	"github.com/namuh-eng/exponential/apps/api/internal/issuetemplates"
 	"github.com/namuh-eng/exponential/apps/api/internal/labels"
+	"github.com/namuh-eng/exponential/apps/api/internal/mcp"
 	"github.com/namuh-eng/exponential/apps/api/internal/myissues"
 	"github.com/namuh-eng/exponential/apps/api/internal/notifications"
 	"github.com/namuh-eng/exponential/apps/api/internal/observability"
@@ -126,7 +127,18 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 		v1.Group(func(publicProvider chi.Router) {
 			publicProvider.Use(ratelimit.PublicMiddleware())
 			publicProvider.Get("/integrations/slack/oauth/callback", integrationsHandler.SlackOAuthCallback)
+			publicProvider.Get("/integrations/discord/oauth/callback", integrationsHandler.DiscordOAuthCallback)
+			publicProvider.Post("/integrations/discord/interactions", integrationsHandler.DiscordInteractions)
+			publicProvider.Get("/integrations/microsoft-teams/oauth/callback", integrationsHandler.MicrosoftTeamsOAuthCallback)
+			publicProvider.Get("/integrations/sentry/oauth/callback", integrationsHandler.SentryOAuthCallback)
+			publicProvider.Get("/integrations/github/setup/callback", integrationsHandler.GitHubSetupCallback)
+			publicProvider.Post("/integrations/sentry/issues/search", integrationsHandler.SentryIssueSearch)
+			publicProvider.Post("/integrations/sentry/issues/link", integrationsHandler.SentryIssueLink)
+			publicProvider.Post("/integrations/sentry/issues/create", integrationsHandler.SentryIssueCreate)
+			publicProvider.Post("/integrations/microsoft-teams/activities", integrationsHandler.MicrosoftTeamsActivities)
 			publicProvider.Post("/integrations/slack/events", integrationsHandler.SlackEvents)
+			publicProvider.Post("/integrations/gitlab/webhook/{integrationID}", integrationsHandler.GitLabWebhook)
+			publicProvider.Post("/integrations/github/webhook", integrationsHandler.GitHubWebhook)
 			publicProvider.Post("/integrations/slack/interactivity", integrationsHandler.SlackInteractivity)
 		})
 		v1.Mount("/inbound", inbound.Handler{DB: db}.Routes())
@@ -135,6 +147,17 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 		v1.Group(func(public chi.Router) {
 			public.Use(ratelimit.PublicMiddleware())
 			public.Get("/workspaces/invite-preview", workspacesHandler.PreviewInvite)
+		})
+		mcpHandler := mcp.Handler{DB: db}
+		v1.Route("/mcp", func(mcpRouter chi.Router) {
+			mcpRouter.Options("/", mcpHandler.Options)
+			mcpRouter.Group(func(protectedMCP chi.Router) {
+				protectedMCP.Use(authMiddleware.Require)
+				protectedMCP.Use(ratelimit.Middleware())
+				protectedMCP.Use(demo.SideEffectGuard{DB: db}.Block)
+				protectedMCP.Get("/", mcpHandler.Get)
+				protectedMCP.Post("/", mcpHandler.Post)
+			})
 		})
 		v1.Group(func(protected chi.Router) {
 			protected.Use(authMiddleware.Require)

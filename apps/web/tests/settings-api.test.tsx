@@ -30,6 +30,7 @@ function buildApiSettings(
     oauthApplications: [],
     webhooks: [],
     apiKeys: [],
+    mcpAuditLog: [],
     ...overrides,
   };
 }

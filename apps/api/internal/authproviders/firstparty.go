@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -46,6 +47,20 @@ type googleClaims struct {
 	EmailVerified bool   `json:"email_verified"`
 	Name          string `json:"name"`
 	Picture       string `json:"picture"`
+}
+
+type discordAccountClaims struct {
+	ID         string `json:"id"`
+	Username   string `json:"username"`
+	GlobalName string `json:"global_name"`
+	Email      string `json:"email"`
+}
+
+type microsoftAccountClaims struct {
+	ID                string `json:"id"`
+	DisplayName       string `json:"displayName"`
+	Mail              string `json:"mail"`
+	UserPrincipalName string `json:"userPrincipalName"`
 }
 
 func (h Handler) StartGoogle(w http.ResponseWriter, r *http.Request) {
@@ -142,6 +157,122 @@ func (h Handler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setSessionCookie(w, r, sessionToken, expires)
+	clearCookie(w, authStateCookieName)
+	http.Redirect(w, r, postAuthCompletionURL(r, callbackURL), http.StatusFound)
+}
+
+func (h Handler) StartDiscord(w http.ResponseWriter, r *http.Request) {
+	cfg, err := discordOAuthConfig(r)
+	if err != nil {
+		problem.JSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		return
+	}
+	callbackURL := safeCallbackPath(r.URL.Query().Get("callback_url"))
+	stateRaw := randomBase64URLAuth(24) + "|" + callbackURL
+	state := signAuthValue(stateRaw)
+	setTransientCookie(w, r, authStateCookieName, state, 10*time.Minute)
+	http.Redirect(w, r, cfg.AuthCodeURL(state), http.StatusFound)
+}
+
+func (h Handler) DiscordCallback(w http.ResponseWriter, r *http.Request) {
+	stateCookie, err := r.Cookie(authStateCookieName)
+	if err != nil {
+		problem.JSON(w, http.StatusBadRequest, map[string]string{"error": "Missing OAuth state."})
+		return
+	}
+	stateRaw, ok := verifyAuthValue(r.URL.Query().Get("state"))
+	if !ok || !hmac.Equal([]byte(r.URL.Query().Get("state")), []byte(stateCookie.Value)) {
+		problem.JSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid OAuth state."})
+		return
+	}
+	parts := strings.SplitN(stateRaw, "|", 2)
+	if len(parts) != 2 {
+		problem.JSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid OAuth state."})
+		return
+	}
+	callbackURL := safeCallbackPath(parts[1])
+	cfg, err := discordOAuthConfig(r)
+	if err != nil {
+		problem.JSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		return
+	}
+	token, err := cfg.Exchange(r.Context(), r.URL.Query().Get("code"))
+	if err != nil {
+		problem.Write(w, http.StatusUnauthorized, "Discord OAuth exchange failed", err.Error())
+		return
+	}
+	claims, err := fetchDiscordAccount(r.Context(), http.DefaultClient, token.AccessToken)
+	if err != nil {
+		problem.Write(w, http.StatusBadGateway, "Discord profile fetch failed", err.Error())
+		return
+	}
+	_, principal, err := (auth.Middleware{DB: h.DB}).BrowserSession(r.Context(), r)
+	if err != nil {
+		http.Redirect(w, r, safeCallbackPath(callbackURL)+"?connection_error=session_required", http.StatusFound)
+		return
+	}
+	if err := h.linkDiscordAccount(r.Context(), principal.UserID, claims, token); err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Discord account link failed", err.Error())
+		return
+	}
+	clearCookie(w, authStateCookieName)
+	http.Redirect(w, r, postAuthCompletionURL(r, callbackURL), http.StatusFound)
+}
+
+func (h Handler) StartMicrosoft(w http.ResponseWriter, r *http.Request) {
+	cfg, err := microsoftOAuthConfig(r)
+	if err != nil {
+		problem.JSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		return
+	}
+	callbackURL := safeCallbackPath(r.URL.Query().Get("callback_url"))
+	stateRaw := randomBase64URLAuth(24) + "|" + callbackURL
+	state := signAuthValue(stateRaw)
+	setTransientCookie(w, r, authStateCookieName, state, 10*time.Minute)
+	http.Redirect(w, r, cfg.AuthCodeURL(state), http.StatusFound)
+}
+
+func (h Handler) MicrosoftCallback(w http.ResponseWriter, r *http.Request) {
+	stateCookie, err := r.Cookie(authStateCookieName)
+	if err != nil {
+		problem.JSON(w, http.StatusBadRequest, map[string]string{"error": "Missing OAuth state."})
+		return
+	}
+	stateRaw, ok := verifyAuthValue(r.URL.Query().Get("state"))
+	if !ok || !hmac.Equal([]byte(r.URL.Query().Get("state")), []byte(stateCookie.Value)) {
+		problem.JSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid OAuth state."})
+		return
+	}
+	parts := strings.SplitN(stateRaw, "|", 2)
+	if len(parts) != 2 {
+		problem.JSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid OAuth state."})
+		return
+	}
+	callbackURL := safeCallbackPath(parts[1])
+	cfg, err := microsoftOAuthConfig(r)
+	if err != nil {
+		problem.JSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		return
+	}
+	token, err := cfg.Exchange(r.Context(), r.URL.Query().Get("code"))
+	if err != nil {
+		problem.Write(w, http.StatusUnauthorized, "Microsoft OAuth exchange failed", err.Error())
+		return
+	}
+	claims, err := fetchMicrosoftAccount(r.Context(), http.DefaultClient, token.AccessToken)
+	if err != nil {
+		problem.Write(w, http.StatusBadGateway, "Microsoft profile fetch failed", err.Error())
+		return
+	}
+	_, principal, err := (auth.Middleware{DB: h.DB}).BrowserSession(r.Context(), r)
+	if err != nil {
+		http.Redirect(w, r, safeCallbackPath(callbackURL)+"?connection_error=session_required", http.StatusFound)
+		return
+	}
+	if err := h.linkMicrosoftAccount(r.Context(), principal.UserID, claims, token); err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Microsoft account link failed", err.Error())
+		return
+	}
 	clearCookie(w, authStateCookieName)
 	http.Redirect(w, r, postAuthCompletionURL(r, callbackURL), http.StatusFound)
 }
@@ -303,6 +434,113 @@ func googleOAuthConfig(r *http.Request) (*oauth2.Config, error) {
 		return nil, fmt.Errorf("Google OAuth is not configured")
 	}
 	return &oauth2.Config{ClientID: clientID, ClientSecret: clientSecret, Endpoint: google.Endpoint, RedirectURL: appURL(r) + "/api/auth/google/callback", Scopes: []string{oidc.ScopeOpenID, "email", "profile"}}, nil
+}
+
+func discordOAuthConfig(r *http.Request) (*oauth2.Config, error) {
+	clientID := strings.TrimSpace(os.Getenv("AUTH_DISCORD_ID"))
+	clientSecret := strings.TrimSpace(os.Getenv("AUTH_DISCORD_SECRET"))
+	if clientID == "" || clientSecret == "" {
+		return nil, fmt.Errorf("Discord OAuth is not configured")
+	}
+	return &oauth2.Config{ClientID: clientID, ClientSecret: clientSecret, Endpoint: oauth2.Endpoint{AuthURL: "https://discord.com/oauth2/authorize", TokenURL: discordAuthAPIBaseURL() + "/oauth2/token"}, RedirectURL: appURL(r) + "/api/auth/discord/callback", Scopes: []string{"identify", "email"}}, nil
+}
+
+func discordAuthAPIBaseURL() string {
+	if v := strings.TrimSpace(os.Getenv("DISCORD_API_BASE_URL")); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	return "https://discord.com/api/v10"
+}
+
+func fetchDiscordAccount(ctx context.Context, client *http.Client, accessToken string) (discordAccountClaims, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, discordAuthAPIBaseURL()+"/users/@me", nil)
+	if err != nil {
+		return discordAccountClaims{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	resp, err := client.Do(req)
+	if err != nil {
+		return discordAccountClaims{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return discordAccountClaims{}, fmt.Errorf("Discord profile returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var claims discordAccountClaims
+	if err := json.NewDecoder(resp.Body).Decode(&claims); err != nil {
+		return discordAccountClaims{}, err
+	}
+	if strings.TrimSpace(claims.ID) == "" {
+		return discordAccountClaims{}, fmt.Errorf("Discord profile did not include an id")
+	}
+	return claims, nil
+}
+
+func (h Handler) linkDiscordAccount(ctx context.Context, userID string, claims discordAccountClaims, token *oauth2.Token) error {
+	accountID := "discord:" + claims.ID
+	refreshToken, _ := token.Extra("refresh_token").(string)
+	_, err := h.DB.Exec(ctx, `insert into account (id,account_id,provider_id,user_id,access_token,refresh_token,access_token_expires_at,scope,created_at,updated_at) values ($1,$2,'discord',$3,$4,$5,$6,$7,now(),now()) on conflict (id) do update set user_id=excluded.user_id, access_token=excluded.access_token, refresh_token=coalesce(nullif(excluded.refresh_token,''), account.refresh_token), access_token_expires_at=excluded.access_token_expires_at, scope=excluded.scope, updated_at=now()`, accountID, claims.ID, userID, token.AccessToken, refreshToken, token.Expiry, "identify email")
+	return err
+}
+
+func microsoftOAuthConfig(r *http.Request) (*oauth2.Config, error) {
+	clientID := strings.TrimSpace(os.Getenv("AUTH_MICROSOFT_ID"))
+	clientSecret := strings.TrimSpace(os.Getenv("AUTH_MICROSOFT_SECRET"))
+	if clientID == "" || clientSecret == "" {
+		return nil, fmt.Errorf("Microsoft OAuth is not configured")
+	}
+	return &oauth2.Config{ClientID: clientID, ClientSecret: clientSecret, Endpoint: oauth2.Endpoint{AuthURL: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize", TokenURL: microsoftGraphAPIBaseURL() + "/common/oauth2/v2.0/token"}, RedirectURL: appURL(r) + "/api/auth/microsoft/callback", Scopes: []string{"User.Read", "offline_access"}}, nil
+}
+
+func microsoftGraphAPIBaseURL() string {
+	if v := strings.TrimSpace(os.Getenv("MICROSOFT_LOGIN_BASE_URL")); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	return "https://login.microsoftonline.com"
+}
+
+func microsoftProfileAPIBaseURL() string {
+	if v := strings.TrimSpace(os.Getenv("MICROSOFT_GRAPH_BASE_URL")); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	return "https://graph.microsoft.com/v1.0"
+}
+
+func fetchMicrosoftAccount(ctx context.Context, client *http.Client, accessToken string) (microsoftAccountClaims, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, microsoftProfileAPIBaseURL()+"/me", nil)
+	if err != nil {
+		return microsoftAccountClaims{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	resp, err := client.Do(req)
+	if err != nil {
+		return microsoftAccountClaims{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return microsoftAccountClaims{}, fmt.Errorf("Microsoft profile returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var claims microsoftAccountClaims
+	if err := json.NewDecoder(resp.Body).Decode(&claims); err != nil {
+		return microsoftAccountClaims{}, err
+	}
+	if strings.TrimSpace(claims.ID) == "" {
+		return microsoftAccountClaims{}, fmt.Errorf("Microsoft profile did not include an id")
+	}
+	return claims, nil
+}
+
+func (h Handler) linkMicrosoftAccount(ctx context.Context, userID string, claims microsoftAccountClaims, token *oauth2.Token) error {
+	accountID := "microsoft:" + claims.ID
+	refreshToken, _ := token.Extra("refresh_token").(string)
+	scope, _ := token.Extra("scope").(string)
+	if scope == "" {
+		scope = "User.Read offline_access"
+	}
+	_, err := h.DB.Exec(ctx, `insert into account (id,account_id,provider_id,user_id,access_token,refresh_token,access_token_expires_at,scope,created_at,updated_at) values ($1,$2,'microsoft',$3,$4,$5,$6,$7,now(),now()) on conflict (id) do update set user_id=excluded.user_id, access_token=excluded.access_token, refresh_token=coalesce(nullif(excluded.refresh_token,''), account.refresh_token), access_token_expires_at=excluded.access_token_expires_at, scope=excluded.scope, updated_at=now()`, accountID, claims.ID, userID, token.AccessToken, refreshToken, token.Expiry, scope)
+	return err
 }
 
 func appURL(r *http.Request) string {

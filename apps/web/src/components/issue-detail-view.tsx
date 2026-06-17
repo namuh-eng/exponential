@@ -101,6 +101,14 @@ interface IssuePropertyOptions {
   cycles: { id: string; name: string | null; number: number }[];
   estimates: { value: number; label: string }[];
 }
+interface IssueExternalSource {
+  provider: "sentry" | string;
+  label: string;
+  url: string;
+  externalId: string;
+  project: string;
+  integrationId: string;
+}
 
 interface IssueDetail {
   id: string;
@@ -156,11 +164,16 @@ interface IssueDetail {
   };
   comments: IssueComment[];
   subIssues: IssueSubIssue[];
+  sources: IssueExternalSource[];
   createdAt: string;
   updatedAt: string;
 }
 
-type IssueHistoryEventType = "created" | "updated" | "comment_created";
+type IssueHistoryEventType =
+  | "created"
+  | "updated"
+  | "comment_created"
+  | "gitlab_merge_request";
 
 interface IssueHistoryEvent {
   id: string;
@@ -331,7 +344,10 @@ function normalizeHistoryEvent(value: unknown): IssueHistoryEvent | null {
   const { id, type, metadata, actor, createdAt } = value;
   if (
     typeof id !== "string" ||
-    (type !== "created" && type !== "updated" && type !== "comment_created") ||
+    (type !== "created" &&
+      type !== "updated" &&
+      type !== "comment_created" &&
+      type !== "gitlab_merge_request") ||
     typeof createdAt !== "string"
   ) {
     return null;
@@ -391,6 +407,22 @@ function getChangedFieldsLabel(metadata: Record<string, unknown>): string {
   return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
 }
 
+function getGitLabMergeRequestTitle(event: IssueHistoryEvent): string {
+  const gitlab = event.metadata.gitlab;
+  if (!isRecord(gitlab)) {
+    return "merge request";
+  }
+  const title = typeof gitlab.title === "string" ? gitlab.title.trim() : "";
+  const iid =
+    typeof gitlab.mergeRequestIid === "string"
+      ? gitlab.mergeRequestIid.trim()
+      : "";
+  if (title && iid) return `!${iid} ${title}`;
+  if (title) return title;
+  if (iid) return `!${iid}`;
+  return "merge request";
+}
+
 function getHistoryEventDescription(event: IssueHistoryEvent): string {
   const actorName = getHistoryActorName(event);
 
@@ -402,7 +434,11 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
         event.metadata.source === "slack_message" ||
         event.metadata.source === "slack_ask"
           ? " from Slack"
-          : "";
+          : event.metadata.source === "microsoft_teams_message"
+            ? " from Microsoft Teams"
+            : event.metadata.source === "sentry_issue"
+              ? " from Sentry"
+              : "";
       return `${actorName} created this issue${legacySuffix}${sourceSuffix}`;
     }
     case "updated":
@@ -416,6 +452,13 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
             }`
           : "";
       return `${actorName} added a comment${attachmentLabel}`;
+    }
+    case "gitlab_merge_request": {
+      const action =
+        typeof event.metadata.action === "string"
+          ? event.metadata.action
+          : "linked";
+      return `${actorName} ${action.replaceAll("_", " ")} GitLab ${getGitLabMergeRequestTitle(event)}`;
     }
   }
 }
@@ -433,6 +476,45 @@ function getSlackSourceLink(event: IssueHistoryEvent): string | null {
   }
   return typeof slack.permalink === "string" && slack.permalink.length > 0
     ? slack.permalink
+    : null;
+}
+
+function getMicrosoftTeamsSourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "microsoft_teams_message") {
+    return null;
+  }
+  const teams = event.metadata.microsoftTeams;
+  if (!isRecord(teams)) {
+    return null;
+  }
+  return typeof teams.permalink === "string" && teams.permalink.length > 0
+    ? teams.permalink
+    : null;
+}
+
+function getSentrySourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "sentry_issue") {
+    return null;
+  }
+  const sentry = event.metadata.sentry;
+  if (!isRecord(sentry)) {
+    return null;
+  }
+  return typeof sentry.webUrl === "string" && sentry.webUrl.length > 0
+    ? sentry.webUrl
+    : null;
+}
+
+function getGitLabSourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "gitlab_merge_request") {
+    return null;
+  }
+  const gitlab = event.metadata.gitlab;
+  if (!isRecord(gitlab)) {
+    return null;
+  }
+  return typeof gitlab.url === "string" && gitlab.url.length > 0
+    ? gitlab.url
     : null;
 }
 
@@ -685,6 +767,7 @@ export function IssueDetailView({
             generatedAt: null,
             sourceCommentCount: 0,
           },
+          sources: json.sources ?? [],
         });
         setDescriptionDraft(
           normalizeIssueDescriptionHtml(json.description) ?? "",
@@ -1935,6 +2018,38 @@ export function IssueDetailView({
                             View source message in Slack
                           </a>
                         ) : null}
+                        {getMicrosoftTeamsSourceLink(event) ? (
+                          <a
+                            href={
+                              getMicrosoftTeamsSourceLink(event) ?? undefined
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source message in Microsoft Teams
+                          </a>
+                        ) : null}
+                        {getSentrySourceLink(event) ? (
+                          <a
+                            href={getSentrySourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source issue in Sentry
+                          </a>
+                        ) : null}
+                        {getGitLabSourceLink(event) ? (
+                          <a
+                            href={getGitLabSourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View merge request in GitLab
+                          </a>
+                        ) : null}
                       </div>
                     </div>
                   ))}
@@ -2387,6 +2502,30 @@ export function IssueDetailView({
               />
             )}
           </div>
+
+          {issue.sources.length > 0 ? (
+            <div className="border-b border-[var(--color-border)] p-4">
+              <div className="editorial-section-title mb-3 text-[12px] uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                Sources
+              </div>
+              <div className="space-y-2">
+                {issue.sources.map((source) => (
+                  <a
+                    key={`${source.provider}-${source.externalId}`}
+                    href={source.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="tty-row flex items-center justify-between border border-[var(--color-border)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                  >
+                    <span>{source.label}</span>
+                    <span className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-text-tertiary)]">
+                      {source.provider}
+                    </span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div className="border-b border-[var(--color-border)] p-4">
             <div className="editorial-section-title mb-3 text-[12px] uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">

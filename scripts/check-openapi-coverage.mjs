@@ -13,6 +13,10 @@ const nonContractProviderCallbacks = new Set([
   "/integrations/slack/oauth/callback",
   "/integrations/slack/events",
   "/integrations/slack/interactivity",
+  "/integrations/discord/oauth/callback",
+  "/integrations/discord/interactions",
+  "/integrations/microsoft-teams/oauth/callback",
+  "/integrations/microsoft-teams/activities",
 ]);
 
 for (const file of routerFiles) {

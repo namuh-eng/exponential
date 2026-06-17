@@ -428,6 +428,10 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 			problem.Write(w, 500, "Update project failed", err.Error())
 			return
 		}
+		if err := h.queueMicrosoftTeamsProjectUpdate(r.Context(), tx, p.WorkspaceID, updated, settings, body); err != nil {
+			problem.Write(w, 500, "Queue Microsoft Teams project update failed", err.Error())
+			return
+		}
 	}
 	updated.Teams = teams
 	updated.Progress = existing.Progress

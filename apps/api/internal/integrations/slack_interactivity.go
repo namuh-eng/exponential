@@ -688,12 +688,23 @@ func (h Handler) createSlackAskIssue(ctx context.Context, install slackInstallRe
 	if err != nil {
 		return createdSlackIssue{}, err
 	}
-	priority := h.workspaceAskPriority(ctx, install.WorkspaceID)
+	priority, autoAssign, asksEnabled := h.workspaceAskSettings(ctx, install.WorkspaceID)
+	if !asksEnabled {
+		return createdSlackIssue{}, fmt.Errorf("Slack Ask intake is disabled")
+	}
+	assigneeID := ""
+	if autoAssign {
+		assigneeID, err = h.slackAskAssignee(ctx, install.WorkspaceID, team.ID)
+		if err != nil {
+			return createdSlackIssue{}, err
+		}
+	}
 	return h.createSlackIssue(ctx, install, slackIssueCreateInput{
 		WorkspaceID: install.WorkspaceID,
 		TeamID:      team.ID,
 		TeamKey:     team.Key,
 		UserID:      creatorID,
+		AssigneeID:  assigneeID,
 		SlackUserID: payload.User.ID,
 		SlackName:   firstNonEmpty(payload.User.Name, payload.User.Username, payload.User.ID),
 		Title:       defaultSlackIssueTitle(payload.Message.Text),
@@ -734,17 +745,83 @@ func (h Handler) workspaceIssueCreator(ctx context.Context, workspaceID string) 
 	return id, err
 }
 
-func (h Handler) workspaceAskPriority(ctx context.Context, workspaceID string) string {
+func (h Handler) workspaceAskSettings(ctx context.Context, workspaceID string) (string, bool, bool) {
 	var raw []byte
 	if err := h.DB.QueryRow(ctx, `select coalesce(settings,'{}'::jsonb) from workspace where id=$1::uuid`, workspaceID).Scan(&raw); err != nil {
-		return "medium"
+		return "medium", true, false
 	}
-	settings := readJSONRecord(raw)
-	priority := stringValue(recordValue(recordValue(settings["collaboration"])["asks"])["defaultPriority"])
+	return slackAskSettings(readJSONRecord(raw))
+}
+
+func slackAskSettings(settings map[string]any) (string, bool, bool) {
+	tasks := recordValue(recordValue(settings["collaboration"])["asks"])
+	priority := stringValue(tasks["defaultPriority"])
 	if !validSlackPriority(priority) {
-		return "medium"
+		priority = "medium"
 	}
-	return priority
+	autoAssign := true
+	if value, ok := tasks["autoAssign"].(bool); ok {
+		autoAssign = value
+	}
+	enabled := false
+	if value, ok := tasks["enabled"].(bool); ok {
+		enabled = value
+	}
+	return priority, autoAssign, enabled
+}
+
+func (h Handler) slackAskAssignee(ctx context.Context, workspaceID, teamID string) (string, error) {
+	var raw []byte
+	if err := h.DB.QueryRow(ctx, `select coalesce(settings,'{}'::jsonb) from team where id=$1::uuid and workspace_id=$2::uuid`, teamID, workspaceID).Scan(&raw); err != nil {
+		return "", err
+	}
+	if candidate := slackDefaultAssignee(readJSONRecord(raw)); candidate != "" {
+		ok, err := h.userCanReceiveTeamAsk(ctx, workspaceID, teamID, candidate)
+		if err != nil {
+			return "", err
+		}
+		if ok {
+			return candidate, nil
+		}
+	}
+	var userID string
+	err := h.DB.QueryRow(ctx, `
+		select tm.user_id
+		from team_member tm
+		join member m on m.user_id=tm.user_id and m.workspace_id=$2::uuid
+		where tm.team_id=$1::uuid
+		order by tm.created_at asc
+		limit 1`, teamID, workspaceID).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return userID, err
+}
+
+func slackDefaultAssignee(settings map[string]any) string {
+	for _, value := range []any{
+		recordValue(settings["workflowAutomation"])["defaultAssigneeId"],
+		settings["defaultAssigneeId"],
+	} {
+		if candidate := strings.TrimSpace(stringValue(value)); candidate != "" {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func (h Handler) userCanReceiveTeamAsk(ctx context.Context, workspaceID, teamID, userID string) (bool, error) {
+	var ok bool
+	err := h.DB.QueryRow(ctx, `
+		select true
+		from team_member tm
+		join member m on m.user_id=tm.user_id and m.workspace_id=$2::uuid
+		where tm.team_id=$1::uuid and tm.user_id=$3
+		limit 1`, teamID, workspaceID, userID).Scan(&ok)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return ok, err
 }
 
 func (h Handler) createSlackIssue(ctx context.Context, install slackInstallRecord, input slackIssueCreateInput) (createdSlackIssue, error) {
