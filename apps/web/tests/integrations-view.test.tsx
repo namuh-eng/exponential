@@ -264,6 +264,30 @@ describe("IntegrationsSettingsPage component", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ id: "front-id", provider: "front" }),
+  it("connects Zendesk from the catalog setup form", async () => {
+    const zendesk = {
+      ...integrations[0],
+      provider: "zendesk",
+      name: "Zendesk",
+      description:
+        "Connect support tickets to product work and customer requests.",
+      status: "not_connected",
+      setupRequirement: null,
+      actions: {
+        canConnect: true,
+        canManage: false,
+        canDisconnect: false,
+        canReconnect: false,
+      },
+    };
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          integrations: [zendesk],
+          canManageIntegrations: true,
+        }),
+
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -281,6 +305,16 @@ describe("IntegrationsSettingsPage component", () => {
               },
             },
           ],
+          accountUrl: "https://acme.zendesk.com",
+          actionBaseUrl: "https://app.example/api/integrations/zendesk/tickets",
+          actionSecret: "secret",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          integrations: [degradedSlack],
+
           canManageIntegrations: true,
         }),
       });
@@ -318,5 +352,32 @@ describe("IntegrationsSettingsPage component", () => {
       );
     });
     expect(await screen.findByText(/Front connected/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Zendesk subdomain"), {
+      target: { value: "acme" },
+    });
+    fireEvent.change(screen.getByLabelText("Admin email"), {
+      target: { value: "admin@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("API token"), {
+      target: { value: "token" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect Zendesk" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/integrations/zendesk/setup",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            subdomain: "acme",
+            email: "admin@example.com",
+            apiToken: "token",
+          }),
+        }),
+      ),
+    );
+    expect(await screen.findByText("Zendesk app details")).toBeInTheDocument();
+    expect(screen.getByText("secret")).toBeInTheDocument();
+
   });
 });

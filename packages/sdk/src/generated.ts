@@ -739,6 +739,86 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/github/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectGitHubIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/github/register": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["registerGitHubIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/github/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectGitHubIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/github/setup/callback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["githubSetupCallback"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/github/webhook": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["ingestGitHubWebhook"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/gitlab": {
     parameters: {
       query?: never;
@@ -883,6 +963,134 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/intercom/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectIntercomIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectIntercomIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/oauth/callback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["intercomOAuthCallback"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/issues/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["searchIntercomLinkableIssues"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/issues/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["getIntercomLinkedIssueStatus"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/issues/link": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["linkIntercomIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/issues/unlink": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["unlinkIntercomIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/issues/create": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createIssueFromIntercom"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/sentry/disconnect": {
     parameters: {
       query?: never;
@@ -893,6 +1101,54 @@ export interface paths {
     get?: never;
     put?: never;
     post: operations["disconnectSentryIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gong/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectGongIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gong/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectGongIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gong/{integrationId}/calls": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["ingestGongCall"];
     delete?: never;
     options?: never;
     head?: never;
@@ -1053,6 +1309,102 @@ export interface paths {
     get?: never;
     put?: never;
     post: operations["createIssueFromFront"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/zendesk/setup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["setupZendeskIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/zendesk/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectZendeskIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/zendesk/tickets/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["searchZendeskLinkableIssues"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/zendesk/tickets/link": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["linkZendeskTicket"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/zendesk/tickets/create": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createIssueFromZendesk"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/zendesk/tickets/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["getZendeskTicketStatus"];
     delete?: never;
     options?: never;
     head?: never;
@@ -2926,8 +3278,7 @@ export interface components {
         | "sentry"
         | "zendesk"
         | "discord"
-        | "microsoft_teams"
-        | "front";
+        | "microsoft_teams";
       name: string;
       description: string;
       /** Format: uuid */
@@ -2950,6 +3301,58 @@ export interface components {
         | null;
       actions: components["schemas"]["IntegrationActions"];
       health: components["schemas"]["IntegrationHealth"];
+      details: {
+        [key: string]: unknown;
+      };
+    };
+    GitHubAccount: {
+      id: string;
+      login: string;
+      type: string;
+    };
+    GitHubRepository: {
+      id: string;
+      name: string;
+      fullName: string;
+      private: boolean;
+      active: boolean;
+    };
+    GitHubConnectResponse: {
+      /** Format: uri */
+      installationUrl: string;
+      state: string;
+      workspaceSlug: string;
+    };
+    GitHubRegisterRequest: {
+      installationId: string;
+      account: components["schemas"]["GitHubAccount"];
+      /** @enum {string} */
+      repositorySelection: "all" | "selected" | "unknown";
+      repositories: components["schemas"]["GitHubRepository"][];
+      permissions: {
+        [key: string]: string;
+      };
+      setupAction?: string;
+      metadata?: {
+        [key: string]: unknown;
+      };
+    };
+    GitHubRegisterResponse: {
+      connected: boolean;
+      /** Format: uuid */
+      integrationId: string;
+      installationId: string;
+      account: components["schemas"]["GitHubAccount"];
+      repositories: components["schemas"]["GitHubRepository"][];
+    };
+    GitHubWebhookResponse: {
+      ok: boolean;
+      duplicate: boolean;
+      ignored: string | null;
+    };
+    GitHubConfigurationRequiredResponse: {
+      error: string;
+      message: string;
     };
     GitLabWorkflowMapping: {
       /** Format: uuid */
@@ -3024,6 +3427,42 @@ export interface components {
       state: string;
       workspaceSlug: string;
     };
+    IntercomConnectResponse: never;
+    GongConnectRequest: {
+      /** Format: uuid */
+      destinationTeamId?: string;
+      routingGuidance?: string;
+      mentionParticipants?: boolean;
+      pollingCursor?: string;
+    };
+    GongConnectResponse: {
+      /** Format: uri */
+      authorizationUrl: string;
+      state: string;
+      workspaceSlug: string;
+    };
+    GongConfigurationRequiredResponse: {
+      error: string;
+      message: string;
+    };
+    GongIngestCallRequest: {
+      call: {
+        [key: string]: unknown;
+      };
+    };
+    GongFindingResult: {
+      findingId: string;
+      /** Format: uuid */
+      issueId: string;
+      identifier: string;
+      linked: boolean;
+    };
+    GongIngestCallResponse: {
+      processed: boolean;
+      skipped: boolean;
+      reason?: string;
+      findings: components["schemas"]["GongFindingResult"][];
+    };
     DiscordConfigurationRequiredResponse: {
       error: string;
       message: string;
@@ -3037,6 +3476,10 @@ export interface components {
       message: string;
     };
     SentryConfigurationRequiredResponse: {
+      error: string;
+      message: string;
+    };
+    IntercomConfigurationRequiredResponse: {
       error: string;
       message: string;
     };
@@ -3068,6 +3511,42 @@ export interface components {
     SentryIssueSearchResponse: {
       issues: components["schemas"]["SentryIssueActionResponse"][];
     };
+    IntercomIssueActionRequest: {
+      appId?: string;
+      conversationId?: string;
+      issueId?: string;
+      /** Format: uuid */
+      teamId?: string;
+      title?: string;
+      description?: string;
+      contactId?: string;
+      contactEmail?: string;
+      companyId?: string;
+    } & {
+      [key: string]: unknown;
+    };
+    IntercomIssue: {
+      /** Format: uuid */
+      id: string;
+      identifier: string;
+      title: string;
+      /** Format: uri */
+      webUrl: string;
+      status: string;
+      assignee: string;
+    };
+    IntercomIssueActionResponse: {
+      ok: boolean;
+      message?: string;
+      issue?: components["schemas"]["IntercomIssue"] | null;
+      meta?: {
+        [key: string]: unknown;
+      };
+    };
+    IntercomIssueSearchResponse: {
+      ok: boolean;
+      issues: components["schemas"]["IntercomIssue"][];
+    };
     FrontSetupRequest: {
       apiToken: string;
       companyId?: string;
@@ -3082,6 +3561,23 @@ export interface components {
       /** @enum {string} */
       status: "connected";
       displayName: string;
+    };
+    FrontIssueActionRequest: {
+      workspaceSlug?: string;
+      companyId?: string;
+      query?: string;
+      issueId?: string;
+      identifier?: string;
+      /** Format: uuid */
+      teamId?: string;
+      teamKey?: string;
+      title?: string;
+      description?: string;
+      /** @enum {string} */
+      priority?: "none" | "urgent" | "high" | "medium" | "low";
+      conversation?: components["schemas"]["FrontConversationReference"];
+    } & {
+      [key: string]: unknown;
     };
     FrontConversationReference: {
       id: string;
@@ -3102,23 +3598,6 @@ export interface components {
     } & {
       [key: string]: unknown;
     };
-    FrontIssueActionRequest: {
-      workspaceSlug?: string;
-      companyId?: string;
-      query?: string;
-      issueId?: string;
-      identifier?: string;
-      /** Format: uuid */
-      teamId?: string;
-      teamKey?: string;
-      title?: string;
-      description?: string;
-      /** @enum {string} */
-      priority?: "none" | "urgent" | "high" | "medium" | "low";
-      conversation?: components["schemas"]["FrontConversationReference"];
-    } & {
-      [key: string]: unknown;
-    };
     FrontIssueActionResponse: {
       /** Format: uuid */
       id: string;
@@ -3131,6 +3610,72 @@ export interface components {
     };
     FrontIssueSearchResponse: {
       issues: components["schemas"]["FrontIssueActionResponse"][];
+    };
+    ZendeskSetupRequest: {
+      subdomain: string;
+      /** Format: email */
+      email: string;
+      apiToken: string;
+    };
+    ZendeskSetupResponse: {
+      connected: boolean;
+      /** Format: uuid */
+      integrationId: string;
+      subdomain: string;
+      /** Format: uri */
+      accountUrl: string;
+      displayName: string;
+      /** Format: uri */
+      actionBaseUrl: string;
+      actionSecret: string;
+    };
+    ZendeskTicketActionRequest: {
+      query?: string;
+      exponentialIssueId?: string;
+      issueIdentifier?: string;
+      /** Format: uuid */
+      teamId?: string;
+      teamKey?: string;
+      title?: string;
+      description?: string;
+      /** @enum {string} */
+      priority?: "none" | "urgent" | "high" | "medium" | "low";
+      subdomain?: string;
+      ticket?: {
+        id?: string;
+        /** Format: uri */
+        url?: string;
+        subject?: string;
+        description?: string;
+        status?: string;
+        requester?: {
+          [key: string]: unknown;
+        };
+        organization?: {
+          [key: string]: unknown;
+        };
+      } & {
+        [key: string]: unknown;
+      };
+    } & {
+      [key: string]: unknown;
+    };
+    ZendeskIssueActionResponse: {
+      /** Format: uri */
+      webUrl: string;
+      project: string;
+      identifier: string;
+      title?: string;
+      stateName?: string;
+      stateCategory?: string;
+    };
+    ZendeskIssueSearchResponse: {
+      issues: components["schemas"]["ZendeskIssueActionResponse"][];
+    };
+    ZendeskTicketStatusResponse: {
+      ticketId: string;
+      linked: boolean;
+      issues: components["schemas"]["ZendeskIssueActionResponse"][];
     };
     IntegrationListResponse: {
       canManageIntegrations: boolean;
@@ -6639,6 +7184,136 @@ export interface operations {
       default: components["responses"]["Problem"];
     };
   };
+  connectGitHubIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description GitHub App installation URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitHubConnectResponse"];
+        };
+      };
+      /** @description GitHub App is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitHubConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  registerGitHubIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["GitHubRegisterRequest"];
+      };
+    };
+    responses: {
+      /** @description GitHub App installation registered */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitHubRegisterResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectGitHubIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description GitHub disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  githubSetupCallback: {
+    parameters: {
+      query?: {
+        installation_id?: string;
+        setup_action?: string;
+        state?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Redirects to integration settings */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  ingestGitHubWebhook: {
+    parameters: {
+      query?: never;
+      header: {
+        "X-Hub-Signature-256": string;
+        "X-GitHub-Delivery": string;
+        "X-GitHub-Event": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          [key: string]: unknown;
+        };
+      };
+    };
+    responses: {
+      /** @description GitHub webhook accepted or deterministically ignored */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitHubWebhookResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   getGitLabIntegration: {
     parameters: {
       query?: never;
@@ -6874,6 +7549,204 @@ export interface operations {
       default: components["responses"]["Problem"];
     };
   };
+  connectIntercomIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Intercom authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomConnectResponse"];
+        };
+      };
+      /** @description Intercom OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectIntercomIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Intercom disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  intercomOAuthCallback: {
+    parameters: {
+      query?: {
+        code?: string;
+        state?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Redirects to integration settings */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  searchIntercomLinkableIssues: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntercomIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linkable Exponential issues for Intercom */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomIssueSearchResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getIntercomLinkedIssueStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntercomIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked issue status for an Intercom conversation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkIntercomIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntercomIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked issue for an Intercom conversation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  unlinkIntercomIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntercomIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Unlinked issue for an Intercom conversation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createIssueFromIntercom: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntercomIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Created issue from an Intercom conversation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   disconnectSentryIntegration: {
     parameters: {
       query?: never;
@@ -6890,6 +7763,88 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  connectGongIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["GongConnectRequest"];
+      };
+    };
+    responses: {
+      /** @description Gong authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GongConnectResponse"];
+        };
+      };
+      /** @description Gong OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GongConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectGongIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Gong disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  ingestGongCall: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        integrationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["GongIngestCallRequest"];
+      };
+    };
+    responses: {
+      /** @description Gong call ingestion result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GongIngestCallResponse"];
         };
       };
       default: components["responses"]["Problem"];
@@ -7133,6 +8088,152 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["FrontIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  setupZendeskIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ZendeskSetupRequest"];
+      };
+    };
+    responses: {
+      /** @description Zendesk connected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ZendeskSetupResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectZendeskIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Zendesk disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  searchZendeskLinkableIssues: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ZendeskTicketActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linkable Exponential issues for Zendesk */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ZendeskIssueSearchResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkZendeskTicket: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ZendeskTicketActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked Exponential issue descriptor for Zendesk */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ZendeskIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createIssueFromZendesk: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ZendeskTicketActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Created Exponential issue descriptor for Zendesk */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ZendeskIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getZendeskTicketStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ZendeskTicketActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked issue status for a Zendesk ticket */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ZendeskTicketStatusResponse"];
         };
       };
       default: components["responses"]["Problem"];

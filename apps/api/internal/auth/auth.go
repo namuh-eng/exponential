@@ -26,11 +26,12 @@ const principalKey contextKey = "principal"
 const BrowserSessionCookieName = "exponential_session"
 
 type Principal struct {
-	UserID      string
-	WorkspaceID string
-	Role        string
-	APIKeyID    string
-	Scopes      []string
+	UserID                string
+	WorkspaceID           string
+	Role                  string
+	APIKeyID              string
+	Scopes                []string
+	IsPersonalAccessToken bool
 }
 
 type BrowserSession struct {
@@ -140,6 +141,9 @@ func scopesAllowRequest(scopes []string, r *http.Request) bool {
 		// Browser sessions and legacy workspace API keys are not scoped here.
 		return true
 	}
+	if isMCPRequest(r) {
+		return hasScope(scopes, "read") || hasScope(scopes, "write")
+	}
 	required := "read"
 	if isUnsafeMethod(r.Method) {
 		required = "write"
@@ -147,6 +151,20 @@ func scopesAllowRequest(scopes []string, r *http.Request) bool {
 	for _, scope := range scopes {
 		scope = strings.TrimSpace(strings.ToLower(scope))
 		if scope == required {
+			return true
+		}
+	}
+	return false
+}
+
+func isMCPRequest(r *http.Request) bool {
+	path := strings.TrimRight(r.URL.Path, "/")
+	return path == "/v1/mcp" || path == "/api/mcp"
+}
+
+func hasScope(scopes []string, required string) bool {
+	for _, scope := range scopes {
+		if strings.EqualFold(strings.TrimSpace(scope), required) {
 			return true
 		}
 	}
@@ -695,6 +713,7 @@ func (m Middleware) authenticatePAT(ctx context.Context, keyHash string) (Princi
 	if len(p.Scopes) == 0 {
 		p.Scopes = []string{"read"}
 	}
+	p.IsPersonalAccessToken = true
 	_, _ = m.DB.Exec(ctx, `update personal_access_token set last_used_at = now() where id = $1::uuid`, p.APIKeyID)
 	_, _ = m.DB.Exec(ctx, `insert into personal_access_token_audit_log (token_id, user_id, workspace_id, action) values ($1::uuid, $2, $3::uuid, 'used')`, p.APIKeyID, p.UserID, p.WorkspaceID)
 	return p, nil
