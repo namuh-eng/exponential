@@ -378,7 +378,6 @@ describe("ImportExportPage component", () => {
             json: async () => ({ success: true, paused: true }),
           });
         }
-
       }
       return Promise.resolve({
         ok: true,
@@ -434,6 +433,5 @@ describe("ImportExportPage component", () => {
     expect(
       await screen.findByText("Jira forward sync paused for this project."),
     ).toBeInTheDocument();
-
   });
 });

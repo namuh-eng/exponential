@@ -927,11 +927,17 @@ func (h Handler) UpdateSCIM(w http.ResponseWriter, r *http.Request) {
 	} else {
 		scim.Status = "disabled"
 	}
+	scim.Tokens = nil
 	if err := h.storeSCIMSettings(r.Context(), p.WorkspaceID, settings, scim); err != nil {
 		problem.Write(w, 500, "Update SCIM settings failed", err.Error())
 		return
 	}
-	problem.JSON(w, 200, map[string]any{"scim": publicSCIM(scim)})
+	tokens, err := h.scimTokens(r.Context(), p.WorkspaceID)
+	if err != nil {
+		problem.Write(w, 500, "Update SCIM settings failed", err.Error())
+		return
+	}
+	problem.JSON(w, 200, map[string]any{"scim": publicSCIM(withSCIMTokens(scim, tokens))})
 }
 
 func (h Handler) CreateSCIMToken(w http.ResponseWriter, r *http.Request) {
@@ -955,13 +961,22 @@ func (h Handler) CreateSCIMToken(w http.ResponseWriter, r *http.Request) {
 	scim := readSCIMSettings(settings, scimBaseURL(r, p.WorkspaceID))
 	scim.Enabled = true
 	scim.Status = "enabled"
-	scim.Tokens = append(scim.Tokens, token)
+	scim.Tokens = nil
 	if err := h.storeSCIMSettings(r.Context(), p.WorkspaceID, settings, scim); err != nil {
 		problem.Write(w, 500, "Create SCIM token failed", err.Error())
 		return
 	}
+	if err := h.storeSCIMToken(r.Context(), p.WorkspaceID, token); err != nil {
+		problem.Write(w, 500, "Create SCIM token failed", err.Error())
+		return
+	}
+	tokens, err := h.scimTokens(r.Context(), p.WorkspaceID)
+	if err != nil {
+		problem.Write(w, 500, "Create SCIM token failed", err.Error())
+		return
+	}
 	created := publicToken(token)
-	problem.JSON(w, 200, map[string]any{"token": secret, "scim": publicSCIM(scim), "created": created})
+	problem.JSON(w, 200, map[string]any{"token": secret, "scim": publicSCIM(withSCIMTokens(scim, tokens)), "created": created})
 }
 
 func (h Handler) RevokeSCIMToken(w http.ResponseWriter, r *http.Request) {
@@ -980,18 +995,17 @@ func (h Handler) RevokeSCIMToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tokenID := chi.URLParam(r, "tokenId")
-	scim := readSCIMSettings(settings, scimBaseURL(r, p.WorkspaceID))
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	for idx := range scim.Tokens {
-		if scim.Tokens[idx].ID == tokenID && scim.Tokens[idx].RevokedAt == nil {
-			scim.Tokens[idx].RevokedAt = &now
-		}
-	}
-	if err := h.storeSCIMSettings(r.Context(), p.WorkspaceID, settings, scim); err != nil {
+	if err := h.revokeSCIMToken(r.Context(), p.WorkspaceID, tokenID); err != nil {
 		problem.Write(w, 500, "Revoke SCIM token failed", err.Error())
 		return
 	}
-	problem.JSON(w, 200, map[string]any{"scim": publicSCIM(scim)})
+	tokens, err := h.scimTokens(r.Context(), p.WorkspaceID)
+	if err != nil {
+		problem.Write(w, 500, "Revoke SCIM token failed", err.Error())
+		return
+	}
+	scim := readSCIMSettings(settings, scimBaseURL(r, p.WorkspaceID))
+	problem.JSON(w, 200, map[string]any{"scim": publicSCIM(withSCIMTokens(scim, tokens))})
 }
 
 func (h Handler) ListApplications(w http.ResponseWriter, r *http.Request) {
@@ -3337,6 +3351,49 @@ func (h Handler) storeSCIMSettings(ctx context.Context, workspaceID string, sett
 	return h.saveWorkspaceSettings(ctx, workspaceID, settings)
 }
 
+func (h Handler) storeSCIMToken(ctx context.Context, workspaceID string, token scimToken) error {
+	_, err := h.DB.Exec(ctx, `insert into workspace_scim_token (id, workspace_id, name, prefix, token_hash, created_at, revoked_at, last_used_at) values ($1, $2::uuid, $3, $4, $5, $6::timestamp, null, null)`, token.ID, workspaceID, token.Name, token.Prefix, token.TokenHash, token.CreatedAt)
+	return err
+}
+
+func (h Handler) revokeSCIMToken(ctx context.Context, workspaceID string, tokenID string) error {
+	_, err := h.DB.Exec(ctx, `update workspace_scim_token set revoked_at=coalesce(revoked_at, now()) where id=$1 and workspace_id=$2::uuid`, tokenID, workspaceID)
+	return err
+}
+
+func (h Handler) scimTokens(ctx context.Context, workspaceID string) ([]scimToken, error) {
+	rows, err := h.DB.Query(ctx, `select id::text, name, prefix, token_hash, created_at, revoked_at, last_used_at from workspace_scim_token where workspace_id=$1::uuid order by created_at desc`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	tokens := []scimToken{}
+	for rows.Next() {
+		var token scimToken
+		var createdAt time.Time
+		var revokedAt, lastUsedAt *time.Time
+		if err := rows.Scan(&token.ID, &token.Name, &token.Prefix, &token.TokenHash, &createdAt, &revokedAt, &lastUsedAt); err != nil {
+			return nil, err
+		}
+		token.CreatedAt = createdAt.UTC().Format(time.RFC3339Nano)
+		if revokedAt != nil {
+			formatted := revokedAt.UTC().Format(time.RFC3339Nano)
+			token.RevokedAt = &formatted
+		}
+		if lastUsedAt != nil {
+			formatted := lastUsedAt.UTC().Format(time.RFC3339Nano)
+			token.LastUsedAt = &formatted
+		}
+		tokens = append(tokens, token)
+	}
+	return tokens, rows.Err()
+}
+
+func withSCIMTokens(scim scimSettings, tokens []scimToken) scimSettings {
+	scim.Tokens = tokens
+	return scim
+}
+
 func (h Handler) saveWorkspaceSettings(ctx context.Context, workspaceID string, settings map[string]any) error {
 	return h.saveWorkspaceSettingsKey(ctx, workspaceID, "security", settings["security"])
 }
@@ -3364,7 +3421,7 @@ func nullableStringPtr(value any) *string {
 	return nil
 }
 func scimBaseURL(r *http.Request, workspaceID string) string {
-	return strings.TrimRight(requestOrigin(r), "/") + "/api/scim/" + workspaceID
+	return strings.TrimRight(requestOrigin(r), "/") + "/scim/v2"
 }
 func requestOrigin(r *http.Request) string {
 	scheme := "http"
