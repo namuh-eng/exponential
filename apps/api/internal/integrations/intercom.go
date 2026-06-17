@@ -146,7 +146,7 @@ func (h Handler) IntercomDisconnect(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusForbidden, "Forbidden", "")
 		return
 	}
-	if err := h.revokeProvider(r.Context(), p.WorkspaceID, "intercom", p.UserID); err != nil {
+	if err := h.disconnectProvider(r.Context(), p.WorkspaceID, p.UserID, "intercom"); err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Disconnect Intercom failed", err.Error())
 		return
 	}

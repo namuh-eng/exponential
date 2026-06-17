@@ -170,6 +170,8 @@ func (h Handler) BulkTriage(w http.ResponseWriter, r *http.Request) {
 	for _, issueID := range input.IssueIDs {
 		result, status := h.applyTriageDecision(r, team, p.UserID, issueID, input)
 		if status >= 500 {
+			// Server-side failure: abort the batch. The response has not been
+			// written yet so it is safe to write a 500 here.
 			problem.Write(w, 500, "Triage decision failed", "")
 			return
 		}
@@ -177,11 +179,8 @@ func (h Handler) BulkTriage(w http.ResponseWriter, r *http.Request) {
 			updated++
 			results = append(results, map[string]any{"issueId": issueID, "status": "updated"})
 		} else {
-			message := "Triage decision failed"
-			if result != nil && result["error"] != nil {
-				message, _ = result["error"].(string)
-			}
-			results = append(results, map[string]any{"issueId": issueID, "status": "conflict", "error": message})
+			// 4xx conflict/validation: result map is guaranteed non-nil here.
+			results = append(results, map[string]any{"issueId": issueID, "status": "conflict", "error": result["error"]})
 		}
 	}
 	status := 200
@@ -191,7 +190,7 @@ func (h Handler) BulkTriage(w http.ResponseWriter, r *http.Request) {
 	problem.JSON(w, status, map[string]any{"updatedCount": updated, "conflictCount": len(input.IssueIDs) - updated, "results": results, "decision": map[string]any{"action": input.Action, "reason": stringPtrTrim(input.Reason)}})
 }
 
-// applyTriageDecision applies a single triage decision. It does not write to
+// applyTriageDecision applies a single triage decision. It no longer writes to
 // http.ResponseWriter: server-side errors return (nil, 500) so the caller
 // decides when to write the response, preventing double-write and nil-map
 // panics in BulkTriage. 4xx validation failures return a non-nil result map
@@ -226,7 +225,7 @@ func (h Handler) applyTriageDecision(r *http.Request, team triageTeam, userID, i
 		return map[string]any{"error": "Destination status not found for this team"}, 400
 	}
 	if err != nil {
-		return triageInternalError(err)
+		return nil, 500
 	}
 	if (input.Action == "accept" && !triageAcceptCategories[dest.Category]) || (input.Action == "decline" && dest.Category != "canceled") {
 		return map[string]any{"error": "Destination status is not allowed for this triage decision"}, 400
@@ -236,7 +235,7 @@ func (h Handler) applyTriageDecision(r *http.Request, team triageTeam, userID, i
 		return map[string]any{"error": "Issue not found"}, 404
 	}
 	if err != nil {
-		return triageInternalError(err)
+		return nil, 500
 	}
 	if current.Category != "triage" {
 		return map[string]any{"error": "Issue is not currently in triage"}, 409
@@ -265,11 +264,13 @@ func (h Handler) applyTriageDecision(r *http.Request, team triageTeam, userID, i
 		dueDate = parsed
 	}
 	if err := h.validateTriageDecisionResources(r.Context(), team, input); err != nil {
+		// Distinguish safe validation messages from raw DB errors so that DB
+		// internals never appear in a 400 title.
 		var ve *triageValidationError
 		if errors.As(err, &ve) {
 			return map[string]any{"error": ve.msg}, 400
 		}
-		return triageInternalError(err)
+		return nil, 500
 	}
 	canceledAt := any(nil)
 	if input.Action == "decline" {

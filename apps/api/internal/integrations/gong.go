@@ -217,7 +217,7 @@ func (h Handler) GongDisconnect(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusForbidden, "Forbidden", "")
 		return
 	}
-	if err := h.revokeProvider(r.Context(), p.WorkspaceID, "gong", p.UserID); err != nil {
+	if err := h.disconnectProvider(r.Context(), p.WorkspaceID, p.UserID, "gong"); err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Disconnect Gong failed", err.Error())
 		return
 	}

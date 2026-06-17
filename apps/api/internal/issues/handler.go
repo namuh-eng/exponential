@@ -955,10 +955,10 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create issue failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	go func() {
 		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "issue.created", "", issue)
 	}()
-	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	h.storeIdempotency(r, p, http.StatusCreated, issue)
 	problem.JSON(w, http.StatusCreated, issue)
 }
@@ -1121,10 +1121,10 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update issue failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	go func() {
 		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "issue.updated", "", updated)
 	}()
-	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	h.storeIdempotency(r, p, http.StatusOK, updated)
 	problem.JSON(w, http.StatusOK, updated)
 }
@@ -1163,10 +1163,10 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete issue failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	go func() {
 		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "issue.deleted", "", existing)
 	}()
-	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	body := map[string]bool{"success": true}
 	h.storeIdempotency(r, p, http.StatusOK, body)
 	problem.JSON(w, http.StatusOK, body)

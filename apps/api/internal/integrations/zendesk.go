@@ -167,7 +167,7 @@ func (h Handler) ZendeskDisconnect(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusForbidden, "Forbidden", "")
 		return
 	}
-	if err := h.revokeProvider(r.Context(), p.WorkspaceID, "zendesk", p.UserID); err != nil {
+	if err := h.disconnectProvider(r.Context(), p.WorkspaceID, p.UserID, "zendesk"); err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Disconnect Zendesk failed", err.Error())
 		return
 	}

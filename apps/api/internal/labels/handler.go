@@ -197,10 +197,10 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create label failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	go func() {
 		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "label.created", "", label)
 	}()
-	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	problem.JSON(w, 201, labelResponse{Label: label})
 }
 
@@ -299,10 +299,10 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update label failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	go func() {
 		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "label.updated", "", label)
 	}()
-	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	problem.JSON(w, 200, labelResponse{Label: label})
 }
 
@@ -337,10 +337,10 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete label failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	go func() {
 		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "label.deleted", "", map[string]string{"id": id})
 	}()
-	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	problem.JSON(w, 200, map[string]bool{"success": true})
 }
 
