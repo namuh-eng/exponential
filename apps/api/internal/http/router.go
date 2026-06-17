@@ -136,6 +136,10 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 			publicProvider.Post("/integrations/sentry/issues/search", integrationsHandler.SentryIssueSearch)
 			publicProvider.Post("/integrations/sentry/issues/link", integrationsHandler.SentryIssueLink)
 			publicProvider.Post("/integrations/sentry/issues/create", integrationsHandler.SentryIssueCreate)
+			publicProvider.Post("/integrations/front/issues/search", integrationsHandler.FrontIssueSearch)
+			publicProvider.Post("/integrations/front/issues/link", integrationsHandler.FrontIssueLink)
+			publicProvider.Post("/integrations/front/issues/unlink", integrationsHandler.FrontIssueUnlink)
+			publicProvider.Post("/integrations/front/issues/create", integrationsHandler.FrontIssueCreate)
 			publicProvider.Post("/integrations/intercom/issues/search", integrationsHandler.IntercomIssueSearch)
 			publicProvider.Post("/integrations/intercom/issues/status", integrationsHandler.IntercomIssueStatus)
 			publicProvider.Post("/integrations/intercom/issues/link", integrationsHandler.IntercomIssueLink)
@@ -145,6 +149,7 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 			publicProvider.Post("/integrations/zendesk/tickets/link", integrationsHandler.ZendeskTicketLink)
 			publicProvider.Post("/integrations/zendesk/tickets/create", integrationsHandler.ZendeskTicketCreate)
 			publicProvider.Post("/integrations/zendesk/tickets/status", integrationsHandler.ZendeskTicketStatus)
+
 			publicProvider.Post("/integrations/microsoft-teams/activities", integrationsHandler.MicrosoftTeamsActivities)
 			publicProvider.Post("/integrations/slack/events", integrationsHandler.SlackEvents)
 			publicProvider.Post("/integrations/gitlab/webhook/{integrationID}", integrationsHandler.GitLabWebhook)

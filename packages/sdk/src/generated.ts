@@ -1219,6 +1219,102 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/front/setup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["setupFrontIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/front/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectFrontIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/front/issues/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["searchFrontLinkableIssues"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/front/issues/link": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["linkFrontIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/front/issues/unlink": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["unlinkFrontIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/front/issues/create": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createIssueFromFront"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/zendesk/setup": {
     parameters: {
       query?: never;
@@ -3450,6 +3546,70 @@ export interface components {
     IntercomIssueSearchResponse: {
       ok: boolean;
       issues: components["schemas"]["IntercomIssue"][];
+    };
+    FrontSetupRequest: {
+      apiToken: string;
+      companyId?: string;
+      /** Format: uri */
+      baseUrl?: string;
+    };
+    FrontSetupResponse: {
+      /** Format: uuid */
+      id: string;
+      /** @enum {string} */
+      provider: "front";
+      /** @enum {string} */
+      status: "connected";
+      displayName: string;
+    };
+    FrontIssueActionRequest: {
+      workspaceSlug?: string;
+      companyId?: string;
+      query?: string;
+      issueId?: string;
+      identifier?: string;
+      /** Format: uuid */
+      teamId?: string;
+      teamKey?: string;
+      title?: string;
+      description?: string;
+      /** @enum {string} */
+      priority?: "none" | "urgent" | "high" | "medium" | "low";
+      conversation?: components["schemas"]["FrontConversationReference"];
+    } & {
+      [key: string]: unknown;
+    };
+    FrontConversationReference: {
+      id: string;
+      subject?: string;
+      /** Format: uri */
+      permalink?: string;
+      messageId?: string;
+      inboxId?: string;
+      contactId?: string;
+      /** Format: email */
+      contactEmail?: string;
+      contactName?: string;
+      accountId?: string;
+      accountName?: string;
+      metadata?: {
+        [key: string]: unknown;
+      };
+    } & {
+      [key: string]: unknown;
+    };
+    FrontIssueActionResponse: {
+      /** Format: uuid */
+      id: string;
+      identifier: string;
+      title: string;
+      status: string;
+      assignee: string | null;
+      /** Format: uri */
+      webUrl: string;
+    };
+    FrontIssueSearchResponse: {
+      issues: components["schemas"]["FrontIssueActionResponse"][];
     };
     ZendeskSetupRequest: {
       subdomain: string;
@@ -7782,6 +7942,152 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SentryIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  setupFrontIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FrontSetupRequest"];
+      };
+    };
+    responses: {
+      /** @description Front connected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FrontSetupResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectFrontIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Front disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  searchFrontLinkableIssues: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FrontIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linkable Exponential issues for Front */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FrontIssueSearchResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkFrontIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FrontIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked Exponential issue descriptor for Front */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FrontIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  unlinkFrontIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FrontIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Front conversation unlinked */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createIssueFromFront: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FrontIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Created Exponential issue descriptor for Front */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FrontIssueActionResponse"];
         };
       };
       default: components["responses"]["Problem"];

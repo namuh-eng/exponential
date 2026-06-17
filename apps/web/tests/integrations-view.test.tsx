@@ -97,6 +97,31 @@ const integrations = [
       auditEvents: [],
     },
   },
+  {
+    provider: "front",
+    name: "Front",
+    description: "Create, link, and reopen issues from Front conversations.",
+    status: "not_connected",
+    displayName: null,
+    connectedAt: null,
+    setupRequirement: null,
+    actions: {
+      canConnect: true,
+      canManage: false,
+      canDisconnect: false,
+      canReconnect: false,
+    },
+    health: {
+      lastEventAt: null,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      lastFailureMessage: null,
+      tokenExpiresAt: null,
+      pendingJobCount: 0,
+      failedJobCount: 0,
+      auditEvents: [],
+    },
+  },
 ];
 
 const degradedSlack = {
@@ -230,6 +255,15 @@ describe("IntegrationsSettingsPage component", () => {
     ).toBeInTheDocument();
   });
 
+  it("connects Front with an API token setup form", async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ integrations, canManageIntegrations: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: "front-id", provider: "front" }),
   it("connects Zendesk from the catalog setup form", async () => {
     const zendesk = {
       ...integrations[0],
@@ -253,10 +287,24 @@ describe("IntegrationsSettingsPage component", () => {
           integrations: [zendesk],
           canManageIntegrations: true,
         }),
+
       })
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
+          integrations: [
+            {
+              ...integrations[3],
+              status: "connected",
+              displayName: "Front cmp_123",
+              actions: {
+                canConnect: false,
+                canManage: true,
+                canDisconnect: true,
+                canReconnect: false,
+              },
+            },
+          ],
           accountUrl: "https://acme.zendesk.com",
           actionBaseUrl: "https://app.example/api/integrations/zendesk/tickets",
           actionSecret: "secret",
@@ -266,6 +314,7 @@ describe("IntegrationsSettingsPage component", () => {
         ok: true,
         json: async () => ({
           integrations: [degradedSlack],
+
           canManageIntegrations: true,
         }),
       });
@@ -275,6 +324,34 @@ describe("IntegrationsSettingsPage component", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Explore integrations" }),
     );
+    fireEvent.change(
+      screen.getByPlaceholderText("Optional company identifier"),
+      {
+        target: { value: "cmp_123" },
+      },
+    );
+    fireEvent.change(
+      screen.getByPlaceholderText(
+        "Bearer token with conversations/comments permissions",
+      ),
+      { target: { value: "front-token" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Connect Front" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        "/api/integrations/front/setup",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            apiToken: "front-token",
+            companyId: "cmp_123",
+            baseUrl: "https://api2.frontapp.com",
+          }),
+        }),
+      );
+    });
+    expect(await screen.findByText(/Front connected/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Zendesk subdomain"), {
       target: { value: "acme" },
     });
@@ -301,5 +378,6 @@ describe("IntegrationsSettingsPage component", () => {
     );
     expect(await screen.findByText("Zendesk app details")).toBeInTheDocument();
     expect(screen.getByText("secret")).toBeInTheDocument();
+
   });
 });

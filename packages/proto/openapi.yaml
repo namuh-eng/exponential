@@ -1523,6 +1523,112 @@ paths:
                 $ref: '#/components/schemas/SentryIssueActionResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /integrations/front/setup:
+    post:
+      operationId: setupFrontIntegration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FrontSetupRequest'
+      responses:
+        '200':
+          description: Front connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrontSetupResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/front/disconnect:
+    post:
+      operationId: disconnectFrontIntegration
+      responses:
+        '200':
+          description: Front disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/front/issues/search:
+    post:
+      operationId: searchFrontLinkableIssues
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FrontIssueActionRequest'
+      responses:
+        '200':
+          description: Linkable Exponential issues for Front
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrontIssueSearchResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/front/issues/link:
+    post:
+      operationId: linkFrontIssue
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FrontIssueActionRequest'
+      responses:
+        '200':
+          description: Linked Exponential issue descriptor for Front
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrontIssueActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/front/issues/unlink:
+    post:
+      operationId: unlinkFrontIssue
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FrontIssueActionRequest'
+      responses:
+        '200':
+          description: Front conversation unlinked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/front/issues/create:
+    post:
+      operationId: createIssueFromFront
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FrontIssueActionRequest'
+      responses:
+        '200':
+          description: Created Exponential issue descriptor for Front
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrontIssueActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /integrations/zendesk/setup:
     post:
       operationId: setupZendeskIntegration
@@ -4925,6 +5031,70 @@ components:
         issues:
           type: array
           items: { $ref: '#/components/schemas/IntercomIssue' }
+    FrontSetupRequest:
+      type: object
+      required: [apiToken]
+      properties:
+        apiToken: { type: string }
+        companyId: { type: string }
+        baseUrl: { type: string, format: uri }
+    FrontSetupResponse:
+      type: object
+      required: [id, provider, status, displayName]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string, enum: [front] }
+        status: { type: string, enum: [connected] }
+        displayName: { type: string }
+    FrontIssueActionRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        workspaceSlug: { type: string }
+        companyId: { type: string }
+        query: { type: string }
+        issueId: { type: string }
+        identifier: { type: string }
+        teamId: { type: string, format: uuid }
+        teamKey: { type: string }
+        title: { type: string }
+        description: { type: string }
+        priority: { type: string, enum: [none, urgent, high, medium, low] }
+        conversation:
+          $ref: '#/components/schemas/FrontConversationReference'
+    FrontConversationReference:
+      type: object
+      additionalProperties: true
+      required: [id]
+      properties:
+        id: { type: string }
+        subject: { type: string }
+        permalink: { type: string, format: uri }
+        messageId: { type: string }
+        inboxId: { type: string }
+        contactId: { type: string }
+        contactEmail: { type: string, format: email }
+        contactName: { type: string }
+        accountId: { type: string }
+        accountName: { type: string }
+        metadata: { type: object, additionalProperties: true }
+    FrontIssueActionResponse:
+      type: object
+      required: [id, identifier, title, status, assignee, webUrl]
+      properties:
+        id: { type: string, format: uuid }
+        identifier: { type: string }
+        title: { type: string }
+        status: { type: string }
+        assignee: { type: [string, 'null'] }
+        webUrl: { type: string, format: uri }
+    FrontIssueSearchResponse:
+      type: object
+      required: [issues]
+      properties:
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/FrontIssueActionResponse' }
     ZendeskSetupRequest:
       type: object
       required: [subdomain, email, apiToken]

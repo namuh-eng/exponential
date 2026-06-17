@@ -114,6 +114,7 @@ var catalog = []CatalogItem{
 	{Provider: "slack", Name: "Slack", Description: "Send issue updates and create issues from Slack messages."},
 	{Provider: "gong", Name: "Gong", Description: "Connect customer call excerpts to issues and customer requests."},
 	{Provider: "zendesk", Name: "Zendesk", Description: "Connect support tickets to product work and customer requests."},
+	{Provider: "front", Name: "Front", Description: "Create, link, and reopen issues from Front conversations."},
 }
 
 func (h Handler) Routes() chi.Router {
@@ -134,12 +135,15 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/microsoft-teams/disconnect", h.MicrosoftTeamsDisconnect)
 	r.Post("/sentry/connect", h.SentryConnect)
 	r.Post("/sentry/disconnect", h.SentryDisconnect)
+	r.Post("/front/setup", h.FrontSetup)
+	r.Post("/front/disconnect", h.FrontDisconnect)
 	r.Post("/intercom/connect", h.IntercomConnect)
 	r.Post("/intercom/disconnect", h.IntercomDisconnect)
 	r.Post("/zendesk/setup", h.ZendeskSetup)
 	r.Post("/zendesk/disconnect", h.ZendeskDisconnect)
 	r.Post("/gong/connect", h.GongConnect)
 	r.Post("/gong/disconnect", h.GongDisconnect)
+
 	r.Post("/slack/disconnect", h.SlackDisconnect)
 	return r
 }

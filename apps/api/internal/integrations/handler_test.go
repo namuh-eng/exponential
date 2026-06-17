@@ -967,6 +967,64 @@ func TestSentryIssueActionFromPayload(t *testing.T) {
 	}
 }
 
+func TestFrontSignatureVerification(t *testing.T) {
+	body := []byte(`{"workspaceSlug":"acme","conversation":{"id":"cnv_123"}}`)
+	mac := hmac.New(sha256.New, []byte("secret"))
+	_, _ = mac.Write(body)
+	signature := hex.EncodeToString(mac.Sum(nil))
+	if !verifyFrontSignature("secret", signature, body) {
+		t.Fatal("valid Front signature was rejected")
+	}
+	if !verifyFrontSignature("secret", "sha256="+signature, body) {
+		t.Fatal("prefixed Front signature was rejected")
+	}
+	if verifyFrontSignature("secret", signature, []byte(`{"workspaceSlug":"other"}`)) {
+		t.Fatal("tampered Front body was accepted")
+	}
+}
+
+func TestValidateFrontTokenUsesConfiguredBaseURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/teammates" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer front-token" {
+			t.Fatalf("authorization = %q", r.Header.Get("Authorization"))
+		}
+		_, _ = w.Write([]byte(`{"_results":[]}`))
+	}))
+	defer server.Close()
+	if err := validateFrontToken(t.Context(), server.Client(), server.URL, "front-token"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPostFrontJSONReopensConversation(t *testing.T) {
+	seen := []string{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Method+" "+r.URL.Path)
+		if r.Header.Get("Authorization") != "Bearer front-token" {
+			t.Fatalf("authorization = %q", r.Header.Get("Authorization"))
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	credential := frontCredential{APIToken: "front-token", BaseURL: server.URL}
+	if err := postFrontJSON(t.Context(), server.Client(), credential, http.MethodPost, "/conversations/cnv_123/comments", map[string]any{"body": "done"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := postFrontJSON(t.Context(), server.Client(), credential, http.MethodPatch, "/conversations/cnv_123", map[string]any{"status": "open"}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(seen, ",") != "POST /conversations/cnv_123/comments,PATCH /conversations/cnv_123" {
+		t.Fatalf("requests = %#v", seen)
+	}
+}
+
+func TestFrontReopenCommentBody(t *testing.T) {
+	body := frontReopenCommentBody(map[string]any{"identifier": "ENG-7", "title": "Fix exports", "category": "canceled", "issueUrl": "https://app.example/team/ENG/issue/ENG-7"})
+	if !strings.Contains(body, "ENG-7 Fix exports was canceled") || !strings.Contains(body, "https://app.example/team/ENG/issue/ENG-7") {
+		t.Fatalf("body = %q", body)
 func TestZendeskSetupRequirementAndSubdomain(t *testing.T) {
 	if got := setupRequirement("zendesk"); got != nil {
 		t.Fatalf("zendesk should be configurable from admin setup, got %#v", got)
@@ -1049,5 +1107,6 @@ func TestUpdateZendeskTicket(t *testing.T) {
 	comment := ticket["comment"].(map[string]any)
 	if comment["body"] != "Done" || comment["public"] != false || ticket["status"] != "open" {
 		t.Fatalf("payload = %#v", got)
+
 	}
 }
