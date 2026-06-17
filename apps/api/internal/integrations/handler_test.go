@@ -386,6 +386,28 @@ func TestSlackIssueCreationEnabledSettings(t *testing.T) {
 	}
 }
 
+func TestSlackAskSettingsRespectPriorityAutoAssignAndEnabled(t *testing.T) {
+	priority, autoAssign, enabled := slackAskSettings(map[string]any{"collaboration": map[string]any{"asks": map[string]any{"enabled": true, "defaultPriority": "urgent", "autoAssign": false}}})
+	if priority != "urgent" || autoAssign || !enabled {
+		t.Fatalf("settings = %q %v %v", priority, autoAssign, enabled)
+	}
+
+	priority, autoAssign, enabled = slackAskSettings(map[string]any{"collaboration": map[string]any{"asks": map[string]any{"defaultPriority": "invalid"}}})
+	if priority != "medium" || !autoAssign || enabled {
+		t.Fatalf("default settings = %q %v %v", priority, autoAssign, enabled)
+	}
+}
+
+func TestSlackDefaultAssigneePrefersWorkflowAutomation(t *testing.T) {
+	got := slackDefaultAssignee(map[string]any{
+		"defaultAssigneeId":  "fallback-user",
+		"workflowAutomation": map[string]any{"defaultAssigneeId": "workflow-user"},
+	})
+	if got != "workflow-user" {
+		t.Fatalf("default assignee = %q", got)
+	}
+}
+
 func TestSlackSourceFromPayloadBuildsFallbackPermalink(t *testing.T) {
 	payload := slackInteractionPayload{}
 	payload.Team.ID = "T123"
