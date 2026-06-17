@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+  "/sync/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get current workspace sync version and replay status */
+    get: operations["getSyncStatus"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/attachments": {
     parameters: {
       query?: never;
@@ -52,6 +69,197 @@ export interface paths {
     put?: never;
     post?: never;
     delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customers": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List customers in the authenticated workspace */
+    get: operations["listCustomers"];
+    put?: never;
+    /** Create a customer in the authenticated workspace */
+    post: operations["createCustomer"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customers/{customerID}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerID: string;
+      };
+      cookie?: never;
+    };
+    /** Get a customer with requests and linked work */
+    get: operations["getCustomer"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Update a customer */
+    patch: operations["updateCustomer"];
+    trace?: never;
+  };
+  "/customers/{customerID}/requests": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerID: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create a customer request and optionally link it to work */
+    post: operations["createCustomerRequest"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customers/{customerID}/requests.csv": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerID: string;
+      };
+      cookie?: never;
+    };
+    /** Export a customer's requests as CSV */
+    get: operations["exportCustomerRequestsForCustomer"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-requests": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Customer request route namespace; mutate concrete request resources by id. */
+    get: operations["customerRequestsNamespace"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-requests/{requestID}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Delete a customer request */
+    delete: operations["deleteCustomerRequest"];
+    options?: never;
+    head?: never;
+    /** Update a customer request */
+    patch: operations["updateCustomerRequest"];
+    trace?: never;
+  };
+  "/customer-requests/{requestID}/issues": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Link a customer request to an issue */
+    post: operations["linkCustomerRequestIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-requests/{requestID}/issues/{issueID}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+        issueID: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Unlink a customer request from an issue */
+    delete: operations["unlinkCustomerRequestIssue"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-requests/{requestID}/projects": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Link a customer request to a project */
+    post: operations["linkCustomerRequestProject"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-requests/{requestID}/projects/{projectID}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+        projectID: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Unlink a customer request from a project */
+    delete: operations["unlinkCustomerRequestProject"];
     options?: never;
     head?: never;
     patch?: never;
@@ -161,6 +369,25 @@ export interface paths {
     put?: never;
     post: operations["toggleIssueReaction"];
     delete: operations["deleteIssueReaction"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/issues/{id}/customer-requests.csv": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    /** Export customer requests linked to an issue as CSV */
+    get: operations["exportCustomerRequestsForIssue"];
+    put?: never;
+    post?: never;
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
@@ -935,6 +1162,54 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/google-sheets/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectGoogleSheetsIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/google-sheets/refresh": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["refreshGoogleSheetsIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/google-sheets/oauth/callback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["googleSheetsOAuthCallback"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/discord/connect": {
     parameters: {
       query?: never;
@@ -1607,6 +1882,22 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/google-sheets/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectGoogleSheetsIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/labels": {
     parameters: {
       query?: never;
@@ -2030,6 +2321,25 @@ export interface paths {
     put?: never;
     /** Create a project */
     post: operations["createProject"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/projects/{slug}/customer-requests.csv": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        slug: string;
+      };
+      cookie?: never;
+    };
+    /** Export customer requests linked to a project as CSV */
+    get: operations["exportCustomerRequestsForProject"];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -3454,6 +3764,37 @@ export interface components {
       failedJobCount: number;
       auditEvents: components["schemas"]["IntegrationAuditEvent"][];
     };
+    GoogleSheetsScopeSelection: {
+      issues: boolean;
+      projects: boolean;
+      initiatives: boolean;
+    };
+    GoogleSheetsConnectRequest: {
+      scopes: components["schemas"]["GoogleSheetsScopeSelection"];
+      /** @default false */
+      includePrivateTeams: boolean;
+    };
+    GoogleSheetsRowCounts: {
+      issues: number;
+      projects: number;
+      initiatives: number;
+    };
+    GoogleSheetsIntegrationDetails: {
+      spreadsheetId: string;
+      spreadsheetUrl: string;
+      spreadsheetTitle: string;
+      scopes: components["schemas"]["GoogleSheetsScopeSelection"];
+      includePrivateTeams: boolean;
+      /** @enum {string} */
+      schedule: "hourly";
+      enabled: boolean;
+      /** Format: date-time */
+      nextRunAt: string | null;
+      rowCounts: components["schemas"]["GoogleSheetsRowCounts"];
+      sheetSchemas?: {
+        [key: string]: string[];
+      };
+    };
     Integration: {
       /** @enum {string} */
       provider:
@@ -3465,6 +3806,7 @@ export interface components {
         | "zendesk"
         | "discord"
         | "microsoft_teams"
+        | "google_sheets"
         | "figma";
       name: string;
       description: string;
@@ -3488,9 +3830,12 @@ export interface components {
         | null;
       actions: components["schemas"]["IntegrationActions"];
       health: components["schemas"]["IntegrationHealth"];
-      details: {
-        [key: string]: unknown;
-      };
+      details:
+        | components["schemas"]["GoogleSheetsIntegrationDetails"]
+        | {
+            [key: string]: unknown;
+          }
+        | null;
     };
     GitHubAccount: {
       id: string;
@@ -4910,6 +5255,120 @@ export interface components {
       end_date?: string;
       auto_rollover?: boolean;
     };
+    Customer: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      workspaceId: string;
+      domain?: string | null;
+      name: string;
+      revenue?: number | null;
+      size?: number | null;
+      tier?: string | null;
+      status?: string | null;
+      ownerId?: string | null;
+      source?: string | null;
+      requestCount: number;
+      issueCount: number;
+      projectCount: number;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    CustomerSummary: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      domain?: string | null;
+      tier?: string | null;
+      status?: string | null;
+    };
+    CustomerRequest: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      workspaceId: string;
+      /** Format: uuid */
+      customerId: string;
+      customer: components["schemas"]["CustomerSummary"];
+      title: string;
+      body?: string | null;
+      source?: string | null;
+      sourceUrl?: string | null;
+      externalProvider?: string | null;
+      externalId?: string | null;
+      important: boolean;
+      createdByUserId?: string | null;
+      linkedIssues: components["schemas"]["CustomerLinkedIssue"][];
+      linkedProjects: components["schemas"]["CustomerLinkedProject"][];
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    CustomerLinkedIssue: {
+      /** Format: uuid */
+      id: string;
+      identifier: string;
+      title: string;
+      teamKey: string;
+    };
+    CustomerLinkedProject: {
+      /** Format: uuid */
+      id: string;
+      slug: string;
+      name: string;
+    };
+    CustomerListResponse: {
+      customers: components["schemas"]["Customer"][];
+    };
+    CustomerDetailResponse: {
+      customer: components["schemas"]["Customer"];
+      requests: components["schemas"]["CustomerRequest"][];
+      issues: components["schemas"]["CustomerLinkedIssue"][];
+      projects: components["schemas"]["CustomerLinkedProject"][];
+    };
+    CreateCustomerRequest: {
+      name: string;
+      domain?: string | null;
+      revenue?: number | null;
+      size?: number | null;
+      tier?: string | null;
+      status?: string | null;
+      ownerId?: string | null;
+      source?: string | null;
+    };
+    UpdateCustomerRequest: {
+      name?: string;
+      domain?: string | null;
+      revenue?: number | null;
+      size?: number | null;
+      tier?: string | null;
+      status?: string | null;
+      ownerId?: string | null;
+      source?: string | null;
+    };
+    CreateCustomerRequestRequest: {
+      title: string;
+      body?: string | null;
+      source?: string | null;
+      sourceUrl?: string | null;
+      externalProvider?: string | null;
+      externalId?: string | null;
+      important?: boolean;
+      issueId?: string | null;
+      projectId?: string | null;
+    };
+    UpdateCustomerRequestRequest: {
+      title?: string;
+      body?: string | null;
+      source?: string | null;
+      sourceUrl?: string | null;
+      externalProvider?: string | null;
+      externalId?: string | null;
+      important?: boolean;
+    };
     /** @enum {string} */
     WorkspaceRole: "owner" | "admin" | "member" | "guest";
     WorkspaceMembership: {
@@ -5016,6 +5475,9 @@ export interface components {
         | "preview_csv"
         | "start_csv_import"
         | "prepare_provider"
+        | "fetch_provider_snapshot"
+        | "confirm_provider_import"
+        | "cancel_provider_import"
         | "configure_jira"
         | "preview_jira_import"
         | "start_jira_import"
@@ -5027,6 +5489,13 @@ export interface components {
       csv?: string;
       /** @enum {string} */
       provider?: "github" | "jira";
+      jobId?: string;
+      repositories?: string[];
+      repositoriesText?: string;
+      /** @enum {string} */
+      scope?: "open" | "all" | "include_closed";
+      includeClosed?: boolean;
+      apiBaseUrl?: string;
       /** Format: uuid */
       defaultTeamId?: string;
       mapping?: {
@@ -6062,6 +6531,37 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  getSyncStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sync status */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** Format: int64 */
+            currentVersion: number;
+            lastReplay?: {
+              /** Format: int64 */
+              requestedVersion: number;
+              operationCount: number;
+              /** Format: date-time */
+              replayedAt: string;
+            };
+          };
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   attachmentsNamespace: {
     parameters: {
       query?: never;
@@ -6117,6 +6617,326 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["AttachmentDownloadUrlResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  listCustomers: {
+    parameters: {
+      query?: {
+        q?: string;
+        tier?: string;
+        status?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Customers */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerListResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createCustomer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateCustomerRequest"];
+      };
+    };
+    responses: {
+      /** @description Customer */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Customer"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getCustomer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerID: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Customer detail */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerDetailResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateCustomer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerID: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateCustomerRequest"];
+      };
+    };
+    responses: {
+      /** @description Customer */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Customer"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createCustomerRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerID: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateCustomerRequestRequest"];
+      };
+    };
+    responses: {
+      /** @description Customer request */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerRequest"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  exportCustomerRequestsForCustomer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerID: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description CSV export */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  customerRequestsNamespace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      default: components["responses"]["Problem"];
+    };
+  };
+  deleteCustomerRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            success?: boolean;
+          };
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateCustomerRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateCustomerRequestRequest"];
+      };
+    };
+    responses: {
+      /** @description Customer request */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerRequest"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkCustomerRequestIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          issueId: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Customer request */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerRequest"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  unlinkCustomerRequestIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+        issueID: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Customer request */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerRequest"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkCustomerRequestProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          projectId: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Customer request */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerRequest"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  unlinkCustomerRequestProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+        projectID: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Customer request */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerRequest"];
         };
       };
       default: components["responses"]["Problem"];
@@ -6381,6 +7201,29 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ReactionSummaryList"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  exportCustomerRequestsForIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description CSV export */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
         };
       };
       default: components["responses"]["Problem"];
@@ -7802,6 +8645,83 @@ export interface operations {
       default: components["responses"]["Problem"];
     };
   };
+  connectGoogleSheetsIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["GoogleSheetsConnectRequest"];
+      };
+    };
+    responses: {
+      /** @description Google authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SlackConnectResponse"];
+        };
+      };
+      /** @description Google OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SlackConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  refreshGoogleSheetsIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Google Sheets refresh queued and run */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  googleSheetsOAuthCallback: {
+    parameters: {
+      query?: {
+        code?: string;
+        state?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Redirects to integration settings */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   connectDiscordIntegration: {
     parameters: {
       query?: never;
@@ -8843,6 +9763,27 @@ export interface operations {
       default: components["responses"]["Problem"];
     };
   };
+  disconnectGoogleSheetsIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Google Sheets disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   listLabels: {
     parameters: {
       query?: {
@@ -9831,6 +10772,29 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Project"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  exportCustomerRequestsForProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        slug: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description CSV export */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
         };
       };
       default: components["responses"]["Problem"];

@@ -64,17 +64,6 @@ type Health struct {
 	AuditEvents        []AuditEvent `json:"auditEvents"`
 }
 
-// HealthInfo carries lifecycle and health telemetry for an integration.
-// No secret or credential data is included in this struct.
-type HealthInfo struct {
-	LifecycleState     string  `json:"lifecycleState"`
-	LastEventAt        *string `json:"lastEventAt"`
-	LastSuccessAt      *string `json:"lastSuccessAt"`
-	LastFailureAt      *string `json:"lastFailureAt"`
-	LastFailureMessage *string `json:"lastFailureMessage"`
-	HealthSummary      *string `json:"healthSummary"`
-}
-
 type Integration struct {
 	CatalogItem
 	ID               *string           `json:"id"`
@@ -85,7 +74,7 @@ type Integration struct {
 	SetupRequirement *SetupRequirement `json:"setupRequirement"`
 	Actions          Actions           `json:"actions"`
 	Health           Health            `json:"health"`
-	Details          map[string]any    `json:"details"`
+	Details          map[string]any    `json:"details,omitempty"`
 }
 
 type response struct {
@@ -119,6 +108,7 @@ var catalog = []CatalogItem{
 	{Provider: "gitlab", Name: "GitLab", Description: "Link merge requests, commits, and workflow automation to issues."},
 	{Provider: "jira", Name: "Jira", Description: "Sync issue status, ownership, and cross-links with Jira projects."},
 	{Provider: "discord", Name: "Discord", Description: "Create, search, and share issues from Discord slash commands."},
+	{Provider: "google_sheets", Name: "Google Sheets", Description: "Create an hourly analytics spreadsheet for issues, projects, and initiatives."},
 	{Provider: "microsoft_teams", Name: "Microsoft Teams", Description: "Create issues and projects from Teams conversations and post project updates."},
 	{Provider: "figma", Name: "Figma", Description: "Preview design links and connect Figma selections to issues."},
 	{Provider: "intercom", Name: "Intercom", Description: "Create and link issues from support conversations and sync customer feedback status."},
@@ -136,6 +126,9 @@ func (h Handler) Routes() chi.Router {
 	r.Get("/", h.List)
 	r.Delete("/", h.Delete)
 	r.Post("/slack/connect", h.SlackConnect)
+	r.Post("/google-sheets/connect", h.GoogleSheetsConnect)
+	r.Post("/google-sheets/refresh", h.GoogleSheetsRefresh)
+	r.Post("/google-sheets/disconnect", h.GoogleSheetsDisconnect)
 	r.Post("/github/connect", h.GitHubConnect)
 	r.Post("/github/register", h.GitHubRegister)
 	r.Post("/github/disconnect", h.GitHubDisconnect)
@@ -186,10 +179,7 @@ func (h Handler) List(w http.ResponseWriter, r *http.Request) {
 		status := "not_connected"
 		var id, displayName, externalID, connectedAt *string
 		if ok {
-			status = connected.LifecycleState
-			if status == "" {
-				status = connected.Status
-			}
+			status = connected.Status
 			id = &connected.ID
 			displayName = connected.DisplayName
 			externalID = connected.ExternalID
@@ -201,11 +191,7 @@ func (h Handler) List(w http.ResponseWriter, r *http.Request) {
 		if ok {
 			health = connected.Health()
 		}
-		details := map[string]any{}
-		if ok && item.Provider == "github" {
-			details = githubIntegrationDetails(connected.Metadata)
-		}
-		out = append(out, Integration{CatalogItem: item, ID: id, Status: status, DisplayName: displayName, ExternalID: externalID, ConnectedAt: connectedAt, SetupRequirement: requirement, Actions: integrationActions(canManage, ok, status, requirement), Health: health, Details: details})
+		out = append(out, Integration{CatalogItem: item, ID: id, Status: status, DisplayName: displayName, ExternalID: externalID, ConnectedAt: connectedAt, SetupRequirement: requirement, Actions: integrationActions(canManage, ok, status, requirement), Health: health, Details: integrationDetails(connected)})
 	}
 	problem.JSON(w, 200, response{CanManageIntegrations: canManage, Integrations: out})
 }
@@ -338,7 +324,7 @@ func (h Handler) SlackDisconnect(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 403, "Forbidden", "")
 		return
 	}
-	if err := h.disconnectProvider(r.Context(), p.WorkspaceID, p.UserID, "slack"); err != nil {
+	if err := h.revokeProvider(r.Context(), p.WorkspaceID, "slack", p.UserID); err != nil {
 		problem.Write(w, 500, "Disconnect Slack failed", err.Error())
 		return
 	}
@@ -356,7 +342,7 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 400, "Provider is required", "")
 		return
 	}
-	err := h.disconnectProvider(r.Context(), p.WorkspaceID, p.UserID, provider)
+	err := h.revokeProvider(r.Context(), p.WorkspaceID, provider, p.UserID)
 	if err != nil {
 		problem.Write(w, 500, "Delete integration failed", err.Error())
 		return
@@ -371,17 +357,15 @@ type row struct {
 	DisplayName        *string
 	ExternalID         *string
 	ConnectedAt        *time.Time
-	LifecycleState     string
 	LastEventAt        *time.Time
 	LastSuccessAt      *time.Time
 	LastFailureAt      *time.Time
 	LastFailureMessage *string
 	TokenExpiresAt     *time.Time
+	Metadata           map[string]any
 	PendingJobCount    int
 	FailedJobCount     int
 	AuditEvents        []AuditEvent
-	HealthSummary      *string
-	Metadata           map[string]any
 }
 
 func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error) {
@@ -392,12 +376,10 @@ func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error
 			wi.display_name,
 			wi.external_id,
 			wi.connected_at,
-			wi.lifecycle_state,
 			wi.last_event_at,
 			wi.last_success_at,
 			wi.last_failure_at,
 			wi.last_failure_message,
-			wi.health_summary,
 			wi.token_expires_at,
 			wi.metadata,
 			coalesce(count(pj.id) filter (where pj.status in ('queued','running')),0)::int,
@@ -414,12 +396,7 @@ func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error
 	for rows.Next() {
 		var r row
 		var metadataRaw []byte
-		if err := rows.Scan(
-			&r.ID, &r.Provider, &r.Status, &r.DisplayName, &r.ExternalID, &r.ConnectedAt,
-			&r.LifecycleState, &r.LastEventAt, &r.LastSuccessAt,
-			&r.LastFailureAt, &r.LastFailureMessage, &r.HealthSummary,
-			&r.TokenExpiresAt, &metadataRaw, &r.PendingJobCount, &r.FailedJobCount,
-		); err != nil {
+		if err := rows.Scan(&r.ID, &r.Provider, &r.Status, &r.DisplayName, &r.ExternalID, &r.ConnectedAt, &r.LastEventAt, &r.LastSuccessAt, &r.LastFailureAt, &r.LastFailureMessage, &r.TokenExpiresAt, &metadataRaw, &r.PendingJobCount, &r.FailedJobCount); err != nil {
 			return nil, err
 		}
 		r.Metadata = map[string]any{}
@@ -449,6 +426,9 @@ func integrationActions(canManage bool, installed bool, status string, requireme
 func setupRequirement(provider string) *SetupRequirement {
 	if provider == "slack" && !slackConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Slack OAuth credentials are not configured. Add AUTH_SLACK_ID and AUTH_SLACK_SECRET to enable installation."}
+	}
+	if provider == "google_sheets" && !googleSheetsConfigured() {
+		return &SetupRequirement{Type: "configuration_required", Message: "Google OAuth credentials are not configured. Add AUTH_GOOGLE_ID and AUTH_GOOGLE_SECRET to enable Google Sheets analytics sync."}
 	}
 	if provider == "discord" && !discordConfigured() {
 		return &SetupRequirement{Type: "configuration_required", Message: "Discord OAuth credentials and public key are not configured. Add AUTH_DISCORD_ID, AUTH_DISCORD_SECRET, and DISCORD_PUBLIC_KEY to enable installation."}
@@ -521,6 +501,17 @@ func (r row) Health() Health {
 	}
 }
 
+func integrationDetails(value row) map[string]any {
+	if value.Provider == googleSheetsProvider {
+		raw, _ := json.Marshal(value.Metadata)
+		return googleSheetsDetails(raw)
+	}
+	if value.Provider == "github" {
+		return githubIntegrationDetails(value.Metadata)
+	}
+	return nil
+}
+
 func (h Handler) auditEvents(ctx context.Context, integrationID string) ([]AuditEvent, error) {
 	rows, err := h.DB.Query(ctx, `
 		select event_type, severity, message, created_at
@@ -545,14 +536,7 @@ func (h Handler) auditEvents(ctx context.Context, integrationID string) ([]Audit
 	return events, rows.Err()
 }
 
-// disconnectProvider revokes an integration by marking lifecycle/status as revoked,
-// clearing active credentials, cancelling pending jobs, and disabling team
-// notification integrations without deleting historical links.
-func (h Handler) revokeProvider(ctx context.Context, workspaceID, provider, userID string) error {
-	return h.disconnectProvider(ctx, workspaceID, userID, provider)
-}
-
-func (h Handler) disconnectProvider(ctx context.Context, workspaceID, userID, provider string) error {
+func (h Handler) revokeProvider(ctx context.Context, workspaceID string, provider string, userID string) error {
 	tx, err := h.DB.Begin(ctx)
 	if err != nil {
 		return err
@@ -577,16 +561,10 @@ func (h Handler) disconnectProvider(ctx context.Context, workspaceID, userID, pr
 	if _, err := tx.Exec(ctx, `update team_notification_integration set enabled=false, updated_at=now() where workspace_integration_id=$1::uuid`, integrationID); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `update workspace_integration set status='revoked', lifecycle_state='revoked', credential_ref=null, credential_revoked_at=now(), credentials_revoked_at=now(), disconnected_at=now(), disconnected_by_user_id=$2, last_event_at=now(), health_summary='Disconnected by workspace admin.', updated_at=now() where id=$1::uuid`, integrationID, userID); err != nil {
+	if _, err := tx.Exec(ctx, `update workspace_integration set status='revoked', credentials_revoked_at=now(), revoked_at=now(), revoked_by_user_id=$2, last_event_at=now(), updated_at=now() where id=$1::uuid`, integrationID, userID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
-}
-
-// deleteProvider is kept for backward compatibility with existing tests.
-// It delegates to disconnectProvider with an empty userID.
-func (h Handler) deleteProvider(ctx context.Context, workspaceID string, provider string) error {
-	return h.disconnectProvider(ctx, workspaceID, "", provider)
 }
 
 func (h Handler) workspaceSlug(ctx context.Context, workspaceID string) (string, error) {
@@ -688,7 +666,6 @@ func (h Handler) completeSlackInstall(ctx context.Context, install slackOAuthIns
 	if _, err := tx.Exec(ctx, `
 		update workspace_integration
 		set status='connected',
-			lifecycle_state='connected',
 			external_id=$2,
 			display_name=$3,
 			metadata=$4::jsonb,
@@ -699,11 +676,6 @@ func (h Handler) completeSlackInstall(ctx context.Context, install slackOAuthIns
 			last_failure_at=null,
 			last_failure_message=null,
 			token_expires_at=null,
-			health_summary=null,
-			credential_ref=null,
-			credential_revoked_at=null,
-			disconnected_at=null,
-			disconnected_by_user_id=null,
 			credentials_revoked_at=null,
 			revoked_at=null,
 			revoked_by_user_id=null,
@@ -740,7 +712,7 @@ func (h Handler) completeSlackInstall(ctx context.Context, install slackOAuthIns
 func (h Handler) recordSlackInstallFailure(ctx context.Context, integrationID string, workspaceID string, message string) error {
 	_, err := h.DB.Exec(ctx, `
 		update workspace_integration
-		set status='error', lifecycle_state='error', last_failure_at=now(), last_failure_message=$2, health_summary=$2, updated_at=now()
+		set status='error', last_failure_at=now(), last_failure_message=$2, updated_at=now()
 		where id=$1::uuid`, integrationID, message)
 	if err != nil {
 		return err
@@ -756,7 +728,7 @@ func (h Handler) queueSlackInboundEvent(ctx context.Context, teamID string, even
 	err := h.DB.QueryRow(ctx, `
 		select workspace_id::text, id::text
 		from workspace_integration
-		where provider='slack' and external_id=$1 and lifecycle_state in ('connected','degraded')
+		where provider='slack' and external_id=$1 and status in ('connected','degraded')
 		limit 1`, teamID).Scan(&workspaceID, &integrationID)
 	if err != nil {
 		return err

@@ -111,7 +111,8 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create custom emoji failed", err.Error())
 		return
 	}
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "custom_emoji", emoji.ID, "created", emoji, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "custom_emoji", emoji.ID, "created", emoji, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Create custom emoji failed", err.Error())
 		return
 	}
@@ -119,6 +120,7 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create custom emoji failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	problem.JSON(w, 201, map[string]CustomEmoji{"emoji": emoji})
 }
 
@@ -161,7 +163,8 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete custom emoji failed", err.Error())
 		return
 	}
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "custom_emoji", id, "deleted", deleted, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "custom_emoji", id, "deleted", deleted, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Delete custom emoji failed", err.Error())
 		return
 	}
@@ -169,6 +172,7 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete custom emoji failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	problem.JSON(w, 200, map[string]bool{"ok": true})
 }
 
@@ -266,6 +270,6 @@ func randomID() string {
 	return "emoji_" + hex.EncodeToString(buf)
 }
 
-func insertOperation(ctx context.Context, tx pgx.Tx, workspaceID, entityType, entityID, opType string, payload any, createdBy string) error {
+func insertOperation(ctx context.Context, tx pgx.Tx, workspaceID, entityType, entityID, opType string, payload any, createdBy string) (syncapi.Operation, error) {
 	return syncapi.InsertOperation(ctx, tx, workspaceID, entityType, entityID, opType, payload, createdBy)
 }

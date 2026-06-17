@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  SYNC_OPERATIONS_EVENT,
+  type SyncOperationsEvent,
+} from "@/app/(app)/sync-subscription";
 import { EmptyState } from "@/components/empty-state";
 import { ProjectRow } from "@/components/project-row";
 import { TeamRouteErrorState } from "@/components/team-route-error-state";
@@ -164,6 +168,21 @@ export function ProjectsPage({
 
   useEffect(() => {
     fetchProjects();
+  }, [fetchProjects]);
+
+  useEffect(() => {
+    const handleSync = (event: Event) => {
+      const operations = (event as SyncOperationsEvent).detail.operations;
+      if (
+        operations.some((operation) =>
+          ["project", "issue"].includes(operation.entity_type),
+        )
+      ) {
+        void fetchProjects();
+      }
+    };
+    window.addEventListener(SYNC_OPERATIONS_EVENT, handleSync);
+    return () => window.removeEventListener(SYNC_OPERATIONS_EVENT, handleSync);
   }, [fetchProjects]);
 
   const handleCreate = useCallback(

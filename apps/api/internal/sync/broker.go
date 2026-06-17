@@ -23,10 +23,10 @@ var (
 	redisErr    error
 )
 
-func InsertOperation(ctx context.Context, store OperationStore, workspaceID, entityType, entityID, opType string, payload any, createdBy string) error {
+func InsertOperation(ctx context.Context, store OperationStore, workspaceID, entityType, entityID, opType string, payload any, createdBy string) (Operation, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		return Operation{}, err
 	}
 	var op Operation
 	var createdAt time.Time
@@ -37,11 +37,16 @@ func InsertOperation(ctx context.Context, store OperationStore, workspaceID, ent
 		workspaceID, entityType, entityID, opType, body, createdBy,
 	).Scan(&op.ID, &op.WorkspaceID, &op.EntityType, &op.EntityID, &op.OpType, &op.Payload, &op.Version, &createdAt, &op.CreatedBy)
 	if err != nil {
-		return err
+		return Operation{}, err
 	}
 	op.CreatedAt = createdAt.UTC().Format(time.RFC3339Nano)
-	_ = PublishOperation(ctx, op)
-	return nil
+	return op, nil
+}
+
+func PublishOperations(ctx context.Context, operations []Operation) {
+	for _, op := range operations {
+		_ = PublishOperation(ctx, op)
+	}
 }
 
 func PublishOperation(ctx context.Context, op Operation) error {

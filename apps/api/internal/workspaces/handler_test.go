@@ -1,6 +1,7 @@
 package workspaces
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -105,6 +106,52 @@ func TestParseImportCSV(t *testing.T) {
 	}
 	if rows[0].row != 2 || rows[0].get("Title") != "Fix bug" || rows[0].get("Status") != "Todo" {
 		t.Fatalf("first row = %#v", rows[0])
+	}
+}
+
+func TestGitHubSnapshotFetchesIssuesCommentsAndSkipsPullRequests(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
+			t.Fatalf("authorization header = %q", got)
+		}
+		switch r.URL.Path {
+		case "/repos/namuh-eng/exponential/issues":
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"id": 101, "number": 7, "title": "Bug", "body": "Body", "state": "open", "html_url": "https://github.com/namuh-eng/exponential/issues/7", "user": map[string]any{"login": "octo"}, "assignees": []map[string]any{{"login": "dev"}}, "labels": []map[string]any{{"name": "bug", "color": "ff0000"}}, "created_at": "2026-06-01T00:00:00Z", "updated_at": "2026-06-01T00:00:00Z"},
+				{"id": 102, "number": 8, "title": "PR", "state": "open", "pull_request": map[string]any{"url": "https://api.github.test/pr/8"}},
+			})
+		case "/repos/namuh-eng/exponential/issues/7/comments":
+			_ = json.NewEncoder(w).Encode([]map[string]any{{"id": 201, "body": "Looks good", "html_url": "https://github.com/namuh-eng/exponential/issues/7#issuecomment-201", "user": map[string]any{"login": "reviewer"}, "created_at": "2026-06-01T00:01:00Z"}})
+		default:
+			t.Fatalf("unexpected GitHub path %s", r.URL.String())
+		}
+	}))
+	defer server.Close()
+
+	client := githubAPIClient{BaseURL: server.URL, Token: "test-token", HTTP: server.Client()}
+	snapshot, err := client.fetchSnapshot(context.Background(), []string{"namuh-eng/exponential"}, "open")
+	if err != nil {
+		t.Fatalf("fetch snapshot: %v", err)
+	}
+	if snapshot.Totals["issues"] != 1 || snapshot.Totals["comments"] != 1 || len(snapshot.Issues) != 1 {
+		t.Fatalf("snapshot totals = %#v issues=%#v", snapshot.Totals, snapshot.Issues)
+	}
+	issue := snapshot.Issues[0]
+	if issue.ExternalID != "namuh-eng/exponential#7" || issue.Labels[0].Name != "bug" || issue.Comments[0].ExternalID != "201" {
+		t.Fatalf("issue snapshot = %#v", issue)
+	}
+}
+
+func TestGitHubImportHelpersNormalizeScopeAndRepositories(t *testing.T) {
+	if got := normalizeGitHubImportScope("include_closed"); got != "all" {
+		t.Fatalf("scope = %q", got)
+	}
+	repos := splitProviderList("https://github.com/namuh-eng/exponential, namuh-eng/other")
+	if len(repos) != 2 || repos[0] != "namuh-eng/exponential" || repos[1] != "namuh-eng/other" {
+		t.Fatalf("repos = %#v", repos)
+	}
+	if got := normalizeGitHubLabelColor("FF00aa"); got != "#ff00aa" {
+		t.Fatalf("color = %q", got)
 	}
 }
 

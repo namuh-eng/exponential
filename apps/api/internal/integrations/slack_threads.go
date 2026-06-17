@@ -235,7 +235,8 @@ func (h Handler) insertSlackReplyComment(ctx context.Context, install slackInsta
 	if _, err := tx.Exec(ctx, `update issue_discussion_summary set status='stale', stale_at=now(), updated_at=now() where issue_id=$1::uuid and status in ('generated','ready')`, issueID); err != nil {
 		return false, err
 	}
-	if err := syncapi.InsertOperation(ctx, tx, install.WorkspaceID, "comment", comment.ID, "created", comment, actorID); err != nil {
+	op, err := syncapi.InsertOperation(ctx, tx, install.WorkspaceID, "comment", comment.ID, "created", comment, actorID)
+	if err != nil {
 		return false, err
 	}
 	if _, err := tx.Exec(ctx, `
@@ -247,6 +248,7 @@ func (h Handler) insertSlackReplyComment(ctx context.Context, install slackInsta
 	if err := tx.Commit(ctx); err != nil {
 		return false, err
 	}
+	syncapi.PublishOperations(ctx, []syncapi.Operation{op})
 	return true, nil
 }
 

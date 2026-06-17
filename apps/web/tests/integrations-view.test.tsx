@@ -4,7 +4,6 @@ import {
   render,
   screen,
   waitFor,
-  within,
 } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import IntegrationsSettingsPage from "@/app/(app)/settings/integrations/page";
@@ -12,29 +11,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const fetchMock = vi.fn();
 
-const integrationBase = {
-  connectedAt: null,
-  health: {
-    lastEventAt: null,
-    lastSuccessAt: null,
-    lastFailureAt: null,
-    lastFailureMessage: null,
-    tokenExpiresAt: null,
-    pendingJobCount: 0,
-    failedJobCount: 0,
-    auditEvents: [],
-  },
-};
-
 const integrations = [
   {
-    ...integrationBase,
     provider: "github",
     name: "GitHub",
     description:
       "Sync pull requests, commits, and issue links with exponential.",
     status: "configuration_required",
     displayName: null,
+    connectedAt: null,
     setupRequirement: {
       type: "configuration_required",
       message: "GitHub setup is not configured in this environment yet.",
@@ -45,14 +30,24 @@ const integrations = [
       canDisconnect: false,
       canReconnect: false,
     },
+    health: {
+      lastEventAt: null,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      lastFailureMessage: null,
+      tokenExpiresAt: null,
+      pendingJobCount: 0,
+      failedJobCount: 0,
+      auditEvents: [],
+    },
   },
   {
-    ...integrationBase,
     provider: "slack",
     name: "Slack",
     description: "Send issue updates and create issues from Slack messages.",
     status: "configuration_required",
     displayName: null,
+    connectedAt: null,
     setupRequirement: {
       type: "configuration_required",
       message: "Slack OAuth credentials are not configured.",
@@ -63,14 +58,24 @@ const integrations = [
       canDisconnect: false,
       canReconnect: false,
     },
+    health: {
+      lastEventAt: null,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      lastFailureMessage: null,
+      tokenExpiresAt: null,
+      pendingJobCount: 0,
+      failedJobCount: 0,
+      auditEvents: [],
+    },
   },
   {
-    ...integrationBase,
     provider: "sentry",
     name: "Sentry",
     description: "Create, link, and resolve issues from Sentry errors.",
     status: "configuration_required",
     displayName: null,
+    connectedAt: null,
     setupRequirement: {
       type: "configuration_required",
       message: "Sentry credentials are not configured.",
@@ -81,15 +86,25 @@ const integrations = [
       canDisconnect: false,
       canReconnect: false,
     },
+    health: {
+      lastEventAt: null,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      lastFailureMessage: null,
+      tokenExpiresAt: null,
+      pendingJobCount: 0,
+      failedJobCount: 0,
+      auditEvents: [],
+    },
   },
   {
-    ...integrationBase,
     provider: "salesforce",
     name: "Salesforce",
     description:
       "Link cases to issues and projects, then sync status and priority back to support.",
     status: "configuration_required",
     displayName: null,
+    connectedAt: null,
     setupRequirement: {
       type: "configuration_required",
       message:
@@ -101,20 +116,40 @@ const integrations = [
       canDisconnect: false,
       canReconnect: false,
     },
+    health: {
+      lastEventAt: null,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      lastFailureMessage: null,
+      tokenExpiresAt: null,
+      pendingJobCount: 0,
+      failedJobCount: 0,
+      auditEvents: [],
+    },
   },
   {
-    ...integrationBase,
     provider: "front",
     name: "Front",
     description: "Create, link, and reopen issues from Front conversations.",
     status: "not_connected",
     displayName: null,
+    connectedAt: null,
     setupRequirement: null,
     actions: {
       canConnect: true,
       canManage: false,
       canDisconnect: false,
       canReconnect: false,
+    },
+    health: {
+      lastEventAt: null,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      lastFailureMessage: null,
+      tokenExpiresAt: null,
+      pendingJobCount: 0,
+      failedJobCount: 0,
+      auditEvents: [],
     },
   },
 ];
@@ -146,6 +181,59 @@ const degradedSlack = {
         createdAt: "2026-06-10T12:00:00Z",
       },
     ],
+  },
+};
+
+const googleSheets = {
+  provider: "google_sheets",
+  name: "Google Sheets",
+  description:
+    "Create an hourly analytics spreadsheet for issues, projects, and initiatives.",
+  status: "not_connected",
+  displayName: null,
+  connectedAt: null,
+  setupRequirement: null,
+  actions: {
+    canConnect: true,
+    canManage: false,
+    canDisconnect: false,
+    canReconnect: false,
+  },
+  health: {
+    lastEventAt: null,
+    lastSuccessAt: null,
+    lastFailureAt: null,
+    lastFailureMessage: null,
+    tokenExpiresAt: null,
+    pendingJobCount: 0,
+    failedJobCount: 0,
+    auditEvents: [],
+  },
+};
+
+const connectedSheets = {
+  ...googleSheets,
+  status: "connected",
+  displayName: "workspace analytics",
+  actions: {
+    canConnect: false,
+    canManage: true,
+    canDisconnect: true,
+    canReconnect: false,
+  },
+  health: {
+    ...googleSheets.health,
+    lastEventAt: "2026-06-16T10:00:00Z",
+    lastSuccessAt: "2026-06-16T10:00:00Z",
+  },
+  details: {
+    spreadsheetUrl: "https://docs.google.com/spreadsheets/d/sheet-1/edit",
+    spreadsheetTitle: "workspace analytics",
+    scopes: { issues: true, projects: true, initiatives: true },
+    includePrivateTeams: false,
+    schedule: "hourly",
+    nextRunAt: "2026-06-16T11:00:00Z",
+    rowCounts: { issues: 2, projects: 1, initiatives: 0 },
   },
 };
 
@@ -218,13 +306,7 @@ describe("IntegrationsSettingsPage component", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Explore integrations" }),
     );
-    const slackCard = screen
-      .getByText("Slack")
-      .closest("[class*='rounded-lg']");
-    expect(slackCard).not.toBeNull();
-    fireEvent.click(
-      within(slackCard as HTMLElement).getByRole("button", { name: "Connect" }),
-    );
+    fireEvent.click(screen.getAllByRole("button", { name: "Connect" })[0]);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Add AUTH_SLACK_ID",
@@ -260,6 +342,84 @@ describe("IntegrationsSettingsPage component", () => {
     ).toBeInTheDocument();
   });
 
+  it("creates and refreshes a Google Sheets analytics sync", async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          integrations: [...integrations, googleSheets],
+          canManageIntegrations: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          authorizationUrl: "https://accounts.google.com/oauth",
+        }),
+      });
+
+    const assignMock = vi.fn();
+    Object.defineProperty(window, "location", {
+      value: { assign: assignMock },
+      writable: true,
+    });
+
+    render(<IntegrationsSettingsPage />);
+    await screen.findByText("No active integrations");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Explore integrations" }),
+    );
+    expect(screen.getByText("Export scopes")).toBeInTheDocument();
+    expect(screen.getByLabelText("Include private teams")).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Create sheet" }));
+
+    await waitFor(() =>
+      expect(assignMock).toHaveBeenCalledWith(
+        "https://accounts.google.com/oauth",
+      ),
+    );
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/integrations/google-sheets/connect",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          scopes: { issues: true, projects: true, initiatives: true },
+          includePrivateTeams: false,
+        }),
+      }),
+    );
+
+    cleanup();
+    fetchMock.mockReset();
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          integrations: [integrations[0], connectedSheets],
+          canManageIntegrations: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          integrations: [integrations[0], connectedSheets],
+          canManageIntegrations: true,
+        }),
+      });
+
+    render(<IntegrationsSettingsPage />);
+    expect(await screen.findByText("Open analytics sheet")).toBeInTheDocument();
+    expect(screen.getByText(/Rows: issues 2, projects 1/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh now" }));
+    expect(
+      await screen.findByText("Google Sheets analytics sync refreshed."),
+    ).toBeInTheDocument();
+  });
+
   it("connects Front with an API token setup form", async () => {
     fetchMock
       .mockResolvedValueOnce({
@@ -273,19 +433,7 @@ describe("IntegrationsSettingsPage component", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          integrations: [
-            {
-              ...integrations[4],
-              status: "connected",
-              displayName: "Front cmp_123",
-              actions: {
-                canConnect: false,
-                canManage: true,
-                canDisconnect: true,
-                canReconnect: false,
-              },
-            },
-          ],
+          integrations: [degradedSlack],
           canManageIntegrations: true,
         }),
       });
@@ -297,7 +445,9 @@ describe("IntegrationsSettingsPage component", () => {
     );
     fireEvent.change(
       screen.getByPlaceholderText("Optional company identifier"),
-      { target: { value: "cmp_123" } },
+      {
+        target: { value: "cmp_123" },
+      },
     );
     fireEvent.change(
       screen.getByPlaceholderText(
@@ -325,13 +475,12 @@ describe("IntegrationsSettingsPage component", () => {
 
   it("connects Zendesk from the catalog setup form", async () => {
     const zendesk = {
-      ...integrationBase,
+      ...integrations[0],
       provider: "zendesk",
       name: "Zendesk",
       description:
         "Connect support tickets to product work and customer requests.",
       status: "not_connected",
-      displayName: null,
       setupRequirement: null,
       actions: {
         canConnect: true,
@@ -359,19 +508,7 @@ describe("IntegrationsSettingsPage component", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          integrations: [
-            {
-              ...zendesk,
-              status: "connected",
-              displayName: "acme.zendesk.com",
-              actions: {
-                canConnect: false,
-                canManage: true,
-                canDisconnect: true,
-                canReconnect: false,
-              },
-            },
-          ],
+          integrations: [degradedSlack],
           canManageIntegrations: true,
         }),
       });

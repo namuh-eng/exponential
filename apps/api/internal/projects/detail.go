@@ -1,11 +1,18 @@
 package projects
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
+	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type detailIssue struct {
@@ -32,7 +39,7 @@ type detailIssueGroup struct {
 	pos    float64
 }
 
-func (h Handler) projectDetail(ctx context.Context, workspaceID, workspaceSlug string, project Project) (map[string]any, error) {
+func (h Handler) projectDetail(ctx context.Context, workspaceID, workspaceSlug string, project Project, includeCustomerRequests bool) (map[string]any, error) {
 	settings, workspaceSettings, err := h.projectAndWorkspaceSettings(ctx, project.ID, workspaceID)
 	if err != nil {
 		return nil, err
@@ -50,6 +57,13 @@ func (h Handler) projectDetail(ctx context.Context, workspaceID, workspaceSlug s
 		return nil, err
 	}
 	milestoneCounts(milestones, groups)
+	customerRequests := []map[string]any{}
+	if includeCustomerRequests {
+		customerRequests, err = h.projectCustomerRequests(ctx, project.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
 	statuses := detailProjectStatuses(workspaceSettings)
 	statusKey := project.Status
 	if key := stringDetail(settings["projectStatusKey"], ""); key != "" {
@@ -87,6 +101,7 @@ func (h Handler) projectDetail(ctx context.Context, workspaceID, workspaceSlug s
 		"activity":          sliceDetail(settings["activity"]),
 		"milestones":        milestones,
 		"issueGroups":       groups,
+		"customerRequests":  customerRequests,
 		"progress": map[string]any{
 			"total":      total,
 			"completed":  completed,
@@ -352,6 +367,97 @@ func (h Handler) projectListLabels(ctx context.Context, settingsByProject map[st
 		}
 	}
 	return out, rows.Err()
+}
+
+func (h Handler) projectCustomerRequests(ctx context.Context, projectID string) ([]map[string]any, error) {
+	rows, err := h.DB.Query(ctx, `
+		select cr.id::text, cr.customer_id::text, c.name, c.domain, c.tier, c.status, cr.title, cr.body, cr.important, cr.source, cr.source_url, cr.created_at, cr.updated_at
+		from project_customer_request pcr
+		join customer_request cr on cr.id=pcr.customer_request_id
+		join customer c on c.id=cr.customer_id
+		where pcr.project_id=$1::uuid
+		order by cr.important desc, cr.created_at desc`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanProjectCustomerRequests(rows)
+}
+
+func scanProjectCustomerRequests(rows pgx.Rows) ([]map[string]any, error) {
+	requests := []map[string]any{}
+	for rows.Next() {
+		var id, customerID, customerName, title string
+		var domain, tier, status, body, source, sourceURL pgtype.Text
+		var important bool
+		var createdAt, updatedAt time.Time
+		if err := rows.Scan(&id, &customerID, &customerName, &domain, &tier, &status, &title, &body, &important, &source, &sourceURL, &createdAt, &updatedAt); err != nil {
+			return nil, err
+		}
+		requests = append(requests, map[string]any{
+			"id":         id,
+			"customerId": customerID,
+			"customer":   map[string]any{"id": customerID, "name": customerName, "domain": projectTextValue(domain), "tier": projectTextValue(tier), "status": projectTextValue(status)},
+			"title":      title,
+			"body":       projectTextValue(body),
+			"important":  important,
+			"source":     projectTextValue(source),
+			"sourceUrl":  projectTextValue(sourceURL),
+			"createdAt":  createdAt.UTC().Format(time.RFC3339Nano),
+			"updatedAt":  updatedAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	return requests, rows.Err()
+}
+
+func writeProjectCustomerRequestsCSV(w http.ResponseWriter, filename string, requests []map[string]any) {
+	var buf bytes.Buffer
+	writer := csv.NewWriter(&buf)
+	_ = writer.Write([]string{"request_id", "customer_id", "customer_name", "customer_domain", "title", "body", "important", "source", "source_url", "created_at"})
+	for _, request := range requests {
+		customer, _ := request["customer"].(map[string]any)
+		_ = writer.Write([]string{
+			projectStringAny(request["id"]),
+			projectStringAny(request["customerId"]),
+			projectStringAny(customer["name"]),
+			projectStringAny(customer["domain"]),
+			projectStringAny(request["title"]),
+			projectStringAny(request["body"]),
+			strconv.FormatBool(projectBoolAny(request["important"])),
+			projectStringAny(request["source"]),
+			projectStringAny(request["sourceUrl"]),
+			projectStringAny(request["createdAt"]),
+		})
+	}
+	writer.Flush()
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(buf.Bytes())
+}
+
+func projectTextValue(value pgtype.Text) any {
+	if !value.Valid {
+		return nil
+	}
+	return value.String
+}
+
+func projectStringAny(value any) string {
+	if value == nil {
+		return ""
+	}
+	if s, ok := value.(string); ok {
+		return s
+	}
+	return stringDetail(value, "")
+}
+
+func projectBoolAny(value any) bool {
+	if v, ok := value.(bool); ok {
+		return v
+	}
+	return false
 }
 
 func recordDetail(value any) map[string]any {

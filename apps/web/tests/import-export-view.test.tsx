@@ -212,6 +212,106 @@ describe("ImportExportPage component", () => {
     });
   });
 
+  it("runs the GitHub guided import review and confirmation flow", async () => {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/workspaces/current/import-export") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          action?: string;
+        };
+        if (body.action === "fetch_provider_snapshot") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              import: {
+                id: "import-gh-1",
+                provider: "github",
+                status: "review",
+                createdAt: "2026-05-20T12:00:00.000Z",
+                message: "GitHub review snapshot fetched with 1 issues.",
+              },
+              snapshot: {
+                totals: { issues: 1, comments: 1, open: 1, closed: 0 },
+                repositories: [{ fullName: "namuh-eng/exponential" }],
+                issues: [
+                  {
+                    externalId: "namuh-eng/exponential#7",
+                    repository: "namuh-eng/exponential",
+                    number: 7,
+                    title: "Imported GitHub issue",
+                    state: "open",
+                    labels: [{ name: "bug" }],
+                  },
+                ],
+              },
+            }),
+          });
+        }
+        if (body.action === "confirm_provider_import") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              import: {
+                id: "import-gh-1",
+                provider: "github",
+                status: "completed",
+                createdAt: "2026-05-20T12:00:00.000Z",
+                message:
+                  "GitHub import completed with 1 created, 0 skipped, and 0 failed.",
+                importedCount: 1,
+                errorCount: 0,
+              },
+            }),
+          });
+        }
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          exports: [],
+          imports: [],
+          teams: [
+            {
+              id: "team-1",
+              key: "ENG",
+              name: "Engineering",
+              states: [
+                { id: "state-open", name: "Backlog", category: "backlog" },
+                { id: "state-done", name: "Done", category: "done" },
+              ],
+            },
+          ],
+        }),
+      });
+    });
+
+    render(<ImportExportPage />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Start import" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /GitHub/ }));
+    fireEvent.change(screen.getByLabelText("GitHub token"), {
+      target: { value: "ghp_test" },
+    });
+    fireEvent.change(screen.getByLabelText("GitHub repositories"), {
+      target: { value: "namuh-eng/exponential" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Fetch GitHub issues" }),
+    );
+
+    expect(
+      await screen.findByText(/Review GitHub snapshot: 1/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Imported GitHub issue")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm GitHub import" }),
+    );
+    expect(
+      await screen.findByText(/GitHub import completed with 1 created/),
+    ).toBeInTheDocument();
+  });
+
   it("runs the Jira guided importer through preview and confirmation", async () => {
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {
       if (

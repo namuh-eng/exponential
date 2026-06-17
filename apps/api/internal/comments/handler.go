@@ -103,7 +103,8 @@ func (h Handler) CreateForIssue(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create comment failed", err.Error())
 		return
 	}
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "comment", comment.ID, "created", comment, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "comment", comment.ID, "created", comment, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Create comment failed", err.Error())
 		return
 	}
@@ -118,6 +119,7 @@ func (h Handler) CreateForIssue(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "comment.created", "", comment)
 	}()
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	problem.JSON(w, 201, comment)
 }
 
@@ -160,7 +162,8 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update comment failed", err.Error())
 		return
 	}
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "comment", comment.ID, "updated", comment, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "comment", comment.ID, "updated", comment, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Update comment failed", err.Error())
 		return
 	}
@@ -171,6 +174,7 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "comment.updated", "", comment)
 	}()
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	problem.JSON(w, 200, comment)
 }
 
@@ -203,7 +207,8 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete comment failed", err.Error())
 		return
 	}
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "comment", comment.ID, "deleted", comment, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "comment", comment.ID, "deleted", comment, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Delete comment failed", err.Error())
 		return
 	}
@@ -214,6 +219,7 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "comment.deleted", "", comment)
 	}()
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	problem.JSON(w, 200, map[string]bool{"success": true})
 }
 
@@ -410,7 +416,7 @@ func scanReactions(rows pgx.Rows, issueShape bool) ([]ReactionSummary, error) {
 	return summary, rows.Err()
 }
 
-func insertOperation(ctx context.Context, tx pgx.Tx, workspaceID, entityType, entityID, opType string, payload any, createdBy string) error {
+func insertOperation(ctx context.Context, tx pgx.Tx, workspaceID, entityType, entityID, opType string, payload any, createdBy string) (syncapi.Operation, error) {
 	return syncapi.InsertOperation(ctx, tx, workspaceID, entityType, entityID, opType, payload, createdBy)
 }
 

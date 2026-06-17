@@ -52,6 +52,7 @@ func main() {
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	defer stopWorker()
 	go (integrations.SlackWorker{DB: db}).Start(workerCtx)
+	go (integrations.GoogleSheetsWorker{DB: db}).Start(workerCtx)
 	go (integrations.MicrosoftTeamsWorker{DB: db}).Start(workerCtx)
 	go (integrations.SentryWorker{DB: db}).Start(workerCtx)
 	go (integrations.SalesforceWorker{DB: db}).Start(workerCtx)

@@ -2,6 +2,10 @@
 
 import { useAppShellContext } from "@/app/(app)/app-shell";
 import {
+  SYNC_OPERATIONS_EVENT,
+  type SyncOperationsEvent,
+} from "@/app/(app)/sync-subscription";
+import {
   IssueProperties,
   type IssuePropertyUpdate,
 } from "@/components/issue-properties";
@@ -12,6 +16,8 @@ import {
   richTextHtmlToPlainText,
 } from "@/lib/issue-description";
 import { withWorkspaceSlug } from "@/lib/workspace-paths";
+import { createBrowserApiClient } from "@/lib/browser-api-client";
+import type { components } from "@namuh-eng/expn-sdk";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -22,6 +28,8 @@ import {
   useRef,
   useState,
 } from "react";
+
+const apiClient = createBrowserApiClient();
 
 interface IssueReaction {
   emoji: string;
@@ -38,22 +46,7 @@ interface IssueCommentAttachment {
   downloadUrl: string | null;
 }
 
-interface FigmaSource {
-  id: string;
-  url: string;
-  normalizedUrl: string;
-  fileKey: string;
-  nodeId?: string | null;
-  name?: string | null;
-  title?: string | null;
-  thumbnailUrl?: string | null;
-  kind: "proto" | "design" | "file" | string;
-  containerType: "description" | "comment" | string;
-  containerId?: string | null;
-  capturedAt: string;
-  refreshedAt?: string | null;
-  lastError?: string | null;
-}
+type FigmaSource = components["schemas"]["FigmaSource"];
 
 interface WorkspaceMemberOption {
   userId: string;
@@ -127,6 +120,24 @@ interface IssueExternalSource {
   integrationId: string;
 }
 
+interface IssueCustomerRequest {
+  id: string;
+  customerId: string;
+  customer: {
+    id: string;
+    name: string;
+    domain: string | null;
+    tier?: string | null;
+    status?: string | null;
+  };
+  title: string;
+  body: string | null;
+  important: boolean;
+  source: string | null;
+  sourceUrl: string | null;
+  createdAt: string;
+}
+
 interface IssueDetail {
   id: string;
   identifier: string;
@@ -183,6 +194,7 @@ interface IssueDetail {
   figmaSources: FigmaSource[];
   subIssues: IssueSubIssue[];
   sources: IssueExternalSource[];
+  customerRequests: IssueCustomerRequest[];
   createdAt: string;
   updatedAt: string;
 }
@@ -456,11 +468,13 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
             ? " from Microsoft Teams"
             : event.metadata.source === "sentry_issue"
               ? " from Sentry"
+              : event.metadata.source === "github_issue"
+                ? " from GitHub"
               : event.metadata.source === "salesforce_case"
                 ? " from Salesforce"
-                : event.metadata.source === "zendesk_ticket"
-                  ? " from Zendesk"
-                  : "";
+              : event.metadata.source === "zendesk_ticket"
+                ? " from Zendesk"
+                : "";
       return `${actorName} created this issue${legacySuffix}${sourceSuffix}`;
     }
     case "updated":
@@ -524,6 +538,19 @@ function getSentrySourceLink(event: IssueHistoryEvent): string | null {
   }
   return typeof sentry.webUrl === "string" && sentry.webUrl.length > 0
     ? sentry.webUrl
+    : null;
+}
+
+function getGitHubSourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "github_issue") {
+    return null;
+  }
+  const github = event.metadata.github;
+  if (!isRecord(github)) {
+    return null;
+  }
+  return typeof github.url === "string" && github.url.length > 0
+    ? github.url
     : null;
 }
 
@@ -692,8 +719,6 @@ function getFigmaKindLabel(kind: FigmaSource["kind"]): string {
       return "Design";
     case "file":
       return "File";
-    default:
-      return "Figma";
   }
 }
 
@@ -756,7 +781,8 @@ function FigmaPreviewCard({
           </button>
         </div>
         <div className="mt-3 text-[12px] text-[var(--color-text-secondary)]">
-          {source.refreshedAt ? "Seen" : "Captured"} {formatFullDate(timestamp)}
+          {source.refreshedAt ? "Seen" : "Captured"}{" "}
+          {formatFullDate(timestamp)}
         </div>
         {source.lastError ? (
           <div className="mt-2 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[12px] text-red-600 dark:text-red-300">
@@ -850,6 +876,13 @@ export function IssueDetailView({
   const [issueReactionNotice, setIssueReactionNotice] = useState<string | null>(
     null,
   );
+  const [customerName, setCustomerName] = useState("");
+  const [customerDomain, setCustomerDomain] = useState("");
+  const [customerRequestTitle, setCustomerRequestTitle] = useState("");
+  const [customerRequestBody, setCustomerRequestBody] = useState("");
+  const [customerRequestImportant, setCustomerRequestImportant] =
+    useState(false);
+  const [customerRequestSaving, setCustomerRequestSaving] = useState(false);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const descriptionRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -909,6 +942,7 @@ export function IssueDetailView({
             sourceCommentCount: 0,
           },
           sources: json.sources ?? [],
+          customerRequests: json.customerRequests ?? [],
         });
         setDescriptionDraft(
           normalizeIssueDescriptionHtml(json.description) ?? "",
@@ -928,6 +962,22 @@ export function IssueDetailView({
   useEffect(() => {
     void fetchHistory();
   }, [fetchHistory]);
+
+  useEffect(() => {
+    const handleSync = (event: Event) => {
+      const operations = (event as SyncOperationsEvent).detail.operations;
+      if (
+        operations.some((operation) =>
+          ["issue", "comment"].includes(operation.entity_type),
+        )
+      ) {
+        void fetchIssue();
+        void fetchHistory();
+      }
+    };
+    window.addEventListener(SYNC_OPERATIONS_EVENT, handleSync);
+    return () => window.removeEventListener(SYNC_OPERATIONS_EVENT, handleSync);
+  }, [fetchHistory, fetchIssue]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1069,6 +1119,74 @@ export function IssueDetailView({
       }
     } finally {
       setSavingField(null);
+    }
+  }
+
+  async function handleCreateCustomerRequest() {
+    if (!issue || customerRequestSaving) {
+      return;
+    }
+    const trimmedCustomerName = customerName.trim();
+    const trimmedTitle = customerRequestTitle.trim();
+    if (!trimmedCustomerName || !trimmedTitle) {
+      setActionStatus("Customer and request title are required.");
+      return;
+    }
+    setCustomerRequestSaving(true);
+    setActionStatus(null);
+    try {
+      const customerRes = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: trimmedCustomerName,
+          domain: customerDomain.trim() || null,
+          source: "manual",
+        }),
+      });
+      if (!customerRes.ok) {
+        throw new Error("Create customer failed");
+      }
+      const customer = (await customerRes.json()) as {
+        id: string;
+        name: string;
+        domain: string | null;
+      };
+      const requestRes = await fetch(`/api/customers/${customer.id}/requests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: trimmedTitle,
+          body: customerRequestBody.trim() || null,
+          important: customerRequestImportant,
+          issueId: issue.id,
+          source: "manual",
+        }),
+      });
+      if (!requestRes.ok) {
+        throw new Error("Create request failed");
+      }
+      const request = (await requestRes.json()) as IssueCustomerRequest;
+      setIssue((current) =>
+        current
+          ? {
+              ...current,
+              customerRequests: [request, ...current.customerRequests],
+            }
+          : current,
+      );
+      setCustomerName("");
+      setCustomerDomain("");
+      setCustomerRequestTitle("");
+      setCustomerRequestBody("");
+      setCustomerRequestImportant(false);
+      setActionStatus("Customer request linked.");
+    } catch (err) {
+      setActionStatus(
+        err instanceof Error ? err.message : "Customer request failed",
+      );
+    } finally {
+      setCustomerRequestSaving(false);
     }
   }
 
@@ -1521,14 +1639,13 @@ export function IssueDetailView({
     setRefreshingFigmaSourceId(sourceId);
     setFigmaActionStatus(null);
     try {
-      const response = await fetch(
-        `/api/issues/${encodeURIComponent(issue.id)}/figma-sources/${encodeURIComponent(sourceId)}/refresh`,
-        { method: "POST" },
+      const { data, error } = await apiClient.POST(
+        "/issues/{id}/figma-sources/{sourceId}/refresh",
+        { params: { path: { id: issue.id, sourceId } } },
       );
-      if (!response.ok) {
+      if (error !== undefined || data === undefined) {
         throw new Error("Failed to mark Figma source as seen");
       }
-      const data = (await response.json()) as FigmaSource;
       setIssue((current) =>
         current
           ? {
@@ -2252,32 +2369,36 @@ export function IssueDetailView({
                             View source issue in Sentry
                           </a>
                         ) : null}
-                        {(() => {
-                          const salesforceLink = getSalesforceSourceLink(event);
-                          return salesforceLink ? (
-                            <a
-                              href={salesforceLink}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
-                            >
-                              View source case in Salesforce
-                            </a>
-                          ) : null;
-                        })()}
-                        {(() => {
-                          const zendeskLink = getZendeskSourceLink(event);
-                          return zendeskLink ? (
-                            <a
-                              href={zendeskLink}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
-                            >
-                              View source ticket in Zendesk
-                            </a>
-                          ) : null;
-                        })()}
+                        {getGitHubSourceLink(event) ? (
+                          <a
+                            href={getGitHubSourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source issue in GitHub
+                          </a>
+                        ) : null}
+                        {getSalesforceSourceLink(event) ? (
+                          <a
+                            href={getSalesforceSourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source case in Salesforce
+                          </a>
+                        ) : null}
+                        {getZendeskSourceLink(event) ? (
+                          <a
+                            href={getZendeskSourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source ticket in Zendesk
+                          </a>
+                        ) : null}
                         {getGitLabSourceLink(event) ? (
                           <a
                             href={getGitLabSourceLink(event) ?? undefined}
@@ -2739,6 +2860,102 @@ export function IssueDetailView({
                 }
               />
             )}
+          </div>
+
+          <div className="border-b border-[var(--color-border)] p-4">
+            <div className="editorial-section-title mb-3 text-[12px] uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+              Customer requests
+            </div>
+            <div className="space-y-2">
+              {issue.customerRequests.length === 0 ? (
+                <p className="text-[13px] text-[var(--color-text-secondary)]">
+                  No customer requests linked.
+                </p>
+              ) : (
+                issue.customerRequests.map((request) => (
+                  <div
+                    key={request.id}
+                    className="tty-row border border-[var(--color-border)] px-3 py-2 text-[13px]"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <Link
+                          href={withWorkspaceSlug(
+                            `/customers/${request.customerId}`,
+                            workspaceSlug,
+                          )}
+                          className="font-medium text-[var(--color-text-primary)] hover:underline"
+                        >
+                          {request.customer.name}
+                        </Link>
+                        <p className="mt-1 text-[var(--color-text-secondary)]">
+                          {request.important ? "★ " : ""}
+                          {request.title}
+                        </p>
+                      </div>
+                      <span className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-text-tertiary)]">
+                        {request.customer.domain ?? "customer"}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="mt-4 space-y-2 border-t border-[var(--color-border)] pt-3">
+              <input
+                value={customerName}
+                onChange={(event) => setCustomerName(event.target.value)}
+                placeholder="Customer name"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+              />
+              <input
+                value={customerDomain}
+                onChange={(event) => setCustomerDomain(event.target.value)}
+                placeholder="Domain (optional)"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+              />
+              <input
+                value={customerRequestTitle}
+                onChange={(event) =>
+                  setCustomerRequestTitle(event.target.value)
+                }
+                placeholder="Request title"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+              />
+              <textarea
+                value={customerRequestBody}
+                onChange={(event) => setCustomerRequestBody(event.target.value)}
+                placeholder="Request details (optional)"
+                rows={3}
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+              />
+              <label className="flex items-center gap-2 text-[12px] text-[var(--color-text-secondary)]">
+                <input
+                  type="checkbox"
+                  checked={customerRequestImportant}
+                  onChange={(event) =>
+                    setCustomerRequestImportant(event.target.checked)
+                  }
+                />
+                Mark important
+              </label>
+              <button
+                type="button"
+                onClick={handleCreateCustomerRequest}
+                disabled={customerRequestSaving}
+                className="tty-button-primary w-full px-3 py-2 text-[12px] disabled:opacity-50"
+              >
+                {customerRequestSaving ? "Linking…" : "Create and link request"}
+              </button>
+              {issue.customerRequests.length > 0 ? (
+                <a
+                  href={`/api/issues/${encodeURIComponent(issue.identifier)}/customer-requests.csv`}
+                  className="block text-center text-[12px] text-[var(--color-accent)] hover:underline"
+                >
+                  Export CSV
+                </a>
+              ) : null}
+            </div>
           </div>
 
           {issue.sources.length > 0 ? (
