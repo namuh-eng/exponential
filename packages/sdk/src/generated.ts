@@ -759,6 +759,38 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/github": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getGitHubIntegration"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/github/setup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["setupGitHubIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/github/connect": {
     parameters: {
       query?: never;
@@ -769,6 +801,22 @@ export interface paths {
     get?: never;
     put?: never;
     post: operations["connectGitHubIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/github/workflows": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["updateGitHubWorkflowAutomation"];
     delete?: never;
     options?: never;
     head?: never;
@@ -3459,6 +3507,74 @@ export interface components {
       details: {
         [key: string]: unknown;
       };
+    };
+    GitHubRepositoryMapping: {
+      id: string;
+      owner: string;
+      name: string;
+      fullName: string;
+      /** Format: uri */
+      htmlUrl: string | null;
+      /** Format: uuid */
+      teamId: string | null;
+      enabled: boolean;
+    };
+    GitHubWorkflowMapping: {
+      /** Format: uuid */
+      teamId: string;
+      teamKey: string;
+      teamName: string;
+      /** Format: uuid */
+      pullRequestMergedStateId: string | null;
+    };
+    GitHubStatusResponse: {
+      connected: boolean;
+      /** Format: uuid */
+      integrationId: string | null;
+      installationId: string | null;
+      displayName: string | null;
+      /** Format: uri */
+      webhookUrl: string | null;
+      webhookSecret: string | null;
+      repositories: components["schemas"]["GitHubRepositoryMapping"][];
+      workflows: components["schemas"]["GitHubWorkflowMapping"][];
+    };
+    GitHubRepositoryInput: {
+      id: string;
+      owner?: string;
+      name?: string;
+      fullName: string;
+      /** Format: uri */
+      htmlUrl?: string;
+    };
+    GitHubSetupRequest: {
+      installationId: string;
+      accountLogin: string;
+      accountType?: string;
+      webhookSecret?: string;
+      branchNameFormat?: string;
+      repositories: components["schemas"]["GitHubRepositoryInput"][];
+    };
+    GitHubSetupResponse: {
+      connected: boolean;
+      /** Format: uuid */
+      integrationId: string;
+      installationId: string;
+      displayName: string;
+      /** Format: uri */
+      webhookUrl: string;
+      webhookSecret: string;
+      repositories: components["schemas"]["GitHubRepositoryMapping"][];
+      workflows: components["schemas"]["GitHubWorkflowMapping"][];
+    };
+    GitHubWorkflowRequest: {
+      /** Format: uuid */
+      teamId: string;
+      /** Format: uuid */
+      pullRequestMergedStateId?: string | null;
+    };
+    GitHubWorkflowResponse: {
+      workflows: components["schemas"]["GitHubWorkflowMapping"][];
     };
     GitHubAccount: {
       id: string;
@@ -7478,6 +7594,52 @@ export interface operations {
       default: components["responses"]["Problem"];
     };
   };
+  getGitHubIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description GitHub integration status */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitHubStatusResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  setupGitHubIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["GitHubSetupRequest"];
+      };
+    };
+    responses: {
+      /** @description GitHub integration connected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitHubSetupResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   connectGitHubIntegration: {
     parameters: {
       query?: never;
@@ -7503,6 +7665,31 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["GitHubConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateGitHubWorkflowAutomation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["GitHubWorkflowRequest"];
+      };
+    };
+    responses: {
+      /** @description GitHub workflow mappings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GitHubWorkflowResponse"];
         };
       };
       default: components["responses"]["Problem"];

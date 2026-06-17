@@ -104,7 +104,7 @@ type slackOAuthResponse struct {
 }
 
 var catalog = []CatalogItem{
-	{Provider: "github", Name: "GitHub", Description: "Sync pull requests, commits, and issue links with Linear."},
+	{Provider: "github", Name: "GitHub", Description: "Sync pull requests, commits, and issue links with Exponential."},
 	{Provider: "gitlab", Name: "GitLab", Description: "Link merge requests, commits, and workflow automation to issues."},
 	{Provider: "jira", Name: "Jira", Description: "Sync issue status, ownership, and cross-links with Jira projects."},
 	{Provider: "discord", Name: "Discord", Description: "Create, search, and share issues from Discord slash commands."},
@@ -125,6 +125,9 @@ func (h Handler) Routes() chi.Router {
 	r.Get("/", h.List)
 	r.Delete("/", h.Delete)
 	r.Post("/slack/connect", h.SlackConnect)
+	r.Get("/github", h.GitHubStatus)
+	r.Post("/github/setup", h.GitHubSetup)
+	r.Post("/github/workflows", h.GitHubWorkflow)
 	r.Post("/github/connect", h.GitHubConnect)
 	r.Post("/github/register", h.GitHubRegister)
 	r.Post("/github/disconnect", h.GitHubDisconnect)

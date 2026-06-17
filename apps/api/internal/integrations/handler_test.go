@@ -72,7 +72,6 @@ func TestSetupRequirement(t *testing.T) {
 	t.Setenv("INTERCOM_SIGNING_SECRET", "signing-secret")
 	if got := setupRequirement("intercom"); got != nil {
 		t.Fatalf("configured intercom requirement = %#v", got)
-
 	}
 	if got := setupRequirement("github"); got == nil || got.Message == "" {
 		t.Fatalf("github requirement = %#v", got)
@@ -253,20 +252,6 @@ func TestGitHubConfigAndSetupRequirement(t *testing.T) {
 	cfg, ok := loadGitHubConfig()
 	if !ok || cfg.AppID != "123" || cfg.ClientID != "client-id" || cfg.PrivateKey != "private-key" || cfg.WebhookSecret != "webhook-secret" {
 		t.Fatalf("github config = %#v ok=%v", cfg, ok)
-	}
-}
-
-func TestGitHubSignatureVerification(t *testing.T) {
-	body := []byte(`{"installation":{"id":123},"repository":{"id":456,"full_name":"namuh-eng/exponential"}}`)
-	signature := githubTestSignature("secret", body)
-	if !verifyGitHubSignature("secret", signature, body) {
-		t.Fatal("valid GitHub signature was rejected")
-	}
-	if verifyGitHubSignature("secret", signature, []byte(`{"installation":{"id":999}}`)) {
-		t.Fatal("tampered GitHub body was accepted")
-	}
-	if verifyGitHubSignature("secret", strings.Replace(signature, "sha256=", "sha1=", 1), body) {
-		t.Fatal("wrong signature algorithm was accepted")
 	}
 }
 
@@ -852,12 +837,82 @@ func TestGitLabMergeRequestEventParsing(t *testing.T) {
 	}
 }
 
+func TestGitHubSignatureVerification(t *testing.T) {
+	body := []byte(`{"action":"opened","pull_request":{"number":7}}`)
+	signature := githubTestSignature("secret", body)
+	if !verifyGitHubSignature("secret", signature, body) {
+		t.Fatal("valid GitHub signature was rejected")
+	}
+	if verifyGitHubSignature("secret", signature, []byte(`{"action":"closed"}`)) {
+		t.Fatal("tampered GitHub body was accepted")
+	}
+	if verifyGitHubSignature("secret", strings.TrimPrefix(signature, "sha256="), body) {
+		t.Fatal("unprefixed GitHub signature was accepted")
+	}
+}
+
+func TestGitHubIssueIdentifierExtraction(t *testing.T) {
+	got := extractGitHubIssueIdentifiers("feature/eng-581-github", "Fixes OPS-3 and eng-581", "no duplicate OPS-3")
+	want := []string{"ENG-581", "OPS-3"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("identifiers = %#v want %#v", got, want)
+	}
+}
+
+func TestGitHubPullRequestEventParsing(t *testing.T) {
+	payload := gitHubWebhookPayload{Action: "closed"}
+	payload.Repository.ID = float64(11)
+	payload.Repository.FullName = "namuh/exponential"
+	payload.Repository.HTMLURL = "https://github.com/namuh/exponential"
+	payload.PullRequest.ID = float64(42)
+	payload.PullRequest.Number = 5
+	payload.PullRequest.Merged = true
+	payload.PullRequest.State = "closed"
+	payload.PullRequest.Title = "Fix ENG-581"
+	payload.PullRequest.Body = "Closes OPS-3"
+	payload.PullRequest.HTMLURL = "https://github.com/namuh/exponential/pull/5"
+	payload.PullRequest.Head.Ref = "jaeyun/eng-581-github"
+	payload.PullRequest.Base.Ref = "staging"
+	payload.PullRequest.User.ID = float64(99)
+	payload.PullRequest.User.Login = "octocat"
+
+	event, ok := gitHubPullRequestEventFromPayload(payload, "delivery-1")
+	if !ok {
+		t.Fatal("pull request event was not parsed")
+	}
+	if event.Action != "merged" || event.RepositoryID != "11" || event.PullRequestNumber != "5" || event.ActorGitHubID != "99" {
+		t.Fatalf("event = %#v", event)
+	}
+	want := []string{"ENG-581", "OPS-3"}
+	if strings.Join(event.Identifiers, ",") != strings.Join(want, ",") {
+		t.Fatalf("identifiers = %#v want %#v", event.Identifiers, want)
+	}
+}
+
+func TestGitHubCommitEventParsing(t *testing.T) {
+	payload := gitHubWebhookPayload{}
+	payload.Repository.ID = "repo-1"
+	payload.Repository.FullName = "namuh/exponential"
+	payload.Commits = []gitHubCommitPayload{{ID: "abcdef123", Message: "Fixes ENG-1 and refs OPS-2", URL: "https://api.github.com/repos/namuh/exponential/commits/abcdef123"}}
+	payload.Commits[0].Author.Name = "Ada"
+	payload.Commits[0].Author.Email = "ada@example.com"
+	events := gitHubCommitEventsFromPayload(payload, "delivery-1")
+	if len(events) != 1 || events[0].SHA != "abcdef123" || events[0].ActorEmail != "ada@example.com" {
+		t.Fatalf("events = %#v", events)
+	}
+	want := []string{"ENG-1", "OPS-2"}
+	if strings.Join(events[0].Identifiers, ",") != strings.Join(want, ",") {
+		t.Fatalf("identifiers = %#v want %#v", events[0].Identifiers, want)
+	}
+}
+
 func slackTestSignature(secret string, timestamp string, body []byte) string {
 	base := "v0:" + timestamp + ":" + string(body)
 	mac := hmac.New(sha256.New, []byte(secret))
 	_, _ = mac.Write([]byte(base))
 	return "v0=" + hex.EncodeToString(mac.Sum(nil))
 }
+
 
 func TestProviderJobFailureStatus(t *testing.T) {
 	status, nextRunAt := providerJobFailureStatus(2, 5)
