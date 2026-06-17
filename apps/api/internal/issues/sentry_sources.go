@@ -91,7 +91,10 @@ func (h Handler) queueProviderAutomations(ctx context.Context, tx pgx.Tx, worksp
 	if err := h.queueSentryAutomations(ctx, tx, workspaceID, before, after); err != nil {
 		return err
 	}
-	return h.queueGongAutomations(ctx, tx, workspaceID, before, after)
+	if err := h.queueGongAutomations(ctx, tx, workspaceID, before, after); err != nil {
+		return err
+	}
+	return h.queueZendeskAutomationsForIssueState(ctx, tx, workspaceID, before, after)
 }
 
 func (h Handler) queueSentryAutomations(ctx context.Context, tx pgx.Tx, workspaceID string, before Issue, after Issue) error {
@@ -169,12 +172,20 @@ func (h Handler) queueSentryAutomations(ctx context.Context, tx pgx.Tx, workspac
 			}
 		}
 	}
-	if stateChanged && (category == "completed" || category == "canceled") {
-		if err := h.queueZendeskAutomations(ctx, tx, workspaceID, after, category); err != nil {
-			return err
-		}
-	}
 	return nil
+}
+func (h Handler) queueZendeskAutomationsForIssueState(ctx context.Context, tx pgx.Tx, workspaceID string, before Issue, after Issue) error {
+	if before.StateID == after.StateID {
+		return nil
+	}
+	var category string
+	if err := tx.QueryRow(ctx, `select category::text from workflow_state where id=$1::uuid`, after.StateID).Scan(&category); err != nil {
+		return err
+	}
+	if category != "completed" && category != "canceled" {
+		return nil
+	}
+	return h.queueZendeskAutomations(ctx, tx, workspaceID, after, category)
 }
 
 func (h Handler) queueGongAutomations(ctx context.Context, tx pgx.Tx, workspaceID string, before Issue, after Issue) error {

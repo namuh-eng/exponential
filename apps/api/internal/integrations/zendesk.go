@@ -456,6 +456,7 @@ func (h Handler) createZendeskIssue(ctx context.Context, install zendeskInstallR
 
 type zendeskLinkExecutor interface {
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
 func (h Handler) insertZendeskTicketLink(ctx context.Context, q zendeskLinkExecutor, install zendeskInstallRecord, issueID string, ticket zendeskTicketRef, raw map[string]any) error {
@@ -475,12 +476,54 @@ func (h Handler) insertZendeskTicketLink(ctx context.Context, q zendeskLinkExecu
 		do update set issue_id=excluded.issue_id, ticket_url=excluded.ticket_url, ticket_status=excluded.ticket_status, requester_id=excluded.requester_id, requester_name=excluded.requester_name, requester_email=excluded.requester_email, organization_id=excluded.organization_id, organization_name=excluded.organization_name, metadata=excluded.metadata, updated_at=now()`, install.WorkspaceID, install.IntegrationID, issueID, ticketID, nullString(ticket.URL), nullString(ticket.Status), nullString(ticket.Requester.ID), nullString(ticket.Requester.Name), nullString(ticket.Requester.Email), nullString(ticket.Organization.ID), nullString(ticket.Organization.Name), metadataRaw); err != nil {
 		return err
 	}
+	if err := upsertZendeskCustomerRequest(ctx, q, install.WorkspaceID, issueID, ticket); err != nil {
+		return err
+	}
+
 	_, err = q.Exec(ctx, `
 		insert into integration_thread_link (workspace_id, workspace_integration_id, provider, issue_id, external_team_id, external_channel_id, external_thread_ts, external_message_ts, external_permalink, direction, source_event_id)
 		values ($1::uuid,$2::uuid,'zendesk',$3::uuid,$4,'tickets',$5,$5,$6,'inbound',$7)
 		on conflict (workspace_integration_id, source_event_id) where workspace_integration_id is not null and source_event_id is not null
 		do update set issue_id=excluded.issue_id, external_permalink=excluded.external_permalink, updated_at=now()`, install.WorkspaceID, install.IntegrationID, issueID, install.Subdomain, ticketID, nullString(ticket.URL), zendeskTicketSourceEventID(ticketID))
 	return err
+}
+
+func upsertZendeskCustomerRequest(ctx context.Context, q zendeskLinkExecutor, workspaceID string, issueID string, ticket zendeskTicketRef) error {
+	customerID, err := upsertZendeskCustomer(ctx, q, workspaceID, ticket)
+	if err != nil {
+		return err
+	}
+	title := truncateZendeskText(firstNonEmpty(ticket.Subject, "Zendesk ticket "+strings.TrimSpace(ticket.ID)), 500)
+	excerpt := zendeskRequestExcerpt(ticket.Description)
+	metadataRaw, _ := json.Marshal(map[string]any{"ticket": ticket})
+	_, err = q.Exec(ctx, `insert into customer_request (workspace_id, customer_id, issue_id, source_provider, source_external_id, source_url, title, excerpt, metadata, created_at, updated_at) values ($1::uuid,$2::uuid,$3::uuid,'zendesk',$4,$5,$6,$7,$8::jsonb,now(),now()) on conflict (workspace_id, source_provider, source_external_id) do update set issue_id=excluded.issue_id, customer_id=excluded.customer_id, source_url=excluded.source_url, title=excluded.title, excerpt=excluded.excerpt, metadata=excluded.metadata, updated_at=now()`, workspaceID, customerID, issueID, strings.TrimSpace(ticket.ID), nullString(ticket.URL), title, excerpt, metadataRaw)
+	return err
+}
+
+func upsertZendeskCustomer(ctx context.Context, q zendeskLinkExecutor, workspaceID string, ticket zendeskTicketRef) (string, error) {
+	domain := domainFromEmail(ticket.Requester.Email)
+	name := truncateZendeskText(firstNonEmpty(ticket.Organization.Name, ticket.Requester.Name, domain, ticket.Requester.Email, "Unknown customer"), 255)
+	externalID := firstNonEmpty(ticket.Organization.ID, ticket.Requester.ID, ticket.Requester.Email, strings.TrimSpace(ticket.ID))
+	metadataRaw, _ := json.Marshal(map[string]any{"requester": ticket.Requester, "organization": ticket.Organization, "domain": domain})
+	var id string
+	err := q.QueryRow(ctx, `insert into customer (workspace_id, name, domain, source_provider, source_external_id, metadata, created_at, updated_at) values ($1::uuid,$2,$3,'zendesk',$4,$5::jsonb,now(),now()) on conflict (workspace_id, source_provider, source_external_id) do update set name=excluded.name, domain=coalesce(nullif(excluded.domain,''), customer.domain), metadata=customer.metadata || excluded.metadata, updated_at=now() returning id::text`, workspaceID, name, domain, externalID, metadataRaw).Scan(&id)
+	return id, err
+}
+
+func truncateZendeskText(value string, max int) string {
+	runes := []rune(strings.TrimSpace(value))
+	if len(runes) <= max {
+		return string(runes)
+	}
+	return string(runes[:max])
+}
+
+func zendeskRequestExcerpt(value string) string {
+	runes := []rune(strings.TrimSpace(value))
+	if len(runes) <= 2000 {
+		return string(runes)
+	}
+	return string(runes[:2000])
 }
 
 func zendeskIssueDescriptionHTML(ticket zendeskTicketRef, fallback string) string {

@@ -103,14 +103,15 @@ function statusClassName(status: Integration["status"]) {
 
 function integrationDetailSummary(integration: Integration) {
   if (integration.provider !== "github") return null;
-  if (integration.details.repositorySelection === "all") {
+  const details = integration.details ?? {};
+  if (details.repositorySelection === "all") {
     return "All repositories enabled";
   }
   if (
-    integration.details.repositorySelection === "selected" &&
-    typeof integration.details.selectedRepositoryCount === "number"
+    details.repositorySelection === "selected" &&
+    typeof details.selectedRepositoryCount === "number"
   ) {
-    return `${integration.details.selectedRepositoryCount} selected repositories enabled`;
+    return `${details.selectedRepositoryCount} selected repositories enabled`;
   }
   if (integration.status === "connected") {
     return "Repository selection pending from GitHub";
@@ -120,7 +121,13 @@ function integrationDetailSummary(integration: Integration) {
 
 function isConnectableProvider(
   provider: string,
-): provider is "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong" {
+): provider is
+  | "github"
+  | "slack"
+  | "discord"
+  | "microsoft_teams"
+  | "sentry"
+  | "gong" {
   return (
     provider === "github" ||
     provider === "slack" ||
@@ -204,7 +211,13 @@ export default function IntegrationsSettingsPage() {
   }, []);
 
   async function connectIntegration(
-    provider: "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong",
+    provider:
+      | "github"
+      | "slack"
+      | "discord"
+      | "microsoft_teams"
+      | "sentry"
+      | "gong",
   ) {
     setPendingProvider(provider);
     setNotice(null);
@@ -371,7 +384,7 @@ export default function IntegrationsSettingsPage() {
                     ? "/api/integrations/gong/disconnect"
                     : provider === "zendesk"
                       ? "/api/integrations/zendesk/disconnect"
-                  : `/api/integrations?provider=${encodeURIComponent(provider)}`;
+                      : `/api/integrations?provider=${encodeURIComponent(provider)}`;
       const response = await fetch(endpoint, {
         method:
           provider === "slack" ||

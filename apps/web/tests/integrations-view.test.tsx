@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import IntegrationsSettingsPage from "@/app/(app)/settings/integrations/page";
@@ -194,7 +195,11 @@ describe("IntegrationsSettingsPage component", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Explore integrations" }),
     );
-    fireEvent.click(screen.getAllByRole("button", { name: "Connect" })[0]);
+    const slackCard = screen.getByText("Slack").closest("div.rounded-lg");
+    expect(slackCard).not.toBeNull();
+    fireEvent.click(
+      within(slackCard as HTMLElement).getByRole("button", { name: "Connect" }),
+    );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Add AUTH_SLACK_ID",

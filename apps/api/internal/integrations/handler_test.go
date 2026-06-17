@@ -1,6 +1,7 @@
 package integrations
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/hmac"
 	"crypto/rand"
@@ -13,6 +14,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestSetupRequirement(t *testing.T) {
@@ -984,5 +988,65 @@ func TestUpdateZendeskTicket(t *testing.T) {
 	comment := ticket["comment"].(map[string]any)
 	if comment["body"] != "Done" || comment["public"] != false || ticket["status"] != "open" {
 		t.Fatalf("payload = %#v", got)
+	}
+}
+
+type fakeZendeskLinkExecutor struct {
+	queries []string
+	args    [][]any
+}
+
+func (f *fakeZendeskLinkExecutor) Exec(_ context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	f.queries = append(f.queries, sql)
+	f.args = append(f.args, args)
+	return pgconn.CommandTag{}, nil
+}
+
+func (f *fakeZendeskLinkExecutor) QueryRow(_ context.Context, sql string, args ...any) pgx.Row {
+	f.queries = append(f.queries, sql)
+	f.args = append(f.args, args)
+	return pgxRowStub{id: "customer-1"}
+}
+
+type pgxRowStub struct {
+	id string
+}
+
+func (r pgxRowStub) Scan(dest ...any) error {
+	if len(dest) > 0 {
+		if out, ok := dest[0].(*string); ok {
+			*out = r.id
+		}
+	}
+	return nil
+}
+
+func TestZendeskCustomerRequestUpsertUsesTicketMetadata(t *testing.T) {
+	exec := &fakeZendeskLinkExecutor{}
+	ticket := zendeskTicketRef{
+		ID:          "123",
+		URL:         "https://acme.zendesk.com/agent/tickets/123",
+		Subject:     "Customer cannot export",
+		Description: strings.Repeat("a", 2100),
+		Requester:   zendeskRequesterRef{ID: "9", Name: "Ada", Email: "ada@example.com"},
+		Organization: zendeskOrganizationRef{
+			ID:   "7",
+			Name: "Acme",
+		},
+	}
+	if err := upsertZendeskCustomerRequest(context.Background(), exec, "workspace-1", "issue-1", ticket); err != nil {
+		t.Fatal(err)
+	}
+	if len(exec.queries) != 2 {
+		t.Fatalf("queries = %#v", exec.queries)
+	}
+	if exec.args[0][1] != "Acme" || exec.args[0][2] != "example.com" || exec.args[0][3] != "7" {
+		t.Fatalf("customer args = %#v", exec.args[0])
+	}
+	if exec.args[1][1] != "customer-1" || exec.args[1][3] != "123" || exec.args[1][5] != "Customer cannot export" {
+		t.Fatalf("request args = %#v", exec.args[1])
+	}
+	if excerpt, ok := exec.args[1][6].(string); !ok || len([]rune(excerpt)) != 2000 {
+		t.Fatalf("excerpt was not bounded: %#v", exec.args[1][6])
 	}
 }
