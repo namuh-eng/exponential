@@ -1882,6 +1882,58 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/figma/plugin/metadata": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List team, status, and project metadata for the Figma plugin */
+    get: operations["listFigmaPluginMetadata"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/figma/plugin/issues": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create an issue from a Figma selection */
+    post: operations["createFigmaPluginIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/figma/plugin/links": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Link an existing issue to a Figma source */
+    post: operations["linkFigmaPluginIssue"];
+    /** Unlink a Figma source from an existing issue */
+    delete: operations["unlinkFigmaPluginIssue"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/google-sheets/disconnect": {
     parameters: {
       query?: never;
@@ -6198,6 +6250,87 @@ export interface components {
     };
     /** @enum {string} */
     IssuePriority: "none" | "urgent" | "high" | "medium" | "low";
+    FigmaPluginTeam: {
+      /** Format: uuid */
+      id: string;
+      key: string;
+      name: string;
+    };
+    FigmaPluginStatus: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      teamId: string;
+      name: string;
+      category: string;
+      color: string;
+      isDefault?: boolean | null;
+    };
+    FigmaPluginProject: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      icon?: string | null;
+    };
+    FigmaPluginMetadataResponse: {
+      teams: components["schemas"]["FigmaPluginTeam"][];
+      statuses: components["schemas"]["FigmaPluginStatus"][];
+      projects: components["schemas"]["FigmaPluginProject"][];
+    };
+    FigmaPluginSourceInput: {
+      /** Format: uri */
+      url: string;
+      name?: string | null;
+      /** Format: uri */
+      thumbnailUrl?: string | null;
+      selection?: {
+        [key: string]: unknown;
+      };
+    };
+    FigmaPluginCreateIssueRequest: {
+      title: string;
+      description?: string | null;
+      /** Format: uuid */
+      teamId?: string;
+      teamKey?: string;
+      /** Format: uuid */
+      statusId?: string | null;
+      /** Format: uuid */
+      projectId?: string | null;
+      priority?: components["schemas"]["IssuePriority"];
+      source: components["schemas"]["FigmaPluginSourceInput"];
+    };
+    FigmaPluginLinkRequest: {
+      /** Format: uuid */
+      issueId?: string;
+      identifier?: string;
+      /** Format: uuid */
+      sourceId?: string;
+      source?: components["schemas"]["FigmaPluginSourceInput"];
+    };
+    FigmaPluginIssueSummary: {
+      /** Format: uuid */
+      id: string;
+      identifier: string;
+      title: string;
+      /** Format: uuid */
+      teamId: string;
+      teamKey: string;
+      /** Format: uuid */
+      stateId: string;
+      priority: components["schemas"]["IssuePriority"];
+      /** Format: uuid */
+      projectId?: string | null;
+      path: string;
+    };
+    FigmaPluginIssueResponse: {
+      issue: components["schemas"]["FigmaPluginIssueSummary"];
+      source: components["schemas"]["FigmaSource"];
+    };
+    FigmaPluginUnlinkResponse: {
+      success: boolean;
+      unlinked: boolean;
+    };
     FigmaSource: {
       /** Format: uuid */
       id: string;
@@ -9709,6 +9842,102 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  listFigmaPluginMetadata: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Figma plugin metadata */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FigmaPluginMetadataResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createFigmaPluginIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FigmaPluginCreateIssueRequest"];
+      };
+    };
+    responses: {
+      /** @description Created issue linked to a Figma source */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FigmaPluginIssueResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkFigmaPluginIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FigmaPluginLinkRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked issue and Figma source */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FigmaPluginIssueResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  unlinkFigmaPluginIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FigmaPluginLinkRequest"];
+      };
+    };
+    responses: {
+      /** @description Unlinked Figma source */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FigmaPluginUnlinkResponse"];
         };
       };
       default: components["responses"]["Problem"];

@@ -153,6 +153,10 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/gong/connect", h.GongConnect)
 	r.Post("/gong/disconnect", h.GongDisconnect)
 
+	r.Get("/figma/plugin/metadata", h.FigmaPluginMetadata)
+	r.Post("/figma/plugin/issues", h.FigmaPluginCreateIssue)
+	r.Post("/figma/plugin/links", h.FigmaPluginLinkIssue)
+	r.Delete("/figma/plugin/links", h.FigmaPluginUnlinkIssue)
 	r.Post("/slack/disconnect", h.SlackDisconnect)
 	return r
 }

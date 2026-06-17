@@ -2294,6 +2294,75 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /integrations/figma/plugin/metadata:
+    get:
+      operationId: listFigmaPluginMetadata
+      summary: List team, status, and project metadata for the Figma plugin
+      responses:
+        '200':
+          description: Figma plugin metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FigmaPluginMetadataResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/figma/plugin/issues:
+    post:
+      operationId: createFigmaPluginIssue
+      summary: Create an issue from a Figma selection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FigmaPluginCreateIssueRequest'
+      responses:
+        '201':
+          description: Created issue linked to a Figma source
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FigmaPluginIssueResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/figma/plugin/links:
+    post:
+      operationId: linkFigmaPluginIssue
+      summary: Link an existing issue to a Figma source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FigmaPluginLinkRequest'
+      responses:
+        '200':
+          description: Linked issue and Figma source
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FigmaPluginIssueResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: unlinkFigmaPluginIssue
+      summary: Unlink a Figma source from an existing issue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FigmaPluginLinkRequest'
+      responses:
+        '200':
+          description: Unlinked Figma source
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FigmaPluginUnlinkResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /integrations/google-sheets/disconnect:
     post:
       operationId: disconnectGoogleSheetsIntegration
@@ -8168,6 +8237,97 @@ components:
     IssuePriority:
       type: string
       enum: [none, urgent, high, medium, low]
+    FigmaPluginTeam:
+      type: object
+      required: [id, key, name]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string }
+        name: { type: string }
+    FigmaPluginStatus:
+      type: object
+      required: [id, teamId, name, category, color]
+      properties:
+        id: { type: string, format: uuid }
+        teamId: { type: string, format: uuid }
+        name: { type: string }
+        category: { type: string }
+        color: { type: string }
+        isDefault: { type: [boolean, 'null'] }
+    FigmaPluginProject:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        icon: { type: [string, 'null'] }
+    FigmaPluginMetadataResponse:
+      type: object
+      required: [teams, statuses, projects]
+      properties:
+        teams:
+          type: array
+          items: { $ref: '#/components/schemas/FigmaPluginTeam' }
+        statuses:
+          type: array
+          items: { $ref: '#/components/schemas/FigmaPluginStatus' }
+        projects:
+          type: array
+          items: { $ref: '#/components/schemas/FigmaPluginProject' }
+    FigmaPluginSourceInput:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, format: uri }
+        name: { type: [string, 'null'] }
+        thumbnailUrl: { type: [string, 'null'], format: uri }
+        selection:
+          type: object
+          additionalProperties: true
+    FigmaPluginCreateIssueRequest:
+      type: object
+      required: [title, source]
+      properties:
+        title: { type: string }
+        description: { type: [string, 'null'] }
+        teamId: { type: string, format: uuid }
+        teamKey: { type: string }
+        statusId: { type: [string, 'null'], format: uuid }
+        projectId: { type: [string, 'null'], format: uuid }
+        priority: { $ref: '#/components/schemas/IssuePriority' }
+        source: { $ref: '#/components/schemas/FigmaPluginSourceInput' }
+    FigmaPluginLinkRequest:
+      type: object
+      properties:
+        issueId: { type: string, format: uuid }
+        identifier: { type: string }
+        sourceId: { type: string, format: uuid }
+        source: { $ref: '#/components/schemas/FigmaPluginSourceInput' }
+    FigmaPluginIssueSummary:
+      type: object
+      required: [id, identifier, title, teamId, teamKey, stateId, priority, path]
+      properties:
+        id: { type: string, format: uuid }
+        identifier: { type: string }
+        title: { type: string }
+        teamId: { type: string, format: uuid }
+        teamKey: { type: string }
+        stateId: { type: string, format: uuid }
+        priority: { $ref: '#/components/schemas/IssuePriority' }
+        projectId: { type: [string, 'null'], format: uuid }
+        path: { type: string }
+    FigmaPluginIssueResponse:
+      type: object
+      required: [issue, source]
+      properties:
+        issue: { $ref: '#/components/schemas/FigmaPluginIssueSummary' }
+        source: { $ref: '#/components/schemas/FigmaSource' }
+    FigmaPluginUnlinkResponse:
+      type: object
+      required: [success, unlinked]
+      properties:
+        success: { type: boolean }
+        unlinked: { type: boolean }
     FigmaSource:
       type: object
       required: [id, url, normalizedUrl, fileKey, kind, containerType, capturedAt]
