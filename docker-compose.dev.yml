@@ -75,6 +75,14 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       PLAYWRIGHT_TEST: "true"
+      # Email — dev stack uses Mailhog as an SMTP relay (no auth, no TLS).
+      # Override SENDER_EMAIL / SMTP_* in .env to use a real relay instead.
+      SENDER_EMAIL: ${SENDER_EMAIL:-no-reply@localhost}
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_TLS: ${SMTP_TLS:-}
     ports:
       - "${API_PORT:-7016}:7016"
     depends_on:
@@ -84,6 +92,8 @@ services:
         condition: service_healthy
       api-migrate:
         condition: service_completed_successfully
+      mailhog:
+        condition: service_started
 
   web:
     image: node:20-alpine

@@ -9,12 +9,15 @@ import {
 
 export { asRecord, isPermissionLevel, readPermissionLevel };
 export type { PermissionLevel, WorkspaceMemberRole };
-export type WebhookEventType = "created" | "updated" | "deleted";
+export type WebhookEventType =
+  | "issue.created"
+  | "issue.updated"
+  | "issue.deleted";
 
 export const WEBHOOK_EVENT_LABELS: Record<WebhookEventType, string> = {
-  created: "Issue created",
-  updated: "Issue updated",
-  deleted: "Issue deleted",
+  "issue.created": "Issue created",
+  "issue.updated": "Issue updated",
+  "issue.deleted": "Issue deleted",
 };
 
 export const OAUTH_SCOPE_OPTIONS = [
@@ -124,9 +127,9 @@ export const OAUTH_APPLICATIONS_DOCS_URL =
 export const WEBHOOKS_DOCS_URL = "https://exponential.app/developers/webhooks";
 
 const WEBHOOK_EVENT_TYPES = new Set<WebhookEventType>([
-  "created",
-  "updated",
-  "deleted",
+  "issue.created",
+  "issue.updated",
+  "issue.deleted",
 ]);
 
 export type WorkspaceApiSettingsState = {

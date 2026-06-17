@@ -162,7 +162,7 @@ func (h Handler) SalesforceDisconnect(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusForbidden, "Forbidden", "")
 		return
 	}
-	if err := h.revokeProvider(r.Context(), p.WorkspaceID, "salesforce", p.UserID); err != nil {
+	if err := h.disconnectProvider(r.Context(), p.WorkspaceID, p.UserID, "salesforce"); err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Disconnect Salesforce failed", err.Error())
 		return
 	}

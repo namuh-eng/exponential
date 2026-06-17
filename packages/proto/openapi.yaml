@@ -4426,6 +4426,36 @@ paths:
                 $ref: '#/components/schemas/WorkspaceBillingResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /workspaces/current/billing/checkout:
+    post:
+      operationId: createCurrentWorkspaceBillingCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkspaceBillingCheckoutRequest'
+      responses:
+        '200':
+          description: Stripe checkout session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateWorkspaceBillingCheckoutResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /workspaces/current/billing/portal:
+    post:
+      operationId: createCurrentWorkspaceBillingPortal
+      responses:
+        '200':
+          description: Stripe billing portal session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateWorkspaceBillingPortalResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /workspaces/current:
     get:
       operationId: getCurrentWorkspace
@@ -4700,6 +4730,60 @@ paths:
                 $ref: '#/components/schemas/InviteWorkspaceMembersResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /workspaces/current/webhook-deliveries:
+    get:
+      operationId: listWebhookDeliveries
+      summary: List recent webhook delivery attempts for the current workspace
+      parameters:
+        - name: webhook_id
+          in: query
+          schema: { type: string }
+          description: Filter by webhook ID
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, delivering, delivered, failed, dead] }
+          description: Filter by delivery status
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Webhook delivery list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deliveries]
+                properties:
+                  deliveries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WebhookDelivery'
+        default:
+          $ref: '#/components/responses/Problem'
+  /workspaces/current/webhook-deliveries/{id}/retry:
+    post:
+      operationId: retryWebhookDelivery
+      summary: Re-queue a failed or dead webhook delivery for immediate retry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Delivery reset to pending
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: pending
+        default:
+          $ref: '#/components/responses/Problem'
   /sync/ws:
     get:
       operationId: watchSync
@@ -4744,6 +4828,21 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
+    WebhookDelivery:
+      type: object
+      required: [id, webhookId, eventType, status, attempts, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        webhookId: { type: string, format: uuid }
+        eventType: { type: string }
+        status: { type: string, enum: [pending, delivering, delivered, failed, dead] }
+        attempts: { type: integer }
+        responseCode: { type: integer, nullable: true }
+        responseBody: { type: string, nullable: true }
+        lastAttemptedAt: { type: string, format: date-time, nullable: true }
+        nextAttemptAt: { type: string, format: date-time, nullable: true }
+        sourceOperationId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
     Problem:
       type: object
       required: [type, title, status]
@@ -5253,6 +5352,9 @@ components:
         createdAt: { type: string, format: date-time }
     IntegrationHealth:
       type: object
+      description: >
+        Lifecycle and health telemetry for an integration. No secrets or raw
+        credential metadata are included.
       required: [lastEventAt, lastSuccessAt, lastFailureAt, lastFailureMessage, tokenExpiresAt, pendingJobCount, failedJobCount, auditEvents]
       properties:
         lastEventAt: { type: [string, 'null'], format: date-time }
@@ -7863,7 +7965,7 @@ components:
       type: object
       required: [id, name, price, description, features]
       properties:
-        id: { type: string, enum: [free, basic, business, enterprise] }
+        id: { type: string, enum: [cloud_free, cloud_team, cloud_business, enterprise_cloud] }
         name: { type: string }
         price: { type: string }
         description: { type: string }
@@ -7890,7 +7992,7 @@ components:
       required: [workspace, currentPlan, canManage, usage, plans, paymentMethods, invoices]
       properties:
         workspace: { $ref: '#/components/schemas/BillingWorkspace' }
-        currentPlan: { type: string, enum: [free, basic, business, enterprise] }
+        currentPlan: { type: string, enum: [cloud_free, cloud_team, cloud_business, enterprise_cloud] }
         canManage: { type: boolean }
         usage: { $ref: '#/components/schemas/BillingUsage' }
         plans:
@@ -7906,7 +8008,23 @@ components:
       type: object
       required: [plan]
       properties:
-        plan: { type: string, enum: [free, basic, business, enterprise] }
+        plan: { type: string, enum: [cloud_free, cloud_team, cloud_business, enterprise_cloud] }
+    CreateWorkspaceBillingCheckoutRequest:
+      type: object
+      required: [plan]
+      properties:
+        plan: { type: string, enum: [cloud_team, cloud_business] }
+    CreateWorkspaceBillingCheckoutResponse:
+      type: object
+      required: [url, sessionId]
+      properties:
+        url: { type: string, format: uri }
+        sessionId: { type: string }
+    CreateWorkspaceBillingPortalResponse:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, format: uri }
     ViewTeam:
       type: object
       required: [id, key, name]

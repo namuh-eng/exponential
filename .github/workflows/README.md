@@ -1,3 +1,46 @@
+# GitHub Actions — workflows
+
+## release.yml — versioned npm releases
+
+Triggers on semver tags (`v*.*.*`). Creates a GitHub Release with changelog
+notes and publishes `@namuh-eng/expn-sdk` and `@namuh-eng/expn-cli` to npm.
+
+### Cutting a release
+
+```sh
+# 1. Bump version in both package.json files and commit the bump to main:
+node -e "const f='packages/sdk/package.json', p=JSON.parse(require('fs').readFileSync(f)); \
+  p.version='0.2.0'; require('fs').writeFileSync(f, JSON.stringify(p,null,2)+'\n')"
+node -e "const f='apps/cli/package.json', p=JSON.parse(require('fs').readFileSync(f)); \
+  p.version='0.2.0'; require('fs').writeFileSync(f, JSON.stringify(p,null,2)+'\n')"
+git add packages/sdk/package.json apps/cli/package.json
+git commit -m "chore: bump version to 0.2.0"
+git push
+
+# 2. Tag and push (triggers release.yml):
+bash scripts/tag-release.sh 0.2.0
+```
+
+### Required repository secret
+
+`NPM_TOKEN` — an npm automation token with publish rights for `@namuh-eng`.
+Set it under **Settings → Secrets and variables → Actions → Secrets**.
+
+### Pre-release tags
+
+Tags with a hyphen suffix (e.g. `v1.0.0-beta.1`) are published to npm and
+marked as a GitHub pre-release automatically.
+
+---
+
+## publish-cli.yml — manual / emergency publish
+
+Manual workflow with an explicit dry-run toggle. Use this for out-of-band
+publishes or to verify packaging without releasing. For normal releases, use
+`scripts/tag-release.sh` and `release.yml` instead.
+
+---
+
 # GitHub Actions — deploy
 
 `deploy.yml` ships `exponential` to ECS Fargate. Push-to-`main` deploys use the

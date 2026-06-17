@@ -18,9 +18,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/namuh-eng/exponential/apps/api/internal/sanitizehtml"
 )
 
@@ -79,16 +79,16 @@ type microsoftTeamsChannelData struct {
 }
 
 type microsoftTeamsActivity struct {
-	ID           string                         `json:"id"`
-	Type         string                         `json:"type"`
-	Text         string                         `json:"text"`
-	Summary      string                         `json:"summary"`
-	ReplyToID    string                         `json:"replyToId"`
-	ServiceURL   string                         `json:"serviceUrl"`
-	From         microsoftTeamsIdentity         `json:"from"`
-	Conversation microsoftTeamsConversation     `json:"conversation"`
-	ChannelData  microsoftTeamsChannelData      `json:"channelData"`
-	Value        map[string]any                 `json:"value"`
+	ID           string                     `json:"id"`
+	Type         string                     `json:"type"`
+	Text         string                     `json:"text"`
+	Summary      string                     `json:"summary"`
+	ReplyToID    string                     `json:"replyToId"`
+	ServiceURL   string                     `json:"serviceUrl"`
+	From         microsoftTeamsIdentity     `json:"from"`
+	Conversation microsoftTeamsConversation `json:"conversation"`
+	ChannelData  microsoftTeamsChannelData  `json:"channelData"`
+	Value        map[string]any             `json:"value"`
 }
 
 type microsoftTeamsCommandContext struct {
@@ -160,7 +160,7 @@ func (h Handler) MicrosoftTeamsDisconnect(w http.ResponseWriter, r *http.Request
 		problem.Write(w, http.StatusForbidden, "Forbidden", "")
 		return
 	}
-	if err := h.revokeProvider(r.Context(), p.WorkspaceID, "microsoft_teams", p.UserID); err != nil {
+	if err := h.disconnectProvider(r.Context(), p.WorkspaceID, p.UserID, "microsoft_teams"); err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Disconnect Microsoft Teams failed", err.Error())
 		return
 	}

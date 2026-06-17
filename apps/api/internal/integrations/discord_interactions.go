@@ -154,7 +154,7 @@ func (h Handler) DiscordDisconnect(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusForbidden, "Forbidden", "")
 		return
 	}
-	if err := h.revokeProvider(r.Context(), p.WorkspaceID, "discord", p.UserID); err != nil {
+	if err := h.disconnectProvider(r.Context(), p.WorkspaceID, p.UserID, "discord"); err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Disconnect Discord failed", err.Error())
 		return
 	}

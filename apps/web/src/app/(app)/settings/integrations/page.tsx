@@ -3,6 +3,23 @@
 import { EmptyState } from "@/components/empty-state";
 import { useCallback, useEffect, useState } from "react";
 
+type IntegrationDetails = {
+  // Google Sheets fields
+  spreadsheetUrl?: string;
+  spreadsheetTitle?: string;
+  scopes?: { issues?: boolean; projects?: boolean; initiatives?: boolean };
+  includePrivateTeams?: boolean;
+  schedule?: string;
+  nextRunAt?: string | null;
+  rowCounts?: { issues?: number; projects?: number; initiatives?: number };
+  // GitHub fields
+  installationId?: string;
+  accountLogin?: string;
+  repositorySelection?: "all" | "selected" | "unknown";
+  selectedRepositoryCount?: number;
+  selectedRepositories?: { id: string; fullName: string; active: boolean }[];
+};
+
 type Integration = {
   provider: string;
   name: string;
@@ -39,22 +56,7 @@ type Integration = {
       createdAt: string;
     }[];
   };
-  details?: {
-    // Google Sheets fields
-    spreadsheetUrl?: string;
-    spreadsheetTitle?: string;
-    scopes?: { issues?: boolean; projects?: boolean; initiatives?: boolean };
-    includePrivateTeams?: boolean;
-    schedule?: string;
-    nextRunAt?: string | null;
-    rowCounts?: { issues?: number; projects?: number; initiatives?: number };
-    // GitHub fields
-    installationId?: string;
-    accountLogin?: string;
-    repositorySelection?: "all" | "selected" | "unknown";
-    selectedRepositoryCount?: number;
-    selectedRepositories?: { id: string; fullName: string; active: boolean }[];
-  } | null;
+  details?: IntegrationDetails | null;
 };
 
 type GitLabSetupDetails = {
@@ -125,14 +127,15 @@ function statusClassName(status: Integration["status"]) {
 
 function integrationDetailSummary(integration: Integration) {
   if (integration.provider !== "github") return null;
-  if (integration.details?.repositorySelection === "all") {
+  const details = integration.details ?? {};
+  if (details.repositorySelection === "all") {
     return "All repositories enabled";
   }
   if (
-    integration.details?.repositorySelection === "selected" &&
-    typeof integration.details?.selectedRepositoryCount === "number"
+    details.repositorySelection === "selected" &&
+    typeof details.selectedRepositoryCount === "number"
   ) {
-    return `${integration.details.selectedRepositoryCount} selected repositories enabled`;
+    return `${details.selectedRepositoryCount} selected repositories enabled`;
   }
   if (integration.status === "connected") {
     return "Repository selection pending from GitHub";

@@ -15,6 +15,30 @@ const allowedDuplicatePrefixGroups = new Map([
       "0006_stripe_webhook_event.sql",
     ]),
   ],
+  [
+    "0007",
+    new Set([
+      "0007_integration_provider_lifecycle.sql",
+      "0007_webhook_delivery.sql",
+    ]),
+  ],
+  [
+    "0008",
+    new Set(["0008_integration_lifecycle.sql", "0008_slack_thread_links.sql"]),
+  ],
+  [
+    "0010",
+    new Set([
+      "0010_customer_requests_gong.sql",
+      "0010_figma_sources.sql",
+      "0010_github_integration.sql",
+      "0010_guided_provider_imports.sql",
+      "0010_jira_import_sync.sql",
+      "0010_salesforce_case_links.sql",
+      "0010_zendesk_ticket_links.sql",
+    ]),
+  ],
+  ["0011", new Set(["0011_agent_runs.sql", "0011_customer_requests.sql"])],
 ]);
 
 function formatPrefix(value) {

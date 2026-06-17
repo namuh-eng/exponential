@@ -39,8 +39,8 @@ reference. Use `vi.hoisted` for shared mock fns:
 ```ts
 const getSessionMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/auth", () => ({
-  auth: { api: { getSession: getSessionMock } },
+vi.mock("@/lib/auth-client", () => ({
+  useSession: getSessionMock,
 }));
 ```
 

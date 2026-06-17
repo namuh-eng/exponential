@@ -11,6 +11,7 @@ Before making changes, skim:
 
 - [README.md](README.md) for product scope and local setup options.
 - [CLAUDE.md](CLAUDE.md) for architecture, auth, and quality guardrails.
+- [docs/README.md](docs/README.md) for the documentation map.
 - [docs/self-hosting.md](docs/self-hosting.md) for Docker and ECS deployment.
 - [docs/secrets.md](docs/secrets.md) for the optional 1Password workflow.
 - [apps/web/tests/README.md](apps/web/tests/README.md) for test conventions.
@@ -132,8 +133,10 @@ include Google OAuth, magic links, sessions, and workspace invitations.
 
 ### Out of Scope
 
-Do not add paywalls, billing, subscription management, or payment processing
-unless there is an explicit approved plan for that work.
+Do not add paywalls, subscription checkout, payment collection, or hosted SaaS
+billing flows unless there is an explicit approved plan for that work. Existing
+workspace billing/settings and Stripe webhook code are current admin/provider
+surfaces; changes there should stay narrowly scoped and documented.
 
 ## Verification
 
@@ -167,8 +170,8 @@ thing as a deployed and live-verified change.
 
 - Go API tests: `cd apps/api && go test ./...` or `make test`.
 - Vitest unit/component tests: `pnpm test` or `make test`.
-- SDK tests: `pnpm --filter @namuh-eng/exponential-sdk test`.
-- CLI tests: `pnpm --filter @namuh-eng/exponential-cli test`.
+- SDK tests: `pnpm --filter @namuh-eng/expn-sdk test`.
+- CLI tests: `pnpm --filter @namuh-eng/expn-cli test`.
 - Playwright E2E: `make test-e2e`, with the dev stack running.
 
 Run a single E2E file from the web package when iterating:

@@ -329,9 +329,9 @@ export function InsightsPanel({
   }
 
   const shellClass =
-    "bg-[var(--editorial-bg)] text-[var(--color-text-primary)]";
+    "bg-[#0c0d0c] text-[var(--color-text-primary)] dark:bg-[var(--editorial-bg)]";
   const panelClass =
-    "border border-[var(--color-border-strong)] bg-[var(--color-surface)]";
+    "border border-[var(--color-border-strong)] bg-[#111312] dark:bg-[var(--color-surface)]";
 
   if (loading) {
     return (

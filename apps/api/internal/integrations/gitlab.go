@@ -269,7 +269,7 @@ func (h Handler) GitLabDisconnect(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusForbidden, "Forbidden", "")
 		return
 	}
-	if err := h.revokeProvider(r.Context(), p.WorkspaceID, "gitlab", p.UserID); err != nil {
+	if err := h.disconnectProvider(r.Context(), p.WorkspaceID, p.UserID, "gitlab"); err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Disconnect GitLab failed", err.Error())
 		return
 	}
