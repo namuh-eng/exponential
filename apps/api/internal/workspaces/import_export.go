@@ -75,7 +75,7 @@ func (h Handler) MutateCurrentImportExport(w http.ResponseWriter, r *http.Reques
 	case "preview_jira_import":
 		h.handleJiraPreview(w, r, current, body)
 	case "start_jira_import", "retry_jira_import", "sync_jira_project":
-		h.handleJiraImport(w, r, current, p, body)
+		h.handleJiraImport(w, r, current, p, body, action)
 	case "pause_jira_sync":
 		h.handleJiraSyncPause(w, r, current, p, body, true)
 	case "resume_jira_sync":

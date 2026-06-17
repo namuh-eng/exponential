@@ -271,6 +271,12 @@ describe("ImportExportPage component", () => {
             }),
           });
         }
+        if (body.action === "pause_jira_sync") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ success: true, paused: true }),
+          });
+        }
       }
       return Promise.resolve({
         ok: true,
@@ -296,6 +302,9 @@ describe("ImportExportPage component", () => {
       await screen.findByRole("button", { name: "Start import" }),
     );
     fireEvent.click(screen.getByRole("button", { name: /Jira/ }));
+    fireEvent.change(screen.getByLabelText("Base URL"), {
+      target: { value: "https://acme.atlassian.net" },
+    });
     fireEvent.change(screen.getByLabelText("Atlassian email"), {
       target: { value: "admin@example.com" },
     });
@@ -315,6 +324,10 @@ describe("ImportExportPage component", () => {
 
     expect(
       await screen.findByText(/Jira import completed with 1 created/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Pause project sync" }));
+    expect(
+      await screen.findByText("Jira forward sync paused for this project."),
     ).toBeInTheDocument();
   });
 });
