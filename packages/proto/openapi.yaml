@@ -7260,10 +7260,18 @@ components:
       properties:
         action:
           type: string
-          enum: [request_export, preview_csv, start_csv_import, prepare_provider, configure_jira, preview_jira_import, start_jira_import, retry_jira_import, sync_jira_project, pause_jira_sync, resume_jira_sync]
+          enum: [request_export, preview_csv, start_csv_import, prepare_provider, fetch_provider_snapshot, confirm_provider_import, cancel_provider_import, configure_jira, preview_jira_import, start_jira_import, retry_jira_import, sync_jira_project, pause_jira_sync, resume_jira_sync]
         fileName: { type: string }
         csv: { type: string }
         provider: { type: string, enum: [github, jira] }
+        jobId: { type: string }
+        repositories:
+          type: array
+          items: { type: string }
+        repositoriesText: { type: string }
+        scope: { type: string, enum: [open, all, include_closed] }
+        includeClosed: { type: boolean }
+        apiBaseUrl: { type: string }
         defaultTeamId: { type: string, format: uuid }
         mapping:
           type: object

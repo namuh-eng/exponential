@@ -468,6 +468,8 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
             ? " from Microsoft Teams"
             : event.metadata.source === "sentry_issue"
               ? " from Sentry"
+              : event.metadata.source === "github_issue"
+                ? " from GitHub"
               : event.metadata.source === "salesforce_case"
                 ? " from Salesforce"
               : event.metadata.source === "zendesk_ticket"
@@ -539,6 +541,19 @@ function getSentrySourceLink(event: IssueHistoryEvent): string | null {
     : null;
 }
 
+function getGitHubSourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "github_issue") {
+    return null;
+  }
+  const github = event.metadata.github;
+  if (!isRecord(github)) {
+    return null;
+  }
+  return typeof github.url === "string" && github.url.length > 0
+    ? github.url
+    : null;
+}
+
 function getSalesforceSourceLink(event: IssueHistoryEvent): string | null {
   if (event.metadata.source !== "salesforce_case") {
     return null;
@@ -549,6 +564,9 @@ function getSalesforceSourceLink(event: IssueHistoryEvent): string | null {
   }
   return typeof salesforce.caseUrl === "string" && salesforce.caseUrl.length > 0
     ? salesforce.caseUrl
+    : null;
+}
+
 function getZendeskSourceLink(event: IssueHistoryEvent): string | null {
   if (event.metadata.source !== "zendesk_ticket") {
     return null;
@@ -2351,24 +2369,36 @@ export function IssueDetailView({
                             View source issue in Sentry
                           </a>
                         ) : null}
-                        {(() => {
-                          const salesforceLink = getSalesforceSourceLink(event);
-                          return salesforceLink ? (
-                            <a
-                              href={salesforceLink}
-                          const zendeskLink = getZendeskSourceLink(event);
-                          return zendeskLink ? (
-                            <a
-                              href={zendeskLink}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
-                            >
-                              View source case in Salesforce
-                              View source ticket in Zendesk
-                            </a>
-                          ) : null;
-                        })()}
+                        {getGitHubSourceLink(event) ? (
+                          <a
+                            href={getGitHubSourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source issue in GitHub
+                          </a>
+                        ) : null}
+                        {getSalesforceSourceLink(event) ? (
+                          <a
+                            href={getSalesforceSourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source case in Salesforce
+                          </a>
+                        ) : null}
+                        {getZendeskSourceLink(event) ? (
+                          <a
+                            href={getZendeskSourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source ticket in Zendesk
+                          </a>
+                        ) : null}
                         {getGitLabSourceLink(event) ? (
                           <a
                             href={getGitLabSourceLink(event) ?? undefined}

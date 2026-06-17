@@ -5443,6 +5443,9 @@ export interface components {
         | "preview_csv"
         | "start_csv_import"
         | "prepare_provider"
+        | "fetch_provider_snapshot"
+        | "confirm_provider_import"
+        | "cancel_provider_import"
         | "configure_jira"
         | "preview_jira_import"
         | "start_jira_import"
@@ -5454,6 +5457,13 @@ export interface components {
       csv?: string;
       /** @enum {string} */
       provider?: "github" | "jira";
+      jobId?: string;
+      repositories?: string[];
+      repositoriesText?: string;
+      /** @enum {string} */
+      scope?: "open" | "all" | "include_closed";
+      includeClosed?: boolean;
+      apiBaseUrl?: string;
       /** Format: uuid */
       defaultTeamId?: string;
       mapping?: {
