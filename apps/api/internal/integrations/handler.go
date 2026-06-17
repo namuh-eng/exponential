@@ -730,7 +730,7 @@ func (h Handler) completeSlackInstall(ctx context.Context, install slackOAuthIns
 		"teamId":    token.Team.ID,
 		"scopes":    scopes,
 	}
-	credentialRaw, err := json.Marshal(credential)
+	credentialRaw, err := encryptedProviderCredentialJSON(credential)
 	if err != nil {
 		return err
 	}

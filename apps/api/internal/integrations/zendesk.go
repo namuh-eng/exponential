@@ -40,7 +40,7 @@ type zendeskSetupResponse struct {
 }
 
 type zendeskCredential struct {
-	Subdomain    string `json:"subdomain"`
+	Subdomain     string `json:"subdomain"`
 	AccountURL    string `json:"accountUrl"`
 	Email         string `json:"email"`
 	APIToken      string `json:"apiToken"`
@@ -352,8 +352,8 @@ func zendeskTicketActionFromPayload(raw map[string]any) zendeskTicketActionReque
 		TeamKey:     firstNonEmpty(stringValue(raw["teamKey"]), stringValue(raw["team"]), stringValue(data["teamKey"]), stringValue(data["team"])),
 		Priority:    firstNonEmpty(stringValue(raw["priority"]), stringValue(data["priority"])),
 		Subdomain:   subdomain,
-		Ticket: zendeskTicketRef{ID: ticketID, URL: ticketURL, Subject: firstNonEmpty(stringValue(ticketRecord["subject"]), stringValue(raw["title"]), stringValue(data["title"])), Description: firstNonEmpty(stringValue(ticketRecord["description"]), stringValue(ticketRecord["body"]), stringValue(raw["description"]), stringValue(data["description"])), Status: firstNonEmpty(stringValue(ticketRecord["status"]), stringValue(raw["ticketStatus"]), stringValue(data["ticketStatus"])), Requester: zendeskRequesterRef{ID: firstNonEmpty(stringValue(requesterRecord["id"]), stringValue(raw["requesterId"]), stringValue(data["requesterId"])), Name: firstNonEmpty(stringValue(requesterRecord["name"]), stringValue(raw["requesterName"]), stringValue(data["requesterName"])), Email: strings.ToLower(firstNonEmpty(stringValue(requesterRecord["email"]), stringValue(raw["requesterEmail"]), stringValue(data["requesterEmail"])))}, Organization: zendeskOrganizationRef{ID: firstNonEmpty(stringValue(organizationRecord["id"]), stringValue(raw["organizationId"]), stringValue(data["organizationId"])), Name: firstNonEmpty(stringValue(organizationRecord["name"]), stringValue(raw["organizationName"]), stringValue(data["organizationName"]))}},
-		Raw: raw,
+		Ticket:      zendeskTicketRef{ID: ticketID, URL: ticketURL, Subject: firstNonEmpty(stringValue(ticketRecord["subject"]), stringValue(raw["title"]), stringValue(data["title"])), Description: firstNonEmpty(stringValue(ticketRecord["description"]), stringValue(ticketRecord["body"]), stringValue(raw["description"]), stringValue(data["description"])), Status: firstNonEmpty(stringValue(ticketRecord["status"]), stringValue(raw["ticketStatus"]), stringValue(data["ticketStatus"])), Requester: zendeskRequesterRef{ID: firstNonEmpty(stringValue(requesterRecord["id"]), stringValue(raw["requesterId"]), stringValue(data["requesterId"])), Name: firstNonEmpty(stringValue(requesterRecord["name"]), stringValue(raw["requesterName"]), stringValue(data["requesterName"])), Email: strings.ToLower(firstNonEmpty(stringValue(requesterRecord["email"]), stringValue(raw["requesterEmail"]), stringValue(data["requesterEmail"])))}, Organization: zendeskOrganizationRef{ID: firstNonEmpty(stringValue(organizationRecord["id"]), stringValue(raw["organizationId"]), stringValue(data["organizationId"])), Name: firstNonEmpty(stringValue(organizationRecord["name"]), stringValue(raw["organizationName"]), stringValue(data["organizationName"]))}},
+		Raw:         raw,
 	}
 }
 
@@ -527,7 +527,9 @@ func (h Handler) resolveZendeskInstall(ctx context.Context, input zendeskTicketA
 		return install, err
 	}
 	install.Metadata = readJSONRecord(metadataRaw)
-	_ = json.Unmarshal(credentialRaw, &install.Credential)
+	if err := decryptProviderCredentialJSON(ctx, h.DB, install.IntegrationID, "zendesk", credentialRaw, &install.Credential); err != nil {
+		return install, err
+	}
 	install.AccountURL = firstNonEmpty(install.Credential.AccountURL, stringValue(install.Metadata["accountUrl"]))
 	return install, nil
 }
@@ -614,7 +616,7 @@ func (h Handler) saveZendeskIntegration(ctx context.Context, workspaceID, userID
 		return "", err
 	}
 	credential := zendeskCredential{Subdomain: subdomain, AccountURL: accountURL, Email: email, APIToken: token, ActionSecret: actionSecret, CloseNoteBody: "Linked Exponential issue reached a terminal state."}
-	credentialRaw, err := json.Marshal(credential)
+	credentialRaw, err := encryptedProviderCredentialJSON(credential)
 	if err != nil {
 		return "", err
 	}
@@ -675,4 +677,6 @@ func zendeskSubdomainFromURL(raw string) string {
 	return strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".zendesk.com")
 }
 
-func zendeskTicketSourceEventID(ticketID string) string { return "zendesk_ticket:" + strings.TrimSpace(ticketID) }
+func zendeskTicketSourceEventID(ticketID string) string {
+	return "zendesk_ticket:" + strings.TrimSpace(ticketID)
+}

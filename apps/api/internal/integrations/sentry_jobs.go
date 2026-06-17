@@ -130,7 +130,7 @@ func (w SentryWorker) activeSentryCredential(ctx context.Context, integrationID 
 		return sentryCredential{}, err
 	}
 	var credential sentryCredential
-	if err := json.Unmarshal(payloadRaw, &credential); err != nil {
+	if err := decryptProviderCredentialJSON(ctx, w.DB, integrationID, "sentry", payloadRaw, &credential); err != nil {
 		return sentryCredential{}, err
 	}
 	if credential.AccessToken == "" {

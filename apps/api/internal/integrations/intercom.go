@@ -441,7 +441,7 @@ func (h Handler) completeIntercomInstall(ctx context.Context, install intercomOA
 		return err
 	}
 	credential := intercomCredential{AccessToken: token.AccessToken, TokenType: firstNonEmpty(token.TokenType, "Bearer"), AppID: appID, AdminID: me.ID, Scopes: strings.Fields(token.Scope)}
-	credentialRaw, err := json.Marshal(credential)
+	credentialRaw, err := encryptedProviderCredentialJSON(credential)
 	if err != nil {
 		return err
 	}

@@ -302,7 +302,7 @@ func (h Handler) completeGoogleSheetsInstall(ctx context.Context, install google
 	if err != nil {
 		return err
 	}
-	credentialRaw, err := json.Marshal(credential)
+	credentialRaw, err := encryptedProviderCredentialJSON(credential)
 	if err != nil {
 		return err
 	}

@@ -89,5 +89,17 @@ for (const item of required) {
         `${item.file}: api must receive EXPONENTIAL_SESSION_SECRET`,
       );
     }
+    if (!secretNames.has("EXPONENTIAL_PROVIDER_CREDENTIAL_ENCRYPTION_KEY")) {
+      throw new Error(
+        `${item.file}: api must receive EXPONENTIAL_PROVIDER_CREDENTIAL_ENCRYPTION_KEY`,
+      );
+    }
+    if (
+      !environmentNames.has("EXPONENTIAL_PROVIDER_CREDENTIAL_ENCRYPTION_KEY_ID")
+    ) {
+      throw new Error(
+        `${item.file}: api must receive EXPONENTIAL_PROVIDER_CREDENTIAL_ENCRYPTION_KEY_ID`,
+      );
+    }
   }
 }

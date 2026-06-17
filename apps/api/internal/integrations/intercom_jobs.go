@@ -117,7 +117,7 @@ func (w IntercomWorker) activeIntercomCredential(ctx context.Context, integratio
 		return intercomCredential{}, err
 	}
 	var credential intercomCredential
-	if err := json.Unmarshal(payloadRaw, &credential); err != nil {
+	if err := decryptProviderCredentialJSON(ctx, w.DB, integrationID, "intercom", payloadRaw, &credential); err != nil {
 		return intercomCredential{}, err
 	}
 	if credential.AccessToken == "" {

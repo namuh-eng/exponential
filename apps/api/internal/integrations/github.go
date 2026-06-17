@@ -393,7 +393,7 @@ func (h Handler) completeGitHubInstall(ctx context.Context, workspaceID string, 
 		return "", err
 	}
 	credential := map[string]any{"installationId": input.InstallationID, "appId": strings.TrimSpace(os.Getenv("GITHUB_APP_ID"))}
-	credentialRaw, err := json.Marshal(credential)
+	credentialRaw, err := encryptedProviderCredentialJSON(credential)
 	if err != nil {
 		return "", err
 	}

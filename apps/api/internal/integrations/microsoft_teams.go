@@ -605,7 +605,7 @@ func (h Handler) completeMicrosoftTeamsInstall(ctx context.Context, install micr
 		"serviceUrl":   strings.TrimSpace(os.Getenv("MICROSOFT_TEAMS_SERVICE_URL")),
 		"webhookUrl":   strings.TrimSpace(os.Getenv("MICROSOFT_TEAMS_WEBHOOK_URL")),
 	}
-	credentialRaw, err := json.Marshal(credential)
+	credentialRaw, err := encryptedProviderCredentialJSON(credential)
 	if err != nil {
 		return err
 	}
