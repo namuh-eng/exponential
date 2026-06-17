@@ -567,6 +567,12 @@ func (h Handler) revokeProvider(ctx context.Context, workspaceID string, provide
 	return tx.Commit(ctx)
 }
 
+// disconnectProvider is kept for provider-specific disconnect handlers that
+// predate revokeProvider's argument order.
+func (h Handler) disconnectProvider(ctx context.Context, workspaceID string, userID string, provider string) error {
+	return h.revokeProvider(ctx, workspaceID, provider, userID)
+}
+
 func (h Handler) workspaceSlug(ctx context.Context, workspaceID string) (string, error) {
 	var slug string
 	err := h.DB.QueryRow(ctx, `select url_slug from workspace where id=$1::uuid`, workspaceID).Scan(&slug)
