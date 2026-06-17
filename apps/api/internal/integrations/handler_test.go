@@ -159,6 +159,90 @@ func TestSlackEventsURLVerificationUsesSignedFixture(t *testing.T) {
 	}
 }
 
+func TestGitHubConfigAndSetupRequirement(t *testing.T) {
+	t.Setenv("GITHUB_APP_ID", "")
+	t.Setenv("GITHUB_CLIENT_ID", "")
+	t.Setenv("GITHUB_PRIVATE_KEY", "")
+	t.Setenv("GITHUB_WEBHOOK_SECRET", "")
+	if got := setupRequirement("github"); got == nil || got.Type != "configuration_required" || !strings.Contains(got.Message, "GITHUB_APP_ID") {
+		t.Fatalf("github requirement = %#v", got)
+	}
+	t.Setenv("GITHUB_APP_ID", "123")
+	t.Setenv("GITHUB_CLIENT_ID", "client-id")
+	t.Setenv("GITHUB_PRIVATE_KEY", "private-key")
+	t.Setenv("GITHUB_WEBHOOK_SECRET", "webhook-secret")
+	if got := setupRequirement("github"); got != nil {
+		t.Fatalf("configured github requirement = %#v", got)
+	}
+	cfg, ok := loadGitHubConfig()
+	if !ok || cfg.AppID != "123" || cfg.ClientID != "client-id" || cfg.PrivateKey != "private-key" || cfg.WebhookSecret != "webhook-secret" {
+		t.Fatalf("github config = %#v ok=%v", cfg, ok)
+	}
+}
+
+func TestGitHubSignatureVerification(t *testing.T) {
+	body := []byte(`{"installation":{"id":123},"repository":{"id":456,"full_name":"namuh-eng/exponential"}}`)
+	signature := githubTestSignature("secret", body)
+	if !verifyGitHubSignature("secret", signature, body) {
+		t.Fatal("valid GitHub signature was rejected")
+	}
+	if verifyGitHubSignature("secret", signature, []byte(`{"installation":{"id":999}}`)) {
+		t.Fatal("tampered GitHub body was accepted")
+	}
+	if verifyGitHubSignature("secret", strings.Replace(signature, "sha256=", "sha1=", 1), body) {
+		t.Fatal("wrong signature algorithm was accepted")
+	}
+}
+
+func TestGitHubRepositoryMappingActive(t *testing.T) {
+	payload := map[string]any{
+		"repository": map[string]any{"id": float64(456), "full_name": "namuh-eng/exponential"},
+	}
+	if !githubRepositoryMappingActive(map[string]any{"repositorySelection": "all"}, payload) {
+		t.Fatal("all repositories should accept repository payload")
+	}
+	selected := map[string]any{
+		"repositorySelection":  "selected",
+		"selectedRepositories": []map[string]any{{"id": "456", "fullName": "namuh-eng/exponential", "active": true}},
+	}
+	if !githubRepositoryMappingActive(selected, payload) {
+		t.Fatal("selected active repository was rejected")
+	}
+	inactive := map[string]any{
+		"repositorySelection":  "selected",
+		"selectedRepositories": []map[string]any{{"id": "456", "fullName": "namuh-eng/exponential", "active": false}},
+	}
+	if githubRepositoryMappingActive(inactive, payload) {
+		t.Fatal("inactive repository mapping was accepted")
+	}
+	unknown := map[string]any{"repositorySelection": "unknown"}
+	if githubRepositoryMappingActive(unknown, payload) {
+		t.Fatal("unknown repository selection should not accept repository payload")
+	}
+}
+
+func TestGitHubIntegrationDetailsAreSecretFree(t *testing.T) {
+	details := githubIntegrationDetails(map[string]any{
+		"installationId":       "12345",
+		"account":              map[string]any{"login": "namuh-eng", "type": "Organization"},
+		"repositorySelection":  "selected",
+		"selectedRepositories": []map[string]any{{"id": "456", "fullName": "namuh-eng/exponential", "active": true}},
+		"privateKey":           "do-not-return",
+		"webhookSecret":        "do-not-return",
+	})
+	encoded, err := json.Marshal(details)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(encoded)
+	if !strings.Contains(text, "namuh-eng/exponential") || !strings.Contains(text, "12345") {
+		t.Fatalf("details missing safe metadata: %s", text)
+	}
+	if strings.Contains(text, "do-not-return") || strings.Contains(text, "privateKey") || strings.Contains(text, "webhookSecret") {
+		t.Fatalf("details leaked secret-like metadata: %s", text)
+	}
+}
+
 func TestExchangeSlackOAuthUsesConfiguredEndpoint(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/oauth.v2.access" {
