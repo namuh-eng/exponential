@@ -447,9 +447,9 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
               ? " from Sentry"
               : event.metadata.source === "salesforce_case"
                 ? " from Salesforce"
-              : event.metadata.source === "zendesk_ticket"
-                ? " from Zendesk"
-                : "";
+                : event.metadata.source === "zendesk_ticket"
+                  ? " from Zendesk"
+                  : "";
       return `${actorName} created this issue${legacySuffix}${sourceSuffix}`;
     }
     case "updated":
@@ -526,6 +526,8 @@ function getSalesforceSourceLink(event: IssueHistoryEvent): string | null {
   }
   return typeof salesforce.caseUrl === "string" && salesforce.caseUrl.length > 0
     ? salesforce.caseUrl
+    : null;
+}
 function getZendeskSourceLink(event: IssueHistoryEvent): string | null {
   if (event.metadata.source !== "zendesk_ticket") {
     return null;
@@ -736,12 +738,11 @@ function FigmaPreviewCard({
             disabled={refreshing}
             className="tty-row border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {refreshing ? "Marking..." : "Mark seen"}
+            {refreshing ? "Refreshing..." : "Refresh"}
           </button>
         </div>
         <div className="mt-3 text-[12px] text-[var(--color-text-secondary)]">
-          {source.refreshedAt ? "Seen" : "Captured"}{" "}
-          {formatFullDate(timestamp)}
+          {source.refreshedAt ? "Seen" : "Captured"} {formatFullDate(timestamp)}
         </div>
         {source.lastError ? (
           <div className="mt-2 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[12px] text-red-600 dark:text-red-300">
@@ -1506,13 +1507,14 @@ export function IssueDetailView({
     setRefreshingFigmaSourceId(sourceId);
     setFigmaActionStatus(null);
     try {
-      const { data, error } = await apiClient.POST(
-        "/issues/{id}/figma-sources/{sourceId}/refresh",
-        { params: { path: { id: issue.id, sourceId } } },
+      const response = await fetch(
+        `/api/issues/${issue.id}/figma-sources/${sourceId}/refresh`,
+        { method: "POST" },
       );
-      if (error !== undefined || data === undefined) {
-        throw new Error("Failed to mark Figma source as seen");
+      if (!response.ok) {
+        throw new Error("Failed to refresh Figma preview");
       }
+      const data = (await response.json()) as FigmaSource;
       setIssue((current) =>
         current
           ? {
@@ -1523,9 +1525,9 @@ export function IssueDetailView({
             }
           : current,
       );
-      setFigmaActionStatus("Figma source marked as seen.");
+      setFigmaActionStatus("Figma preview refreshed.");
     } catch {
-      setFigmaActionStatus("Figma source could not be updated.");
+      setFigmaActionStatus("Figma preview could not be refreshed.");
     } finally {
       setRefreshingFigmaSourceId(null);
     }
@@ -2241,6 +2243,15 @@ export function IssueDetailView({
                           return salesforceLink ? (
                             <a
                               href={salesforceLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                            >
+                              View source case in Salesforce
+                            </a>
+                          ) : null;
+                        })()}
+                        {(() => {
                           const zendeskLink = getZendeskSourceLink(event);
                           return zendeskLink ? (
                             <a
@@ -2249,7 +2260,6 @@ export function IssueDetailView({
                               rel="noreferrer"
                               className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
                             >
-                              View source case in Salesforce
                               View source ticket in Zendesk
                             </a>
                           ) : null;

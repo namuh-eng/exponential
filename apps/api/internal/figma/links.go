@@ -2,6 +2,7 @@ package figma
 
 import (
 	"context"
+	"encoding/json"
 	"net/url"
 	"regexp"
 	"sort"
@@ -116,17 +117,31 @@ func SyncSources(ctx context.Context, tx pgx.Tx, target SyncTarget, content stri
 	}
 	for _, link := range ExtractLinks(content) {
 		name := defaultName(link)
+		var sourceID string
 		if target.CommentID == "" {
-			if _, err := tx.Exec(ctx, `insert into figma_source (workspace_id, issue_id, container_type, source_url, normalized_url, file_key, node_id, kind, name, captured_at, updated_at) values ($1::uuid,$2::uuid,$3,$4,$5,$6,$7,$8,$9,now(),now())`, target.WorkspaceID, target.IssueID, containerType, link.URL, link.NormalizedURL, link.FileKey, nullString(link.NodeID), link.Kind, name); err != nil {
+			if err := tx.QueryRow(ctx, `insert into figma_source (workspace_id, issue_id, container_type, source_url, normalized_url, file_key, node_id, kind, name, captured_at, updated_at) values ($1::uuid,$2::uuid,$3,$4,$5,$6,$7,$8,$9,now(),now()) returning id::text`, target.WorkspaceID, target.IssueID, containerType, link.URL, link.NormalizedURL, link.FileKey, nullString(link.NodeID), link.Kind, name).Scan(&sourceID); err != nil {
 				return err
 			}
-			continue
+		} else if err := tx.QueryRow(ctx, `insert into figma_source (workspace_id, issue_id, comment_id, container_type, source_url, normalized_url, file_key, node_id, kind, name, captured_at, updated_at) values ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10,now(),now()) returning id::text`, target.WorkspaceID, target.IssueID, target.CommentID, containerType, link.URL, link.NormalizedURL, link.FileKey, nullString(link.NodeID), link.Kind, name).Scan(&sourceID); err != nil {
+			return err
 		}
-		if _, err := tx.Exec(ctx, `insert into figma_source (workspace_id, issue_id, comment_id, container_type, source_url, normalized_url, file_key, node_id, kind, name, captured_at, updated_at) values ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10,now(),now())`, target.WorkspaceID, target.IssueID, target.CommentID, containerType, link.URL, link.NormalizedURL, link.FileKey, nullString(link.NodeID), link.Kind, name); err != nil {
+		if err := enqueueMetadataRefresh(ctx, tx, target.WorkspaceID, target.IssueID, sourceID, link); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func enqueueMetadataRefresh(ctx context.Context, tx pgx.Tx, workspaceID, issueID, sourceID string, link Link) error {
+	payload := map[string]any{"sourceId": sourceID, "issueId": issueID, "normalizedUrl": link.NormalizedURL, "fileKey": link.FileKey, "nodeId": link.NodeID}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
+		insert into provider_job (workspace_id, workspace_integration_id, provider, kind, status, payload, scheduled_at, updated_at)
+		values ($1::uuid, (select id from workspace_integration where workspace_id=$1::uuid and provider='figma' and status in ('connected','degraded') limit 1), 'figma', 'metadata_refresh', 'queued', $2::jsonb, now(), now())`, workspaceID, raw)
+	return err
 }
 
 func ScanSource(row pgx.Row) (Source, error) {

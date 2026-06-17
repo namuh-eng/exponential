@@ -806,6 +806,43 @@ export const comment = pgTable(
   (t) => [index("comment_issue_idx").on(t.issueId)],
 );
 
+export const figmaSource = pgTable(
+  "figma_source",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    issueId: uuid("issue_id")
+      .notNull()
+      .references(() => issue.id, { onDelete: "cascade" }),
+    commentId: uuid("comment_id").references(() => comment.id, {
+      onDelete: "cascade",
+    }),
+    documentId: text("document_id"),
+    containerType: varchar("container_type", { length: 32 })
+      .notNull()
+      .default("issue_description"),
+    sourceUrl: text("source_url").notNull(),
+    normalizedUrl: text("normalized_url").notNull(),
+    fileKey: text("file_key").notNull(),
+    nodeId: text("node_id"),
+    kind: varchar("kind", { length: 16 }).notNull(),
+    name: text("name"),
+    thumbnailUrl: text("thumbnail_url"),
+    snapshot: jsonb("snapshot").notNull().default({}),
+    capturedAt: timestamp("captured_at").notNull().defaultNow(),
+    refreshedAt: timestamp("refreshed_at"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("figma_source_issue_idx").on(t.issueId, t.createdAt),
+    index("figma_source_workspace_idx").on(t.workspaceId, t.createdAt),
+  ],
+);
+
 // ─── Issue Discussion Summary ───────────────────────────────────────
 
 export const issueDiscussionSummary = pgTable(
@@ -1255,6 +1292,7 @@ export const issueRelations = relations(issue, ({ one, many }) => ({
   subIssues: many(issue, { relationName: "parentIssue" }),
   labels: many(issueLabel),
   comments: many(comment),
+  figmaSources: many(figmaSource),
   reactions: many(issueReaction),
   subscriptions: many(issueSubscription),
   discussionSummary: many(issueDiscussionSummary),
@@ -1452,6 +1490,19 @@ export const commentRelations = relations(comment, ({ one, many }) => ({
   user: one(user, { fields: [comment.userId], references: [user.id] }),
   reactions: many(reaction),
   attachments: many(commentAttachment),
+  figmaSources: many(figmaSource),
+}));
+
+export const figmaSourceRelations = relations(figmaSource, ({ one }) => ({
+  workspace: one(workspace, {
+    fields: [figmaSource.workspaceId],
+    references: [workspace.id],
+  }),
+  issue: one(issue, { fields: [figmaSource.issueId], references: [issue.id] }),
+  comment: one(comment, {
+    fields: [figmaSource.commentId],
+    references: [comment.id],
+  }),
 }));
 
 export const issueDiscussionSummaryRelations = relations(

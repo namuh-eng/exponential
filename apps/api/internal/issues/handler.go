@@ -555,6 +555,14 @@ func (h Handler) RefreshFigmaSource(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusInternalServerError, "Refresh Figma preview failed", err.Error())
 		return
 	}
+	payload := map[string]any{"sourceId": source.ID, "issueId": issue.ID, "normalizedUrl": source.NormalizedURL, "fileKey": source.FileKey, "nodeId": source.NodeID}
+	raw, _ := json.Marshal(payload)
+	if _, err := h.DB.Exec(r.Context(), `
+		insert into provider_job (workspace_id, workspace_integration_id, provider, kind, status, payload, scheduled_at, updated_at)
+		values ($1::uuid, (select id from workspace_integration where workspace_id=$1::uuid and provider='figma' and status in ('connected','degraded') limit 1), 'figma', 'metadata_refresh', 'queued', $2::jsonb, now(), now())`, p.WorkspaceID, raw); err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Refresh Figma preview failed", err.Error())
+		return
+	}
 	problem.JSON(w, http.StatusOK, source)
 }
 
