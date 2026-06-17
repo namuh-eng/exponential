@@ -615,7 +615,6 @@ func normalizeGitHubRepositories(repositories []githubRepository) []githubReposi
 		if repo.ID == "" && repo.FullName == "" {
 			continue
 		}
-
 		out = append(out, repo)
 	}
 	return out
