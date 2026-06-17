@@ -991,6 +991,105 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /integrations/github/connect:
+    post:
+      operationId: connectGitHubIntegration
+      responses:
+        '200':
+          description: GitHub App installation URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubConnectResponse'
+        '412':
+          description: GitHub App is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubConfigurationRequiredResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/github/register:
+    post:
+      operationId: registerGitHubIntegration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GitHubRegisterRequest'
+      responses:
+        '200':
+          description: GitHub App installation registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubRegisterResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/github/disconnect:
+    post:
+      operationId: disconnectGitHubIntegration
+      responses:
+        '200':
+          description: GitHub disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/github/setup/callback:
+    get:
+      operationId: githubSetupCallback
+      security: []
+      parameters:
+        - name: installation_id
+          in: query
+          schema: { type: string }
+        - name: setup_action
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+      responses:
+        '302': { description: Redirects to integration settings }
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/github/webhook:
+    post:
+      operationId: ingestGitHubWebhook
+      security: []
+      parameters:
+        - name: X-Hub-Signature-256
+          in: header
+          required: true
+          schema: { type: string }
+        - name: X-GitHub-Delivery
+          in: header
+          required: true
+          schema: { type: string }
+        - name: X-GitHub-Event
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '202':
+          description: GitHub webhook accepted or deterministically ignored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubWebhookResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /integrations/gitlab:
     get:
       operationId: getGitLabIntegration
@@ -1293,6 +1392,65 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /integrations/gong/connect:
+    post:
+      operationId: connectGongIntegration
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GongConnectRequest'
+      responses:
+        '200':
+          description: Gong authorization URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GongConnectResponse'
+        '412':
+          description: Gong OAuth is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GongConfigurationRequiredResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/gong/disconnect:
+    post:
+      operationId: disconnectGongIntegration
+      responses:
+        '200':
+          description: Gong disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/gong/{integrationId}/calls:
+    post:
+      operationId: ingestGongCall
+      parameters:
+        - name: integrationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GongIngestCallRequest'
+      responses:
+        '200':
+          description: Gong call ingestion result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GongIngestCallResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /integrations/sentry/oauth/callback:
     get:
       operationId: sentryOAuthCallback
@@ -1363,6 +1521,112 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SentryIssueActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/zendesk/setup:
+    post:
+      operationId: setupZendeskIntegration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ZendeskSetupRequest'
+      responses:
+        '200':
+          description: Zendesk connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ZendeskSetupResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/zendesk/disconnect:
+    post:
+      operationId: disconnectZendeskIntegration
+      responses:
+        '200':
+          description: Zendesk disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/zendesk/tickets/search:
+    post:
+      operationId: searchZendeskLinkableIssues
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ZendeskTicketActionRequest'
+      responses:
+        '200':
+          description: Linkable Exponential issues for Zendesk
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ZendeskIssueSearchResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/zendesk/tickets/link:
+    post:
+      operationId: linkZendeskTicket
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ZendeskTicketActionRequest'
+      responses:
+        '200':
+          description: Linked Exponential issue descriptor for Zendesk
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ZendeskIssueActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/zendesk/tickets/create:
+    post:
+      operationId: createIssueFromZendesk
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ZendeskTicketActionRequest'
+      responses:
+        '200':
+          description: Created Exponential issue descriptor for Zendesk
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ZendeskIssueActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/zendesk/tickets/status:
+    post:
+      operationId: getZendeskTicketStatus
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ZendeskTicketActionRequest'
+      responses:
+        '200':
+          description: Linked issue status for a Zendesk ticket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ZendeskTicketStatusResponse'
         default:
           $ref: '#/components/responses/Problem'
   /integrations/microsoft-teams/disconnect:
@@ -4339,7 +4603,7 @@ components:
           items: { $ref: '#/components/schemas/IntegrationAuditEvent' }
     Integration:
       type: object
-      required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions, health]
+      required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions, health, details]
       properties:
         provider: { type: string, enum: [github, gitlab, jira, slack, sentry, zendesk, discord, microsoft_teams] }
         name: { type: string }
@@ -4355,6 +4619,73 @@ components:
             - type: 'null'
         actions: { $ref: '#/components/schemas/IntegrationActions' }
         health: { $ref: '#/components/schemas/IntegrationHealth' }
+        details:
+          type: object
+          additionalProperties: true
+    GitHubAccount:
+      type: object
+      required: [id, login, type]
+      properties:
+        id: { type: string }
+        login: { type: string }
+        type: { type: string }
+    GitHubRepository:
+      type: object
+      required: [id, name, fullName, private, active]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        fullName: { type: string }
+        private: { type: boolean }
+        active: { type: boolean }
+    GitHubConnectResponse:
+      type: object
+      required: [installationUrl, state, workspaceSlug]
+      properties:
+        installationUrl: { type: string, format: uri }
+        state: { type: string }
+        workspaceSlug: { type: string }
+    GitHubRegisterRequest:
+      type: object
+      required: [installationId, account, repositorySelection, repositories, permissions]
+      properties:
+        installationId: { type: string }
+        account: { $ref: '#/components/schemas/GitHubAccount' }
+        repositorySelection: { type: string, enum: [all, selected, unknown] }
+        repositories:
+          type: array
+          items: { $ref: '#/components/schemas/GitHubRepository' }
+        permissions:
+          type: object
+          additionalProperties: { type: string }
+        setupAction: { type: string }
+        metadata:
+          type: object
+          additionalProperties: true
+    GitHubRegisterResponse:
+      type: object
+      required: [connected, integrationId, installationId, account, repositories]
+      properties:
+        connected: { type: boolean }
+        integrationId: { type: string, format: uuid }
+        installationId: { type: string }
+        account: { $ref: '#/components/schemas/GitHubAccount' }
+        repositories:
+          type: array
+          items: { $ref: '#/components/schemas/GitHubRepository' }
+    GitHubWebhookResponse:
+      type: object
+      required: [ok, duplicate, ignored]
+      properties:
+        ok: { type: boolean }
+        duplicate: { type: boolean }
+        ignored: { type: [string, 'null'] }
+    GitHubConfigurationRequiredResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error: { type: string }
+        message: { type: string }
     GitLabWorkflowMapping:
       type: object
       required: [teamId, teamKey, teamName, mergeRequestMergedStateId]
@@ -4443,12 +4774,53 @@ components:
         state: { type: string }
         workspaceSlug: { type: string }
     IntercomConnectResponse:
+    GongConnectRequest:
+      type: object
+      properties:
+        destinationTeamId: { type: string, format: uuid }
+        routingGuidance: { type: string }
+        mentionParticipants: { type: boolean }
+        pollingCursor: { type: string }
+    GongConnectResponse:
+
       type: object
       required: [authorizationUrl, state, workspaceSlug]
       properties:
         authorizationUrl: { type: string, format: uri }
         state: { type: string }
         workspaceSlug: { type: string }
+    GongConfigurationRequiredResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error: { type: string }
+        message: { type: string }
+    GongIngestCallRequest:
+      type: object
+      required: [call]
+      properties:
+        call:
+          type: object
+          additionalProperties: true
+    GongFindingResult:
+      type: object
+      required: [findingId, issueId, identifier, linked]
+      properties:
+        findingId: { type: string }
+        issueId: { type: string, format: uuid }
+        identifier: { type: string }
+        linked: { type: boolean }
+    GongIngestCallResponse:
+      type: object
+      required: [processed, skipped, findings]
+      properties:
+        processed: { type: boolean }
+        skipped: { type: boolean }
+        reason: { type: string }
+        findings:
+          type: array
+          items: { $ref: '#/components/schemas/GongFindingResult' }
+
     DiscordConfigurationRequiredResponse:
       type: object
       required: [error, message]
@@ -4553,6 +4925,79 @@ components:
         issues:
           type: array
           items: { $ref: '#/components/schemas/IntercomIssue' }
+    ZendeskSetupRequest:
+      type: object
+      required: [subdomain, email, apiToken]
+      properties:
+        subdomain: { type: string }
+        email: { type: string, format: email }
+        apiToken: { type: string, minLength: 1 }
+    ZendeskSetupResponse:
+      type: object
+      required: [connected, integrationId, subdomain, accountUrl, displayName, actionBaseUrl, actionSecret]
+      properties:
+        connected: { type: boolean }
+        integrationId: { type: string, format: uuid }
+        subdomain: { type: string }
+        accountUrl: { type: string, format: uri }
+        displayName: { type: string }
+        actionBaseUrl: { type: string, format: uri }
+        actionSecret: { type: string }
+    ZendeskTicketActionRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        query: { type: string }
+        exponentialIssueId: { type: string }
+        issueIdentifier: { type: string }
+        teamId: { type: string, format: uuid }
+        teamKey: { type: string }
+        title: { type: string }
+        description: { type: string }
+        priority: { type: string, enum: [none, urgent, high, medium, low] }
+        subdomain: { type: string }
+        ticket:
+          type: object
+          additionalProperties: true
+          properties:
+            id: { type: string }
+            url: { type: string, format: uri }
+            subject: { type: string }
+            description: { type: string }
+            status: { type: string }
+            requester:
+              type: object
+              additionalProperties: true
+            organization:
+              type: object
+              additionalProperties: true
+    ZendeskIssueActionResponse:
+      type: object
+      required: [webUrl, project, identifier]
+      properties:
+        webUrl: { type: string, format: uri }
+        project: { type: string }
+        identifier: { type: string }
+        title: { type: string }
+        stateName: { type: string }
+        stateCategory: { type: string }
+    ZendeskIssueSearchResponse:
+      type: object
+      required: [issues]
+      properties:
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/ZendeskIssueActionResponse' }
+    ZendeskTicketStatusResponse:
+      type: object
+      required: [ticketId, linked, issues]
+      properties:
+        ticketId: { type: string }
+        linked: { type: boolean }
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/ZendeskIssueActionResponse' }
+
     IntegrationListResponse:
       type: object
       required: [canManageIntegrations, integrations]

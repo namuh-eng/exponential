@@ -224,6 +224,90 @@ func TestSlackEventsURLVerificationUsesSignedFixture(t *testing.T) {
 	}
 }
 
+func TestGitHubConfigAndSetupRequirement(t *testing.T) {
+	t.Setenv("GITHUB_APP_ID", "")
+	t.Setenv("GITHUB_CLIENT_ID", "")
+	t.Setenv("GITHUB_PRIVATE_KEY", "")
+	t.Setenv("GITHUB_WEBHOOK_SECRET", "")
+	if got := setupRequirement("github"); got == nil || got.Type != "configuration_required" || !strings.Contains(got.Message, "GITHUB_APP_ID") {
+		t.Fatalf("github requirement = %#v", got)
+	}
+	t.Setenv("GITHUB_APP_ID", "123")
+	t.Setenv("GITHUB_CLIENT_ID", "client-id")
+	t.Setenv("GITHUB_PRIVATE_KEY", "private-key")
+	t.Setenv("GITHUB_WEBHOOK_SECRET", "webhook-secret")
+	if got := setupRequirement("github"); got != nil {
+		t.Fatalf("configured github requirement = %#v", got)
+	}
+	cfg, ok := loadGitHubConfig()
+	if !ok || cfg.AppID != "123" || cfg.ClientID != "client-id" || cfg.PrivateKey != "private-key" || cfg.WebhookSecret != "webhook-secret" {
+		t.Fatalf("github config = %#v ok=%v", cfg, ok)
+	}
+}
+
+func TestGitHubSignatureVerification(t *testing.T) {
+	body := []byte(`{"installation":{"id":123},"repository":{"id":456,"full_name":"namuh-eng/exponential"}}`)
+	signature := githubTestSignature("secret", body)
+	if !verifyGitHubSignature("secret", signature, body) {
+		t.Fatal("valid GitHub signature was rejected")
+	}
+	if verifyGitHubSignature("secret", signature, []byte(`{"installation":{"id":999}}`)) {
+		t.Fatal("tampered GitHub body was accepted")
+	}
+	if verifyGitHubSignature("secret", strings.Replace(signature, "sha256=", "sha1=", 1), body) {
+		t.Fatal("wrong signature algorithm was accepted")
+	}
+}
+
+func TestGitHubRepositoryMappingActive(t *testing.T) {
+	payload := map[string]any{
+		"repository": map[string]any{"id": float64(456), "full_name": "namuh-eng/exponential"},
+	}
+	if !githubRepositoryMappingActive(map[string]any{"repositorySelection": "all"}, payload) {
+		t.Fatal("all repositories should accept repository payload")
+	}
+	selected := map[string]any{
+		"repositorySelection": "selected",
+		"selectedRepositories": []map[string]any{{"id": "456", "fullName": "namuh-eng/exponential", "active": true}},
+	}
+	if !githubRepositoryMappingActive(selected, payload) {
+		t.Fatal("selected active repository was rejected")
+	}
+	inactive := map[string]any{
+		"repositorySelection": "selected",
+		"selectedRepositories": []map[string]any{{"id": "456", "fullName": "namuh-eng/exponential", "active": false}},
+	}
+	if githubRepositoryMappingActive(inactive, payload) {
+		t.Fatal("inactive repository mapping was accepted")
+	}
+	unknown := map[string]any{"repositorySelection": "unknown"}
+	if githubRepositoryMappingActive(unknown, payload) {
+		t.Fatal("unknown repository selection should not accept repository payload")
+	}
+}
+
+func TestGitHubIntegrationDetailsAreSecretFree(t *testing.T) {
+	details := githubIntegrationDetails(map[string]any{
+		"installationId": "12345",
+		"account": map[string]any{"login": "namuh-eng", "type": "Organization"},
+		"repositorySelection": "selected",
+		"selectedRepositories": []map[string]any{{"id": "456", "fullName": "namuh-eng/exponential", "active": true}},
+		"privateKey": "do-not-return",
+		"webhookSecret": "do-not-return",
+	})
+	encoded, err := json.Marshal(details)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(encoded)
+	if !strings.Contains(text, "namuh-eng/exponential") || !strings.Contains(text, "12345") {
+		t.Fatalf("details missing safe metadata: %s", text)
+	}
+	if strings.Contains(text, "do-not-return") || strings.Contains(text, "privateKey") || strings.Contains(text, "webhookSecret") {
+		t.Fatalf("details leaked secret-like metadata: %s", text)
+	}
+}
+
 func TestExchangeSlackOAuthUsesConfiguredEndpoint(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/oauth.v2.access" {
@@ -364,6 +448,28 @@ func TestSlackIssueCreationEnabledSettings(t *testing.T) {
 	}
 	if slackIssueCreationEnabled(map[string]any{"integrations": map[string]any{"slack": map[string]any{"issueCreationEnabled": false}}}) {
 		t.Fatal("workspace integration disabled setting was ignored")
+	}
+}
+
+func TestSlackAskSettingsRespectPriorityAutoAssignAndEnabled(t *testing.T) {
+	priority, autoAssign, enabled := slackAskSettings(map[string]any{"collaboration": map[string]any{"asks": map[string]any{"enabled": true, "defaultPriority": "urgent", "autoAssign": false}}})
+	if priority != "urgent" || autoAssign || !enabled {
+		t.Fatalf("settings = %q %v %v", priority, autoAssign, enabled)
+	}
+
+	priority, autoAssign, enabled = slackAskSettings(map[string]any{"collaboration": map[string]any{"asks": map[string]any{"defaultPriority": "invalid"}}})
+	if priority != "medium" || !autoAssign || enabled {
+		t.Fatalf("default settings = %q %v %v", priority, autoAssign, enabled)
+	}
+}
+
+func TestSlackDefaultAssigneePrefersWorkflowAutomation(t *testing.T) {
+	got := slackDefaultAssignee(map[string]any{
+		"defaultAssigneeId":  "fallback-user",
+		"workflowAutomation": map[string]any{"defaultAssigneeId": "workflow-user"},
+	})
+	if got != "workflow-user" {
+		t.Fatalf("default assignee = %q", got)
 	}
 }
 
@@ -858,5 +964,90 @@ func TestSentryIssueActionFromPayload(t *testing.T) {
 	}
 	if got.AssigneeEmail != "ashley@example.com" || got.SentryIssue.ID != "987" || got.SentryIssue.Project.Slug != "api" {
 		t.Fatalf("parsed Sentry issue = %#v", got)
+	}
+}
+
+func TestZendeskSetupRequirementAndSubdomain(t *testing.T) {
+	if got := setupRequirement("zendesk"); got != nil {
+		t.Fatalf("zendesk should be configurable from admin setup, got %#v", got)
+	}
+	subdomain, accountURL, err := normalizeZendeskSubdomain("https://Acme.zendesk.com/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subdomain != "acme" || accountURL != "https://acme.zendesk.com" {
+		t.Fatalf("normalized = %q %q", subdomain, accountURL)
+	}
+	if _, _, err := normalizeZendeskSubdomain("https://acme.zendesk.com/path"); err == nil {
+		t.Fatal("Zendesk origin with path was accepted")
+	}
+}
+
+func TestZendeskSignatureVerification(t *testing.T) {
+	body := []byte(`{"ticket":{"id":"42"}}`)
+	mac := hmac.New(sha256.New, []byte("secret"))
+	_, _ = mac.Write(body)
+	signature := hex.EncodeToString(mac.Sum(nil))
+	if !verifyZendeskSignature("secret", signature, body) {
+		t.Fatal("valid Zendesk signature was rejected")
+	}
+	if !verifyZendeskSignature("secret", "sha256="+signature, body) {
+		t.Fatal("prefixed Zendesk signature was rejected")
+	}
+	if verifyZendeskSignature("secret", signature, []byte(`{"ticket":{"id":"43"}}`)) {
+		t.Fatal("tampered Zendesk body was accepted")
+	}
+}
+
+func TestZendeskTicketActionFromPayload(t *testing.T) {
+	payload := map[string]any{
+		"query":           "ENG",
+		"teamKey":         "ENG",
+		"issueIdentifier": "ENG-42",
+		"ticket": map[string]any{
+			"id":          "123",
+			"url":         "https://acme.zendesk.com/agent/tickets/123",
+			"subject":     "Customer cannot export",
+			"description": "Export fails",
+			"status":      "open",
+			"requester":   map[string]any{"id": "9", "name": "Ada", "email": "ADA@EXAMPLE.COM"},
+			"organization": map[string]any{"id": "7", "name": "Acme"},
+		},
+	}
+	got := zendeskTicketActionFromPayload(payload)
+	if got.Query != "ENG" || got.TeamKey != "ENG" || got.IssueID != "ENG-42" {
+		t.Fatalf("parsed action = %#v", got)
+	}
+	if got.Subdomain != "acme" || got.Ticket.ID != "123" || got.Ticket.Requester.Email != "ada@example.com" || got.Ticket.Organization.Name != "Acme" {
+		t.Fatalf("parsed ticket = %#v", got.Ticket)
+	}
+}
+
+func TestUpdateZendeskTicket(t *testing.T) {
+	var got map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v2/tickets/123.json" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		username, password, ok := r.BasicAuth()
+		if !ok || username != "admin@example.com/token" || password != "token" {
+			t.Fatalf("basic auth = %q %q %v", username, password, ok)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = w.Write([]byte(`{"ticket":{"id":123}}`))
+	}))
+	defer server.Close()
+	t.Setenv("ZENDESK_API_BASE_URL", server.URL)
+
+	err := updateZendeskTicket(t.Context(), server.Client(), zendeskCredential{Subdomain: "acme", AccountURL: "https://acme.zendesk.com", Email: "admin@example.com", APIToken: "token"}, "123", "Done")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticket := got["ticket"].(map[string]any)
+	comment := ticket["comment"].(map[string]any)
+	if comment["body"] != "Done" || comment["public"] != false || ticket["status"] != "open" {
+		t.Fatalf("payload = %#v", got)
 	}
 }
