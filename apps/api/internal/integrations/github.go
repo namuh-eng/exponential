@@ -195,7 +195,7 @@ func (h Handler) GitHubDisconnect(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusForbidden, "Forbidden", "")
 		return
 	}
-	if err := h.revokeProvider(r.Context(), p.WorkspaceID, "github", p.UserID); err != nil {
+	if err := h.disconnectProvider(r.Context(), p.WorkspaceID, p.UserID, "github"); err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Disconnect GitHub failed", err.Error())
 		return
 	}
