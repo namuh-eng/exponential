@@ -17,12 +17,15 @@ const integrations = [
     name: "GitHub",
     description:
       "Sync pull requests, commits, and issue links with exponential.",
-    status: "not_connected",
+    status: "configuration_required",
     displayName: null,
     connectedAt: null,
-    setupRequirement: null,
+    setupRequirement: {
+      type: "configuration_required",
+      message: "GitHub setup is not configured in this environment yet.",
+    },
     actions: {
-      canConnect: true,
+      canConnect: false,
       canManage: false,
       canDisconnect: false,
       canReconnect: false,
@@ -94,6 +97,45 @@ const integrations = [
       auditEvents: [],
     },
   },
+  {
+    provider: "salesforce",
+    name: "Salesforce",
+    description:
+      "Link cases to issues and projects, then sync status and priority back to support.",
+    status: "configuration_required",
+    displayName: null,
+    connectedAt: null,
+    setupRequirement: {
+      type: "configuration_required",
+      message:
+        "Salesforce OAuth credentials and component secret are not configured.",
+    },
+    actions: {
+      canConnect: false,
+    provider: "front",
+    name: "Front",
+    description: "Create, link, and reopen issues from Front conversations.",
+    status: "not_connected",
+    displayName: null,
+    connectedAt: null,
+    setupRequirement: null,
+    actions: {
+      canConnect: true,
+      canManage: false,
+      canDisconnect: false,
+      canReconnect: false,
+    },
+    health: {
+      lastEventAt: null,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      lastFailureMessage: null,
+      tokenExpiresAt: null,
+      pendingJobCount: 0,
+      failedJobCount: 0,
+      auditEvents: [],
+    },
+  },
 ];
 
 const degradedSlack = {
@@ -123,18 +165,6 @@ const degradedSlack = {
         createdAt: "2026-06-10T12:00:00Z",
       },
     ],
-  },
-};
-
-const connectableSlack = {
-  ...integrations[1],
-  status: "not_connected",
-  setupRequirement: null,
-  actions: {
-    canConnect: true,
-    canManage: false,
-    canDisconnect: false,
-    canReconnect: false,
   },
 };
 
@@ -175,29 +205,25 @@ describe("IntegrationsSettingsPage component", () => {
     expect(screen.getByText("GitHub")).toBeInTheDocument();
     expect(screen.getByText("Slack")).toBeInTheDocument();
     expect(screen.getByText("Sentry")).toBeInTheDocument();
+    expect(screen.getByText("Salesforce")).toBeInTheDocument();
     expect(
       screen.queryByText(/Setup unavailable in this workspace/),
     ).not.toBeInTheDocument();
+    expect(screen.getByText(/Slack OAuth credentials/)).toBeInTheDocument();
+    expect(screen.getByText(/Sentry credentials/)).toBeInTheDocument();
     expect(
-      screen.queryByText(/GitHub setup is not configured/),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByLabelText("GitHub App installation ID"),
+      screen.getByText(/Salesforce OAuth credentials/),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Repository full name")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Connect GitHub" }),
-    ).toBeDisabled();
+      screen.getAllByRole("button", { name: "Connect" }).length,
+    ).toBeGreaterThan(0);
   });
 
   it("surfaces Slack connect API failures instead of no-oping", async () => {
     fetchMock
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
-          integrations: [integrations[0], connectableSlack, integrations[2]],
-          canManageIntegrations: true,
-        }),
+        json: async () => ({ integrations, canManageIntegrations: true }),
       })
       .mockResolvedValueOnce({
         ok: false,
@@ -222,57 +248,6 @@ describe("IntegrationsSettingsPage component", () => {
     );
   });
 
-  it("posts GitHub installation metadata and shows webhook details", async () => {
-    fetchMock
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ integrations, canManageIntegrations: true }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          webhookUrl: "https://app.example/api/integrations/github/webhook/123",
-          webhookSecret: "secret-token",
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ integrations, canManageIntegrations: true }),
-      });
-
-    render(<IntegrationsSettingsPage />);
-    await screen.findByText("No active integrations");
-    fireEvent.click(
-      screen.getByRole("button", { name: "Explore integrations" }),
-    );
-    fireEvent.change(screen.getByLabelText("GitHub App installation ID"), {
-      target: { value: "98765" },
-    });
-    fireEvent.change(screen.getByLabelText("Account or organization login"), {
-      target: { value: "namuh-eng" },
-    });
-    fireEvent.change(screen.getByLabelText("Repository full name"), {
-      target: { value: "namuh-eng/exponential" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Connect GitHub" }));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/integrations/github/setup",
-        expect.objectContaining({ method: "POST" }),
-      );
-    });
-    const setupBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
-    expect(setupBody).toMatchObject({
-      installationId: "98765",
-      accountLogin: "namuh-eng",
-      repositories: [{ fullName: "namuh-eng/exponential" }],
-    });
-    expect(
-      await screen.findByText("GitHub webhook details"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("secret-token")).toBeInTheDocument();
-  });
   it("shows admin health and reconnect state for installed providers", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -296,5 +271,131 @@ describe("IntegrationsSettingsPage component", () => {
     expect(
       screen.getByRole("button", { name: "Reconnect" }),
     ).toBeInTheDocument();
+  });
+
+  it("connects Front with an API token setup form", async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ integrations, canManageIntegrations: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: "front-id", provider: "front" }),
+  it("connects Zendesk from the catalog setup form", async () => {
+    const zendesk = {
+      ...integrations[0],
+      provider: "zendesk",
+      name: "Zendesk",
+      description:
+        "Connect support tickets to product work and customer requests.",
+      status: "not_connected",
+      setupRequirement: null,
+      actions: {
+        canConnect: true,
+        canManage: false,
+        canDisconnect: false,
+        canReconnect: false,
+      },
+    };
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          integrations: [zendesk],
+          canManageIntegrations: true,
+        }),
+
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          integrations: [
+            {
+              ...integrations[3],
+              status: "connected",
+              displayName: "Front cmp_123",
+              actions: {
+                canConnect: false,
+                canManage: true,
+                canDisconnect: true,
+                canReconnect: false,
+              },
+            },
+          ],
+          accountUrl: "https://acme.zendesk.com",
+          actionBaseUrl: "https://app.example/api/integrations/zendesk/tickets",
+          actionSecret: "secret",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          integrations: [degradedSlack],
+
+          canManageIntegrations: true,
+        }),
+      });
+
+    render(<IntegrationsSettingsPage />);
+    await screen.findByText("No active integrations");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Explore integrations" }),
+    );
+    fireEvent.change(
+      screen.getByPlaceholderText("Optional company identifier"),
+      {
+        target: { value: "cmp_123" },
+      },
+    );
+    fireEvent.change(
+      screen.getByPlaceholderText(
+        "Bearer token with conversations/comments permissions",
+      ),
+      { target: { value: "front-token" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Connect Front" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        "/api/integrations/front/setup",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            apiToken: "front-token",
+            companyId: "cmp_123",
+            baseUrl: "https://api2.frontapp.com",
+          }),
+        }),
+      );
+    });
+    expect(await screen.findByText(/Front connected/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Zendesk subdomain"), {
+      target: { value: "acme" },
+    });
+    fireEvent.change(screen.getByLabelText("Admin email"), {
+      target: { value: "admin@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("API token"), {
+      target: { value: "token" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect Zendesk" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/integrations/zendesk/setup",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            subdomain: "acme",
+            email: "admin@example.com",
+            apiToken: "token",
+          }),
+        }),
+      ),
+    );
+    expect(await screen.findByText("Zendesk app details")).toBeInTheDocument();
+    expect(screen.getByText("secret")).toBeInTheDocument();
+
   });
 });

@@ -27,6 +27,16 @@ const mockTeam = {
     { id: "state-canceled", name: "Canceled", category: "canceled" },
     { id: "state-duplicate", name: "Duplicate", category: "canceled" },
   ],
+  triageDefaultAssigneeId: "user-ada",
+  triageDefaultLabelIds: ["label-bug"],
+  triageDefaultProjectId: "project-1",
+  triageDefaultCycleId: "cycle-1",
+  metadataOptions: {
+    labels: [{ id: "label-bug", name: "Bug", color: "#f00" }],
+    cycles: [{ id: "cycle-1", name: "Cycle 1", number: 1 }],
+    projects: [{ id: "project-1", name: "Website" }],
+    members: [{ id: "user-ada", name: "Ada", email: "ada@example.com" }],
+  },
 };
 
 describe("TeamTriageSettingsPage", () => {
@@ -74,6 +84,16 @@ describe("TeamTriageSettingsPage", () => {
     expect(screen.getByLabelText("Default decline destination")).toHaveValue(
       "state-canceled",
     );
+    expect(screen.getByLabelText("Default triage assignee")).toHaveValue(
+      "user-ada",
+    );
+    expect(screen.getByLabelText("Default triage project")).toHaveValue(
+      "project-1",
+    );
+    expect(screen.getByLabelText("Default triage cycle")).toHaveValue(
+      "cycle-1",
+    );
+    expect(screen.getByLabelText("Default triage label Bug")).toBeChecked();
   });
 
   it("handles toggling triage and saving", async () => {
@@ -131,6 +151,25 @@ describe("TeamTriageSettingsPage", () => {
           body: JSON.stringify({
             triageDeclineDestinationStateId: "state-duplicate",
           }),
+        }),
+      );
+    });
+  });
+
+  it("saves routing metadata defaults", async () => {
+    render(<TeamTriageSettingsPage />);
+    await waitFor(() => screen.getByLabelText("Default triage assignee"));
+
+    fireEvent.change(screen.getByLabelText("Default triage assignee"), {
+      target: { value: "" },
+    });
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/teams/TEAM/settings",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ triageDefaultAssigneeId: null }),
         }),
       );
     });

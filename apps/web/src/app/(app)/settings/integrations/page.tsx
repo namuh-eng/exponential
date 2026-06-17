@@ -39,6 +39,13 @@ type Integration = {
       createdAt: string;
     }[];
   };
+  details: {
+    installationId?: string;
+    accountLogin?: string;
+    repositorySelection?: "all" | "selected" | "unknown";
+    selectedRepositoryCount?: number;
+    selectedRepositories?: { id: string; fullName: string; active: boolean }[];
+  };
 };
 
 type GitLabSetupDetails = {
@@ -47,9 +54,15 @@ type GitLabSetupDetails = {
   webhookSecret: string;
 };
 
-type GitHubSetupDetails = {
-  webhookUrl: string;
-  webhookSecret: string;
+type JiraSetupDetails = {
+  integrationId: string;
+  displayName: string;
+  projectCount: number;
+type ZendeskSetupDetails = {
+  accountUrl: string;
+  actionBaseUrl: string;
+  actionSecret: string;
+
 };
 
 type IntegrationsPayload = {
@@ -93,14 +106,41 @@ function statusClassName(status: Integration["status"]) {
   return "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-tertiary)]";
 }
 
+function integrationDetailSummary(integration: Integration) {
+  if (integration.provider !== "github") return null;
+  if (integration.details.repositorySelection === "all") {
+    return "All repositories enabled";
+  }
+  if (
+    integration.details.repositorySelection === "selected" &&
+    typeof integration.details.selectedRepositoryCount === "number"
+  ) {
+    return `${integration.details.selectedRepositoryCount} selected repositories enabled`;
+  }
+  if (integration.status === "connected") {
+    return "Repository selection pending from GitHub";
+  }
+  return null;
+}
+
 function isConnectableProvider(
   provider: string,
-): provider is "slack" | "discord" | "microsoft_teams" | "sentry" {
+): provider is
+  | "slack"
+  | "discord"
+  | "microsoft_teams"
+  | "sentry"
+  | "salesforce" {
+): provider is "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong" | "intercom" {
   return (
+    provider === "github" ||
     provider === "slack" ||
     provider === "discord" ||
     provider === "microsoft_teams" ||
-    provider === "sentry"
+    provider === "sentry" ||
+    provider === "salesforce"
+    provider === "gong" ||
+    provider === "intercom"
   );
 }
 
@@ -115,11 +155,24 @@ export default function IntegrationsSettingsPage() {
   const [gitLabToken, setGitLabToken] = useState("");
   const [gitLabSetupDetails, setGitLabSetupDetails] =
     useState<GitLabSetupDetails | null>(null);
-  const [gitHubInstallationId, setGitHubInstallationId] = useState("");
-  const [gitHubAccountLogin, setGitHubAccountLogin] = useState("");
-  const [gitHubRepositoryFullName, setGitHubRepositoryFullName] = useState("");
-  const [gitHubSetupDetails, setGitHubSetupDetails] =
-    useState<GitHubSetupDetails | null>(null);
+  const [jiraDeployment, setJiraDeployment] = useState<"cloud" | "server">(
+    "cloud",
+  );
+  const [jiraBaseUrl, setJiraBaseUrl] = useState("https://acme.atlassian.net");
+  const [jiraEmail, setJiraEmail] = useState("");
+  const [jiraToken, setJiraToken] = useState("");
+  const [jiraSetupDetails, setJiraSetupDetails] =
+    useState<JiraSetupDetails | null>(null);
+  const [frontCompanyId, setFrontCompanyId] = useState("");
+  const [frontApiToken, setFrontApiToken] = useState("");
+  const [frontBaseUrl, setFrontBaseUrl] = useState("https://api2.frontapp.com");
+  const [zendeskSubdomain, setZendeskSubdomain] = useState("");
+  const [zendeskEmail, setZendeskEmail] = useState("");
+  const [zendeskAPIToken, setZendeskAPIToken] = useState("");
+  const [zendeskSetupDetails, setZendeskSetupDetails] =
+    useState<ZendeskSetupDetails | null>(null);
+
+
 
   const loadIntegrations = useCallback(async () => {
     setLoading(true);
@@ -152,15 +205,45 @@ export default function IntegrationsSettingsPage() {
     void loadIntegrations();
   }, [loadIntegrations]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const githubParam = params.get("github");
+    if (githubParam === "connected") {
+      setNotice("GitHub connected successfully.");
+      const cleanUrl =
+        window.location.pathname +
+        (params
+          .toString()
+          .replace(/[&?]?github=[^&]*/g, "")
+          .replace(/^&/, "?") || "");
+      window.history.replaceState(null, "", cleanUrl);
+    } else if (githubParam === "canceled") {
+      setError("GitHub installation was canceled.");
+      const cleanUrl =
+        window.location.pathname +
+        (params
+          .toString()
+          .replace(/[&?]?github=[^&]*/g, "")
+          .replace(/^&/, "?") || "");
+      window.history.replaceState(null, "", cleanUrl);
+    }
+  }, []);
+
   async function connectIntegration(
-    provider: "slack" | "discord" | "microsoft_teams" | "sentry",
+    provider: "slack" | "discord" | "microsoft_teams" | "sentry" | "salesforce",
+    provider: "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong" | "intercom",
   ) {
     setPendingProvider(provider);
     setNotice(null);
     setError(null);
-    let label = provider === "discord" ? "Discord" : "Slack";
+    let label = "GitHub";
+    if (provider === "discord") label = "Discord";
+    if (provider === "slack") label = "Slack";
     if (provider === "microsoft_teams") label = "Microsoft Teams";
     if (provider === "sentry") label = "Sentry";
+    if (provider === "salesforce") label = "Salesforce";
+    if (provider === "gong") label = "Gong";
+    if (provider === "intercom") label = "Intercom";
     const endpoint =
       provider === "microsoft_teams"
         ? "/api/integrations/microsoft-teams/connect"
@@ -172,11 +255,16 @@ export default function IntegrationsSettingsPage() {
       });
       const data = (await response.json().catch(() => ({}))) as {
         authorizationUrl?: string;
+        installationUrl?: string;
         error?: string;
         message?: string;
       };
       if (!response.ok) {
         throw new Error(data.message || data.error || `${label} setup failed.`);
+      }
+      if (provider === "github" && data.installationUrl) {
+        window.location.assign(data.installationUrl);
+        return;
       }
       if (data.authorizationUrl) {
         window.location.assign(data.authorizationUrl);
@@ -241,57 +329,106 @@ export default function IntegrationsSettingsPage() {
     }
   }
 
-  async function setupGitHub() {
-    setPendingProvider("github");
+  async function setupJira() {
+    setPendingProvider("jira");
     setNotice(null);
     setError(null);
-    setGitHubSetupDetails(null);
-    const [owner, name] = gitHubRepositoryFullName.trim().split("/");
+    setJiraSetupDetails(null);
     try {
-      const response = await fetch("/api/integrations/github/setup", {
+      const response = await fetch("/api/workspaces/current/import-export", {
+  async function setupFront() {
+    setPendingProvider("front");
+    setNotice(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/integrations/front/setup", {
+  async function setupZendesk() {
+    setPendingProvider("zendesk");
+    setNotice(null);
+    setError(null);
+    setZendeskSetupDetails(null);
+    try {
+      const response = await fetch("/api/integrations/zendesk/setup", {
+
+
         method: "POST",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          installationId: gitHubInstallationId,
-          accountLogin: gitHubAccountLogin,
-          repositories: [
-            {
-              id: gitHubRepositoryFullName.trim(),
-              owner,
-              name,
-              fullName: gitHubRepositoryFullName.trim(),
-              htmlUrl: `https://github.com/${gitHubRepositoryFullName.trim()}`,
-            },
-          ],
+          action: "configure_jira",
+          deployment: jiraDeployment,
+          baseUrl: jiraBaseUrl,
+          email: jiraDeployment === "cloud" ? jiraEmail : undefined,
+          token: jiraToken,
         }),
       });
       const data = (await response.json().catch(() => ({}))) as {
-        webhookUrl?: string;
-        webhookSecret?: string;
+        integrationId?: string;
+        displayName?: string;
+        projects?: { id: string; key: string; name: string }[];
+          apiToken: frontApiToken,
+          companyId: frontCompanyId,
+          baseUrl: frontBaseUrl,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+          subdomain: zendeskSubdomain,
+          email: zendeskEmail,
+          apiToken: zendeskAPIToken,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        accountUrl?: string;
+        actionBaseUrl?: string;
+        actionSecret?: string;
+
+
         error?: string;
         message?: string;
       };
       if (!response.ok) {
-        throw new Error(data.message || data.error || "GitHub setup failed.");
+        throw new Error(data.message || data.error || "Jira setup failed.");
       }
-      if (data.webhookUrl && data.webhookSecret) {
-        setGitHubSetupDetails({
-          webhookUrl: data.webhookUrl,
-          webhookSecret: data.webhookSecret,
+      setJiraSetupDetails({
+        integrationId: data.integrationId ?? "",
+        displayName: data.displayName ?? "Jira",
+        projectCount: data.projects?.length ?? 0,
+      });
+      setJiraToken("");
+      setNotice(
+        "Jira connected. Use Import & export to preview projects and mappings.",
+        throw new Error(data.message || data.error || "Front setup failed.");
+      }
+      setFrontApiToken("");
+      setNotice(
+        "Front connected. Add the Front sidebar plugin URL from this app to Front.",
+        throw new Error(data.message || data.error || "Zendesk setup failed.");
+      }
+      if (data.accountUrl && data.actionBaseUrl && data.actionSecret) {
+        setZendeskSetupDetails({
+          accountUrl: data.accountUrl,
+          actionBaseUrl: data.actionBaseUrl,
+          actionSecret: data.actionSecret,
         });
       }
+      setZendeskAPIToken("");
       setNotice(
-        "GitHub connected. Copy the webhook URL and secret into your GitHub App.",
+        "Zendesk connected. Copy the action URL and secret into the Zendesk app.",
+
+
       );
       await loadIntegrations();
     } catch (setupError) {
       setError(
+        setupError instanceof Error ? setupError.message : "Jira setup failed.",
         setupError instanceof Error
           ? setupError.message
-          : "GitHub setup failed.",
+          : "Front setup failed.",
+          : "Zendesk setup failed.",
+
+
       );
     } finally {
       setPendingProvider(null);
@@ -312,13 +449,37 @@ export default function IntegrationsSettingsPage() {
               ? "/api/integrations/microsoft-teams/disconnect"
               : provider === "sentry"
                 ? "/api/integrations/sentry/disconnect"
-                : `/api/integrations?provider=${encodeURIComponent(provider)}`;
+                : provider === "salesforce"
+                  ? "/api/integrations/salesforce/disconnect"
+                : provider === "front"
+                  ? "/api/integrations/front/disconnect"
+            : provider === "github"
+              ? "/api/integrations/github/disconnect"
+              : provider === "microsoft_teams"
+                ? "/api/integrations/microsoft-teams/disconnect"
+                : provider === "sentry"
+                  ? "/api/integrations/sentry/disconnect"
+                  : provider === "gong"
+                    ? "/api/integrations/gong/disconnect"
+                    : provider === "zendesk"
+                      ? "/api/integrations/zendesk/disconnect"
+                      : provider === "intercom"
+                        ? "/api/integrations/intercom/disconnect"
+
+                  : `/api/integrations?provider=${encodeURIComponent(provider)}`;
       const response = await fetch(endpoint, {
         method:
           provider === "slack" ||
           provider === "discord" ||
+          provider === "github" ||
           provider === "microsoft_teams" ||
-          provider === "sentry"
+          provider === "sentry" ||
+          provider === "salesforce"
+          provider === "front"
+          provider === "gong" ||
+          provider === "zendesk" ||
+          provider === "intercom"
+
             ? "POST"
             : "DELETE",
         headers: { Accept: "application/json" },
@@ -398,25 +559,36 @@ export default function IntegrationsSettingsPage() {
           </div>
         </div>
       ) : null}
-      {gitHubSetupDetails ? (
+      {jiraSetupDetails ? (
         <div className="mt-6 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
           <div className="font-medium text-[var(--color-text-primary)]">
-            GitHub webhook details
+            Jira connection ready
+          </div>
+          <p className="mt-2">
+            {jiraSetupDetails.displayName} returned{" "}
+            {jiraSetupDetails.projectCount} projects for guided import.
+          </p>
+      {zendeskSetupDetails ? (
+        <div className="mt-6 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
+          <div className="font-medium text-[var(--color-text-primary)]">
+            Zendesk app details
           </div>
           <div className="mt-3 grid gap-2">
             <div className="grid gap-1">
-              <span>Webhook URL</span>
+              <span>Action base URL</span>
               <code className="overflow-x-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[12px] text-[var(--color-text-primary)]">
-                {gitHubSetupDetails.webhookUrl}
+                {zendeskSetupDetails.actionBaseUrl}
               </code>
             </div>
             <div className="grid gap-1">
-              <span>Secret</span>
+              <span>Signing secret</span>
               <code className="overflow-x-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[12px] text-[var(--color-text-primary)]">
-                {gitHubSetupDetails.webhookSecret}
+                {zendeskSetupDetails.actionSecret}
               </code>
             </div>
+            <div>Connected account: {zendeskSetupDetails.accountUrl}</div>
           </div>
+
         </div>
       ) : null}
 
@@ -445,11 +617,20 @@ export default function IntegrationsSettingsPage() {
                         ? "Disconnected locally; historical links are preserved."
                         : `Connected to ${integration.displayName || integration.name}`}
                     </p>
+                    {integrationDetailSummary(integration) ? (
+                      <span className="mt-1 block text-[12px] text-[var(--color-text-tertiary)]">
+                        {integrationDetailSummary(integration)}
+                      </span>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 gap-2">
                     {integration.actions.canReconnect &&
                     integration.provider !== "gitlab" &&
-                    integration.provider !== "github" ? (
+                    integration.provider !== "jira" ? (
+                    integration.provider !== "front" ? (
+                    integration.provider !== "zendesk" ? (
+
+
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
@@ -612,6 +793,11 @@ export default function IntegrationsSettingsPage() {
                           ? ` · ${integration.displayName}`
                           : ""}
                       </p>
+                      {integrationDetailSummary(integration) ? (
+                        <p className="mt-2 text-[12px] text-[var(--color-text-tertiary)]">
+                          {integrationDetailSummary(integration)}
+                        </p>
+                      ) : null}
                       {integration.setupRequirement ? (
                         <p className="mt-2 text-[12px] text-amber-300">
                           {integration.setupRequirement.message}
@@ -660,60 +846,179 @@ export default function IntegrationsSettingsPage() {
                           </button>
                         </div>
                       ) : null}
-                      {integration.provider === "github" &&
+                      {integration.provider === "jira" &&
+                      {integration.provider === "front" &&
+                      {integration.provider === "zendesk" &&
+
+
                       (integration.actions.canConnect ||
                         integration.actions.canReconnect) ? (
                         <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
                           <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
-                            GitHub App installation ID
+                            Jira deployment
+                            <select
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setJiraDeployment(
+                                  event.target.value === "server"
+                                    ? "server"
+                                    : "cloud",
+                                )
+                              }
+                              value={jiraDeployment}
+                            >
+                              <option value="cloud">Jira Cloud</option>
+                              <option value="server">
+                                Jira Server/Data Center
+                              </option>
+                            </select>
+                          </label>
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Base URL
                             <input
                               className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
                               onChange={(event) =>
-                                setGitHubInstallationId(event.target.value)
+                                setJiraBaseUrl(event.target.value)
                               }
-                              placeholder="12345678"
-                              type="text"
-                              value={gitHubInstallationId}
+                              placeholder="https://acme.atlassian.net"
+                              type="url"
+                              value={jiraBaseUrl}
+                            />
+                          </label>
+                          {jiraDeployment === "cloud" ? (
+                            <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                              Atlassian email
+                              <input
+                                className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                                onChange={(event) =>
+                                  setJiraEmail(event.target.value)
+                                }
+                                placeholder="admin@example.com"
+                                type="email"
+                                value={jiraEmail}
+                              />
+                            </label>
+                          ) : null}
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            API token or PAT
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setJiraToken(event.target.value)
+                              }
+                              placeholder={
+                                jiraDeployment === "cloud"
+                                  ? "Atlassian API token"
+                                  : "Jira personal access token"
+                              }
+                              type="password"
+                              value={jiraToken}
+                            Front company ID
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setFrontCompanyId(event.target.value)
+                              }
+                              placeholder="Optional company identifier"
+                              value={frontCompanyId}
                             />
                           </label>
                           <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
-                            Account or organization login
+                            Front API base URL
                             <input
                               className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
                               onChange={(event) =>
-                                setGitHubAccountLogin(event.target.value)
+                                setFrontBaseUrl(event.target.value)
+                              }
+                              placeholder="https://api2.frontapp.com"
+                              type="url"
+                              value={frontBaseUrl}
+                            />
+                          </label>
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Front API token
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setFrontApiToken(event.target.value)
+                              }
+                              placeholder="Bearer token with conversations/comments permissions"
+                              type="password"
+                              value={frontApiToken}
+                            Zendesk subdomain
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setZendeskSubdomain(event.target.value)
                               }
                               placeholder="acme"
                               type="text"
-                              value={gitHubAccountLogin}
+                              value={zendeskSubdomain}
                             />
                           </label>
                           <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
-                            Repository full name
+                            Admin email
                             <input
                               className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
                               onChange={(event) =>
-                                setGitHubRepositoryFullName(event.target.value)
+                                setZendeskEmail(event.target.value)
                               }
-                              placeholder="acme/web"
-                              type="text"
-                              value={gitHubRepositoryFullName}
+                              placeholder="admin@example.com"
+                              type="email"
+                              value={zendeskEmail}
+                            />
+                          </label>
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            API token
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setZendeskAPIToken(event.target.value)
+                              }
+                              placeholder="Zendesk API token"
+                              type="password"
+                              value={zendeskAPIToken}
+
+
                             />
                           </label>
                           <button
                             className="w-fit rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
                             disabled={
-                              pendingProvider === "github" ||
-                              gitHubInstallationId.trim() === "" ||
-                              gitHubAccountLogin.trim() === "" ||
-                              !gitHubRepositoryFullName.includes("/")
+                              pendingProvider === "jira" ||
+                              jiraBaseUrl.trim() === "" ||
+                              jiraToken.trim() === "" ||
+                              (jiraDeployment === "cloud" &&
+                                jiraEmail.trim() === "")
                             }
-                            onClick={() => void setupGitHub()}
+                            onClick={() => void setupJira()}
                             type="button"
                           >
-                            {pendingProvider === "github"
-                              ? "Connecting..."
-                              : "Connect GitHub"}
+                            {pendingProvider === "jira"
+                              ? "Validating..."
+                              : "Connect Jira"}
+                              pendingProvider === "front" ||
+                              frontApiToken.trim() === ""
+                            }
+                            onClick={() => void setupFront()}
+                            type="button"
+                          >
+                            {pendingProvider === "front"
+                              ? "Validating..."
+                              : "Connect Front"}
+                              pendingProvider === "zendesk" ||
+                              zendeskSubdomain.trim() === "" ||
+                              zendeskEmail.trim() === "" ||
+                              zendeskAPIToken.trim() === ""
+                            }
+                            onClick={() => void setupZendesk()}
+                            type="button"
+                          >
+                            {pendingProvider === "zendesk"
+                              ? "Validating..."
+                              : "Connect Zendesk"}
+
+
                           </button>
                         </div>
                       ) : null}
@@ -729,7 +1034,11 @@ export default function IntegrationsSettingsPage() {
                       </button>
                     ) : integration.actions.canReconnect &&
                       integration.provider !== "gitlab" &&
-                      integration.provider !== "github" ? (
+                      integration.provider !== "jira" ? (
+                      integration.provider !== "front" ? (
+                      integration.provider !== "zendesk" ? (
+
+
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
@@ -757,7 +1066,10 @@ export default function IntegrationsSettingsPage() {
                           ? "Opening..."
                           : "Connect"}
                       </button>
-                    ) : integration.provider === "gitlab" ? null : (
+                    ) : integration.provider === "gitlab" ||
+                      integration.provider === "jira" ? null : (
+                      integration.provider === "zendesk" ? null : (
+
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-tertiary)]"
                         disabled
