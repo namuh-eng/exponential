@@ -132,7 +132,11 @@ export function AgentDashboard() {
       }
 
       const response = data as AgentRunsResponse | undefined;
-      const nextRuns = response?.runs ?? [];
+      const nextRuns = (response?.runs ?? []).map((run) => ({
+        ...run,
+        logs: run.logs ?? [],
+        suggestions: run.suggestions ?? [],
+      }));
       setRuns(nextRuns);
       setCanCreateRuns(response?.canCreateRuns ?? false);
       setDisabledReason(response?.disabledReason ?? null);
@@ -179,7 +183,11 @@ export function AgentDashboard() {
         throw new Error(apiErrorMessage(error, "Unable to create agent run"));
       }
 
-      const run = data.run as AgentRun;
+      const run = {
+        ...(data.run as AgentRun),
+        logs: (data.run as AgentRun).logs ?? [],
+        suggestions: (data.run as AgentRun).suggestions ?? [],
+      };
       setRuns((current) => [run, ...current]);
       setSelectedRunId(run.id);
       setTitle("Follow up on agent output");
@@ -210,7 +218,11 @@ export function AgentDashboard() {
         throw new Error(apiErrorMessage(error, "Unable to update suggestion"));
       }
 
-      const updatedRun = data.run as AgentRun;
+      const updatedRun = {
+        ...(data.run as AgentRun),
+        logs: (data.run as AgentRun).logs ?? [],
+        suggestions: (data.run as AgentRun).suggestions ?? [],
+      };
       setRuns((current) =>
         current.map((run) => (run.id === updatedRun.id ? updatedRun : run)),
       );

@@ -322,6 +322,10 @@ export default function TeamTriagePage() {
       const endpoint = pendingDecision.bulk
         ? `/api/teams/${params.key}/triage/bulk`
         : `/api/teams/${params.key}/triage/${pendingDecision.issues[0].id}`;
+      const includeDueDate = Boolean(
+        acceptMetadata.dueDate ||
+          pendingDecision.issues.some((issue) => Boolean(issue.dueDate)),
+      );
       const res = await fetch(endpoint, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -343,7 +347,9 @@ export default function TeamTriagePage() {
                 cycleId: acceptMetadata.cycleId || null,
                 projectId: acceptMetadata.projectId || null,
                 projectMilestoneId: acceptMetadata.projectMilestoneId || null,
-                dueDate: acceptMetadata.dueDate || null,
+                ...(includeDueDate
+                  ? { dueDate: acceptMetadata.dueDate || null }
+                  : {}),
                 assigneeId: acceptMetadata.assigneeId || null,
                 comment: acceptMetadata.comment.trim() || undefined,
                 subscribe: acceptMetadata.subscribe,
