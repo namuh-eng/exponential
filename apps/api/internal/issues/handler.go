@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
+	"github.com/namuh-eng/exponential/apps/api/internal/figma"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
 	"github.com/namuh-eng/exponential/apps/api/internal/sanitizehtml"
 	dbsqlc "github.com/namuh-eng/exponential/apps/api/internal/sqlc/generated"
@@ -189,6 +190,7 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/{id}/subscription", h.Subscribe)
 	r.Delete("/{id}/subscription", h.Unsubscribe)
 	r.Get("/{id}/customer-requests.csv", h.ExportCustomerRequests)
+	r.Post("/{id}/figma-sources/{sourceID}/refresh", h.RefreshFigmaSource)
 	r.Get("/{id}", h.Get)
 	r.Patch("/{id}", h.Update)
 	r.Delete("/{id}", h.Delete)
@@ -378,6 +380,10 @@ func (h Handler) issueDetail(ctx context.Context, issue Issue, userID string, in
 	if err != nil {
 		return nil, err
 	}
+	figmaSources, err := h.figmaSources(ctx, issue.ID)
+	if err != nil {
+		return nil, err
+	}
 	sources, err := h.issueExternalSources(ctx, issue.ID)
 	if err != nil {
 		return nil, err
@@ -411,6 +417,7 @@ func (h Handler) issueDetail(ctx context.Context, issue Issue, userID string, in
 		"labels":               labels,
 		"subscription":         subscription,
 		"reactions":            reactions,
+		"figmaSources":         figmaSources,
 		"discussionSummary":    map[string]any{"enabled": false, "status": "disabled", "text": nil, "generatedAt": nil, "sourceCommentCount": 0},
 		"comments":             []any{},
 		"subIssues":            subIssues,
@@ -687,6 +694,41 @@ func (h Handler) subscriptionSummary(ctx context.Context, issueID, userID string
 	return summary, rows.Err()
 }
 
+func (h Handler) figmaSources(ctx context.Context, issueID string) ([]figma.Source, error) {
+	rows, err := h.DB.Query(ctx, `select `+figma.SourceColumns("fs.")+` from figma_source fs where fs.issue_id=$1::uuid order by fs.created_at asc, fs.id asc`, issueID)
+	if err != nil {
+		return nil, err
+	}
+	return figma.ScanSources(rows)
+}
+
+func (h Handler) RefreshFigmaSource(w http.ResponseWriter, r *http.Request) {
+	p, ok := auth.FromContext(r.Context())
+	if !ok {
+		problem.Write(w, http.StatusUnauthorized, "Unauthorized", "")
+		return
+	}
+	issue, err := h.findIssue(r.Context(), chi.URLParam(r, "id"), p.WorkspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, http.StatusNotFound, "Issue not found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Refresh Figma preview failed", err.Error())
+		return
+	}
+	source, err := figma.ScanSource(h.DB.QueryRow(r.Context(), `update figma_source fs set refreshed_at=now(), last_error=null, updated_at=now() where fs.id=$1::uuid and fs.issue_id=$2::uuid and fs.workspace_id=$3::uuid returning `+figma.SourceColumns("fs."), chi.URLParam(r, "sourceID"), issue.ID, p.WorkspaceID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, http.StatusNotFound, "Figma source not found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Refresh Figma preview failed", err.Error())
+		return
+	}
+	problem.JSON(w, http.StatusOK, source)
+}
+
 func (h Handler) issueState(ctx context.Context, stateID string) (map[string]any, error) {
 	var id, name, category, color string
 	err := h.DB.QueryRow(ctx, `select id::text,name,category::text,color from workflow_state where id=$1::uuid`, stateID).Scan(&id, &name, &category, &color)
@@ -881,6 +923,12 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create issue failed", err.Error())
 		return
 	}
+	if input.Description != nil {
+		if err := figma.SyncSources(r.Context(), tx, figma.SyncTarget{WorkspaceID: p.WorkspaceID, IssueID: issue.ID, ContainerType: "issue_description"}, *input.Description); err != nil {
+			problem.Write(w, 500, "Create issue failed", err.Error())
+			return
+		}
+	}
 	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "issue", issue.ID, "created", issue, p.UserID); err != nil {
 		problem.Write(w, 500, "Create issue failed", err.Error())
 		return
@@ -992,11 +1040,25 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update issue failed", err.Error())
 		return
 	}
+	if input.Description != nil {
+		if err := figma.SyncSources(r.Context(), tx, figma.SyncTarget{WorkspaceID: p.WorkspaceID, IssueID: updated.ID, ContainerType: "issue_description"}, *input.Description); err != nil {
+			problem.Write(w, 500, "Update issue failed", err.Error())
+			return
+		}
+	}
 	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "issue", updated.ID, "updated", updated, p.UserID); err != nil {
 		problem.Write(w, 500, "Update issue failed", err.Error())
 		return
 	}
-	if err := h.queueSentryAutomations(r.Context(), tx, p.WorkspaceID, existing, updated); err != nil {
+	if err := h.queueProviderAutomations(r.Context(), tx, p.WorkspaceID, existing, updated); err != nil {
+		problem.Write(w, 500, "Update issue failed", err.Error())
+		return
+	}
+	if err := h.queueFrontAutomations(r.Context(), tx, p.WorkspaceID, existing, updated); err != nil {
+		problem.Write(w, 500, "Update issue failed", err.Error())
+		return
+	}
+	if err := h.queueSalesforceAutomations(r.Context(), tx, p.WorkspaceID, existing, updated); err != nil {
 		problem.Write(w, 500, "Update issue failed", err.Error())
 		return
 	}

@@ -26,6 +26,7 @@ const (
 const (
 	AgentRunStatusCompleted   AgentRunStatus = "completed"
 	AgentRunStatusNeedsReview AgentRunStatus = "needs_review"
+	AgentRunStatusFailed      AgentRunStatus = "failed"
 	AgentRunStatusQueued      AgentRunStatus = "queued"
 	AgentRunStatusRunning     AgentRunStatus = "running"
 )
@@ -696,10 +697,23 @@ const (
 
 // Defines values for WorkspaceImportExportActionRequestAction.
 const (
-	PrepareProvider WorkspaceImportExportActionRequestAction = "prepare_provider"
-	PreviewCsv      WorkspaceImportExportActionRequestAction = "preview_csv"
-	RequestExport   WorkspaceImportExportActionRequestAction = "request_export"
-	StartCsvImport  WorkspaceImportExportActionRequestAction = "start_csv_import"
+	ConfigureJira     WorkspaceImportExportActionRequestAction = "configure_jira"
+	PauseJiraSync     WorkspaceImportExportActionRequestAction = "pause_jira_sync"
+	PrepareProvider   WorkspaceImportExportActionRequestAction = "prepare_provider"
+	PreviewCsv        WorkspaceImportExportActionRequestAction = "preview_csv"
+	PreviewJiraImport WorkspaceImportExportActionRequestAction = "preview_jira_import"
+	RequestExport     WorkspaceImportExportActionRequestAction = "request_export"
+	ResumeJiraSync    WorkspaceImportExportActionRequestAction = "resume_jira_sync"
+	RetryJiraImport   WorkspaceImportExportActionRequestAction = "retry_jira_import"
+	StartCsvImport    WorkspaceImportExportActionRequestAction = "start_csv_import"
+	StartJiraImport   WorkspaceImportExportActionRequestAction = "start_jira_import"
+	SyncJiraProject   WorkspaceImportExportActionRequestAction = "sync_jira_project"
+)
+
+// Defines values for WorkspaceImportExportActionRequestDeployment.
+const (
+	Cloud  WorkspaceImportExportActionRequestDeployment = "cloud"
+	Server WorkspaceImportExportActionRequestDeployment = "server"
 )
 
 // Defines values for WorkspaceImportExportActionRequestProvider.
@@ -869,6 +883,7 @@ type AgentRun struct {
 	Id           string    `json:"id"`
 	Logs         []string  `json:"logs"`
 	Output       string    `json:"output"`
+	FailureReason *string   `json:"failureReason,omitempty"`
 	Owner        string    `json:"owner"`
 	Prompt       string    `json:"prompt"`
 	PromptConfig struct {
@@ -887,8 +902,10 @@ type AgentRunStatus string
 
 // AgentRunListResponse defines model for AgentRunListResponse.
 type AgentRunListResponse struct {
-	CanCreateRuns bool       `json:"canCreateRuns"`
-	Runs          []AgentRun `json:"runs"`
+	CanCreateRuns      bool       `json:"canCreateRuns"`
+	DisabledReason     *string    `json:"disabledReason,omitempty"`
+	ProviderConfigured bool       `json:"providerConfigured"`
+	Runs               []AgentRun `json:"runs"`
 }
 
 // AgentRunResponse defines model for AgentRunResponse.
@@ -902,6 +919,8 @@ type AgentSuggestion struct {
 	Id                string                `json:"id"`
 	IsExternalContext *bool                 `json:"isExternalContext,omitempty"`
 	Status            AgentSuggestionStatus `json:"status"`
+	ReviewedAt        *time.Time            `json:"reviewedAt,omitempty"`
+	ReviewedBy        *string               `json:"reviewedBy,omitempty"`
 	Summary           string                `json:"summary"`
 	Target            string                `json:"target"`
 	Title             string                `json:"title"`
@@ -1891,6 +1910,57 @@ type IntegrationListResponse struct {
 type IntegrationSetupRequirement struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
+}
+
+// IntercomConfigurationRequiredResponse defines model for IntercomConfigurationRequiredResponse.
+type IntercomConfigurationRequiredResponse struct {
+	Error   string `json:"error"`
+	Message string `json:"message"`
+}
+
+// IntercomConnectResponse defines model for IntercomConnectResponse.
+type IntercomConnectResponse struct {
+	AuthorizationUrl string `json:"authorizationUrl"`
+	State            string `json:"state"`
+	WorkspaceSlug    string `json:"workspaceSlug"`
+}
+
+// IntercomIssue defines model for IntercomIssue.
+type IntercomIssue struct {
+	Assignee   string             `json:"assignee"`
+	Id         openapi_types.UUID `json:"id"`
+	Identifier string             `json:"identifier"`
+	Status     string             `json:"status"`
+	Title      string             `json:"title"`
+	WebUrl     string             `json:"webUrl"`
+}
+
+// IntercomIssueActionRequest defines model for IntercomIssueActionRequest.
+type IntercomIssueActionRequest struct {
+	AppId                *string                `json:"appId,omitempty"`
+	CompanyId            *string                `json:"companyId,omitempty"`
+	ContactEmail         *string                `json:"contactEmail,omitempty"`
+	ContactId            *string                `json:"contactId,omitempty"`
+	ConversationId       *string                `json:"conversationId,omitempty"`
+	Description          *string                `json:"description,omitempty"`
+	IssueId              *string                `json:"issueId,omitempty"`
+	TeamId               *openapi_types.UUID    `json:"teamId,omitempty"`
+	Title                *string                `json:"title,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// IntercomIssueActionResponse defines model for IntercomIssueActionResponse.
+type IntercomIssueActionResponse struct {
+	Issue   *IntercomIssue          `json:"issue"`
+	Message *string                 `json:"message,omitempty"`
+	Meta    *map[string]interface{} `json:"meta,omitempty"`
+	Ok      bool                    `json:"ok"`
+}
+
+// IntercomIssueSearchResponse defines model for IntercomIssueSearchResponse.
+type IntercomIssueSearchResponse struct {
+	Issues []IntercomIssue `json:"issues"`
+	Ok     bool            `json:"ok"`
 }
 
 // InviteResult defines model for InviteResult.
@@ -3722,17 +3792,32 @@ type WorkspaceExportsResponse struct {
 
 // WorkspaceImportExportActionRequest defines model for WorkspaceImportExportActionRequest.
 type WorkspaceImportExportActionRequest struct {
-	Action               WorkspaceImportExportActionRequestAction    `json:"action"`
-	Csv                  *string                                     `json:"csv,omitempty"`
-	DefaultTeamId        *openapi_types.UUID                         `json:"defaultTeamId,omitempty"`
-	FileName             *string                                     `json:"fileName,omitempty"`
-	Mapping              *map[string]interface{}                     `json:"mapping,omitempty"`
-	Provider             *WorkspaceImportExportActionRequestProvider `json:"provider,omitempty"`
-	AdditionalProperties map[string]interface{}                      `json:"-"`
+	Action             WorkspaceImportExportActionRequestAction      `json:"action"`
+	BaseUrl            *string                                       `json:"baseUrl,omitempty"`
+	Csv                *string                                       `json:"csv,omitempty"`
+	DefaultTeamId      *openapi_types.UUID                           `json:"defaultTeamId,omitempty"`
+	Deployment         *WorkspaceImportExportActionRequestDeployment `json:"deployment,omitempty"`
+	Email              *openapi_types.Email                          `json:"email,omitempty"`
+	FileName           *string                                       `json:"fileName,omitempty"`
+	ForwardSyncEnabled *bool                                         `json:"forwardSyncEnabled,omitempty"`
+	ImportComments     *bool                                         `json:"importComments,omitempty"`
+	ImportLabels       *bool                                         `json:"importLabels,omitempty"`
+	Mapping            *map[string]interface{}                       `json:"mapping,omitempty"`
+	ProjectKey         *string                                       `json:"projectKey,omitempty"`
+	Provider           *WorkspaceImportExportActionRequestProvider   `json:"provider,omitempty"`
+	StatusMapping      *map[string]openapi_types.UUID                `json:"statusMapping,omitempty"`
+	TeamId             *openapi_types.UUID                           `json:"teamId,omitempty"`
+
+	// Token API token or personal access token for authenticating with the provider. Write-only: never returned in responses.
+	Token                *string                `json:"token,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
 }
 
 // WorkspaceImportExportActionRequestAction defines model for WorkspaceImportExportActionRequest.Action.
 type WorkspaceImportExportActionRequestAction string
+
+// WorkspaceImportExportActionRequestDeployment defines model for WorkspaceImportExportActionRequest.Deployment.
+type WorkspaceImportExportActionRequestDeployment string
 
 // WorkspaceImportExportActionRequestProvider defines model for WorkspaceImportExportActionRequest.Provider.
 type WorkspaceImportExportActionRequestProvider string
@@ -3958,6 +4043,12 @@ type IngestGitHubWebhookParams struct {
 	XGitHubEvent     string `json:"X-GitHub-Event"`
 }
 
+// IntercomOAuthCallbackParams defines parameters for IntercomOAuthCallback.
+type IntercomOAuthCallbackParams struct {
+	Code  *string `form:"code,omitempty" json:"code,omitempty"`
+	State *string `form:"state,omitempty" json:"state,omitempty"`
+}
+
 // SentryOAuthCallbackParams defines parameters for SentryOAuthCallback.
 type SentryOAuthCallbackParams struct {
 	Code  *string `form:"code,omitempty" json:"code,omitempty"`
@@ -4170,6 +4261,21 @@ type SetupGitLabIntegrationJSONRequestBody = GitLabSetupRequest
 
 // UpdateGitLabWorkflowAutomationJSONRequestBody defines body for UpdateGitLabWorkflowAutomation for application/json ContentType.
 type UpdateGitLabWorkflowAutomationJSONRequestBody = GitLabWorkflowRequest
+
+// CreateIssueFromIntercomJSONRequestBody defines body for CreateIssueFromIntercom for application/json ContentType.
+type CreateIssueFromIntercomJSONRequestBody = IntercomIssueActionRequest
+
+// LinkIntercomIssueJSONRequestBody defines body for LinkIntercomIssue for application/json ContentType.
+type LinkIntercomIssueJSONRequestBody = IntercomIssueActionRequest
+
+// SearchIntercomLinkableIssuesJSONRequestBody defines body for SearchIntercomLinkableIssues for application/json ContentType.
+type SearchIntercomLinkableIssuesJSONRequestBody = IntercomIssueActionRequest
+
+// GetIntercomLinkedIssueStatusJSONRequestBody defines body for GetIntercomLinkedIssueStatus for application/json ContentType.
+type GetIntercomLinkedIssueStatusJSONRequestBody = IntercomIssueActionRequest
+
+// UnlinkIntercomIssueJSONRequestBody defines body for UnlinkIntercomIssue for application/json ContentType.
+type UnlinkIntercomIssueJSONRequestBody = IntercomIssueActionRequest
 
 // CreateIssueFromSentryJSONRequestBody defines body for CreateIssueFromSentry for application/json ContentType.
 type CreateIssueFromSentryJSONRequestBody = SentryIssueActionRequest
@@ -4699,6 +4805,194 @@ func (a AccountSecurityResponse) MarshalJSON() ([]byte, error) {
 	object["sessions"], err = json.Marshal(a.Sessions)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling 'sessions': %w", err)
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for IntercomIssueActionRequest. Returns the specified
+// element and whether it was found
+func (a IntercomIssueActionRequest) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for IntercomIssueActionRequest
+func (a *IntercomIssueActionRequest) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for IntercomIssueActionRequest to handle AdditionalProperties
+func (a *IntercomIssueActionRequest) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["appId"]; found {
+		err = json.Unmarshal(raw, &a.AppId)
+		if err != nil {
+			return fmt.Errorf("error reading 'appId': %w", err)
+		}
+		delete(object, "appId")
+	}
+
+	if raw, found := object["companyId"]; found {
+		err = json.Unmarshal(raw, &a.CompanyId)
+		if err != nil {
+			return fmt.Errorf("error reading 'companyId': %w", err)
+		}
+		delete(object, "companyId")
+	}
+
+	if raw, found := object["contactEmail"]; found {
+		err = json.Unmarshal(raw, &a.ContactEmail)
+		if err != nil {
+			return fmt.Errorf("error reading 'contactEmail': %w", err)
+		}
+		delete(object, "contactEmail")
+	}
+
+	if raw, found := object["contactId"]; found {
+		err = json.Unmarshal(raw, &a.ContactId)
+		if err != nil {
+			return fmt.Errorf("error reading 'contactId': %w", err)
+		}
+		delete(object, "contactId")
+	}
+
+	if raw, found := object["conversationId"]; found {
+		err = json.Unmarshal(raw, &a.ConversationId)
+		if err != nil {
+			return fmt.Errorf("error reading 'conversationId': %w", err)
+		}
+		delete(object, "conversationId")
+	}
+
+	if raw, found := object["description"]; found {
+		err = json.Unmarshal(raw, &a.Description)
+		if err != nil {
+			return fmt.Errorf("error reading 'description': %w", err)
+		}
+		delete(object, "description")
+	}
+
+	if raw, found := object["issueId"]; found {
+		err = json.Unmarshal(raw, &a.IssueId)
+		if err != nil {
+			return fmt.Errorf("error reading 'issueId': %w", err)
+		}
+		delete(object, "issueId")
+	}
+
+	if raw, found := object["teamId"]; found {
+		err = json.Unmarshal(raw, &a.TeamId)
+		if err != nil {
+			return fmt.Errorf("error reading 'teamId': %w", err)
+		}
+		delete(object, "teamId")
+	}
+
+	if raw, found := object["title"]; found {
+		err = json.Unmarshal(raw, &a.Title)
+		if err != nil {
+			return fmt.Errorf("error reading 'title': %w", err)
+		}
+		delete(object, "title")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for IntercomIssueActionRequest to handle AdditionalProperties
+func (a IntercomIssueActionRequest) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.AppId != nil {
+		object["appId"], err = json.Marshal(a.AppId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'appId': %w", err)
+		}
+	}
+
+	if a.CompanyId != nil {
+		object["companyId"], err = json.Marshal(a.CompanyId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'companyId': %w", err)
+		}
+	}
+
+	if a.ContactEmail != nil {
+		object["contactEmail"], err = json.Marshal(a.ContactEmail)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'contactEmail': %w", err)
+		}
+	}
+
+	if a.ContactId != nil {
+		object["contactId"], err = json.Marshal(a.ContactId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'contactId': %w", err)
+		}
+	}
+
+	if a.ConversationId != nil {
+		object["conversationId"], err = json.Marshal(a.ConversationId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'conversationId': %w", err)
+		}
+	}
+
+	if a.Description != nil {
+		object["description"], err = json.Marshal(a.Description)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'description': %w", err)
+		}
+	}
+
+	if a.IssueId != nil {
+		object["issueId"], err = json.Marshal(a.IssueId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'issueId': %w", err)
+		}
+	}
+
+	if a.TeamId != nil {
+		object["teamId"], err = json.Marshal(a.TeamId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'teamId': %w", err)
+		}
+	}
+
+	if a.Title != nil {
+		object["title"], err = json.Marshal(a.Title)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'title': %w", err)
+		}
 	}
 
 	for fieldName, field := range a.AdditionalProperties {
@@ -6795,6 +7089,14 @@ func (a *WorkspaceImportExportActionRequest) UnmarshalJSON(b []byte) error {
 		delete(object, "action")
 	}
 
+	if raw, found := object["baseUrl"]; found {
+		err = json.Unmarshal(raw, &a.BaseUrl)
+		if err != nil {
+			return fmt.Errorf("error reading 'baseUrl': %w", err)
+		}
+		delete(object, "baseUrl")
+	}
+
 	if raw, found := object["csv"]; found {
 		err = json.Unmarshal(raw, &a.Csv)
 		if err != nil {
@@ -6811,12 +7113,52 @@ func (a *WorkspaceImportExportActionRequest) UnmarshalJSON(b []byte) error {
 		delete(object, "defaultTeamId")
 	}
 
+	if raw, found := object["deployment"]; found {
+		err = json.Unmarshal(raw, &a.Deployment)
+		if err != nil {
+			return fmt.Errorf("error reading 'deployment': %w", err)
+		}
+		delete(object, "deployment")
+	}
+
+	if raw, found := object["email"]; found {
+		err = json.Unmarshal(raw, &a.Email)
+		if err != nil {
+			return fmt.Errorf("error reading 'email': %w", err)
+		}
+		delete(object, "email")
+	}
+
 	if raw, found := object["fileName"]; found {
 		err = json.Unmarshal(raw, &a.FileName)
 		if err != nil {
 			return fmt.Errorf("error reading 'fileName': %w", err)
 		}
 		delete(object, "fileName")
+	}
+
+	if raw, found := object["forwardSyncEnabled"]; found {
+		err = json.Unmarshal(raw, &a.ForwardSyncEnabled)
+		if err != nil {
+			return fmt.Errorf("error reading 'forwardSyncEnabled': %w", err)
+		}
+		delete(object, "forwardSyncEnabled")
+	}
+
+	if raw, found := object["importComments"]; found {
+		err = json.Unmarshal(raw, &a.ImportComments)
+		if err != nil {
+			return fmt.Errorf("error reading 'importComments': %w", err)
+		}
+		delete(object, "importComments")
+	}
+
+	if raw, found := object["importLabels"]; found {
+		err = json.Unmarshal(raw, &a.ImportLabels)
+		if err != nil {
+			return fmt.Errorf("error reading 'importLabels': %w", err)
+		}
+		delete(object, "importLabels")
 	}
 
 	if raw, found := object["mapping"]; found {
@@ -6827,12 +7169,44 @@ func (a *WorkspaceImportExportActionRequest) UnmarshalJSON(b []byte) error {
 		delete(object, "mapping")
 	}
 
+	if raw, found := object["projectKey"]; found {
+		err = json.Unmarshal(raw, &a.ProjectKey)
+		if err != nil {
+			return fmt.Errorf("error reading 'projectKey': %w", err)
+		}
+		delete(object, "projectKey")
+	}
+
 	if raw, found := object["provider"]; found {
 		err = json.Unmarshal(raw, &a.Provider)
 		if err != nil {
 			return fmt.Errorf("error reading 'provider': %w", err)
 		}
 		delete(object, "provider")
+	}
+
+	if raw, found := object["statusMapping"]; found {
+		err = json.Unmarshal(raw, &a.StatusMapping)
+		if err != nil {
+			return fmt.Errorf("error reading 'statusMapping': %w", err)
+		}
+		delete(object, "statusMapping")
+	}
+
+	if raw, found := object["teamId"]; found {
+		err = json.Unmarshal(raw, &a.TeamId)
+		if err != nil {
+			return fmt.Errorf("error reading 'teamId': %w", err)
+		}
+		delete(object, "teamId")
+	}
+
+	if raw, found := object["token"]; found {
+		err = json.Unmarshal(raw, &a.Token)
+		if err != nil {
+			return fmt.Errorf("error reading 'token': %w", err)
+		}
+		delete(object, "token")
 	}
 
 	if len(object) != 0 {
@@ -6859,6 +7233,13 @@ func (a WorkspaceImportExportActionRequest) MarshalJSON() ([]byte, error) {
 		return nil, fmt.Errorf("error marshaling 'action': %w", err)
 	}
 
+	if a.BaseUrl != nil {
+		object["baseUrl"], err = json.Marshal(a.BaseUrl)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'baseUrl': %w", err)
+		}
+	}
+
 	if a.Csv != nil {
 		object["csv"], err = json.Marshal(a.Csv)
 		if err != nil {
@@ -6873,10 +7254,45 @@ func (a WorkspaceImportExportActionRequest) MarshalJSON() ([]byte, error) {
 		}
 	}
 
+	if a.Deployment != nil {
+		object["deployment"], err = json.Marshal(a.Deployment)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'deployment': %w", err)
+		}
+	}
+
+	if a.Email != nil {
+		object["email"], err = json.Marshal(a.Email)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'email': %w", err)
+		}
+	}
+
 	if a.FileName != nil {
 		object["fileName"], err = json.Marshal(a.FileName)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling 'fileName': %w", err)
+		}
+	}
+
+	if a.ForwardSyncEnabled != nil {
+		object["forwardSyncEnabled"], err = json.Marshal(a.ForwardSyncEnabled)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'forwardSyncEnabled': %w", err)
+		}
+	}
+
+	if a.ImportComments != nil {
+		object["importComments"], err = json.Marshal(a.ImportComments)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'importComments': %w", err)
+		}
+	}
+
+	if a.ImportLabels != nil {
+		object["importLabels"], err = json.Marshal(a.ImportLabels)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'importLabels': %w", err)
 		}
 	}
 
@@ -6887,10 +7303,38 @@ func (a WorkspaceImportExportActionRequest) MarshalJSON() ([]byte, error) {
 		}
 	}
 
+	if a.ProjectKey != nil {
+		object["projectKey"], err = json.Marshal(a.ProjectKey)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'projectKey': %w", err)
+		}
+	}
+
 	if a.Provider != nil {
 		object["provider"], err = json.Marshal(a.Provider)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling 'provider': %w", err)
+		}
+	}
+
+	if a.StatusMapping != nil {
+		object["statusMapping"], err = json.Marshal(a.StatusMapping)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'statusMapping': %w", err)
+		}
+	}
+
+	if a.TeamId != nil {
+		object["teamId"], err = json.Marshal(a.TeamId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'teamId': %w", err)
+		}
+	}
+
+	if a.Token != nil {
+		object["token"], err = json.Marshal(a.Token)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'token': %w", err)
 		}
 	}
 
@@ -7357,6 +7801,30 @@ type ServerInterface interface {
 
 	// (POST /integrations/gitlab/workflows)
 	UpdateGitLabWorkflowAutomation(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/intercom/connect)
+	ConnectIntercomIntegration(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/intercom/disconnect)
+	DisconnectIntercomIntegration(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/intercom/issues/create)
+	CreateIssueFromIntercom(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/intercom/issues/link)
+	LinkIntercomIssue(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/intercom/issues/search)
+	SearchIntercomLinkableIssues(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/intercom/issues/status)
+	GetIntercomLinkedIssueStatus(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/intercom/issues/unlink)
+	UnlinkIntercomIssue(w http.ResponseWriter, r *http.Request)
+
+	// (GET /integrations/intercom/oauth/callback)
+	IntercomOAuthCallback(w http.ResponseWriter, r *http.Request, params IntercomOAuthCallbackParams)
 
 	// (POST /integrations/microsoft-teams/connect)
 	ConnectMicrosoftTeamsIntegration(w http.ResponseWriter, r *http.Request)
@@ -8253,6 +8721,46 @@ func (_ Unimplemented) IngestGitLabWebhook(w http.ResponseWriter, r *http.Reques
 
 // (POST /integrations/gitlab/workflows)
 func (_ Unimplemented) UpdateGitLabWorkflowAutomation(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/intercom/connect)
+func (_ Unimplemented) ConnectIntercomIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/intercom/disconnect)
+func (_ Unimplemented) DisconnectIntercomIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/intercom/issues/create)
+func (_ Unimplemented) CreateIssueFromIntercom(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/intercom/issues/link)
+func (_ Unimplemented) LinkIntercomIssue(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/intercom/issues/search)
+func (_ Unimplemented) SearchIntercomLinkableIssues(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/intercom/issues/status)
+func (_ Unimplemented) GetIntercomLinkedIssueStatus(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/intercom/issues/unlink)
+func (_ Unimplemented) UnlinkIntercomIssue(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /integrations/intercom/oauth/callback)
+func (_ Unimplemented) IntercomOAuthCallback(w http.ResponseWriter, r *http.Request, params IntercomOAuthCallbackParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10978,6 +11486,151 @@ func (siw *ServerInterfaceWrapper) UpdateGitLabWorkflowAutomation(w http.Respons
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateGitLabWorkflowAutomation(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConnectIntercomIntegration operation middleware
+func (siw *ServerInterfaceWrapper) ConnectIntercomIntegration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConnectIntercomIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DisconnectIntercomIntegration operation middleware
+func (siw *ServerInterfaceWrapper) DisconnectIntercomIntegration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisconnectIntercomIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateIssueFromIntercom operation middleware
+func (siw *ServerInterfaceWrapper) CreateIssueFromIntercom(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateIssueFromIntercom(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LinkIntercomIssue operation middleware
+func (siw *ServerInterfaceWrapper) LinkIntercomIssue(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LinkIntercomIssue(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchIntercomLinkableIssues operation middleware
+func (siw *ServerInterfaceWrapper) SearchIntercomLinkableIssues(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchIntercomLinkableIssues(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetIntercomLinkedIssueStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetIntercomLinkedIssueStatus(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetIntercomLinkedIssueStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnlinkIntercomIssue operation middleware
+func (siw *ServerInterfaceWrapper) UnlinkIntercomIssue(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnlinkIntercomIssue(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// IntercomOAuthCallback operation middleware
+func (siw *ServerInterfaceWrapper) IntercomOAuthCallback(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params IntercomOAuthCallbackParams
+
+	// ------------- Optional query parameter "code" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "code", r.URL.Query(), &params.Code)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "code", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "state", r.URL.Query(), &params.State)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IntercomOAuthCallback(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16070,6 +16723,30 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/integrations/gitlab/workflows", wrapper.UpdateGitLabWorkflowAutomation)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/intercom/connect", wrapper.ConnectIntercomIntegration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/intercom/disconnect", wrapper.DisconnectIntercomIntegration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/intercom/issues/create", wrapper.CreateIssueFromIntercom)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/intercom/issues/link", wrapper.LinkIntercomIssue)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/intercom/issues/search", wrapper.SearchIntercomLinkableIssues)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/intercom/issues/status", wrapper.GetIntercomLinkedIssueStatus)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/intercom/issues/unlink", wrapper.UnlinkIntercomIssue)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/integrations/intercom/oauth/callback", wrapper.IntercomOAuthCallback)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/integrations/microsoft-teams/connect", wrapper.ConnectMicrosoftTeamsIntegration)
 	})
 	r.Group(func(r chi.Router) {
@@ -18602,6 +19279,244 @@ type UpdateGitLabWorkflowAutomationdefaultApplicationProblemPlusJSONResponse str
 }
 
 func (response UpdateGitLabWorkflowAutomationdefaultApplicationProblemPlusJSONResponse) VisitUpdateGitLabWorkflowAutomationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ConnectIntercomIntegrationRequestObject struct {
+}
+
+type ConnectIntercomIntegrationResponseObject interface {
+	VisitConnectIntercomIntegrationResponse(w http.ResponseWriter) error
+}
+
+type ConnectIntercomIntegration200JSONResponse IntercomConnectResponse
+
+func (response ConnectIntercomIntegration200JSONResponse) VisitConnectIntercomIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ConnectIntercomIntegration412JSONResponse IntercomConfigurationRequiredResponse
+
+func (response ConnectIntercomIntegration412JSONResponse) VisitConnectIntercomIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(412)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ConnectIntercomIntegrationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ConnectIntercomIntegrationdefaultApplicationProblemPlusJSONResponse) VisitConnectIntercomIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DisconnectIntercomIntegrationRequestObject struct {
+}
+
+type DisconnectIntercomIntegrationResponseObject interface {
+	VisitDisconnectIntercomIntegrationResponse(w http.ResponseWriter) error
+}
+
+type DisconnectIntercomIntegration200JSONResponse SuccessResponse
+
+func (response DisconnectIntercomIntegration200JSONResponse) VisitDisconnectIntercomIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DisconnectIntercomIntegrationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DisconnectIntercomIntegrationdefaultApplicationProblemPlusJSONResponse) VisitDisconnectIntercomIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateIssueFromIntercomRequestObject struct {
+	Body *CreateIssueFromIntercomJSONRequestBody
+}
+
+type CreateIssueFromIntercomResponseObject interface {
+	VisitCreateIssueFromIntercomResponse(w http.ResponseWriter) error
+}
+
+type CreateIssueFromIntercom200JSONResponse IntercomIssueActionResponse
+
+func (response CreateIssueFromIntercom200JSONResponse) VisitCreateIssueFromIntercomResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateIssueFromIntercomdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateIssueFromIntercomdefaultApplicationProblemPlusJSONResponse) VisitCreateIssueFromIntercomResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type LinkIntercomIssueRequestObject struct {
+	Body *LinkIntercomIssueJSONRequestBody
+}
+
+type LinkIntercomIssueResponseObject interface {
+	VisitLinkIntercomIssueResponse(w http.ResponseWriter) error
+}
+
+type LinkIntercomIssue200JSONResponse IntercomIssueActionResponse
+
+func (response LinkIntercomIssue200JSONResponse) VisitLinkIntercomIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type LinkIntercomIssuedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response LinkIntercomIssuedefaultApplicationProblemPlusJSONResponse) VisitLinkIntercomIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SearchIntercomLinkableIssuesRequestObject struct {
+	Body *SearchIntercomLinkableIssuesJSONRequestBody
+}
+
+type SearchIntercomLinkableIssuesResponseObject interface {
+	VisitSearchIntercomLinkableIssuesResponse(w http.ResponseWriter) error
+}
+
+type SearchIntercomLinkableIssues200JSONResponse IntercomIssueSearchResponse
+
+func (response SearchIntercomLinkableIssues200JSONResponse) VisitSearchIntercomLinkableIssuesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchIntercomLinkableIssuesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SearchIntercomLinkableIssuesdefaultApplicationProblemPlusJSONResponse) VisitSearchIntercomLinkableIssuesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetIntercomLinkedIssueStatusRequestObject struct {
+	Body *GetIntercomLinkedIssueStatusJSONRequestBody
+}
+
+type GetIntercomLinkedIssueStatusResponseObject interface {
+	VisitGetIntercomLinkedIssueStatusResponse(w http.ResponseWriter) error
+}
+
+type GetIntercomLinkedIssueStatus200JSONResponse IntercomIssueActionResponse
+
+func (response GetIntercomLinkedIssueStatus200JSONResponse) VisitGetIntercomLinkedIssueStatusResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetIntercomLinkedIssueStatusdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetIntercomLinkedIssueStatusdefaultApplicationProblemPlusJSONResponse) VisitGetIntercomLinkedIssueStatusResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UnlinkIntercomIssueRequestObject struct {
+	Body *UnlinkIntercomIssueJSONRequestBody
+}
+
+type UnlinkIntercomIssueResponseObject interface {
+	VisitUnlinkIntercomIssueResponse(w http.ResponseWriter) error
+}
+
+type UnlinkIntercomIssue200JSONResponse IntercomIssueActionResponse
+
+func (response UnlinkIntercomIssue200JSONResponse) VisitUnlinkIntercomIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UnlinkIntercomIssuedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UnlinkIntercomIssuedefaultApplicationProblemPlusJSONResponse) VisitUnlinkIntercomIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IntercomOAuthCallbackRequestObject struct {
+	Params IntercomOAuthCallbackParams
+}
+
+type IntercomOAuthCallbackResponseObject interface {
+	VisitIntercomOAuthCallbackResponse(w http.ResponseWriter) error
+}
+
+type IntercomOAuthCallback302Response struct {
+}
+
+func (response IntercomOAuthCallback302Response) VisitIntercomOAuthCallbackResponse(w http.ResponseWriter) error {
+	w.WriteHeader(302)
+	return nil
+}
+
+type IntercomOAuthCallbackdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response IntercomOAuthCallbackdefaultApplicationProblemPlusJSONResponse) VisitIntercomOAuthCallbackResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(response.StatusCode)
 
@@ -23943,6 +24858,30 @@ type StrictServerInterface interface {
 	// (POST /integrations/gitlab/workflows)
 	UpdateGitLabWorkflowAutomation(ctx context.Context, request UpdateGitLabWorkflowAutomationRequestObject) (UpdateGitLabWorkflowAutomationResponseObject, error)
 
+	// (POST /integrations/intercom/connect)
+	ConnectIntercomIntegration(ctx context.Context, request ConnectIntercomIntegrationRequestObject) (ConnectIntercomIntegrationResponseObject, error)
+
+	// (POST /integrations/intercom/disconnect)
+	DisconnectIntercomIntegration(ctx context.Context, request DisconnectIntercomIntegrationRequestObject) (DisconnectIntercomIntegrationResponseObject, error)
+
+	// (POST /integrations/intercom/issues/create)
+	CreateIssueFromIntercom(ctx context.Context, request CreateIssueFromIntercomRequestObject) (CreateIssueFromIntercomResponseObject, error)
+
+	// (POST /integrations/intercom/issues/link)
+	LinkIntercomIssue(ctx context.Context, request LinkIntercomIssueRequestObject) (LinkIntercomIssueResponseObject, error)
+
+	// (POST /integrations/intercom/issues/search)
+	SearchIntercomLinkableIssues(ctx context.Context, request SearchIntercomLinkableIssuesRequestObject) (SearchIntercomLinkableIssuesResponseObject, error)
+
+	// (POST /integrations/intercom/issues/status)
+	GetIntercomLinkedIssueStatus(ctx context.Context, request GetIntercomLinkedIssueStatusRequestObject) (GetIntercomLinkedIssueStatusResponseObject, error)
+
+	// (POST /integrations/intercom/issues/unlink)
+	UnlinkIntercomIssue(ctx context.Context, request UnlinkIntercomIssueRequestObject) (UnlinkIntercomIssueResponseObject, error)
+
+	// (GET /integrations/intercom/oauth/callback)
+	IntercomOAuthCallback(ctx context.Context, request IntercomOAuthCallbackRequestObject) (IntercomOAuthCallbackResponseObject, error)
+
 	// (POST /integrations/microsoft-teams/connect)
 	ConnectMicrosoftTeamsIntegration(ctx context.Context, request ConnectMicrosoftTeamsIntegrationRequestObject) (ConnectMicrosoftTeamsIntegrationResponseObject, error)
 
@@ -26421,6 +27360,235 @@ func (sh *strictHandler) UpdateGitLabWorkflowAutomation(w http.ResponseWriter, r
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateGitLabWorkflowAutomationResponseObject); ok {
 		if err := validResponse.VisitUpdateGitLabWorkflowAutomationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ConnectIntercomIntegration operation middleware
+func (sh *strictHandler) ConnectIntercomIntegration(w http.ResponseWriter, r *http.Request) {
+	var request ConnectIntercomIntegrationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ConnectIntercomIntegration(ctx, request.(ConnectIntercomIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConnectIntercomIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ConnectIntercomIntegrationResponseObject); ok {
+		if err := validResponse.VisitConnectIntercomIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DisconnectIntercomIntegration operation middleware
+func (sh *strictHandler) DisconnectIntercomIntegration(w http.ResponseWriter, r *http.Request) {
+	var request DisconnectIntercomIntegrationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisconnectIntercomIntegration(ctx, request.(DisconnectIntercomIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisconnectIntercomIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisconnectIntercomIntegrationResponseObject); ok {
+		if err := validResponse.VisitDisconnectIntercomIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateIssueFromIntercom operation middleware
+func (sh *strictHandler) CreateIssueFromIntercom(w http.ResponseWriter, r *http.Request) {
+	var request CreateIssueFromIntercomRequestObject
+
+	var body CreateIssueFromIntercomJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateIssueFromIntercom(ctx, request.(CreateIssueFromIntercomRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateIssueFromIntercom")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateIssueFromIntercomResponseObject); ok {
+		if err := validResponse.VisitCreateIssueFromIntercomResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// LinkIntercomIssue operation middleware
+func (sh *strictHandler) LinkIntercomIssue(w http.ResponseWriter, r *http.Request) {
+	var request LinkIntercomIssueRequestObject
+
+	var body LinkIntercomIssueJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.LinkIntercomIssue(ctx, request.(LinkIntercomIssueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "LinkIntercomIssue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LinkIntercomIssueResponseObject); ok {
+		if err := validResponse.VisitLinkIntercomIssueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SearchIntercomLinkableIssues operation middleware
+func (sh *strictHandler) SearchIntercomLinkableIssues(w http.ResponseWriter, r *http.Request) {
+	var request SearchIntercomLinkableIssuesRequestObject
+
+	var body SearchIntercomLinkableIssuesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchIntercomLinkableIssues(ctx, request.(SearchIntercomLinkableIssuesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchIntercomLinkableIssues")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchIntercomLinkableIssuesResponseObject); ok {
+		if err := validResponse.VisitSearchIntercomLinkableIssuesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetIntercomLinkedIssueStatus operation middleware
+func (sh *strictHandler) GetIntercomLinkedIssueStatus(w http.ResponseWriter, r *http.Request) {
+	var request GetIntercomLinkedIssueStatusRequestObject
+
+	var body GetIntercomLinkedIssueStatusJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetIntercomLinkedIssueStatus(ctx, request.(GetIntercomLinkedIssueStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetIntercomLinkedIssueStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetIntercomLinkedIssueStatusResponseObject); ok {
+		if err := validResponse.VisitGetIntercomLinkedIssueStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UnlinkIntercomIssue operation middleware
+func (sh *strictHandler) UnlinkIntercomIssue(w http.ResponseWriter, r *http.Request) {
+	var request UnlinkIntercomIssueRequestObject
+
+	var body UnlinkIntercomIssueJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UnlinkIntercomIssue(ctx, request.(UnlinkIntercomIssueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UnlinkIntercomIssue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UnlinkIntercomIssueResponseObject); ok {
+		if err := validResponse.VisitUnlinkIntercomIssueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// IntercomOAuthCallback operation middleware
+func (sh *strictHandler) IntercomOAuthCallback(w http.ResponseWriter, r *http.Request, params IntercomOAuthCallbackParams) {
+	var request IntercomOAuthCallbackRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.IntercomOAuthCallback(ctx, request.(IntercomOAuthCallbackRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "IntercomOAuthCallback")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(IntercomOAuthCallbackResponseObject); ok {
+		if err := validResponse.VisitIntercomOAuthCallbackResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

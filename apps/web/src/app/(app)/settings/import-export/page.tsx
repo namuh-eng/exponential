@@ -37,6 +37,35 @@ type PreviewRow = {
   errors: string[];
 };
 
+type JiraProjectOption = {
+  id: string;
+  key: string;
+  name: string;
+};
+
+type JiraPreviewIssue = {
+  id: string;
+  key: string;
+  title: string;
+  status: string;
+  priority: string;
+  assignee: string;
+  labels: string[];
+  commentCount: number;
+  sourceUrl: string;
+  errors: string[];
+};
+
+type JiraPreviewResponse = {
+  projects?: JiraProjectOption[];
+  projectKey?: string;
+  issues?: JiraPreviewIssue[];
+  statusOptions?: string[];
+  mapping?: { teamId?: string; statuses?: Record<string, string> };
+  error?: string;
+  message?: string;
+};
+
 type Provider = "csv" | "github" | "jira";
 type CsvStep = "upload" | "map" | "preview" | "complete";
 
@@ -135,6 +164,23 @@ function ImportModal({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [jiraStep, setJiraStep] = useState<
+    "connect" | "project" | "preview" | "complete"
+  >("connect");
+  const [jiraDeployment, setJiraDeployment] = useState<"cloud" | "server">(
+    "cloud",
+  );
+  const [jiraBaseUrl, setJiraBaseUrl] = useState("");
+  const [jiraEmail, setJiraEmail] = useState("");
+  const [jiraToken, setJiraToken] = useState("");
+  const [jiraProjects, setJiraProjects] = useState<JiraProjectOption[]>([]);
+  const [jiraProjectKey, setJiraProjectKey] = useState("");
+  const [jiraPreview, setJiraPreview] = useState<JiraPreviewIssue[]>([]);
+  const [jiraStatuses, setJiraStatuses] = useState<string[]>([]);
+  const [jiraStatusMapping, setJiraStatusMapping] = useState<
+    Record<string, string>
+  >({});
+  const [jiraForwardSync, setJiraForwardSync] = useState(false);
 
   useEffect(() => {
     fetch("/api/workspaces/imports")
@@ -278,6 +324,121 @@ function ImportModal({
     }
   };
 
+  const configureJira = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/workspaces/current/import-export", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "configure_jira",
+          deployment: jiraDeployment,
+          baseUrl: jiraBaseUrl,
+          email: jiraDeployment === "cloud" ? jiraEmail : undefined,
+          token: jiraToken,
+        }),
+      });
+      const data = (await response.json()) as JiraPreviewResponse;
+      if (!response.ok) throw new Error(data.error ?? "Jira setup failed.");
+      const projects = data.projects ?? [];
+      setJiraProjects(projects);
+      setJiraProjectKey(projects[0]?.key ?? "");
+      setJiraToken("");
+      setJiraStep("project");
+      setMessage("Jira connected. Choose a project to preview.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Jira setup failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const previewJira = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/workspaces/current/import-export", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "preview_jira_import",
+          projectKey: jiraProjectKey,
+          teamId,
+        }),
+      });
+      const data = (await response.json()) as JiraPreviewResponse;
+      if (!response.ok) throw new Error(data.error ?? "Jira preview failed.");
+      setJiraProjects(data.projects ?? jiraProjects);
+      setJiraPreview(data.issues ?? []);
+      setJiraStatuses(data.statusOptions ?? []);
+      setJiraStatusMapping(data.mapping?.statuses ?? {});
+      setJiraStep("preview");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Jira preview failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startJiraImport = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/workspaces/current/import-export", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "start_jira_import",
+          projectKey: jiraProjectKey,
+          teamId,
+          statusMapping: jiraStatusMapping,
+          importComments: true,
+          importLabels: true,
+          forwardSyncEnabled: jiraForwardSync,
+        }),
+      });
+      const data = (await response.json()) as {
+        import?: ImportJob;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(data.error ?? "Jira import failed.");
+      setMessage(data.import?.message ?? "Jira import completed.");
+      setJiraStep("complete");
+      onComplete();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Jira import failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pauseJiraSync = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/workspaces/current/import-export", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "pause_jira_sync",
+          projectKey: jiraProjectKey,
+          teamId,
+        }),
+      });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok)
+        throw new Error(data.error ?? "Unable to pause Jira sync.");
+      setMessage("Jira forward sync paused for this project.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Unable to pause Jira sync.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
       <dialog
@@ -330,7 +491,7 @@ function ImportModal({
               </button>
             ))}
           </div>
-        ) : provider === "github" || provider === "jira" ? (
+        ) : provider === "github" ? (
           <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <button
               type="button"
@@ -340,11 +501,11 @@ function ImportModal({
               ← Back to providers
             </button>
             <h3 className="text-[15px] font-medium text-[var(--color-text-primary)]">
-              {providerCopy[provider].name} import setup
+              GitHub import setup
             </h3>
             <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
               Create a reload-safe setup record, then connect the integration to
-              select source projects and mappings.
+              select source repositories and mappings.
             </p>
             {error ? (
               <p role="alert" className="mt-3 text-[13px] text-red-400">
@@ -366,12 +527,235 @@ function ImportModal({
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => prepareProvider(provider)}
+                onClick={() => prepareProvider("github")}
                 className="rounded-md bg-[#5E6AD2] px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-[#4F5ABF] disabled:opacity-60"
               >
                 Save setup
               </button>
             </div>
+          </div>
+        ) : provider === "jira" ? (
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <button
+              type="button"
+              onClick={() => {
+                setProvider(null);
+                setJiraStep("connect");
+              }}
+              className="mb-4 text-[12px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+            >
+              ← Back to providers
+            </button>
+            <h3 className="text-[15px] font-medium text-[var(--color-text-primary)]">
+              Jira guided import
+            </h3>
+            <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
+              Connect Jira Cloud or Server, preview a project, map statuses, and
+              import issues with comments and source links.
+            </p>
+            {jiraStep === "connect" ? (
+              <div className="mt-4 grid gap-3">
+                <label className="grid gap-1 text-[13px]">
+                  Deployment
+                  <select
+                    className="rounded-md bg-[var(--color-panel)] p-2"
+                    value={jiraDeployment}
+                    onChange={(event) =>
+                      setJiraDeployment(
+                        event.target.value === "server" ? "server" : "cloud",
+                      )
+                    }
+                  >
+                    <option value="cloud">Jira Cloud</option>
+                    <option value="server">Jira Server/Data Center</option>
+                  </select>
+                </label>
+                <label className="grid gap-1 text-[13px]">
+                  Base URL
+                  <input
+                    className="rounded-md bg-[var(--color-panel)] p-2"
+                    value={jiraBaseUrl}
+                    onChange={(event) => setJiraBaseUrl(event.target.value)}
+                    placeholder="https://acme.atlassian.net"
+                    type="url"
+                  />
+                </label>
+                {jiraDeployment === "cloud" ? (
+                  <label className="grid gap-1 text-[13px]">
+                    Atlassian email
+                    <input
+                      className="rounded-md bg-[var(--color-panel)] p-2"
+                      value={jiraEmail}
+                      onChange={(event) => setJiraEmail(event.target.value)}
+                      placeholder="admin@example.com"
+                      type="email"
+                    />
+                  </label>
+                ) : null}
+                <label className="grid gap-1 text-[13px]">
+                  API token or PAT
+                  <input
+                    className="rounded-md bg-[var(--color-panel)] p-2"
+                    value={jiraToken}
+                    onChange={(event) => setJiraToken(event.target.value)}
+                    type="password"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={
+                    busy ||
+                    jiraBaseUrl.trim() === "" ||
+                    jiraToken.trim() === "" ||
+                    (jiraDeployment === "cloud" && jiraEmail.trim() === "")
+                  }
+                  onClick={configureJira}
+                  className="w-fit rounded-md bg-[#5E6AD2] px-3 py-1.5 text-white disabled:opacity-50"
+                >
+                  Connect Jira
+                </button>
+              </div>
+            ) : null}
+            {jiraStep === "project" ? (
+              <div className="mt-4 grid gap-3">
+                <label className="grid gap-1 text-[13px]">
+                  Jira project
+                  <select
+                    className="rounded-md bg-[var(--color-panel)] p-2"
+                    value={jiraProjectKey}
+                    onChange={(event) => setJiraProjectKey(event.target.value)}
+                  >
+                    {jiraProjects.map((project) => (
+                      <option key={project.id} value={project.key}>
+                        {project.name} ({project.key})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-[13px]">
+                  Target team
+                  <select
+                    className="rounded-md bg-[var(--color-panel)] p-2"
+                    value={teamId}
+                    onChange={(event) => setTeamId(event.target.value)}
+                  >
+                    {teams.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.name} ({team.key})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  disabled={busy || jiraProjectKey === "" || teamId === ""}
+                  onClick={previewJira}
+                  className="w-fit rounded-md bg-[#5E6AD2] px-3 py-1.5 text-white disabled:opacity-50"
+                >
+                  Preview Jira import
+                </button>
+              </div>
+            ) : null}
+            {jiraStep === "preview" ? (
+              <div className="mt-4 grid gap-4">
+                <p className="text-[13px] text-[var(--color-text-secondary)]">
+                  Preview:{" "}
+                  {
+                    jiraPreview.filter((issue) => issue.errors.length === 0)
+                      .length
+                  }{" "}
+                  ready, {jiraPreview.length} total issues.
+                </p>
+                <div className="grid gap-2">
+                  {jiraStatuses.map((status) => (
+                    <label key={status} className="grid gap-1 text-[13px]">
+                      Jira status: {status}
+                      <select
+                        className="rounded-md bg-[var(--color-panel)] p-2"
+                        value={jiraStatusMapping[status] ?? ""}
+                        onChange={(event) =>
+                          setJiraStatusMapping({
+                            ...jiraStatusMapping,
+                            [status]: event.target.value,
+                          })
+                        }
+                      >
+                        {selectedTeam?.states.map((state) => (
+                          <option key={state.id} value={state.id}>
+                            {state.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+                <div className="max-h-56 overflow-auto rounded border border-[var(--color-border)]">
+                  <table className="w-full text-left text-[12px]">
+                    <thead>
+                      <tr>
+                        <th>Key</th>
+                        <th>Title</th>
+                        <th>Status</th>
+                        <th>Comments</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {jiraPreview.map((issue) => (
+                        <tr key={issue.id}>
+                          <td>{issue.key}</td>
+                          <td>{issue.title}</td>
+                          <td>{issue.status}</td>
+                          <td>{issue.commentCount}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <label className="flex items-center gap-2 text-[13px]">
+                  <input
+                    checked={jiraForwardSync}
+                    onChange={(event) =>
+                      setJiraForwardSync(event.target.checked)
+                    }
+                    type="checkbox"
+                  />
+                  Enable forward sync for this Jira project/team
+                </label>
+                <button
+                  type="button"
+                  disabled={
+                    busy || jiraPreview.some((issue) => issue.errors.length > 0)
+                  }
+                  onClick={startJiraImport}
+                  className="w-fit rounded-md bg-[#5E6AD2] px-3 py-1.5 text-white disabled:opacity-50"
+                >
+                  Confirm Jira import
+                </button>
+              </div>
+            ) : null}
+            {jiraStep === "complete" ? (
+              <div className="mt-4 grid gap-3">
+                <p className="text-[13px] text-green-400">{message}</p>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={pauseJiraSync}
+                  className="w-fit rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px]"
+                >
+                  Pause project sync
+                </button>
+              </div>
+            ) : null}
+            {error ? (
+              <p role="alert" className="mt-3 text-[13px] text-red-400">
+                {error}
+              </p>
+            ) : null}
+            {message && jiraStep !== "complete" ? (
+              <output className="mt-3 block text-[13px] text-green-400">
+                {message}
+              </output>
+            ) : null}
           </div>
         ) : (
           <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">

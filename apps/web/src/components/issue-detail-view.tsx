@@ -12,6 +12,8 @@ import {
   richTextHtmlToPlainText,
 } from "@/lib/issue-description";
 import { withWorkspaceSlug } from "@/lib/workspace-paths";
+import { createBrowserApiClient } from "@/lib/browser-api-client";
+import type { components } from "@namuh-eng/expn-sdk";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -22,6 +24,8 @@ import {
   useRef,
   useState,
 } from "react";
+
+const apiClient = createBrowserApiClient();
 
 interface IssueReaction {
   emoji: string;
@@ -37,6 +41,8 @@ interface IssueCommentAttachment {
   size: number;
   downloadUrl: string | null;
 }
+
+type FigmaSource = components["schemas"]["FigmaSource"];
 
 interface WorkspaceMemberOption {
   userId: string;
@@ -181,6 +187,7 @@ interface IssueDetail {
     error?: string | null;
   };
   comments: IssueComment[];
+  figmaSources: FigmaSource[];
   subIssues: IssueSubIssue[];
   sources: IssueExternalSource[];
   customerRequests: IssueCustomerRequest[];
@@ -457,7 +464,11 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
             ? " from Microsoft Teams"
             : event.metadata.source === "sentry_issue"
               ? " from Sentry"
-              : "";
+              : event.metadata.source === "salesforce_case"
+                ? " from Salesforce"
+              : event.metadata.source === "zendesk_ticket"
+                ? " from Zendesk"
+                : "";
       return `${actorName} created this issue${legacySuffix}${sourceSuffix}`;
     }
     case "updated":
@@ -521,6 +532,29 @@ function getSentrySourceLink(event: IssueHistoryEvent): string | null {
   }
   return typeof sentry.webUrl === "string" && sentry.webUrl.length > 0
     ? sentry.webUrl
+    : null;
+}
+
+function getSalesforceSourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "salesforce_case") {
+    return null;
+  }
+  const salesforce = event.metadata.salesforce;
+  if (!isRecord(salesforce)) {
+    return null;
+  }
+  return typeof salesforce.caseUrl === "string" && salesforce.caseUrl.length > 0
+    ? salesforce.caseUrl
+function getZendeskSourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "zendesk_ticket") {
+    return null;
+  }
+  const zendesk = event.metadata.zendesk;
+  if (!isRecord(zendesk)) {
+    return null;
+  }
+  return typeof zendesk.ticketUrl === "string" && zendesk.ticketUrl.length > 0
+    ? zendesk.ticketUrl
     : null;
 }
 
@@ -655,6 +689,89 @@ function CommentReactions({
   );
 }
 
+function getFigmaKindLabel(kind: FigmaSource["kind"]): string {
+  switch (kind) {
+    case "proto":
+      return "Prototype";
+    case "design":
+      return "Design";
+    case "file":
+      return "File";
+  }
+}
+
+function FigmaPreviewCard({
+  source,
+  refreshing,
+  onRefresh,
+}: {
+  source: FigmaSource;
+  refreshing: boolean;
+  onRefresh: (sourceId: string) => void;
+}) {
+  const label = getFigmaKindLabel(source.kind);
+  const title = source.name?.trim() || `Figma ${label.toLowerCase()}`;
+  const timestamp = source.refreshedAt ?? source.capturedAt;
+
+  const safeThumbnailUrl =
+    source.thumbnailUrl?.startsWith("https://") === true
+      ? source.thumbnailUrl
+      : null;
+
+  return (
+    <div className="tty-row overflow-hidden border border-[var(--color-border)] bg-[var(--color-content-bg)]">
+      {safeThumbnailUrl ? (
+        <img
+          src={safeThumbnailUrl}
+          alt=""
+          className="h-28 w-full object-cover"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+        />
+      ) : null}
+      <div className="p-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+              Figma {label}
+            </div>
+            <a
+              href={source.normalizedUrl || source.url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 block truncate text-[14px] font-medium text-[var(--color-text-primary)] hover:text-[var(--color-accent)]"
+            >
+              {title}
+            </a>
+            <div className="mt-1 truncate text-[12px] text-[var(--color-text-secondary)]">
+              {source.nodeId
+                ? `${source.fileKey} · ${source.nodeId}`
+                : source.fileKey}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onRefresh(source.id)}
+            disabled={refreshing}
+            className="tty-row border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {refreshing ? "Marking..." : "Mark seen"}
+          </button>
+        </div>
+        <div className="mt-3 text-[12px] text-[var(--color-text-secondary)]">
+          {source.refreshedAt ? "Seen" : "Captured"}{" "}
+          {formatFullDate(timestamp)}
+        </div>
+        {source.lastError ? (
+          <div className="mt-2 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[12px] text-red-600 dark:text-red-300">
+            {source.lastError}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function IssueDetailView({
   issueId,
   compact = false,
@@ -706,6 +823,12 @@ export function IssueDetailView({
   );
   const [issueReactionPickerOpen, setIssueReactionPickerOpen] = useState(false);
   const [subscriptionSaving, setSubscriptionSaving] = useState(false);
+  const [refreshingFigmaSourceId, setRefreshingFigmaSourceId] = useState<
+    string | null
+  >(null);
+  const [figmaActionStatus, setFigmaActionStatus] = useState<string | null>(
+    null,
+  );
   const [descriptionDraft, setDescriptionDraft] = useState("");
   const [descriptionFocused, setDescriptionFocused] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
@@ -786,6 +909,9 @@ export function IssueDetailView({
             subscribed: false,
             watcherCount: 0,
           },
+          figmaSources: Array.isArray(json.figmaSources)
+            ? json.figmaSources
+            : [],
           discussionSummary: json.discussionSummary ?? {
             enabled: false,
             status: "disabled",
@@ -950,6 +1076,9 @@ export function IssueDetailView({
           : current,
       );
       void fetchHistory();
+      if (field === "description") {
+        void fetchIssue();
+      }
     } finally {
       setSavingField(null);
     }
@@ -1464,6 +1593,39 @@ export function IssueDetailView({
     }
   }
 
+  async function handleFigmaRefresh(sourceId: string) {
+    if (!issue || refreshingFigmaSourceId) {
+      return;
+    }
+
+    setRefreshingFigmaSourceId(sourceId);
+    setFigmaActionStatus(null);
+    try {
+      const { data, error } = await apiClient.POST(
+        "/issues/{id}/figma-sources/{sourceId}/refresh",
+        { params: { path: { id: issue.id, sourceId } } },
+      );
+      if (error !== undefined || data === undefined) {
+        throw new Error("Failed to mark Figma source as seen");
+      }
+      setIssue((current) =>
+        current
+          ? {
+              ...current,
+              figmaSources: current.figmaSources.map((source) =>
+                source.id === sourceId ? data : source,
+              ),
+            }
+          : current,
+      );
+      setFigmaActionStatus("Figma source marked as seen.");
+    } catch {
+      setFigmaActionStatus("Figma source could not be updated.");
+    } finally {
+      setRefreshingFigmaSourceId(null);
+    }
+  }
+
   async function handleCommentEdit(commentId: string) {
     const nextBody = commentEditBody.trim();
     if (!nextBody) {
@@ -1923,6 +2085,40 @@ export function IssueDetailView({
               </div>
             </section>
 
+            {issue.figmaSources.length > 0 ? (
+              <section
+                className="tty-panel px-5 py-4"
+                aria-label="Figma previews"
+              >
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-[13px] font-medium text-[var(--color-text-secondary)]">
+                      Figma previews
+                    </h2>
+                    <p className="mt-1 text-[12px] text-[var(--color-text-secondary)]">
+                      Safe preview cards are generated from linked Figma files,
+                      designs, and prototypes.
+                    </p>
+                  </div>
+                  {figmaActionStatus ? (
+                    <span className="text-[12px] text-[var(--color-text-secondary)]">
+                      {figmaActionStatus}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {issue.figmaSources.map((source) => (
+                    <FigmaPreviewCard
+                      key={source.id}
+                      source={source}
+                      refreshing={refreshingFigmaSourceId === source.id}
+                      onRefresh={handleFigmaRefresh}
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
             <section className="tty-panel px-5 py-4">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-[13px] font-medium text-[var(--color-text-secondary)]">
@@ -2135,6 +2331,24 @@ export function IssueDetailView({
                             View source issue in Sentry
                           </a>
                         ) : null}
+                        {(() => {
+                          const salesforceLink = getSalesforceSourceLink(event);
+                          return salesforceLink ? (
+                            <a
+                              href={salesforceLink}
+                          const zendeskLink = getZendeskSourceLink(event);
+                          return zendeskLink ? (
+                            <a
+                              href={zendeskLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                            >
+                              View source case in Salesforce
+                              View source ticket in Zendesk
+                            </a>
+                          ) : null;
+                        })()}
                         {getGitLabSourceLink(event) ? (
                           <a
                             href={getGitLabSourceLink(event) ?? undefined}
