@@ -74,7 +74,7 @@ type Integration struct {
 	SetupRequirement *SetupRequirement `json:"setupRequirement"`
 	Actions          Actions           `json:"actions"`
 	Health           Health            `json:"health"`
-	Details          map[string]any     `json:"details,omitempty"`
+	Details          map[string]any    `json:"details,omitempty"`
 }
 
 type response struct {
@@ -191,7 +191,8 @@ func (h Handler) List(w http.ResponseWriter, r *http.Request) {
 		if ok {
 			health = connected.Health()
 		}
-		out = append(out, Integration{CatalogItem: item, ID: id, Status: status, DisplayName: displayName, ExternalID: externalID, ConnectedAt: connectedAt, SetupRequirement: requirement, Actions: integrationActions(canManage, ok, status, requirement), Health: health, Details: integrationDetails(connected)})
+		details := integrationDetails(connected)
+		out = append(out, Integration{CatalogItem: item, ID: id, Status: status, DisplayName: displayName, ExternalID: externalID, ConnectedAt: connectedAt, SetupRequirement: requirement, Actions: integrationActions(canManage, ok, status, requirement), Health: health, Details: details})
 	}
 	problem.JSON(w, 200, response{CanManageIntegrations: canManage, Integrations: out})
 }
@@ -508,6 +509,9 @@ func integrationDetails(value row) map[string]any {
 	}
 	if value.Provider == "github" {
 		return githubIntegrationDetails(value.Metadata)
+	}
+	if value.Provider == "gong" {
+		return gongIntegrationDetails(value.Metadata)
 	}
 	return nil
 }

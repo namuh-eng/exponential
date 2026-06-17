@@ -133,6 +133,41 @@ describe("IssueDetailView UI", () => {
     expect(screen.getByText("Sentry · api · 987")).toBeInTheDocument();
   });
 
+  it("renders Gong customer request excerpts with timestamp source links", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...mockIssueDetail,
+        customerRequests: [
+          {
+            id: "cr-1",
+            customerId: "cust-1",
+            customer: { id: "cust-1", name: "Acme", domain: "acme.example" },
+            title: "Acme: We need exports",
+            body: "Gong customer call finding\n\n> We need exports by requester",
+            important: true,
+            source: "Gong",
+            sourceUrl: "https://app.gong.io/call?id=7788&t=91",
+            createdAt: "2026-06-16T10:00:00Z",
+          },
+        ],
+      }),
+    } as Response);
+
+    render(<IssueDetailView issueId="iss-1" />);
+
+    expect(
+      await screen.findByText(/Acme: We need exports/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/We need exports by requester/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Gong" })).toHaveAttribute(
+      "href",
+      "https://app.gong.io/call?id=7788&t=91",
+    );
+  });
+
   it("renders safe Figma preview cards and refreshes them", async () => {
     const figmaSource = {
       id: "figma-1",
@@ -153,12 +188,14 @@ describe("IssueDetailView UI", () => {
       refreshedAt: "2026-04-25T10:30:00Z",
     };
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
-      const path = url.toString();
+      const path = url instanceof Request ? url.url : url.toString();
       if (path.includes("/api/issues/iss-1/figma-sources/figma-1/refresh")) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => refreshed,
-        } as Response);
+        return Promise.resolve(
+          new Response(JSON.stringify(refreshed), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
       }
       return Promise.resolve({
         ok: true,
@@ -178,14 +215,24 @@ describe("IssueDetailView UI", () => {
       "https://www.figma.com/design/file123?node-id=1%3A2",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark seen" }));
 
     await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalledWith(
-        "/api/issues/iss-1/figma-sources/figma-1/refresh",
-        { method: "POST" },
-      );
-      expect(screen.getByText("Figma preview refreshed.")).toBeInTheDocument();
+      expect(
+        fetchSpy.mock.calls.some(([request]) => {
+          if (request instanceof Request) {
+            return (
+              request.url.endsWith(
+                "/api/issues/iss-1/figma-sources/figma-1/refresh",
+              ) && request.method === "POST"
+            );
+          }
+          return request === "/api/issues/iss-1/figma-sources/figma-1/refresh";
+        }),
+      ).toBe(true);
+      expect(
+        screen.getByText("Figma source marked as seen."),
+      ).toBeInTheDocument();
     });
   });
 

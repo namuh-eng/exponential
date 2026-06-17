@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import IntegrationsSettingsPage from "@/app/(app)/settings/integrations/page";
@@ -237,6 +238,46 @@ const connectedSheets = {
   },
 };
 
+const connectedGong = {
+  provider: "gong",
+  name: "Gong",
+  description:
+    "Connect customer call excerpts to issues and customer requests.",
+  status: "connected",
+  displayName: "Gong",
+  connectedAt: "2026-06-16T09:00:00Z",
+  setupRequirement: null,
+  actions: {
+    canConnect: false,
+    canManage: true,
+    canDisconnect: true,
+    canReconnect: true,
+  },
+  health: {
+    lastEventAt: "2026-06-16T10:00:00Z",
+    lastSuccessAt: "2026-06-16T10:00:00Z",
+    lastFailureAt: null,
+    lastFailureMessage: null,
+    tokenExpiresAt: null,
+    pendingJobCount: 0,
+    failedJobCount: 0,
+    auditEvents: [
+      {
+        eventType: "followup_unsupported",
+        severity: "info",
+        message: "Gong status writeback is not supported for this workspace.",
+        createdAt: "2026-06-16T10:00:00Z",
+      },
+    ],
+  },
+  details: {
+    destinationTeamId: "team-1",
+    minimumDurationSec: "600",
+    statusWriteback: "unsupported",
+    mentionParticipants: true,
+  },
+};
+
 describe("IntegrationsSettingsPage component", () => {
   beforeEach(() => {
     fetchMock.mockReset();
@@ -306,7 +347,9 @@ describe("IntegrationsSettingsPage component", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Explore integrations" }),
     );
-    fireEvent.click(screen.getAllByRole("button", { name: "Connect" })[0]);
+    const slackCard = screen.getByText("Slack").closest(".rounded-lg");
+    if (!slackCard) throw new Error("Slack card not found");
+    fireEvent.click(within(slackCard).getByRole("button", { name: "Connect" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Add AUTH_SLACK_ID",
@@ -340,6 +383,47 @@ describe("IntegrationsSettingsPage component", () => {
     expect(
       screen.getByRole("button", { name: "Reconnect" }),
     ).toBeInTheDocument();
+  });
+
+  it("shows Gong configuration and disconnect controls for admins", async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          integrations: [connectedGong],
+          canManageIntegrations: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ integrations: [], canManageIntegrations: true }),
+      });
+
+    render(<IntegrationsSettingsPage />);
+
+    expect(await screen.findByText("Gong")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Customer call excerpts sync to issues; completion writeback is unsupported.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Gong status writeback is not supported for this workspace.",
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/integrations/gong/disconnect",
+        expect.objectContaining({ method: "POST" }),
+      ),
+    );
   });
 
   it("creates and refreshes a Google Sheets analytics sync", async () => {

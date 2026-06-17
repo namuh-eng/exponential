@@ -102,11 +102,11 @@ type gongParticipant struct {
 }
 
 type gongTranscriptLine struct {
-	Speaker        string `json:"speaker"`
-	SpeakerEmail   string `json:"speakerEmail"`
+	Speaker         string `json:"speaker"`
+	SpeakerEmail    string `json:"speakerEmail"`
 	SpeakerExternal bool   `json:"speakerExternal"`
-	StartMs        int    `json:"startMs"`
-	Text           string `json:"text"`
+	StartMs         int    `json:"startMs"`
+	Text            string `json:"text"`
 }
 
 type gongFinding struct {
@@ -508,14 +508,21 @@ func (h Handler) tryCreateGongFinding(ctx context.Context, install gongInstallRe
 			return gongFindingResult{}, err
 		}
 	}
+	if _, err := tx.Exec(ctx, `select id from team where id=$1::uuid for update`, teamID); err != nil {
+		return gongFindingResult{}, err
+	}
 	var nextNumber int32
-	if err := tx.QueryRow(ctx, `select coalesce(max(number),0)+1 from issue where team_id=$1::uuid for update`, teamID).Scan(&nextNumber); err != nil {
+	if err := tx.QueryRow(ctx, `select coalesce(max(number),0)+1 from issue where team_id=$1::uuid`, teamID).Scan(&nextNumber); err != nil {
 		return gongFindingResult{}, err
 	}
 	identifier := fmt.Sprintf("%s-%d", team.Key, nextNumber)
 	issueURL := issueBacklink(team.Key, identifier)
 	var issueID string
-	if err := tx.QueryRow(ctx, `insert into issue (number,identifier,title,description,team_id,state_id,creator_id,priority) values ($1,$2,$3,$4,$5::uuid,$6::uuid,$7,'medium') returning id::text`, nextNumber, identifier, finding.Title, finding.Description, teamID, stateID, creatorID).Scan(&issueID); err != nil {
+	description := finding.Description
+	if install.Metadata["mentionParticipants"] == true {
+		description = appendGongParticipants(description, call.Participants)
+	}
+	if err := tx.QueryRow(ctx, `insert into issue (number,identifier,title,description,team_id,state_id,creator_id,priority) values ($1,$2,$3,$4,$5::uuid,$6::uuid,$7,'medium') returning id::text`, nextNumber, identifier, finding.Title, description, teamID, stateID, creatorID).Scan(&issueID); err != nil {
 		return gongFindingResult{}, err
 	}
 	history := map[string]any{"source": "gong_call", "provider": "gong", "callId": call.ID, "findingId": finding.ID, "sourceUrl": finding.Permalink, "issueUrl": issueURL, "customerDomain": finding.CustomerDomain}
@@ -527,8 +534,12 @@ func (h Handler) tryCreateGongFinding(ctx context.Context, install gongInstallRe
 	if err != nil {
 		return gongFindingResult{}, err
 	}
-	metadataRaw, _ := json.Marshal(map[string]any{"callId": call.ID, "findingId": finding.ID, "timestampMs": finding.TimestampMs, "speaker": finding.Speaker, "speakerEmail": finding.SpeakerEmail, "accountId": call.Account.ID, "participants": call.Participants})
-	if _, err := tx.Exec(ctx, `insert into customer_request (workspace_id, customer_id, issue_id, source_provider, source_external_id, source_url, title, excerpt, metadata, created_at, updated_at) values ($1::uuid,$2::uuid,$3::uuid,'gong',$4,$5,$6,$7,$8::jsonb,now(),now()) on conflict (workspace_id, source_provider, source_external_id) do update set issue_id=excluded.issue_id, customer_id=excluded.customer_id, source_url=excluded.source_url, title=excluded.title, excerpt=excluded.excerpt, metadata=excluded.metadata, updated_at=now()`, install.WorkspaceID, customerID, issueID, finding.ID, finding.Permalink, finding.Title, finding.Excerpt, metadataRaw); err != nil {
+	body := finding.Description
+	var requestID string
+	if err := tx.QueryRow(ctx, `insert into customer_request (workspace_id, customer_id, title, body, source, source_url, external_provider, external_id, important, created_by_user_id) values ($1::uuid,$2::uuid,$3,$4,'Gong',$5,'gong',$6,true,$7) on conflict (workspace_id, external_provider, external_id) where external_provider is not null and external_id is not null do update set customer_id=excluded.customer_id, title=excluded.title, body=excluded.body, source=excluded.source, source_url=excluded.source_url, important=excluded.important, updated_at=now() returning id::text`, install.WorkspaceID, customerID, finding.Title, body, finding.Permalink, finding.ID, nullString(creatorID)).Scan(&requestID); err != nil {
+		return gongFindingResult{}, err
+	}
+	if _, err := tx.Exec(ctx, `insert into issue_customer_request (issue_id, customer_request_id, created_by_user_id) values ($1::uuid,$2::uuid,$3) on conflict do nothing`, issueID, requestID, nullString(creatorID)); err != nil {
 		return gongFindingResult{}, err
 	}
 	if _, err := tx.Exec(ctx, `insert into integration_thread_link (workspace_id, workspace_integration_id, provider, issue_id, external_team_id, external_channel_id, external_thread_ts, external_message_ts, external_permalink, direction, source_event_id) values ($1::uuid,$2::uuid,'gong',$3::uuid,$4,$5,$6,$7,$8,'inbound',$9) on conflict (workspace_integration_id, source_event_id) where workspace_integration_id is not null and source_event_id is not null do update set issue_id=excluded.issue_id, external_permalink=excluded.external_permalink, updated_at=now()`, install.WorkspaceID, install.IntegrationID, issueID, call.Account.ID, "gong", call.ID, finding.ID, finding.Permalink, finding.ID); err != nil {
@@ -546,10 +557,19 @@ func (h Handler) tryCreateGongFinding(ctx context.Context, install gongInstallRe
 func upsertGongCustomer(ctx context.Context, tx pgx.Tx, workspaceID string, call gongCall, finding gongFinding) (string, error) {
 	domain := strings.ToLower(strings.TrimSpace(firstNonEmpty(finding.CustomerDomain, call.Account.Domain, domainFromEmail(finding.CustomerEmail))))
 	name := firstNonEmpty(finding.CustomerName, call.Account.Name, domain, "Unknown customer")
-	externalID := firstNonEmpty(call.Account.ID, domain, finding.CustomerEmail)
-	metadataRaw, _ := json.Marshal(map[string]any{"gongAccountId": call.Account.ID, "domain": domain, "matchedEmail": finding.CustomerEmail})
+	if domain != "" {
+		var id string
+		err := tx.QueryRow(ctx, `select id::text from customer where workspace_id=$1::uuid and lower(domain)=lower($2) limit 1`, workspaceID, domain).Scan(&id)
+		if err == nil {
+			_, updateErr := tx.Exec(ctx, `update customer set name=$2, source=coalesce(nullif(source,''),'gong'), updated_at=now() where id=$1::uuid`, id, name)
+			return id, updateErr
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return "", err
+		}
+	}
 	var id string
-	err := tx.QueryRow(ctx, `insert into customer (workspace_id, name, domain, source_provider, source_external_id, metadata, created_at, updated_at) values ($1::uuid,$2,$3,'gong',$4,$5::jsonb,now(),now()) on conflict (workspace_id, source_provider, source_external_id) do update set name=excluded.name, domain=coalesce(nullif(excluded.domain,''), customer.domain), metadata=customer.metadata || excluded.metadata, updated_at=now() returning id::text`, workspaceID, name, domain, externalID, metadataRaw).Scan(&id)
+	err := tx.QueryRow(ctx, `insert into customer (workspace_id, name, domain, source, created_at, updated_at) values ($1::uuid,$2,$3,'gong',now(),now()) returning id::text`, workspaceID, name, nullString(domain)).Scan(&id)
 	return id, err
 }
 
@@ -672,6 +692,29 @@ func gongFindingDescription(call gongCall, finding gongFinding) string {
 	return strings.Join(parts, "\n")
 }
 
+func appendGongParticipants(description string, participants []gongParticipant) string {
+	lines := []string{}
+	seen := map[string]bool{}
+	for _, participant := range participants {
+		if !participant.External && !strings.EqualFold(participant.Role, "customer") && !strings.EqualFold(participant.Role, "external") {
+			continue
+		}
+		label := strings.TrimSpace(participant.Name)
+		if participant.Email != "" {
+			label = strings.TrimSpace(label + " <" + strings.ToLower(strings.TrimSpace(participant.Email)) + ">")
+		}
+		if label == "" || seen[strings.ToLower(label)] {
+			continue
+		}
+		seen[strings.ToLower(label)] = true
+		lines = append(lines, "- "+label)
+	}
+	if len(lines) == 0 {
+		return description
+	}
+	return description + "\n\nParticipants:\n" + strings.Join(lines, "\n")
+}
+
 func gongTimestampPermalink(rawURL string, timestampMs int) string {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
@@ -719,6 +762,22 @@ func gongConfigured() bool {
 	return ok
 }
 
+func gongIntegrationDetails(metadata map[string]any) map[string]any {
+	details := map[string]any{}
+	for _, key := range []string{"destinationTeamId", "routingGuidance", "pollingCursor", "minimumDurationSec", "statusWriteback"} {
+		if value := stringValue(metadata[key]); value != "" {
+			details[key] = value
+		}
+	}
+	if value, ok := metadata["mentionParticipants"].(bool); ok {
+		details["mentionParticipants"] = value
+	}
+	if value := stringValue(metadata["tenantId"]); value != "" {
+		details["tenantId"] = value
+	}
+	return details
+}
+
 func gongRedirectURI(appURL string) string {
 	return strings.TrimRight(appURL, "/") + "/api/integrations/gong/oauth/callback"
 }
@@ -728,7 +787,7 @@ func gongAuthorizationURL(clientID, appURL, state string) string {
 	values.Set("client_id", clientID)
 	values.Set("response_type", "code")
 	values.Set("redirect_uri", gongRedirectURI(appURL))
-	values.Set("scope", "api:calls:read api:transcripts:read")
+	values.Set("scope", "api:calls:read:extensive api:calls:read:transcript")
 	values.Set("state", state)
 	return gongAPIBaseURL() + "/oauth2/authorize?" + values.Encode()
 }

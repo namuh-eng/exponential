@@ -54,6 +54,14 @@ type Integration = {
     repositorySelection?: "all" | "selected" | "unknown";
     selectedRepositoryCount?: number;
     selectedRepositories?: { id: string; fullName: string; active: boolean }[];
+    // Gong fields
+    destinationTeamId?: string;
+    routingGuidance?: string;
+    pollingCursor?: string;
+    minimumDurationSec?: string;
+    statusWriteback?: string;
+    mentionParticipants?: boolean;
+    tenantId?: string;
   } | null;
 };
 
@@ -124,18 +132,23 @@ function statusClassName(status: Integration["status"]) {
 }
 
 function integrationDetailSummary(integration: Integration) {
-  if (integration.provider !== "github") return null;
-  if (integration.details?.repositorySelection === "all") {
-    return "All repositories enabled";
+  if (integration.provider === "github") {
+    if (integration.details?.repositorySelection === "all") {
+      return "All repositories enabled";
+    }
+    if (
+      integration.details?.repositorySelection === "selected" &&
+      typeof integration.details?.selectedRepositoryCount === "number"
+    ) {
+      return `${integration.details.selectedRepositoryCount} selected repositories enabled`;
+    }
+    if (integration.status === "connected") {
+      return "Repository selection pending from GitHub";
+    }
   }
-  if (
-    integration.details?.repositorySelection === "selected" &&
-    typeof integration.details?.selectedRepositoryCount === "number"
-  ) {
-    return `${integration.details.selectedRepositoryCount} selected repositories enabled`;
-  }
-  if (integration.status === "connected") {
-    return "Repository selection pending from GitHub";
+  if (integration.provider === "gong" && integration.status === "connected") {
+    const writeback = integration.details?.statusWriteback ?? "unsupported";
+    return `Customer call excerpts sync to issues; completion writeback is ${writeback}.`;
   }
   return null;
 }
