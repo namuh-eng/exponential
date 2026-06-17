@@ -1,40 +1,91 @@
-# Exponential MCP v0
+# Exponential MCP
 
-Exponential MCP v0 is a local stdio server for AI clients that need safe,
-read-only access to Exponential issues, projects, and cycles.
+Exponential exposes two MCP entry points:
 
-The reusable server package is `packages/mcp-server`. The stdio runtime is
-`apps/mcp` and exposes the `exponential-mcp` binary.
+- Hosted remote Streamable HTTP endpoint: `https://<api-host>/v1/mcp`
+- Local stdio package: `packages/mcp-server` via the `apps/mcp` `exponential-mcp` binary
 
-## Scope
+Local development uses the Go API endpoint `http://localhost:7016/v1/mcp`.
 
-MCP v0 is read-only and local-only.
+## Authentication
 
-Registered tools:
+Remote MCP requires a personal access token in the HTTP `Authorization` header:
 
-- `search_issues`
-- `get_issue`
-- `list_my_issues`
-- `list_projects`
-- `get_project`
-- `list_team_cycles`
+```text
+Authorization: Bearer pat_...
+```
 
-Not included in v0:
+Browser sessions are rejected for remote MCP. Revoked personal access tokens stop working on the next request because the endpoint uses the same Go API PAT authentication middleware as the rest of `/v1`.
 
-- write tools such as `create_issue` or `update_issue`
-- issue comment listing, because the OpenAPI/SDK contract does not expose a
-  comment-read endpoint yet
-- HTTP transport
-- OAuth setup
-- public or hosted remote MCP
-- direct database access
+PAT scope rules:
 
-All tools call the generated TypeScript SDK against the Go API and inherit the
-same personal access token authorization boundary as the CLI.
+- Read tools require `read`.
+- Mutating tools require `write`.
+- Tool calls are written to `personal_access_token_audit_log` with action `mcp_tool_call`; secret-like arguments and raw comment/description bodies are redacted from metadata.
 
-## Run locally
+## Remote tools
 
-From a source checkout:
+Read tools:
+
+- `exponential_search_issues`
+- `exponential_get_issue`
+- `exponential_list_projects`
+- `exponential_get_project`
+- `exponential_list_teams`
+- `exponential_get_team_context`
+- `exponential_list_team_issues`
+- `exponential_list_team_cycles`
+- `exponential_list_views`
+- `exponential_get_view`
+
+Write tools:
+
+- `exponential_create_issue`
+- `exponential_update_issue`
+- `exponential_create_project`
+- `exponential_update_project`
+- `exponential_create_view`
+- `exponential_update_view`
+- `exponential_create_comment`
+- `exponential_update_comment`
+- `exponential_delete_comment`
+
+Customer tools and comment read/list tools are intentionally omitted until those API contracts exist. Private-team data follows the same visibility boundary as the Go API: workspace admins can see all teams, non-admins only see public teams and private teams they belong to, and guests cannot discover public-team issue data unless they are team members.
+
+## Client configuration
+
+### Codex, Claude, and Cursor
+
+Use an HTTP MCP server entry with an authorization header:
+
+```json
+{
+  "mcpServers": {
+    "exponential": {
+      "type": "http",
+      "url": "https://<api-host>/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer pat_your_token"
+      }
+    }
+  }
+}
+```
+
+### Generic MCP clients
+
+Send JSON-RPC 2.0 requests to `/v1/mcp` over HTTP:
+
+```bash
+curl -X POST "https://<api-host>/v1/mcp" \
+  -H "Authorization: Bearer pat_your_token" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+## Local stdio server
+
+The local stdio server remains available for clients that prefer spawning a process. It calls the generated TypeScript SDK against the Go API.
 
 ```bash
 pnpm install
@@ -43,12 +94,7 @@ EXPONENTIAL_API_URL=http://localhost:7016/v1 \
 pnpm --filter @exponential/mcp exec exponential-mcp
 ```
 
-`EXPONENTIAL_API_URL` defaults to the SDK default when omitted. For local
-development and self-hosted Compose, use `http://localhost:7016/v1`.
-
-## Client configuration
-
-Configure MCP clients to spawn the local stdio command. Example shape:
+Example local client configuration:
 
 ```json
 {
@@ -65,34 +111,18 @@ Configure MCP clients to spawn the local stdio command. Example shape:
 }
 ```
 
-Keep tokens in your client secret store or environment manager when possible.
-Do not commit PAT values into repository files.
+Keep tokens in your client secret store or environment manager when possible. Do not commit PAT values into repository files.
 
 ## Smoke test
 
 Use the MCP inspector or your client UI to verify:
 
-- the tool list contains exactly the six v0 read-only tools
-- `search_issues` returns a JSON text payload with `status` and `data`
-- `get_issue` can read a known issue id or identifier
-- no `create_*`, `update_*`, `delete_*`, or comment-listing tool appears
-
-Example inspector command:
-
-```bash
-EXPONENTIAL_TOKEN=pat_your_token \
-EXPONENTIAL_API_URL=http://localhost:7016/v1 \
-npx @modelcontextprotocol/inspector pnpm --filter @exponential/mcp exec exponential-mcp
-```
+- remote `tools/list` includes the `exponential_*` read/write tools above
+- a read-scoped PAT can call `exponential_search_issues`
+- a read-scoped PAT receives a tool error for `exponential_create_issue`
+- revoking the PAT immediately makes `/v1/mcp` return unauthorized
+- audit log rows use `mcp_tool_call` and redact authorization, token, cookie, secret, body, and description values
 
 ## Errors
 
-Missing `EXPONENTIAL_TOKEN` fails before the server starts. API errors are
-returned as MCP tool errors with HTTP status and problem title while omitting
-authorization, token, cookie, and secret fields.
-
-## Follow-up work
-
-Write tools need a separate spec covering audit logs, idempotency, rate limits,
-scope checks, and safe retries. Remote MCP transport and OAuth also require a
-separate design before implementation.
+Remote MCP returns JSON-RPC errors for malformed MCP requests and MCP tool errors for tool validation/API failures. API error details omit authorization, token, cookie, and secret fields.

@@ -39,12 +39,25 @@ type Integration = {
       createdAt: string;
     }[];
   };
+  details: {
+    installationId?: string;
+    accountLogin?: string;
+    repositorySelection?: "all" | "selected" | "unknown";
+    selectedRepositoryCount?: number;
+    selectedRepositories?: { id: string; fullName: string; active: boolean }[];
+  };
 };
 
 type GitLabSetupDetails = {
   origin: string;
   webhookUrl: string;
   webhookSecret: string;
+};
+
+type ZendeskSetupDetails = {
+  accountUrl: string;
+  actionBaseUrl: string;
+  actionSecret: string;
 };
 
 type IntegrationsPayload = {
@@ -88,6 +101,23 @@ function statusClassName(status: Integration["status"]) {
   return "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-tertiary)]";
 }
 
+function integrationDetailSummary(integration: Integration) {
+  if (integration.provider !== "github") return null;
+  if (integration.details.repositorySelection === "all") {
+    return "All repositories enabled";
+  }
+  if (
+    integration.details.repositorySelection === "selected" &&
+    typeof integration.details.selectedRepositoryCount === "number"
+  ) {
+    return `${integration.details.selectedRepositoryCount} selected repositories enabled`;
+  }
+  if (integration.status === "connected") {
+    return "Repository selection pending from GitHub";
+  }
+  return null;
+}
+
 function isConnectableProvider(
   provider: string,
 ): provider is
@@ -96,12 +126,16 @@ function isConnectableProvider(
   | "microsoft_teams"
   | "sentry"
   | "salesforce" {
+): provider is "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong" | "intercom" {
   return (
+    provider === "github" ||
     provider === "slack" ||
     provider === "discord" ||
     provider === "microsoft_teams" ||
     provider === "sentry" ||
     provider === "salesforce"
+    provider === "gong" ||
+    provider === "intercom"
   );
 }
 
@@ -116,6 +150,15 @@ export default function IntegrationsSettingsPage() {
   const [gitLabToken, setGitLabToken] = useState("");
   const [gitLabSetupDetails, setGitLabSetupDetails] =
     useState<GitLabSetupDetails | null>(null);
+  const [frontCompanyId, setFrontCompanyId] = useState("");
+  const [frontApiToken, setFrontApiToken] = useState("");
+  const [frontBaseUrl, setFrontBaseUrl] = useState("https://api2.frontapp.com");
+  const [zendeskSubdomain, setZendeskSubdomain] = useState("");
+  const [zendeskEmail, setZendeskEmail] = useState("");
+  const [zendeskAPIToken, setZendeskAPIToken] = useState("");
+  const [zendeskSetupDetails, setZendeskSetupDetails] =
+    useState<ZendeskSetupDetails | null>(null);
+
 
   const loadIntegrations = useCallback(async () => {
     setLoading(true);
@@ -148,16 +191,45 @@ export default function IntegrationsSettingsPage() {
     void loadIntegrations();
   }, [loadIntegrations]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const githubParam = params.get("github");
+    if (githubParam === "connected") {
+      setNotice("GitHub connected successfully.");
+      const cleanUrl =
+        window.location.pathname +
+        (params
+          .toString()
+          .replace(/[&?]?github=[^&]*/g, "")
+          .replace(/^&/, "?") || "");
+      window.history.replaceState(null, "", cleanUrl);
+    } else if (githubParam === "canceled") {
+      setError("GitHub installation was canceled.");
+      const cleanUrl =
+        window.location.pathname +
+        (params
+          .toString()
+          .replace(/[&?]?github=[^&]*/g, "")
+          .replace(/^&/, "?") || "");
+      window.history.replaceState(null, "", cleanUrl);
+    }
+  }, []);
+
   async function connectIntegration(
     provider: "slack" | "discord" | "microsoft_teams" | "sentry" | "salesforce",
+    provider: "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong" | "intercom",
   ) {
     setPendingProvider(provider);
     setNotice(null);
     setError(null);
-    let label = provider === "discord" ? "Discord" : "Slack";
+    let label = "GitHub";
+    if (provider === "discord") label = "Discord";
+    if (provider === "slack") label = "Slack";
     if (provider === "microsoft_teams") label = "Microsoft Teams";
     if (provider === "sentry") label = "Sentry";
     if (provider === "salesforce") label = "Salesforce";
+    if (provider === "gong") label = "Gong";
+    if (provider === "intercom") label = "Intercom";
     const endpoint =
       provider === "microsoft_teams"
         ? "/api/integrations/microsoft-teams/connect"
@@ -169,11 +241,16 @@ export default function IntegrationsSettingsPage() {
       });
       const data = (await response.json().catch(() => ({}))) as {
         authorizationUrl?: string;
+        installationUrl?: string;
         error?: string;
         message?: string;
       };
       if (!response.ok) {
         throw new Error(data.message || data.error || `${label} setup failed.`);
+      }
+      if (provider === "github" && data.installationUrl) {
+        window.location.assign(data.installationUrl);
+        return;
       }
       if (data.authorizationUrl) {
         window.location.assign(data.authorizationUrl);
@@ -238,6 +315,79 @@ export default function IntegrationsSettingsPage() {
     }
   }
 
+  async function setupFront() {
+    setPendingProvider("front");
+    setNotice(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/integrations/front/setup", {
+  async function setupZendesk() {
+    setPendingProvider("zendesk");
+    setNotice(null);
+    setError(null);
+    setZendeskSetupDetails(null);
+    try {
+      const response = await fetch("/api/integrations/zendesk/setup", {
+
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          apiToken: frontApiToken,
+          companyId: frontCompanyId,
+          baseUrl: frontBaseUrl,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+          subdomain: zendeskSubdomain,
+          email: zendeskEmail,
+          apiToken: zendeskAPIToken,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        accountUrl?: string;
+        actionBaseUrl?: string;
+        actionSecret?: string;
+
+        error?: string;
+        message?: string;
+      };
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Front setup failed.");
+      }
+      setFrontApiToken("");
+      setNotice(
+        "Front connected. Add the Front sidebar plugin URL from this app to Front.",
+        throw new Error(data.message || data.error || "Zendesk setup failed.");
+      }
+      if (data.accountUrl && data.actionBaseUrl && data.actionSecret) {
+        setZendeskSetupDetails({
+          accountUrl: data.accountUrl,
+          actionBaseUrl: data.actionBaseUrl,
+          actionSecret: data.actionSecret,
+        });
+      }
+      setZendeskAPIToken("");
+      setNotice(
+        "Zendesk connected. Copy the action URL and secret into the Zendesk app.",
+
+      );
+      await loadIntegrations();
+    } catch (setupError) {
+      setError(
+        setupError instanceof Error
+          ? setupError.message
+          : "Front setup failed.",
+          : "Zendesk setup failed.",
+
+      );
+    } finally {
+      setPendingProvider(null);
+    }
+  }
+
   async function disconnect(provider: string) {
     setPendingProvider(provider);
     setNotice(null);
@@ -254,14 +404,35 @@ export default function IntegrationsSettingsPage() {
                 ? "/api/integrations/sentry/disconnect"
                 : provider === "salesforce"
                   ? "/api/integrations/salesforce/disconnect"
+                : provider === "front"
+                  ? "/api/integrations/front/disconnect"
+            : provider === "github"
+              ? "/api/integrations/github/disconnect"
+              : provider === "microsoft_teams"
+                ? "/api/integrations/microsoft-teams/disconnect"
+                : provider === "sentry"
+                  ? "/api/integrations/sentry/disconnect"
+                  : provider === "gong"
+                    ? "/api/integrations/gong/disconnect"
+                    : provider === "zendesk"
+                      ? "/api/integrations/zendesk/disconnect"
+                      : provider === "intercom"
+                        ? "/api/integrations/intercom/disconnect"
+
                   : `/api/integrations?provider=${encodeURIComponent(provider)}`;
       const response = await fetch(endpoint, {
         method:
           provider === "slack" ||
           provider === "discord" ||
+          provider === "github" ||
           provider === "microsoft_teams" ||
           provider === "sentry" ||
           provider === "salesforce"
+          provider === "front"
+          provider === "gong" ||
+          provider === "zendesk" ||
+          provider === "intercom"
+
             ? "POST"
             : "DELETE",
         headers: { Accept: "application/json" },
@@ -341,6 +512,28 @@ export default function IntegrationsSettingsPage() {
           </div>
         </div>
       ) : null}
+      {zendeskSetupDetails ? (
+        <div className="mt-6 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
+          <div className="font-medium text-[var(--color-text-primary)]">
+            Zendesk app details
+          </div>
+          <div className="mt-3 grid gap-2">
+            <div className="grid gap-1">
+              <span>Action base URL</span>
+              <code className="overflow-x-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[12px] text-[var(--color-text-primary)]">
+                {zendeskSetupDetails.actionBaseUrl}
+              </code>
+            </div>
+            <div className="grid gap-1">
+              <span>Signing secret</span>
+              <code className="overflow-x-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[12px] text-[var(--color-text-primary)]">
+                {zendeskSetupDetails.actionSecret}
+              </code>
+            </div>
+            <div>Connected account: {zendeskSetupDetails.accountUrl}</div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-8">
         {installedIntegrations.length ? (
@@ -367,10 +560,18 @@ export default function IntegrationsSettingsPage() {
                         ? "Disconnected locally; historical links are preserved."
                         : `Connected to ${integration.displayName || integration.name}`}
                     </p>
+                    {integrationDetailSummary(integration) ? (
+                      <span className="mt-1 block text-[12px] text-[var(--color-text-tertiary)]">
+                        {integrationDetailSummary(integration)}
+                      </span>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 gap-2">
                     {integration.actions.canReconnect &&
-                    integration.provider !== "gitlab" ? (
+                    integration.provider !== "gitlab" &&
+                    integration.provider !== "front" ? (
+                    integration.provider !== "zendesk" ? (
+
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
@@ -533,6 +734,11 @@ export default function IntegrationsSettingsPage() {
                           ? ` · ${integration.displayName}`
                           : ""}
                       </p>
+                      {integrationDetailSummary(integration) ? (
+                        <p className="mt-2 text-[12px] text-[var(--color-text-tertiary)]">
+                          {integrationDetailSummary(integration)}
+                        </p>
+                      ) : null}
                       {integration.setupRequirement ? (
                         <p className="mt-2 text-[12px] text-amber-300">
                           {integration.setupRequirement.message}
@@ -581,6 +787,108 @@ export default function IntegrationsSettingsPage() {
                           </button>
                         </div>
                       ) : null}
+                      {integration.provider === "front" &&
+                      {integration.provider === "zendesk" &&
+
+                      (integration.actions.canConnect ||
+                        integration.actions.canReconnect) ? (
+                        <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Front company ID
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setFrontCompanyId(event.target.value)
+                              }
+                              placeholder="Optional company identifier"
+                              value={frontCompanyId}
+                            />
+                          </label>
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Front API base URL
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setFrontBaseUrl(event.target.value)
+                              }
+                              placeholder="https://api2.frontapp.com"
+                              type="url"
+                              value={frontBaseUrl}
+                            />
+                          </label>
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Front API token
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setFrontApiToken(event.target.value)
+                              }
+                              placeholder="Bearer token with conversations/comments permissions"
+                              type="password"
+                              value={frontApiToken}
+                            Zendesk subdomain
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setZendeskSubdomain(event.target.value)
+                              }
+                              placeholder="acme"
+                              type="text"
+                              value={zendeskSubdomain}
+                            />
+                          </label>
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Admin email
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setZendeskEmail(event.target.value)
+                              }
+                              placeholder="admin@example.com"
+                              type="email"
+                              value={zendeskEmail}
+                            />
+                          </label>
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+                            API token
+                            <input
+                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+                              onChange={(event) =>
+                                setZendeskAPIToken(event.target.value)
+                              }
+                              placeholder="Zendesk API token"
+                              type="password"
+                              value={zendeskAPIToken}
+
+                            />
+                          </label>
+                          <button
+                            className="w-fit rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={
+                              pendingProvider === "front" ||
+                              frontApiToken.trim() === ""
+                            }
+                            onClick={() => void setupFront()}
+                            type="button"
+                          >
+                            {pendingProvider === "front"
+                              ? "Validating..."
+                              : "Connect Front"}
+                              pendingProvider === "zendesk" ||
+                              zendeskSubdomain.trim() === "" ||
+                              zendeskEmail.trim() === "" ||
+                              zendeskAPIToken.trim() === ""
+                            }
+                            onClick={() => void setupZendesk()}
+                            type="button"
+                          >
+                            {pendingProvider === "zendesk"
+                              ? "Validating..."
+                              : "Connect Zendesk"}
+
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                     {integration.actions.canDisconnect ? (
                       <button
@@ -592,7 +900,10 @@ export default function IntegrationsSettingsPage() {
                         Disconnect
                       </button>
                     ) : integration.actions.canReconnect &&
-                      integration.provider !== "gitlab" ? (
+                      integration.provider !== "gitlab" &&
+                      integration.provider !== "front" ? (
+                      integration.provider !== "zendesk" ? (
+
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
@@ -620,7 +931,8 @@ export default function IntegrationsSettingsPage() {
                           ? "Opening..."
                           : "Connect"}
                       </button>
-                    ) : integration.provider === "gitlab" ? null : (
+                    ) : integration.provider === "gitlab" ||
+                      integration.provider === "zendesk" ? null : (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-tertiary)]"
                         disabled

@@ -9,6 +9,7 @@ import {
 } from "@/lib/api-settings";
 import type {
   ApiSettingsPayload,
+  McpAuditLogEntry,
   OAuthApplicationRecord,
   OAuthScope,
   PermissionLevel,
@@ -439,6 +440,41 @@ function ApiKeysList({
                 label="Revoke API key"
                 onClick={() => onDelete(item)}
               />
+            </div>
+          </div>
+        </SurfaceRow>
+      ))}
+    </div>
+  );
+}
+
+function McpAuditLog({ items }: { items: McpAuditLogEntry[] }) {
+  if (items.length === 0) {
+    return (
+      <SurfaceRow>
+        <div className="text-[13px] text-[var(--color-text-tertiary)]">
+          No remote MCP tool calls have been recorded.
+        </div>
+      </SurfaceRow>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {items.map((item) => (
+        <SurfaceRow key={item.id}>
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0">
+              <div className="text-[13px] font-medium text-[var(--color-text-primary)]">
+                {item.toolName || "Unknown MCP tool"}
+              </div>
+              <div className="mt-1 text-[12px] text-[var(--color-text-secondary)]">
+                {item.success ? "Succeeded" : item.error || "Failed"}
+              </div>
+            </div>
+            <div className="text-[12px] text-[var(--color-text-tertiary)]">
+              <div>{formatDate(item.createdAt)}</div>
+              <div>{item.credentialId ?? "Deleted credential"}</div>
             </div>
           </div>
         </SurfaceRow>
@@ -933,6 +969,16 @@ export default function ApiSettingsPage() {
           onCreate={() => setApiKeyModalOpen(true)}
           onDelete={deleteApiKey}
         />
+
+        {data.canManageWorkspaceApi ? (
+          <>
+            <SectionHeader>Remote MCP audit log</SectionHeader>
+            <p className="mb-4 text-[13px] text-[var(--color-text-tertiary)]">
+              Recent hosted MCP tool calls made with personal access tokens.
+            </p>
+            <McpAuditLog items={data.mcpAuditLog} />
+          </>
+        ) : null}
       </div>
 
       {oauthModalOpen ? (
