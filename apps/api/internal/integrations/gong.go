@@ -102,11 +102,11 @@ type gongParticipant struct {
 }
 
 type gongTranscriptLine struct {
-	Speaker        string `json:"speaker"`
-	SpeakerEmail   string `json:"speakerEmail"`
+	Speaker         string `json:"speaker"`
+	SpeakerEmail    string `json:"speakerEmail"`
 	SpeakerExternal bool   `json:"speakerExternal"`
-	StartMs        int    `json:"startMs"`
-	Text           string `json:"text"`
+	StartMs         int    `json:"startMs"`
+	Text            string `json:"text"`
 }
 
 type gongFinding struct {
@@ -508,14 +508,21 @@ func (h Handler) tryCreateGongFinding(ctx context.Context, install gongInstallRe
 			return gongFindingResult{}, err
 		}
 	}
+	if _, err := tx.Exec(ctx, `select id from team where id=$1::uuid for update`, teamID); err != nil {
+		return gongFindingResult{}, err
+	}
 	var nextNumber int32
-	if err := tx.QueryRow(ctx, `select coalesce(max(number),0)+1 from issue where team_id=$1::uuid for update`, teamID).Scan(&nextNumber); err != nil {
+	if err := tx.QueryRow(ctx, `select coalesce(max(number),0)+1 from issue where team_id=$1::uuid`, teamID).Scan(&nextNumber); err != nil {
 		return gongFindingResult{}, err
 	}
 	identifier := fmt.Sprintf("%s-%d", team.Key, nextNumber)
 	issueURL := issueBacklink(team.Key, identifier)
 	var issueID string
-	if err := tx.QueryRow(ctx, `insert into issue (number,identifier,title,description,team_id,state_id,creator_id,priority) values ($1,$2,$3,$4,$5::uuid,$6::uuid,$7,'medium') returning id::text`, nextNumber, identifier, finding.Title, finding.Description, teamID, stateID, creatorID).Scan(&issueID); err != nil {
+	description := finding.Description
+	if install.Metadata["mentionParticipants"] == true {
+		description = appendGongParticipants(description, call.Participants)
+	}
+	if err := tx.QueryRow(ctx, `insert into issue (number,identifier,title,description,team_id,state_id,creator_id,priority) values ($1,$2,$3,$4,$5::uuid,$6::uuid,$7,'medium') returning id::text`, nextNumber, identifier, finding.Title, description, teamID, stateID, creatorID).Scan(&issueID); err != nil {
 		return gongFindingResult{}, err
 	}
 	history := map[string]any{"source": "gong_call", "provider": "gong", "callId": call.ID, "findingId": finding.ID, "sourceUrl": finding.Permalink, "issueUrl": issueURL, "customerDomain": finding.CustomerDomain}
@@ -672,6 +679,29 @@ func gongFindingDescription(call gongCall, finding gongFinding) string {
 	return strings.Join(parts, "\n")
 }
 
+func appendGongParticipants(description string, participants []gongParticipant) string {
+	lines := []string{}
+	seen := map[string]bool{}
+	for _, participant := range participants {
+		if !participant.External && !strings.EqualFold(participant.Role, "customer") && !strings.EqualFold(participant.Role, "external") {
+			continue
+		}
+		label := strings.TrimSpace(participant.Name)
+		if participant.Email != "" {
+			label = strings.TrimSpace(label + " <" + strings.ToLower(strings.TrimSpace(participant.Email)) + ">")
+		}
+		if label == "" || seen[strings.ToLower(label)] {
+			continue
+		}
+		seen[strings.ToLower(label)] = true
+		lines = append(lines, "- "+label)
+	}
+	if len(lines) == 0 {
+		return description
+	}
+	return description + "\n\nParticipants:\n" + strings.Join(lines, "\n")
+}
+
 func gongTimestampPermalink(rawURL string, timestampMs int) string {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
@@ -719,6 +749,22 @@ func gongConfigured() bool {
 	return ok
 }
 
+func gongIntegrationDetails(metadata map[string]any) map[string]any {
+	details := map[string]any{}
+	for _, key := range []string{"destinationTeamId", "routingGuidance", "pollingCursor", "minimumDurationSec", "statusWriteback"} {
+		if value := stringValue(metadata[key]); value != "" {
+			details[key] = value
+		}
+	}
+	if value, ok := metadata["mentionParticipants"].(bool); ok {
+		details["mentionParticipants"] = value
+	}
+	if value := stringValue(metadata["tenantId"]); value != "" {
+		details["tenantId"] = value
+	}
+	return details
+}
+
 func gongRedirectURI(appURL string) string {
 	return strings.TrimRight(appURL, "/") + "/api/integrations/gong/oauth/callback"
 }
@@ -728,7 +774,7 @@ func gongAuthorizationURL(clientID, appURL, state string) string {
 	values.Set("client_id", clientID)
 	values.Set("response_type", "code")
 	values.Set("redirect_uri", gongRedirectURI(appURL))
-	values.Set("scope", "api:calls:read api:transcripts:read")
+	values.Set("scope", "api:calls:read:extensive api:calls:read:transcript")
 	values.Set("state", state)
 	return gongAPIBaseURL() + "/oauth2/authorize?" + values.Encode()
 }

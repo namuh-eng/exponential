@@ -191,7 +191,8 @@ func (h Handler) List(w http.ResponseWriter, r *http.Request) {
 		if ok {
 			health = connected.Health()
 		}
-		out = append(out, Integration{CatalogItem: item, ID: id, Status: status, DisplayName: displayName, ExternalID: externalID, ConnectedAt: connectedAt, SetupRequirement: requirement, Actions: integrationActions(canManage, ok, status, requirement), Health: health, Details: integrationDetails(connected)})
+		details := integrationDetails(connected)
+		out = append(out, Integration{CatalogItem: item, ID: id, Status: status, DisplayName: displayName, ExternalID: externalID, ConnectedAt: connectedAt, SetupRequirement: requirement, Actions: integrationActions(canManage, ok, status, requirement), Health: health, Details: details})
 	}
 	problem.JSON(w, 200, response{CanManageIntegrations: canManage, Integrations: out})
 }
@@ -366,6 +367,7 @@ type row struct {
 	PendingJobCount    int
 	FailedJobCount     int
 	AuditEvents        []AuditEvent
+
 }
 
 func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error) {
@@ -508,6 +510,9 @@ func integrationDetails(value row) map[string]any {
 	}
 	if value.Provider == "github" {
 		return githubIntegrationDetails(value.Metadata)
+	}
+	if value.Provider == "gong" {
+		return gongIntegrationDetails(value.Metadata)
 	}
 	return nil
 }
