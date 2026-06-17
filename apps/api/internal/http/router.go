@@ -224,6 +224,7 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 			protected.Post("/workspaces/accept-invite", workspacesHandler.AcceptInvite)
 			protected.Mount("/workspaces", workspacesHandler.Routes())
 			protected.Get("/sync/ws", syncapi.Handler{DB: db}.WebSocket)
+			protected.Get("/sync/status", syncapi.Handler{DB: db}.Status)
 		})
 	})
 }

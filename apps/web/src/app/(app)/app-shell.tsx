@@ -31,6 +31,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { SyncSubscription } from "./sync-subscription";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -709,6 +710,9 @@ export function AppShell({
 
   return (
     <AppShellContext.Provider value={shellContext}>
+      {shellContext.workspaceId ? (
+        <SyncSubscription workspaceId={shellContext.workspaceId} />
+      ) : null}
       <div
         className="flex h-screen overflow-hidden bg-[var(--color-sidebar-bg)] text-[var(--color-text-primary)]"
         data-editorial-theme="product"
