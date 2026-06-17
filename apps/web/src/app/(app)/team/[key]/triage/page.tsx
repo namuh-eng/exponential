@@ -79,6 +79,14 @@ interface TriageResponse {
     projectMilestones: { id: string; name: string; projectId: string }[];
     members: { id: string; name: string | null; email: string | null }[];
   };
+  defaults?: {
+    acceptDestinationStateId?: string | null;
+    declineDestinationStateId?: string | null;
+    assigneeId?: string | null;
+    labelIds?: string[] | null;
+    projectId?: string | null;
+    cycleId?: string | null;
+  };
 }
 
 type TriageDecisionAction = "accept" | "decline";
@@ -118,6 +126,7 @@ export default function TeamTriagePage() {
     cycleId: "",
     projectId: "",
     projectMilestoneId: "",
+    dueDate: "",
     assigneeId: "",
     comment: "",
     subscribe: true,
@@ -213,7 +222,14 @@ export default function TeamTriagePage() {
         action === "accept"
           ? (data?.acceptDestinationStates ?? [])
           : (data?.declineDestinationStates ?? []);
+      const configuredDestinationId =
+        action === "accept"
+          ? data?.defaults?.acceptDestinationStateId
+          : data?.defaults?.declineDestinationStateId;
       const defaultDestination =
+        destinationStates.find(
+          (state) => state.id === configuredDestinationId,
+        ) ??
         destinationStates.find((state) => state.isDefault) ??
         destinationStates[0] ??
         null;
@@ -221,15 +237,17 @@ export default function TeamTriagePage() {
       setPendingDecision({ action, issues, bulk });
       setDecisionDestinationId(defaultDestination?.id ?? "");
       const issue = issues[0];
+      const defaultLabelIds = data?.defaults?.labelIds ?? [];
       setDecisionReason("");
       setAcceptMetadata({
         priority: issue.priority ?? "none",
         estimate: issue.estimate == null ? "" : String(issue.estimate),
-        labelIds: issue.labelIds ?? [],
-        cycleId: issue.cycleId ?? "",
-        projectId: issue.projectId ?? "",
+        labelIds: issue.labelIds?.length ? issue.labelIds : defaultLabelIds,
+        cycleId: issue.cycleId ?? data?.defaults?.cycleId ?? "",
+        projectId: issue.projectId ?? data?.defaults?.projectId ?? "",
         projectMilestoneId: issue.projectMilestoneId ?? "",
-        assigneeId: issue.assigneeId ?? "",
+        dueDate: issue.dueDate?.slice(0, 10) ?? "",
+        assigneeId: issue.assigneeId ?? data?.defaults?.assigneeId ?? "",
         comment: "",
         subscribe: true,
       });
@@ -238,6 +256,7 @@ export default function TeamTriagePage() {
     [
       data?.acceptDestinationStates,
       data?.declineDestinationStates,
+      data?.defaults,
       data?.issues,
     ],
   );
@@ -299,7 +318,7 @@ export default function TeamTriagePage() {
           destinationStateId: decisionDestinationId,
           confirmed: true,
           reason: decisionReason.trim() || undefined,
-          ...(pendingDecision.action === "accept" && !pendingDecision.bulk
+          ...(pendingDecision.action === "accept"
             ? {
                 priority: acceptMetadata.priority,
                 estimate: acceptMetadata.estimate
@@ -309,6 +328,7 @@ export default function TeamTriagePage() {
                 cycleId: acceptMetadata.cycleId || null,
                 projectId: acceptMetadata.projectId || null,
                 projectMilestoneId: acceptMetadata.projectMilestoneId || null,
+                dueDate: acceptMetadata.dueDate || null,
                 assigneeId: acceptMetadata.assigneeId || null,
                 comment: acceptMetadata.comment.trim() || undefined,
                 subscribe: acceptMetadata.subscribe,
@@ -602,7 +622,7 @@ export default function TeamTriagePage() {
     >
       <dialog
         aria-labelledby="triage-decision-title"
-        className={`w-full ${pendingDecision.action === "accept" && !pendingDecision.bulk ? "max-w-[720px]" : "max-w-[440px]"} rounded-lg border border-[var(--color-border)] bg-[var(--color-content-bg)] p-5 shadow-2xl`}
+        className={`w-full ${pendingDecision.action === "accept" ? "max-w-[720px]" : "max-w-[440px]"} rounded-lg border border-[var(--color-border)] bg-[var(--color-content-bg)] p-5 shadow-2xl`}
         open
         onKeyDown={(event) => {
           if (event.key === "Escape") {
@@ -622,7 +642,9 @@ export default function TeamTriagePage() {
             >
               {pendingDecision.action === "accept" && !pendingDecision.bulk
                 ? `Accept: ${pendingDecision.issues[0].identifier} ${pendingDecision.issues[0].title}`
-                : decisionTitle}
+                : pendingDecision.action === "accept" && pendingDecision.bulk
+                  ? "Bulk accept triage issues"
+                  : decisionTitle}
             </h2>
             <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
               {pendingDecision.bulk
@@ -683,7 +705,7 @@ export default function TeamTriagePage() {
           </label>
         ) : null}
 
-        {pendingDecision.action === "accept" && !pendingDecision.bulk ? (
+        {pendingDecision.action === "accept" ? (
           <div className="mb-4 grid gap-3 rounded-lg border border-[var(--color-border)] p-3 md:grid-cols-2">
             <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">
               Priority
@@ -815,6 +837,21 @@ export default function TeamTriagePage() {
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">
+              Due date
+              <input
+                aria-label="Accept due date"
+                type="date"
+                value={acceptMetadata.dueDate}
+                onChange={(event) =>
+                  setAcceptMetadata((current) => ({
+                    ...current,
+                    dueDate: event.target.value,
+                  }))
+                }
+                className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+              />
             </label>
             <fieldset className="md:col-span-2">
               <legend className="text-[12px] font-medium text-[var(--color-text-secondary)]">

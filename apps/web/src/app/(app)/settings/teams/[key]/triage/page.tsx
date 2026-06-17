@@ -17,6 +17,16 @@ interface TeamTriageData {
   triageDeclineDestinationStateId: string | null;
   acceptDestinationStates: TriageDestinationState[];
   declineDestinationStates: TriageDestinationState[];
+  triageDefaultAssigneeId?: string | null;
+  triageDefaultLabelIds?: string[] | null;
+  triageDefaultProjectId?: string | null;
+  triageDefaultCycleId?: string | null;
+  metadataOptions?: {
+    labels: { id: string; name: string; color: string }[];
+    cycles: { id: string; name: string | null; number: number }[];
+    projects: { id: string; name: string }[];
+    members: { id: string; name: string | null; email: string | null }[];
+  };
 }
 
 function Toggle({
@@ -60,6 +70,10 @@ export default function TeamTriageSettingsPage() {
   const [acceptDestinationStateId, setAcceptDestinationStateId] = useState("");
   const [declineDestinationStateId, setDeclineDestinationStateId] =
     useState("");
+  const [defaultAssigneeId, setDefaultAssigneeId] = useState("");
+  const [defaultLabelIds, setDefaultLabelIds] = useState<string[]>([]);
+  const [defaultProjectId, setDefaultProjectId] = useState("");
+  const [defaultCycleId, setDefaultCycleId] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
@@ -80,6 +94,10 @@ export default function TeamTriageSettingsPage() {
               data.team.declineDestinationStates?.[0]?.id ??
               "",
           );
+          setDefaultAssigneeId(data.team.triageDefaultAssigneeId ?? "");
+          setDefaultLabelIds(data.team.triageDefaultLabelIds ?? []);
+          setDefaultProjectId(data.team.triageDefaultProjectId ?? "");
+          setDefaultCycleId(data.team.triageDefaultCycleId ?? "");
         }
       })
       .finally(() => setLoading(false));
@@ -89,6 +107,10 @@ export default function TeamTriageSettingsPage() {
     triageEnabled?: boolean;
     triageAcceptDestinationStateId?: string | null;
     triageDeclineDestinationStateId?: string | null;
+    triageDefaultAssigneeId?: string | null;
+    triageDefaultLabelIds?: string[];
+    triageDefaultProjectId?: string | null;
+    triageDefaultCycleId?: string | null;
   }) {
     setSaving(true);
     setSaveMessage(null);
@@ -117,6 +139,10 @@ export default function TeamTriageSettingsPage() {
           payload.team.declineDestinationStates?.[0]?.id ??
           "",
       );
+      setDefaultAssigneeId(payload.team.triageDefaultAssigneeId ?? "");
+      setDefaultLabelIds(payload.team.triageDefaultLabelIds ?? []);
+      setDefaultProjectId(payload.team.triageDefaultProjectId ?? "");
+      setDefaultCycleId(payload.team.triageDefaultCycleId ?? "");
       setSaveMessage("Triage settings updated");
     } catch (_error) {
       setSaveMessage("Failed to update triage settings");
@@ -142,6 +168,29 @@ export default function TeamTriageSettingsPage() {
     await saveTriageSettings({
       triageDeclineDestinationStateId: destinationStateId || null,
     });
+  }
+
+  async function handleDefaultAssigneeChange(assigneeId: string) {
+    setDefaultAssigneeId(assigneeId);
+    await saveTriageSettings({ triageDefaultAssigneeId: assigneeId || null });
+  }
+
+  async function handleDefaultProjectChange(projectId: string) {
+    setDefaultProjectId(projectId);
+    await saveTriageSettings({ triageDefaultProjectId: projectId || null });
+  }
+
+  async function handleDefaultCycleChange(cycleId: string) {
+    setDefaultCycleId(cycleId);
+    await saveTriageSettings({ triageDefaultCycleId: cycleId || null });
+  }
+
+  async function toggleDefaultLabel(labelId: string) {
+    const next = defaultLabelIds.includes(labelId)
+      ? defaultLabelIds.filter((currentId) => currentId !== labelId)
+      : [...defaultLabelIds, labelId];
+    setDefaultLabelIds(next);
+    await saveTriageSettings({ triageDefaultLabelIds: next });
   }
 
   if (loading) {
@@ -251,6 +300,106 @@ export default function TeamTriageSettingsPage() {
               ))}
             </select>
           </label>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-lg border border-[var(--color-border)] p-4">
+        <div className="text-[13px] font-medium text-[var(--color-text-primary)]">
+          Accept routing defaults
+        </div>
+        <p className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+          These values prefill accept decisions and are applied by the API when
+          accept requests omit them.
+        </p>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">
+            Default assignee
+            <select
+              aria-label="Default triage assignee"
+              value={defaultAssigneeId}
+              disabled={saving}
+              onChange={(event) =>
+                void handleDefaultAssigneeChange(event.target.value)
+              }
+              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none disabled:opacity-60"
+            >
+              <option value="">Unassigned</option>
+              {(team.metadataOptions?.members ?? []).map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name ?? member.email ?? member.id}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">
+            Default project
+            <select
+              aria-label="Default triage project"
+              value={defaultProjectId}
+              disabled={saving}
+              onChange={(event) =>
+                void handleDefaultProjectChange(event.target.value)
+              }
+              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none disabled:opacity-60"
+            >
+              <option value="">No project</option>
+              {(team.metadataOptions?.projects ?? []).map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">
+            Default cycle
+            <select
+              aria-label="Default triage cycle"
+              value={defaultCycleId}
+              disabled={saving}
+              onChange={(event) =>
+                void handleDefaultCycleChange(event.target.value)
+              }
+              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none disabled:opacity-60"
+            >
+              <option value="">No cycle</option>
+              {(team.metadataOptions?.cycles ?? []).map((cycle) => (
+                <option key={cycle.id} value={cycle.id}>
+                  {cycle.name ?? `Cycle ${cycle.number}`}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <fieldset className="sm:col-span-2">
+            <legend className="text-[12px] font-medium text-[var(--color-text-secondary)]">
+              Default labels
+            </legend>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(team.metadataOptions?.labels ?? []).length === 0 ? (
+                <span className="text-[12px] text-[var(--color-text-tertiary)]">
+                  No labels available
+                </span>
+              ) : null}
+              {(team.metadataOptions?.labels ?? []).map((label) => (
+                <label
+                  key={label.id}
+                  className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-primary)]"
+                >
+                  <input
+                    aria-label={`Default triage label ${label.name}`}
+                    type="checkbox"
+                    checked={defaultLabelIds.includes(label.id)}
+                    disabled={saving}
+                    onChange={() => void toggleDefaultLabel(label.id)}
+                  />
+                  {label.name}
+                </label>
+              ))}
+            </div>
+          </fieldset>
         </div>
       </div>
 
