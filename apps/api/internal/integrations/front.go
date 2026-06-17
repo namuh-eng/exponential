@@ -499,11 +499,11 @@ func insertFrontIssueLinkTx(ctx context.Context, q frontLinkExecutor, install fr
 		return fmt.Errorf("Front conversation id is required")
 	}
 	channelID := firstNonEmpty(conversation.InboxID, conversationID)
-	messageID := firstNonEmpty(issueID, conversation.MessageID, conversationID)
 	sourceEventID := conversationID + ":" + issueID
+	messageID := firstNonEmpty(conversation.MessageID, sourceEventID)
 	if created {
 		sourceEventID = frontCreatedSourceEventID(conversationID)
-		messageID = firstNonEmpty(conversation.MessageID, "created:"+conversationID)
+		messageID = firstNonEmpty(conversation.MessageID, sourceEventID)
 	}
 	_, err := q.Exec(ctx, `
 		insert into integration_thread_link (workspace_id, workspace_integration_id, provider, issue_id, external_team_id, external_channel_id, external_thread_ts, external_message_ts, external_permalink, direction, source_event_id)

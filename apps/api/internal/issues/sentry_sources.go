@@ -245,11 +245,15 @@ func (h Handler) queueFrontAutomations(ctx context.Context, tx pgx.Tx, workspace
 	if before.StateID == after.StateID {
 		return nil
 	}
-	var category string
-	if err := tx.QueryRow(ctx, `select category::text from workflow_state where id=$1::uuid`, after.StateID).Scan(&category); err != nil {
+	var beforeCategory, category string
+	if err := tx.QueryRow(ctx, `
+		select before_ws.category::text, after_ws.category::text
+		from workflow_state before_ws
+		join workflow_state after_ws on after_ws.id=$2::uuid
+		where before_ws.id=$1::uuid`, before.StateID, after.StateID).Scan(&beforeCategory, &category); err != nil {
 		return err
 	}
-	if category != "completed" && category != "canceled" {
+	if (category != "completed" && category != "canceled") || beforeCategory == category {
 		return nil
 	}
 	var teamKey string

@@ -1,6 +1,7 @@
 package integrations
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/hmac"
 	"crypto/rand"
@@ -14,6 +15,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestSetupRequirement(t *testing.T) {
@@ -1108,5 +1111,61 @@ func TestUpdateZendeskTicket(t *testing.T) {
 	if comment["body"] != "Done" || comment["public"] != false || ticket["status"] != "open" {
 		t.Fatalf("payload = %#v", got)
 
+	}
+}
+
+type recordingFrontLinkExecutor struct {
+	query string
+	args  []any
+}
+
+func (e *recordingFrontLinkExecutor) Exec(_ context.Context, query string, args ...any) (pgconn.CommandTag, error) {
+	e.query = query
+	e.args = args
+	return pgconn.CommandTag{}, nil
+}
+
+func TestInsertFrontIssueLinkUsesConversationMessageID(t *testing.T) {
+	executor := &recordingFrontLinkExecutor{}
+	install := frontInstallRecord{WorkspaceID: "00000000-0000-4000-8000-000000000001", IntegrationID: "00000000-0000-4000-8000-000000000002", ExternalID: "cmp_123", Metadata: map[string]any{"companyId": "cmp_meta"}}
+	conversation := frontConversationRef{ID: "cnv_123", InboxID: "inb_1", MessageID: "msg_123", Permalink: "https://front.example/cnv_123"}
+
+	if err := insertFrontIssueLinkTx(t.Context(), executor, install, "00000000-0000-4000-8000-000000000003", conversation, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := executor.args[6]; got != "msg_123" {
+		t.Fatalf("external_message_ts = %#v", got)
+	}
+	if got := executor.args[8]; got != "cnv_123:00000000-0000-4000-8000-000000000003" {
+		t.Fatalf("source_event_id = %#v", got)
+	}
+}
+
+func TestInsertFrontIssueLinkFallbackMessageIDIsPerConversationLink(t *testing.T) {
+	executor := &recordingFrontLinkExecutor{}
+	install := frontInstallRecord{WorkspaceID: "00000000-0000-4000-8000-000000000001", IntegrationID: "00000000-0000-4000-8000-000000000002", Metadata: map[string]any{"companyId": "cmp_meta"}}
+	conversation := frontConversationRef{ID: "cnv_123", InboxID: "inb_1"}
+
+	if err := insertFrontIssueLinkTx(t.Context(), executor, install, "00000000-0000-4000-8000-000000000003", conversation, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := executor.args[6]; got != "cnv_123:00000000-0000-4000-8000-000000000003" {
+		t.Fatalf("external_message_ts fallback = %#v", got)
+	}
+}
+
+func TestInsertFrontCreatedIssueLinkUsesCreatedSource(t *testing.T) {
+	executor := &recordingFrontLinkExecutor{}
+	install := frontInstallRecord{WorkspaceID: "00000000-0000-4000-8000-000000000001", IntegrationID: "00000000-0000-4000-8000-000000000002", Metadata: map[string]any{"companyId": "cmp_meta"}}
+	conversation := frontConversationRef{ID: "cnv_123", InboxID: "inb_1"}
+
+	if err := insertFrontIssueLinkTx(t.Context(), executor, install, "00000000-0000-4000-8000-000000000003", conversation, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := executor.args[6]; got != "created:cnv_123" {
+		t.Fatalf("external_message_ts fallback = %#v", got)
+	}
+	if got := executor.args[8]; got != "created:cnv_123" {
+		t.Fatalf("source_event_id = %#v", got)
 	}
 }
