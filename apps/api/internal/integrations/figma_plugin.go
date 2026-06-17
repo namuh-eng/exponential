@@ -189,7 +189,7 @@ func (h Handler) FigmaPluginCreateIssue(w http.ResponseWriter, r *http.Request) 
 		problem.Write(w, http.StatusInternalServerError, "Create Figma issue failed", err.Error())
 		return
 	}
-	if err := syncapi.InsertOperation(r.Context(), tx, p.WorkspaceID, "issue", issue.ID, "created", issue, p.UserID); err != nil {
+	if _, err := syncapi.InsertOperation(r.Context(), tx, p.WorkspaceID, "issue", issue.ID, "created", issue, p.UserID); err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Create Figma issue failed", err.Error())
 		return
 	}
@@ -232,7 +232,7 @@ func (h Handler) FigmaPluginLinkIssue(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusInternalServerError, "Link Figma source failed", err.Error())
 		return
 	}
-	if err := syncapi.InsertOperation(r.Context(), tx, p.WorkspaceID, "issue", issue.ID, "updated", map[string]any{"figmaSourceLinked": storedSource}, p.UserID); err != nil {
+	if _, err := syncapi.InsertOperation(r.Context(), tx, p.WorkspaceID, "issue", issue.ID, "updated", map[string]any{"figmaSourceLinked": storedSource}, p.UserID); err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Link Figma source failed", err.Error())
 		return
 	}
