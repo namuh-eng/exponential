@@ -18,6 +18,9 @@ const env = {
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:redis",
   SESSION_SECRET_SECRET_ARN:
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:session",
+  PROVIDER_CREDENTIAL_ENCRYPTION_KEY_SECRET_ARN:
+    "arn:aws:secretsmanager:us-east-1:123456789012:secret:provider-credential-key",
+  PROVIDER_CREDENTIAL_ENCRYPTION_KEY_ID: "env:v1",
   GOOGLE_CLIENT_ID_SECRET_ARN:
     "arn:aws:secretsmanager:us-east-1:123456789012:secret:google-id",
   GOOGLE_CLIENT_SECRET_SECRET_ARN:

@@ -102,11 +102,11 @@ type gongParticipant struct {
 }
 
 type gongTranscriptLine struct {
-	Speaker        string `json:"speaker"`
-	SpeakerEmail   string `json:"speakerEmail"`
+	Speaker         string `json:"speaker"`
+	SpeakerEmail    string `json:"speakerEmail"`
 	SpeakerExternal bool   `json:"speakerExternal"`
-	StartMs        int    `json:"startMs"`
-	Text           string `json:"text"`
+	StartMs         int    `json:"startMs"`
+	Text            string `json:"text"`
 }
 
 type gongFinding struct {
@@ -379,7 +379,7 @@ func (h Handler) completeGongInstall(ctx context.Context, install gongOAuthInsta
 		return err
 	}
 	credential := map[string]any{"accessToken": token.AccessToken, "refreshToken": token.RefreshToken, "tokenType": token.TokenType, "tenantId": externalID, "scope": token.Scope}
-	credentialRaw, err := json.Marshal(credential)
+	credentialRaw, err := encryptedProviderCredentialJSON(credential)
 	if err != nil {
 		return err
 	}

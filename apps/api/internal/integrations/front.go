@@ -281,7 +281,10 @@ func (h Handler) completeFrontInstall(ctx context.Context, workspaceID string, u
 	metadata := map[string]any{"companyId": companyID, "baseUrl": baseURL, "reopenOnDone": true, "connectedBy": "front_setup"}
 	metadataRaw, _ := json.Marshal(metadata)
 	credential := frontCredential{APIToken: token, BaseURL: baseURL}
-	credentialRaw, _ := json.Marshal(credential)
+	credentialRaw, err := encryptedProviderCredentialJSON(credential)
+	if err != nil {
+		return "", err
+	}
 	tx, err := h.DB.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -513,7 +516,9 @@ func insertFrontIssueLinkTx(ctx context.Context, q frontLinkExecutor, install fr
 	return err
 }
 
-func frontCreatedSourceEventID(conversationID string) string { return "created:" + strings.TrimSpace(conversationID) }
+func frontCreatedSourceEventID(conversationID string) string {
+	return "created:" + strings.TrimSpace(conversationID)
+}
 
 func frontHistoryMetadata(conversation frontConversationRef) map[string]any {
 	return map[string]any{

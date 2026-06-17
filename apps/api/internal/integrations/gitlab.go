@@ -408,7 +408,7 @@ func (h Handler) saveGitLabIntegration(ctx context.Context, workspaceID, userID,
 		return "", err
 	}
 	credential := gitLabCredential{Token: token, Origin: origin, WebhookSecret: webhookSecret}
-	credentialRaw, err := json.Marshal(credential)
+	credentialRaw, err := encryptedProviderCredentialJSON(credential)
 	if err != nil {
 		return "", err
 	}
@@ -435,7 +435,9 @@ func (h Handler) gitLabIntegrationStatus(ctx context.Context, workspaceID string
 		return row{}, gitLabCredential{}, err
 	}
 	var credential gitLabCredential
-	_ = json.Unmarshal(credentialRaw, &credential)
+	if err := decryptProviderCredentialJSON(ctx, h.DB, r.ID, "gitlab", credentialRaw, &credential); err != nil {
+		return row{}, gitLabCredential{}, err
+	}
 	return r, credential, nil
 }
 
@@ -452,7 +454,9 @@ func (h Handler) resolveGitLabWebhookInstall(ctx context.Context, integrationID 
 		return install, err
 	}
 	var credential gitLabCredential
-	_ = json.Unmarshal(credentialRaw, &credential)
+	if err := decryptProviderCredentialJSON(ctx, h.DB, install.IntegrationID, "gitlab", credentialRaw, &credential); err != nil {
+		return install, err
+	}
 	if credential.Origin != "" {
 		install.Origin = credential.Origin
 	}

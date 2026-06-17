@@ -96,6 +96,8 @@ running `scripts/prepare-ecs-deploy-env.sh`.
 | `DATABASE_URL_SECRET_ARN`         | Secrets Manager ARN                                                  |
 | `REDIS_URL_SECRET_ARN`            | Secrets Manager ARN                                                  |
 | `SESSION_SECRET_SECRET_ARN`       | Secrets Manager ARN                                                  |
+| `PROVIDER_CREDENTIAL_ENCRYPTION_KEY_SECRET_ARN` | Secrets Manager ARN for provider credential encryption key |
+| `PROVIDER_CREDENTIAL_ENCRYPTION_KEY_ID` | Optional key id label, defaults to `env:v1` |
 | `GOOGLE_CLIENT_ID_SECRET_ARN`     | Secrets Manager ARN                                                  |
 | `GOOGLE_CLIENT_SECRET_SECRET_ARN` | Secrets Manager ARN                                                  |
 | `METRICS_TOKEN_SECRET_ARN`        | Secrets Manager ARN for the RED metrics token                        |
@@ -120,7 +122,8 @@ out of `.env` for paste-in (run on your laptop):
 ```sh
 for k in AWS_REGION APP_NAME ECS_EXECUTION_ROLE_ARN ECS_TASK_ROLE_ARN \
          DATABASE_URL_SECRET_ARN REDIS_URL_SECRET_ARN \
-         SESSION_SECRET_SECRET_ARN METRICS_TOKEN_SECRET_ARN \
+         SESSION_SECRET_SECRET_ARN PROVIDER_CREDENTIAL_ENCRYPTION_KEY_SECRET_ARN \
+         PROVIDER_CREDENTIAL_ENCRYPTION_KEY_ID METRICS_TOKEN_SECRET_ARN \
          STRIPE_WEBHOOK_SIGNING_SECRET_SECRET_ARN \
          GOOGLE_CLIENT_ID_SECRET_ARN GOOGLE_CLIENT_SECRET_SECRET_ARN \
          PUBLIC_BASE_URL PRIV_SUBNET_A PRIV_SUBNET_B APP_SG ALB_SG \

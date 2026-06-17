@@ -133,7 +133,7 @@ func (w MicrosoftTeamsWorker) activeMicrosoftTeamsCredential(ctx context.Context
 		return microsoftTeamsCredential{}, err
 	}
 	var credential microsoftTeamsCredential
-	if err := json.Unmarshal(payloadRaw, &credential); err != nil {
+	if err := decryptProviderCredentialJSON(ctx, w.DB, integrationID, "microsoft_teams", payloadRaw, &credential); err != nil {
 		return microsoftTeamsCredential{}, err
 	}
 	if credential.WebhookURL == "" && (credential.ServiceURL == "" || credential.BotToken == "") {

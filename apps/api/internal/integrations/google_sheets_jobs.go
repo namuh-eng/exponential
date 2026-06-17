@@ -187,7 +187,7 @@ func (w GoogleSheetsWorker) googleSheetsProjectRows(ctx context.Context, workspa
 	}
 	defer projects.Close()
 	type projectRecord struct {
-		ID, Name, Slug, Status, Priority, LeadID string
+		ID, Name, Slug, Status, Priority, LeadID                             string
 		StartDate, TargetDate, CompletedAt, CanceledAt, CreatedAt, UpdatedAt *time.Time
 	}
 	records := []projectRecord{}
@@ -283,7 +283,7 @@ func (w GoogleSheetsWorker) googleSheetsInitiativeRows(ctx context.Context, work
 	defer rows.Close()
 	type initiativeRecord struct {
 		ID, Name, Status, Health, OwnerID, Timeframe string
-		StartDate, TargetDate, CreatedAt, UpdatedAt *time.Time
+		StartDate, TargetDate, CreatedAt, UpdatedAt  *time.Time
 	}
 	records := []initiativeRecord{}
 	for rows.Next() {
@@ -387,7 +387,7 @@ func (w GoogleSheetsWorker) activeGoogleSheetsCredential(ctx context.Context, in
 		return googleSheetsCredential{}, err
 	}
 	var credential googleSheetsCredential
-	if err := json.Unmarshal(payloadRaw, &credential); err != nil {
+	if err := decryptProviderCredentialJSON(ctx, w.DB, integrationID, "google_sheets", payloadRaw, &credential); err != nil {
 		return googleSheetsCredential{}, err
 	}
 	if credential.AccessToken == "" && credential.RefreshToken == "" {
@@ -549,7 +549,7 @@ func (w GoogleSheetsWorker) succeedGoogleSheetsJob(ctx context.Context, job goog
 	if err != nil {
 		return err
 	}
-	credentialRaw, err := json.Marshal(credential)
+	credentialRaw, err := encryptedProviderCredentialJSON(credential)
 	if err != nil {
 		return err
 	}

@@ -352,7 +352,9 @@ func (h Handler) resolveSlackInstall(ctx context.Context, teamID string) (slackI
 	install.Metadata = map[string]any{}
 	_ = json.Unmarshal(metadataRaw, &install.Metadata)
 	var credential slackCredential
-	_ = json.Unmarshal(credentialRaw, &credential)
+	if err := decryptProviderCredentialJSON(ctx, h.DB, install.IntegrationID, "slack", credentialRaw, &credential); err != nil {
+		return install, err
+	}
 	install.BotToken = credential.BotToken
 	return install, nil
 }
