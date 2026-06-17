@@ -311,4 +311,110 @@ describe("ImportExportPage component", () => {
       await screen.findByText(/GitHub import completed with 1 created/),
     ).toBeInTheDocument();
   });
+
+  it("runs the Jira guided importer through preview and confirmation", async () => {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (
+        url === "/api/workspaces/current/import-export" &&
+        init?.method === "POST"
+      ) {
+        const body = JSON.parse(String(init.body)) as { action: string };
+        if (body.action === "configure_jira") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              integrationId: "integration-1",
+              displayName: "Jira acme.atlassian.net",
+              projects: [{ id: "100", key: "ENG", name: "Engineering" }],
+            }),
+          });
+        }
+        if (body.action === "preview_jira_import") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              projects: [{ id: "100", key: "ENG", name: "Engineering" }],
+              projectKey: "ENG",
+              statusOptions: ["To Do"],
+              mapping: { teamId: "team-1", statuses: { "To Do": "state-1" } },
+              issues: [
+                {
+                  id: "10001",
+                  key: "ENG-1",
+                  title: "Ship importer",
+                  status: "To Do",
+                  priority: "High",
+                  assignee: "Ada",
+                  labels: ["migration"],
+                  commentCount: 1,
+                  sourceUrl: "https://acme.atlassian.net/browse/ENG-1",
+                  errors: [],
+                },
+              ],
+            }),
+          });
+        }
+        if (body.action === "start_jira_import") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              import: {
+                id: "import-jira-1",
+                provider: "jira",
+                status: "completed",
+                createdAt: "2026-05-20T12:00:00.000Z",
+                message:
+                  "Jira import completed with 1 created and 0 updated issues.",
+                importedCount: 1,
+                errorCount: 0,
+              },
+            }),
+          });
+        }
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          exports: [],
+          imports: [],
+          teams: [
+            {
+              id: "team-1",
+              key: "ENG",
+              name: "Engineering",
+              states: [
+                { id: "state-1", name: "Backlog", category: "unstarted" },
+              ],
+            },
+          ],
+        }),
+      });
+    });
+
+    render(<ImportExportPage />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Start import" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Jira/ }));
+    fireEvent.change(screen.getByLabelText("Atlassian email"), {
+      target: { value: "admin@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("API token or PAT"), {
+      target: { value: "jira-token" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect Jira" }));
+
+    expect(await screen.findByText(/Choose a project/)).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Preview Jira import" }),
+    );
+    expect(await screen.findByText("ENG-1")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm Jira import" }),
+    );
+
+    expect(
+      await screen.findByText(/Jira import completed with 1 created/),
+    ).toBeInTheDocument();
+  });
 });

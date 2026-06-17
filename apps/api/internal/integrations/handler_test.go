@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -50,11 +51,34 @@ func TestSetupRequirement(t *testing.T) {
 	if got := setupRequirement("microsoft_teams"); got != nil {
 		t.Fatalf("configured microsoft teams requirement = %#v", got)
 	}
+	t.Setenv("AUTH_FIGMA_ID", "")
+	t.Setenv("AUTH_FIGMA_SECRET", "")
+	if got := setupRequirement("figma"); got == nil || !strings.Contains(got.Message, "AUTH_FIGMA_ID") {
+		t.Fatalf("figma requirement = %#v", got)
+	}
+	t.Setenv("AUTH_FIGMA_ID", "id")
+	t.Setenv("AUTH_FIGMA_SECRET", "secret")
+	if got := setupRequirement("figma"); got != nil {
+		t.Fatalf("configured figma requirement = %#v", got)
+	}
+	t.Setenv("AUTH_INTERCOM_ID", "")
+	t.Setenv("AUTH_INTERCOM_SECRET", "")
+	t.Setenv("INTERCOM_SIGNING_SECRET", "")
+	if got := setupRequirement("intercom"); got == nil || got.Type != "configuration_required" {
+		t.Fatalf("intercom requirement = %#v", got)
+	}
+	t.Setenv("AUTH_INTERCOM_ID", "id")
+	t.Setenv("AUTH_INTERCOM_SECRET", "secret")
+	t.Setenv("INTERCOM_SIGNING_SECRET", "signing-secret")
+	if got := setupRequirement("intercom"); got != nil {
+		t.Fatalf("configured intercom requirement = %#v", got)
+
+	}
 	if got := setupRequirement("github"); got == nil || got.Message == "" {
 		t.Fatalf("github requirement = %#v", got)
 	}
-	if got := setupRequirement("jira"); got == nil || !strings.Contains(got.Message, "Jira") {
-		t.Fatalf("jira requirement = %#v", got)
+	if got := setupRequirement("jira"); got != nil {
+		t.Fatalf("jira should be configured from workspace credentials, got %#v", got)
 	}
 }
 
@@ -130,6 +154,58 @@ func TestSlackSignatureVerification(t *testing.T) {
 	}
 }
 
+func TestIntercomAuthorizationURL(t *testing.T) {
+	got := intercomAuthorizationURL("client", "https://app.example/", "state-token")
+	if !strings.HasPrefix(got, "https://app.intercom.com/oauth?") {
+		t.Fatalf("unexpected URL = %q", got)
+	}
+	if !strings.Contains(got, "client_id=client") || !strings.Contains(got, "state=state-token") {
+		t.Fatalf("missing auth params = %q", got)
+	}
+	if !strings.Contains(got, "redirect_uri=https%3A%2F%2Fapp.example%2Fapi%2Fintegrations%2Fintercom%2Foauth%2Fcallback") {
+		t.Fatalf("missing redirect uri = %q", got)
+	}
+}
+
+func TestIntercomSignatureVerification(t *testing.T) {
+	body := []byte(`{"app_id":"app_123","conversation":{"id":"conv_123"}}`)
+	macSHA1 := hmac.New(sha1.New, []byte("secret"))
+	_, _ = macSHA1.Write(body)
+	hubSignature := "sha1=" + hex.EncodeToString(macSHA1.Sum(nil))
+	if !verifyIntercomSignature("secret", hubSignature, "", body) {
+		t.Fatal("valid Intercom sha1 signature was rejected")
+	}
+	macSHA256 := hmac.New(sha256.New, []byte("secret"))
+	_, _ = macSHA256.Write(body)
+	intercomSignature := hex.EncodeToString(macSHA256.Sum(nil))
+	if !verifyIntercomSignature("secret", "", intercomSignature, body) {
+		t.Fatal("valid Intercom sha256 signature was rejected")
+	}
+	if verifyIntercomSignature("secret", hubSignature, "", []byte(`{"app_id":"tampered"}`)) {
+		t.Fatal("tampered Intercom body was accepted")
+	}
+}
+
+func TestIntercomActionFromPayload(t *testing.T) {
+	payload := map[string]any{
+		"app_id": "app_123",
+		"conversation": map[string]any{
+			"id":        "conv_123",
+			"subject":   "Refund feedback",
+			"permalink": "https://app.intercom.com/a/inbox/inbox/conversation/conv_123",
+		},
+		"contact": map[string]any{"id": "contact_1", "name": "Ada", "email": "ada@example.com"},
+		"company": map[string]any{"id": "company_1", "name": "Acme"},
+	}
+	got := intercomActionFromPayload(payload)
+	if got.AppID != "app_123" || got.ConversationID != "conv_123" || got.Title != "Refund feedback" {
+		t.Fatalf("action = %#v", got)
+	}
+	if got.ContactEmail != "ada@example.com" || got.CompanyName != "Acme" {
+		t.Fatalf("customer mapping = %#v", got)
+	}
+}
+
 func TestSlackTeamID(t *testing.T) {
 	if got := slackTeamID(map[string]any{"team_id": "T123"}); got != "T123" {
 		t.Fatalf("top-level team id = %q", got)
@@ -156,6 +232,90 @@ func TestSlackEventsURLVerificationUsesSignedFixture(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "challenge-token") {
 		t.Fatalf("challenge response = %s", rec.Body.String())
+	}
+}
+
+func TestGitHubConfigAndSetupRequirement(t *testing.T) {
+	t.Setenv("GITHUB_APP_ID", "")
+	t.Setenv("GITHUB_CLIENT_ID", "")
+	t.Setenv("GITHUB_PRIVATE_KEY", "")
+	t.Setenv("GITHUB_WEBHOOK_SECRET", "")
+	if got := setupRequirement("github"); got == nil || got.Type != "configuration_required" || !strings.Contains(got.Message, "GITHUB_APP_ID") {
+		t.Fatalf("github requirement = %#v", got)
+	}
+	t.Setenv("GITHUB_APP_ID", "123")
+	t.Setenv("GITHUB_CLIENT_ID", "client-id")
+	t.Setenv("GITHUB_PRIVATE_KEY", "private-key")
+	t.Setenv("GITHUB_WEBHOOK_SECRET", "webhook-secret")
+	if got := setupRequirement("github"); got != nil {
+		t.Fatalf("configured github requirement = %#v", got)
+	}
+	cfg, ok := loadGitHubConfig()
+	if !ok || cfg.AppID != "123" || cfg.ClientID != "client-id" || cfg.PrivateKey != "private-key" || cfg.WebhookSecret != "webhook-secret" {
+		t.Fatalf("github config = %#v ok=%v", cfg, ok)
+	}
+}
+
+func TestGitHubSignatureVerification(t *testing.T) {
+	body := []byte(`{"installation":{"id":123},"repository":{"id":456,"full_name":"namuh-eng/exponential"}}`)
+	signature := githubTestSignature("secret", body)
+	if !verifyGitHubSignature("secret", signature, body) {
+		t.Fatal("valid GitHub signature was rejected")
+	}
+	if verifyGitHubSignature("secret", signature, []byte(`{"installation":{"id":999}}`)) {
+		t.Fatal("tampered GitHub body was accepted")
+	}
+	if verifyGitHubSignature("secret", strings.Replace(signature, "sha256=", "sha1=", 1), body) {
+		t.Fatal("wrong signature algorithm was accepted")
+	}
+}
+
+func TestGitHubRepositoryMappingActive(t *testing.T) {
+	payload := map[string]any{
+		"repository": map[string]any{"id": float64(456), "full_name": "namuh-eng/exponential"},
+	}
+	if !githubRepositoryMappingActive(map[string]any{"repositorySelection": "all"}, payload) {
+		t.Fatal("all repositories should accept repository payload")
+	}
+	selected := map[string]any{
+		"repositorySelection": "selected",
+		"selectedRepositories": []map[string]any{{"id": "456", "fullName": "namuh-eng/exponential", "active": true}},
+	}
+	if !githubRepositoryMappingActive(selected, payload) {
+		t.Fatal("selected active repository was rejected")
+	}
+	inactive := map[string]any{
+		"repositorySelection": "selected",
+		"selectedRepositories": []map[string]any{{"id": "456", "fullName": "namuh-eng/exponential", "active": false}},
+	}
+	if githubRepositoryMappingActive(inactive, payload) {
+		t.Fatal("inactive repository mapping was accepted")
+	}
+	unknown := map[string]any{"repositorySelection": "unknown"}
+	if githubRepositoryMappingActive(unknown, payload) {
+		t.Fatal("unknown repository selection should not accept repository payload")
+	}
+}
+
+func TestGitHubIntegrationDetailsAreSecretFree(t *testing.T) {
+	details := githubIntegrationDetails(map[string]any{
+		"installationId": "12345",
+		"account": map[string]any{"login": "namuh-eng", "type": "Organization"},
+		"repositorySelection": "selected",
+		"selectedRepositories": []map[string]any{{"id": "456", "fullName": "namuh-eng/exponential", "active": true}},
+		"privateKey": "do-not-return",
+		"webhookSecret": "do-not-return",
+	})
+	encoded, err := json.Marshal(details)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(encoded)
+	if !strings.Contains(text, "namuh-eng/exponential") || !strings.Contains(text, "12345") {
+		t.Fatalf("details missing safe metadata: %s", text)
+	}
+	if strings.Contains(text, "do-not-return") || strings.Contains(text, "privateKey") || strings.Contains(text, "webhookSecret") {
+		t.Fatalf("details leaked secret-like metadata: %s", text)
 	}
 }
 
@@ -299,6 +459,28 @@ func TestSlackIssueCreationEnabledSettings(t *testing.T) {
 	}
 	if slackIssueCreationEnabled(map[string]any{"integrations": map[string]any{"slack": map[string]any{"issueCreationEnabled": false}}}) {
 		t.Fatal("workspace integration disabled setting was ignored")
+	}
+}
+
+func TestSlackAskSettingsRespectPriorityAutoAssignAndEnabled(t *testing.T) {
+	priority, autoAssign, enabled := slackAskSettings(map[string]any{"collaboration": map[string]any{"asks": map[string]any{"enabled": true, "defaultPriority": "urgent", "autoAssign": false}}})
+	if priority != "urgent" || autoAssign || !enabled {
+		t.Fatalf("settings = %q %v %v", priority, autoAssign, enabled)
+	}
+
+	priority, autoAssign, enabled = slackAskSettings(map[string]any{"collaboration": map[string]any{"asks": map[string]any{"defaultPriority": "invalid"}}})
+	if priority != "medium" || !autoAssign || enabled {
+		t.Fatalf("default settings = %q %v %v", priority, autoAssign, enabled)
+	}
+}
+
+func TestSlackDefaultAssigneePrefersWorkflowAutomation(t *testing.T) {
+	got := slackDefaultAssignee(map[string]any{
+		"defaultAssigneeId":  "fallback-user",
+		"workflowAutomation": map[string]any{"defaultAssigneeId": "workflow-user"},
+	})
+	if got != "workflow-user" {
+		t.Fatalf("default assignee = %q", got)
 	}
 }
 
@@ -793,5 +975,231 @@ func TestSentryIssueActionFromPayload(t *testing.T) {
 	}
 	if got.AssigneeEmail != "ashley@example.com" || got.SentryIssue.ID != "987" || got.SentryIssue.Project.Slug != "api" {
 		t.Fatalf("parsed Sentry issue = %#v", got)
+	}
+}
+
+func TestSalesforceSetupRequirementAndAuthorizationURL(t *testing.T) {
+	t.Setenv("AUTH_SALESFORCE_ID", "")
+	t.Setenv("AUTH_SALESFORCE_SECRET", "")
+	t.Setenv("SALESFORCE_COMPONENT_SECRET", "")
+	if got := setupRequirement("salesforce"); got == nil || got.Type != "configuration_required" {
+		t.Fatalf("salesforce requirement = %#v", got)
+	}
+	t.Setenv("AUTH_SALESFORCE_ID", "salesforce-id")
+	t.Setenv("AUTH_SALESFORCE_SECRET", "salesforce-secret")
+	t.Setenv("SALESFORCE_COMPONENT_SECRET", "component-secret")
+	if got := setupRequirement("salesforce"); got != nil {
+		t.Fatalf("configured salesforce requirement = %#v", got)
+	}
+	got := salesforceAuthorizationURL("client", "https://app.example/", "state-token")
+	if !strings.HasPrefix(got, "https://login.salesforce.com/services/oauth2/authorize?") {
+		t.Fatalf("unexpected Salesforce URL = %q", got)
+	}
+	if !strings.Contains(got, "client_id=client") || !strings.Contains(got, "state=state-token") {
+		t.Fatalf("missing query params = %q", got)
+	}
+	if !strings.Contains(got, "api+refresh_token+id+openid") {
+		t.Fatalf("missing Salesforce scopes = %q", got)
+	}
+	if !strings.Contains(got, "redirect_uri=https%3A%2F%2Fapp.example%2Fapi%2Fintegrations%2Fsalesforce%2Foauth%2Fcallback") {
+		t.Fatalf("missing redirect uri = %q", got)
+	}
+}
+
+func TestSalesforceSignatureVerification(t *testing.T) {
+	body := []byte(`{"case":{"Id":"500xx"}}`)
+	signature := salesforceSignature("secret", body)
+	if !verifySalesforceSignature("secret", signature, body) {
+		t.Fatal("valid Salesforce signature was rejected")
+	}
+	if verifySalesforceSignature("secret", signature, []byte(`{"case":{"Id":"500yy"}}`)) {
+		t.Fatal("tampered Salesforce body was accepted")
+	}
+}
+
+func TestSalesforceCaseActionFromPayload(t *testing.T) {
+	payload := map[string]any{
+		"orgId":           "00Dxx",
+		"query":           "ENG",
+		"teamKey":         "ENG",
+		"issueIdentifier": "ENG-42",
+		"case": map[string]any{
+			"Id":           "500xx",
+			"CaseNumber":   "00001042",
+			"Subject":      "Customer cannot export",
+			"AccountId":    "001xx",
+			"AccountName":  "Acme",
+			"ContactEmail": "CUSTOMER@EXAMPLE.COM",
+		},
+	}
+	got := salesforceCaseActionFromPayload(payload)
+	if got.OrganizationID != "00Dxx" || got.Query != "ENG" || got.IssueID != "ENG-42" {
+		t.Fatalf("parsed action = %#v", got)
+	}
+	if got.Case.ID != "500xx" || got.Case.Number != "00001042" || got.Case.ContactEmail != "customer@example.com" {
+		t.Fatalf("parsed case = %#v", got.Case)
+	}
+}
+
+func TestSalesforceCasePatchBody(t *testing.T) {
+	t.Setenv("SALESFORCE_STATUS_FIELD", "Linear_Status__c")
+	body := salesforceCasePatchBody(map[string]any{
+		"status":   "Done",
+		"priority": "high",
+		"issueUrl": "https://app.example/team/ENG/issue/ENG-42",
+		"followUp": "Issue completed.",
+	})
+	if body["Linear_Status__c"] != "Done" || body["Exponential_Priority__c"] != "high" {
+		t.Fatalf("patch body = %#v", body)
+	}
+	if body["Exponential_Issue_URL__c"] == "" || body["Exponential_Follow_Up__c"] == "" {
+		t.Fatalf("missing backlink/follow-up fields = %#v", body)
+	}
+}
+
+func TestFrontSignatureVerification(t *testing.T) {
+	body := []byte(`{"workspaceSlug":"acme","conversation":{"id":"cnv_123"}}`)
+	mac := hmac.New(sha256.New, []byte("secret"))
+	_, _ = mac.Write(body)
+	signature := hex.EncodeToString(mac.Sum(nil))
+	if !verifyFrontSignature("secret", signature, body) {
+		t.Fatal("valid Front signature was rejected")
+	}
+	if !verifyFrontSignature("secret", "sha256="+signature, body) {
+		t.Fatal("prefixed Front signature was rejected")
+	}
+	if verifyFrontSignature("secret", signature, []byte(`{"workspaceSlug":"other"}`)) {
+		t.Fatal("tampered Front body was accepted")
+	}
+}
+
+func TestValidateFrontTokenUsesConfiguredBaseURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/teammates" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer front-token" {
+			t.Fatalf("authorization = %q", r.Header.Get("Authorization"))
+		}
+		_, _ = w.Write([]byte(`{"_results":[]}`))
+	}))
+	defer server.Close()
+	if err := validateFrontToken(t.Context(), server.Client(), server.URL, "front-token"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPostFrontJSONReopensConversation(t *testing.T) {
+	seen := []string{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Method+" "+r.URL.Path)
+		if r.Header.Get("Authorization") != "Bearer front-token" {
+			t.Fatalf("authorization = %q", r.Header.Get("Authorization"))
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	credential := frontCredential{APIToken: "front-token", BaseURL: server.URL}
+	if err := postFrontJSON(t.Context(), server.Client(), credential, http.MethodPost, "/conversations/cnv_123/comments", map[string]any{"body": "done"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := postFrontJSON(t.Context(), server.Client(), credential, http.MethodPatch, "/conversations/cnv_123", map[string]any{"status": "open"}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(seen, ",") != "POST /conversations/cnv_123/comments,PATCH /conversations/cnv_123" {
+		t.Fatalf("requests = %#v", seen)
+	}
+}
+
+func TestFrontReopenCommentBody(t *testing.T) {
+	body := frontReopenCommentBody(map[string]any{"identifier": "ENG-7", "title": "Fix exports", "category": "canceled", "issueUrl": "https://app.example/team/ENG/issue/ENG-7"})
+	if !strings.Contains(body, "ENG-7 Fix exports was canceled") || !strings.Contains(body, "https://app.example/team/ENG/issue/ENG-7") {
+			t.Fatalf("body = %q", body)
+	}
+}
+
+func TestZendeskSetupRequirementAndSubdomain(t *testing.T) {
+	if got := setupRequirement("zendesk"); got != nil {
+		t.Fatalf("zendesk should be configurable from admin setup, got %#v", got)
+	}
+	subdomain, accountURL, err := normalizeZendeskSubdomain("https://Acme.zendesk.com/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subdomain != "acme" || accountURL != "https://acme.zendesk.com" {
+		t.Fatalf("normalized = %q %q", subdomain, accountURL)
+	}
+	if _, _, err := normalizeZendeskSubdomain("https://acme.zendesk.com/path"); err == nil {
+		t.Fatal("Zendesk origin with path was accepted")
+	}
+}
+
+func TestZendeskSignatureVerification(t *testing.T) {
+	body := []byte(`{"ticket":{"id":"42"}}`)
+	mac := hmac.New(sha256.New, []byte("secret"))
+	_, _ = mac.Write(body)
+	signature := hex.EncodeToString(mac.Sum(nil))
+	if !verifyZendeskSignature("secret", signature, body) {
+		t.Fatal("valid Zendesk signature was rejected")
+	}
+	if !verifyZendeskSignature("secret", "sha256="+signature, body) {
+		t.Fatal("prefixed Zendesk signature was rejected")
+	}
+	if verifyZendeskSignature("secret", signature, []byte(`{"ticket":{"id":"43"}}`)) {
+		t.Fatal("tampered Zendesk body was accepted")
+	}
+}
+
+func TestZendeskTicketActionFromPayload(t *testing.T) {
+	payload := map[string]any{
+		"query":           "ENG",
+		"teamKey":         "ENG",
+		"issueIdentifier": "ENG-42",
+		"ticket": map[string]any{
+			"id":          "123",
+			"url":         "https://acme.zendesk.com/agent/tickets/123",
+			"subject":     "Customer cannot export",
+			"description": "Export fails",
+			"status":      "open",
+			"requester":   map[string]any{"id": "9", "name": "Ada", "email": "ADA@EXAMPLE.COM"},
+			"organization": map[string]any{"id": "7", "name": "Acme"},
+		},
+	}
+	got := zendeskTicketActionFromPayload(payload)
+	if got.Query != "ENG" || got.TeamKey != "ENG" || got.IssueID != "ENG-42" {
+		t.Fatalf("parsed action = %#v", got)
+	}
+	if got.Subdomain != "acme" || got.Ticket.ID != "123" || got.Ticket.Requester.Email != "ada@example.com" || got.Ticket.Organization.Name != "Acme" {
+		t.Fatalf("parsed ticket = %#v", got.Ticket)
+	}
+}
+
+func TestUpdateZendeskTicket(t *testing.T) {
+	var got map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v2/tickets/123.json" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		username, password, ok := r.BasicAuth()
+		if !ok || username != "admin@example.com/token" || password != "token" {
+			t.Fatalf("basic auth = %q %q %v", username, password, ok)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = w.Write([]byte(`{"ticket":{"id":123}}`))
+	}))
+	defer server.Close()
+	t.Setenv("ZENDESK_API_BASE_URL", server.URL)
+
+	err := updateZendeskTicket(t.Context(), server.Client(), zendeskCredential{Subdomain: "acme", AccountURL: "https://acme.zendesk.com", Email: "admin@example.com", APIToken: "token"}, "123", "Done")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticket := got["ticket"].(map[string]any)
+	comment := ticket["comment"].(map[string]any)
+	if comment["body"] != "Done" || comment["public"] != false || ticket["status"] != "open" {
+		t.Fatalf("payload = %#v", got)
+
 	}
 }

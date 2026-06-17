@@ -83,6 +83,16 @@ func (h Handler) MutateCurrentImportExport(w http.ResponseWriter, r *http.Reques
 		h.handleGitHubProviderConfirm(w, r, current, p, body)
 	case "cancel_provider_import":
 		h.handleProviderImportCancel(w, r, current, body)
+	case "configure_jira":
+		h.handleJiraConfigure(w, r, current, p, body)
+	case "preview_jira_import":
+		h.handleJiraPreview(w, r, current, body)
+	case "start_jira_import", "retry_jira_import", "sync_jira_project":
+		h.handleJiraImport(w, r, current, p, body)
+	case "pause_jira_sync":
+		h.handleJiraSyncPause(w, r, current, p, body, true)
+	case "resume_jira_sync":
+		h.handleJiraSyncPause(w, r, current, p, body, false)
 	case "start_csv_import":
 		h.handleCurrentCSVImport(w, r, current, p, body)
 	default:

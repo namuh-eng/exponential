@@ -77,6 +77,7 @@ const mockIssueDetail = {
       attachments: [],
     },
   ],
+  figmaSources: [],
   subIssues: [],
   sources: [
     {
@@ -130,6 +131,62 @@ describe("IssueDetailView UI", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByText("First comment")).toBeInTheDocument();
     expect(screen.getByText("Sentry · api · 987")).toBeInTheDocument();
+  });
+
+  it("renders safe Figma preview cards and refreshes them", async () => {
+    const figmaSource = {
+      id: "figma-1",
+      url: "https://figma.com/design/file123/Product?node-id=1-2",
+      normalizedUrl: "https://www.figma.com/design/file123?node-id=1%3A2",
+      fileKey: "file123",
+      nodeId: "1:2",
+      kind: "design" as const,
+      name: "Checkout mockup",
+      thumbnailUrl: null,
+      containerType: "issue_description" as const,
+      capturedAt: "2026-04-25T09:30:00Z",
+      refreshedAt: null,
+      lastError: null,
+    };
+    const refreshed = {
+      ...figmaSource,
+      refreshedAt: "2026-04-25T10:30:00Z",
+    };
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      const path = url.toString();
+      if (path.includes("/api/issues/iss-1/figma-sources/figma-1/refresh")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => refreshed,
+        } as Response);
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ ...mockIssueDetail, figmaSources: [figmaSource] }),
+      } as Response);
+    });
+
+    render(<IssueDetailView issueId="iss-1" />);
+
+    expect(await screen.findByLabelText("Figma previews")).toBeInTheDocument();
+    expect(screen.getByText("Checkout mockup")).toBeInTheDocument();
+    expect(screen.getByText("file123 · 1:2")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Checkout mockup" }),
+    ).toHaveAttribute(
+      "href",
+      "https://www.figma.com/design/file123?node-id=1%3A2",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/issues/iss-1/figma-sources/figma-1/refresh",
+        { method: "POST" },
+      );
+      expect(screen.getByText("Figma preview refreshed.")).toBeInTheDocument();
+    });
   });
 
   it("renders exponential-like planning fields, relations, issue reactions, and actions", async () => {

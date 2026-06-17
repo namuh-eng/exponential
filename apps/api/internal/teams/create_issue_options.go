@@ -227,7 +227,12 @@ func (h Handler) optionLabels(ctx context.Context, workspaceID, teamID string) (
 }
 
 func (h Handler) optionProjects(ctx context.Context, workspaceID string) ([]optionProject, error) {
-	rows, err := h.DB.Query(ctx, `select id::text,name,icon from project where workspace_id=$1::uuid order by name asc`, workspaceID)
+	// Exclude completed and canceled projects. They would be rejected by
+	// validateTriageProject anyway, and offering dead projects as routing
+	// targets only produces confusing validation errors for the user.
+	// Issue creation also benefits from this filter — there is no reason to
+	// let users create new issues in a completed or canceled project.
+	rows, err := h.DB.Query(ctx, `select id::text,name,icon from project where workspace_id=$1::uuid and completed_at is null and canceled_at is null order by name asc`, workspaceID)
 	if err != nil {
 		return nil, err
 	}
