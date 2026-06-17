@@ -81,7 +81,7 @@ const DEFAULT_SAML: SamlSettings = {
 
 const DEFAULT_SCIM: ScimSettings = {
   enabled: false,
-  baseUrl: "/api/scim/current",
+  baseUrl: "/scim/v2",
   tokens: [],
   lastSyncAt: null,
   status: "disabled",

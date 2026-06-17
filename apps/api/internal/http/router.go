@@ -39,6 +39,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/projectupdateconfigs"
 	"github.com/namuh-eng/exponential/apps/api/internal/projectupdates"
 	"github.com/namuh-eng/exponential/apps/api/internal/ratelimit"
+	"github.com/namuh-eng/exponential/apps/api/internal/scim"
 	"github.com/namuh-eng/exponential/apps/api/internal/sidebar"
 	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
 	"github.com/namuh-eng/exponential/apps/api/internal/teams"
@@ -100,6 +101,7 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 	r.Get("/metrics/red", redMetricsHandler)
 	r.Get("/api/metrics/red", redMetricsHandler)
 
+	r.Mount("/scim/v2", scim.Handler{DB: db}.Routes())
 	mountAPIRoutes(r, "/v1", db, emailSender, logger)
 	mountAPIRoutes(r, "/api", db, emailSender, logger)
 	return r

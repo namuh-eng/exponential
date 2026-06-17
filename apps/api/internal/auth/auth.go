@@ -545,7 +545,7 @@ func (m Middleware) browserSessionByToken(ctx context.Context, r *http.Request, 
 			from session s
 			join "user" u on u.id = s.user_id
 			join member m on m.user_id = u.id
-			where s.token_hash = $1 and s.expires_at > now() and m.workspace_id = $2::uuid
+			where s.token_hash = $1 and s.expires_at > now() and m.workspace_id = $2::uuid and m.deleted_at is null
 			limit 1`, tokenHash, requested.ID).Scan(
 			&session.User.ID,
 			&session.User.Name,
@@ -567,7 +567,7 @@ func (m Middleware) browserSessionByToken(ctx context.Context, r *http.Request, 
 			join "user" u on u.id = s.user_id
 			join member m on m.user_id = u.id
 			join workspace w on w.id = m.workspace_id
-			where s.token_hash = $1 and s.expires_at > now() and w.url_slug = $2
+			where s.token_hash = $1 and s.expires_at > now() and w.url_slug = $2 and m.deleted_at is null
 			limit 1`, tokenHash, requested.Slug).Scan(
 			&session.User.ID,
 			&session.User.Name,
@@ -587,7 +587,7 @@ func (m Middleware) browserSessionByToken(ctx context.Context, r *http.Request, 
 		select u.id, u.name, u.email, u.image, m.workspace_id::text, m.role::text
 		from session s
 		join "user" u on u.id = s.user_id
-		left join member m on m.user_id = u.id
+		left join member m on m.user_id = u.id and m.deleted_at is null
 		where s.token_hash = $1 and s.expires_at > now()
 		order by m.created_at desc nulls last
 		limit 1`, tokenHash).Scan(
@@ -694,7 +694,7 @@ func (m Middleware) authenticateLegacyAPIKey(ctx context.Context, keyHash string
 		select ak.id::text, ak.user_id, ak.workspace_id::text, m.role::text
 		from api_key ak
 		join member m on m.user_id = ak.user_id and m.workspace_id = ak.workspace_id
-		where ak.key_hash = $1
+		where ak.key_hash = $1 and m.deleted_at is null
 		limit 1`, keyHash).Scan(&p.APIKeyID, &p.UserID, &p.WorkspaceID, &p.Role)
 	if err != nil {
 		return Principal{}, errUnauthorized("invalid token")
@@ -710,7 +710,7 @@ func (m Middleware) authenticatePAT(ctx context.Context, keyHash string) (Princi
 		select pat.id::text, pat.user_id, pat.workspace_id::text, m.role::text, coalesce(pat.scopes,'[]'::jsonb)
 		from personal_access_token pat
 		join member m on m.user_id = pat.user_id and m.workspace_id = pat.workspace_id
-		where pat.token_hash = $1 and pat.revoked_at is null
+		where pat.token_hash = $1 and pat.revoked_at is null and m.deleted_at is null
 		limit 1`, keyHash).Scan(&p.APIKeyID, &p.UserID, &p.WorkspaceID, &p.Role, &scopesRaw)
 	if err != nil {
 		return Principal{}, errUnauthorized("invalid token")

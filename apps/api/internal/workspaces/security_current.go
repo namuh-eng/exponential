@@ -17,6 +17,7 @@ type currentWorkspaceSecurityRecord struct {
 	InviteLinkToken      *string
 	ApprovedEmailDomains []string
 	Role                 string
+	SCIMTokens           []scimToken
 }
 
 func (h Handler) GetCurrentSecurity(w http.ResponseWriter, r *http.Request) {
@@ -102,6 +103,10 @@ func (h Handler) currentSecurityRecord(r *http.Request, p auth.Principal) (curre
 	current.Settings = map[string]any{}
 	_ = json.Unmarshal(rawSettings, &current.Settings)
 	_ = json.Unmarshal(rawDomains, &current.ApprovedEmailDomains)
+	current.SCIMTokens, err = h.scimTokens(r.Context(), current.ID)
+	if err != nil {
+		return current, err
+	}
 	return current, nil
 }
 
@@ -136,7 +141,7 @@ func (h Handler) currentSecurityPayload(r *http.Request, current currentWorkspac
 		"hipaa":                boolSetting(security, "hipaa", false),
 		"ipRestrictions":       firstNonNil(security["ipRestrictions"], []any{}),
 		"saml":                 readSAMLSettings(current.Settings),
-		"scim":                 publicSCIM(readSCIMSettings(current.Settings, scimBaseURL(r, current.ID))),
+		"scim":                 publicSCIM(withSCIMTokens(readSCIMSettings(current.Settings, scimBaseURL(r, current.ID)), current.SCIMTokens)),
 		"capabilities": map[string]any{
 			"canInviteMembers":            canPermission(current.Role, permissions["invitationsRole"]),
 			"canCreateTeams":              canPermission(current.Role, permissions["teamCreationRole"]),
