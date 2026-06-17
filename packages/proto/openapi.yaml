@@ -1518,6 +1518,57 @@ paths:
                 $ref: '#/components/schemas/SlackConfigurationRequiredResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /integrations/google-sheets/connect:
+    post:
+      operationId: connectGoogleSheetsIntegration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleSheetsConnectRequest'
+      responses:
+        '200':
+          description: Google authorization URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlackConnectResponse'
+        '412':
+          description: Google OAuth is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlackConfigurationRequiredResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/google-sheets/refresh:
+    post:
+      operationId: refreshGoogleSheetsIntegration
+      responses:
+        '200':
+          description: Google Sheets refresh queued and run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/google-sheets/oauth/callback:
+    get:
+      operationId: googleSheetsOAuthCallback
+      security: []
+      parameters:
+        - name: code
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+      responses:
+        '302': { description: Redirects to integration settings }
+        default:
+          $ref: '#/components/responses/Problem'
   /integrations/discord/connect:
     post:
       operationId: connectDiscordIntegration
@@ -2237,6 +2288,18 @@ paths:
       responses:
         '200':
           description: Slack disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /integrations/google-sheets/disconnect:
+    post:
+      operationId: disconnectGoogleSheetsIntegration
+      responses:
+        '200':
+          description: Google Sheets disconnected
           content:
             application/json:
               schema:
@@ -5202,11 +5265,49 @@ components:
         auditEvents:
           type: array
           items: { $ref: '#/components/schemas/IntegrationAuditEvent' }
+    GoogleSheetsScopeSelection:
+      type: object
+      required: [issues, projects, initiatives]
+      properties:
+        issues: { type: boolean }
+        projects: { type: boolean }
+        initiatives: { type: boolean }
+    GoogleSheetsConnectRequest:
+      type: object
+      required: [scopes, includePrivateTeams]
+      properties:
+        scopes: { $ref: '#/components/schemas/GoogleSheetsScopeSelection' }
+        includePrivateTeams: { type: boolean, default: false }
+    GoogleSheetsRowCounts:
+      type: object
+      required: [issues, projects, initiatives]
+      properties:
+        issues: { type: integer, minimum: 0 }
+        projects: { type: integer, minimum: 0 }
+        initiatives: { type: integer, minimum: 0 }
+    GoogleSheetsIntegrationDetails:
+      type: object
+      required: [spreadsheetId, spreadsheetUrl, spreadsheetTitle, scopes, includePrivateTeams, schedule, enabled, nextRunAt, rowCounts]
+      properties:
+        spreadsheetId: { type: string }
+        spreadsheetUrl: { type: string }
+        spreadsheetTitle: { type: string }
+        scopes: { $ref: '#/components/schemas/GoogleSheetsScopeSelection' }
+        includePrivateTeams: { type: boolean }
+        schedule: { type: string, enum: [hourly] }
+        enabled: { type: boolean }
+        nextRunAt: { type: [string, 'null'], format: date-time }
+        rowCounts: { $ref: '#/components/schemas/GoogleSheetsRowCounts' }
+        sheetSchemas:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
     Integration:
       type: object
       required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions, health, details]
       properties:
-        provider: { type: string, enum: [github, gitlab, jira, slack, sentry, zendesk, discord, microsoft_teams, figma] }
+        provider: { type: string, enum: [github, gitlab, jira, slack, sentry, zendesk, discord, microsoft_teams, google_sheets, figma] }
         name: { type: string }
         description: { type: string }
         id: { type: [string, 'null'], format: uuid }
@@ -5221,8 +5322,11 @@ components:
         actions: { $ref: '#/components/schemas/IntegrationActions' }
         health: { $ref: '#/components/schemas/IntegrationHealth' }
         details:
-          type: object
-          additionalProperties: true
+          anyOf:
+            - $ref: '#/components/schemas/GoogleSheetsIntegrationDetails'
+            - type: object
+              additionalProperties: true
+            - type: 'null'
     GitHubAccount:
       type: object
       required: [id, login, type]

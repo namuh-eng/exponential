@@ -1162,6 +1162,54 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/google-sheets/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectGoogleSheetsIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/google-sheets/refresh": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["refreshGoogleSheetsIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/google-sheets/oauth/callback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["googleSheetsOAuthCallback"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/discord/connect": {
     parameters: {
       query?: never;
@@ -1828,6 +1876,22 @@ export interface paths {
     get?: never;
     put?: never;
     post: operations["disconnectSlackIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/google-sheets/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectGoogleSheetsIntegration"];
     delete?: never;
     options?: never;
     head?: never;
@@ -3668,6 +3732,37 @@ export interface components {
       failedJobCount: number;
       auditEvents: components["schemas"]["IntegrationAuditEvent"][];
     };
+    GoogleSheetsScopeSelection: {
+      issues: boolean;
+      projects: boolean;
+      initiatives: boolean;
+    };
+    GoogleSheetsConnectRequest: {
+      scopes: components["schemas"]["GoogleSheetsScopeSelection"];
+      /** @default false */
+      includePrivateTeams: boolean;
+    };
+    GoogleSheetsRowCounts: {
+      issues: number;
+      projects: number;
+      initiatives: number;
+    };
+    GoogleSheetsIntegrationDetails: {
+      spreadsheetId: string;
+      spreadsheetUrl: string;
+      spreadsheetTitle: string;
+      scopes: components["schemas"]["GoogleSheetsScopeSelection"];
+      includePrivateTeams: boolean;
+      /** @enum {string} */
+      schedule: "hourly";
+      enabled: boolean;
+      /** Format: date-time */
+      nextRunAt: string | null;
+      rowCounts: components["schemas"]["GoogleSheetsRowCounts"];
+      sheetSchemas?: {
+        [key: string]: string[];
+      };
+    };
     Integration: {
       /** @enum {string} */
       provider:
@@ -3679,6 +3774,7 @@ export interface components {
         | "zendesk"
         | "discord"
         | "microsoft_teams"
+        | "google_sheets"
         | "figma";
       name: string;
       description: string;
@@ -3702,9 +3798,12 @@ export interface components {
         | null;
       actions: components["schemas"]["IntegrationActions"];
       health: components["schemas"]["IntegrationHealth"];
-      details: {
-        [key: string]: unknown;
-      };
+      details:
+        | components["schemas"]["GoogleSheetsIntegrationDetails"]
+        | {
+            [key: string]: unknown;
+          }
+        | null;
     };
     GitHubAccount: {
       id: string;
@@ -8487,6 +8586,83 @@ export interface operations {
       default: components["responses"]["Problem"];
     };
   };
+  connectGoogleSheetsIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["GoogleSheetsConnectRequest"];
+      };
+    };
+    responses: {
+      /** @description Google authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SlackConnectResponse"];
+        };
+      };
+      /** @description Google OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SlackConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  refreshGoogleSheetsIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Google Sheets refresh queued and run */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  googleSheetsOAuthCallback: {
+    parameters: {
+      query?: {
+        code?: string;
+        state?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Redirects to integration settings */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   connectDiscordIntegration: {
     parameters: {
       query?: never;
@@ -9517,6 +9693,27 @@ export interface operations {
     requestBody?: never;
     responses: {
       /** @description Slack disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectGoogleSheetsIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Google Sheets disconnected */
       200: {
         headers: {
           [name: string]: unknown;
