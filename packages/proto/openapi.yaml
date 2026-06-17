@@ -82,6 +82,268 @@ paths:
                 $ref: '#/components/schemas/AttachmentDownloadUrlResponse'
         default:
           $ref: '#/components/responses/Problem'
+
+  /customers:
+    get:
+      operationId: listCustomers
+      summary: List customers in the authenticated workspace
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: tier
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Customers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerListResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createCustomer
+      summary: Create a customer in the authenticated workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCustomerRequest'
+      responses:
+        '201':
+          description: Customer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        default:
+          $ref: '#/components/responses/Problem'
+  /customers/{customerID}:
+    parameters:
+      - name: customerID
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getCustomer
+      summary: Get a customer with requests and linked work
+      responses:
+        '200':
+          description: Customer detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerDetailResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: updateCustomer
+      summary: Update a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCustomerRequest'
+      responses:
+        '200':
+          description: Customer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        default:
+          $ref: '#/components/responses/Problem'
+  /customers/{customerID}/requests:
+    parameters:
+      - name: customerID
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: createCustomerRequest
+      summary: Create a customer request and optionally link it to work
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCustomerRequestRequest'
+      responses:
+        '201':
+          description: Customer request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRequest'
+        default:
+          $ref: '#/components/responses/Problem'
+  /customers/{customerID}/requests.csv:
+    parameters:
+      - name: customerID
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: exportCustomerRequestsForCustomer
+      summary: Export a customer's requests as CSV
+      responses:
+        '200':
+          description: CSV export
+          content:
+            text/csv:
+              schema: { type: string }
+        default:
+          $ref: '#/components/responses/Problem'
+  /customer-requests:
+    get:
+      operationId: customerRequestsNamespace
+      summary: Customer request route namespace; mutate concrete request resources by id.
+      responses:
+        default:
+          $ref: '#/components/responses/Problem'
+  /customer-requests/{requestID}:
+    parameters:
+      - name: requestID
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      operationId: updateCustomerRequest
+      summary: Update a customer request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCustomerRequestRequest'
+      responses:
+        '200':
+          description: Customer request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRequest'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deleteCustomerRequest
+      summary: Delete a customer request
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+        default:
+          $ref: '#/components/responses/Problem'
+  /customer-requests/{requestID}/issues:
+    parameters:
+      - name: requestID
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: linkCustomerRequestIssue
+      summary: Link a customer request to an issue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [issueId]
+              properties:
+                issueId: { type: string }
+      responses:
+        '200':
+          description: Customer request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRequest'
+        default:
+          $ref: '#/components/responses/Problem'
+  /customer-requests/{requestID}/issues/{issueID}:
+    parameters:
+      - name: requestID
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: issueID
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: unlinkCustomerRequestIssue
+      summary: Unlink a customer request from an issue
+      responses:
+        '200':
+          description: Customer request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRequest'
+        default:
+          $ref: '#/components/responses/Problem'
+  /customer-requests/{requestID}/projects:
+    parameters:
+      - name: requestID
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: linkCustomerRequestProject
+      summary: Link a customer request to a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [projectId]
+              properties:
+                projectId: { type: string }
+      responses:
+        '200':
+          description: Customer request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRequest'
+        default:
+          $ref: '#/components/responses/Problem'
+  /customer-requests/{requestID}/projects/{projectID}:
+    parameters:
+      - name: requestID
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: projectID
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: unlinkCustomerRequestProject
+      summary: Unlink a customer request from a project
+      responses:
+        '200':
+          description: Customer request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRequest'
+        default:
+          $ref: '#/components/responses/Problem'
   /demo/session:
     get:
       operationId: createDemoSession
@@ -272,6 +534,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReactionSummaryList'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /issues/{id}/customer-requests.csv:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: exportCustomerRequestsForIssue
+      summary: Export customer requests linked to an issue as CSV
+      responses:
+        '200':
+          description: CSV export
+          content:
+            text/csv:
+              schema: { type: string }
         default:
           $ref: '#/components/responses/Problem'
   /issues/{id}/discussion-summary:
@@ -2657,6 +2937,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Project'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /projects/{slug}/customer-requests.csv:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: exportCustomerRequestsForProject
+      summary: Export customer requests linked to a project as CSV
+      responses:
+        '200':
+          description: CSV export
+          content:
+            text/csv:
+              schema: { type: string }
         default:
           $ref: '#/components/responses/Problem'
   /projects/{slug}:
@@ -6581,6 +6879,149 @@ components:
         start_date: { type: string }
         end_date: { type: string }
         auto_rollover: { type: boolean }
+
+    Customer:
+      type: object
+      required: [id, workspaceId, name, requestCount, issueCount, projectCount, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        domain: { type: [string, 'null'] }
+        name: { type: string }
+        revenue: { type: [number, 'null'] }
+        size: { type: [integer, 'null'] }
+        tier: { type: [string, 'null'] }
+        status: { type: [string, 'null'] }
+        ownerId: { type: [string, 'null'] }
+        source: { type: [string, 'null'] }
+        requestCount: { type: integer }
+        issueCount: { type: integer }
+        projectCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CustomerSummary:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        domain: { type: [string, 'null'] }
+        tier: { type: [string, 'null'] }
+        status: { type: [string, 'null'] }
+    CustomerRequest:
+      type: object
+      required: [id, workspaceId, customerId, customer, title, important, linkedIssues, linkedProjects, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        customerId: { type: string, format: uuid }
+        customer:
+          $ref: '#/components/schemas/CustomerSummary'
+        title: { type: string }
+        body: { type: [string, 'null'] }
+        source: { type: [string, 'null'] }
+        sourceUrl: { type: [string, 'null'] }
+        externalProvider: { type: [string, 'null'] }
+        externalId: { type: [string, 'null'] }
+        important: { type: boolean }
+        createdByUserId: { type: [string, 'null'] }
+        linkedIssues:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerLinkedIssue'
+        linkedProjects:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerLinkedProject'
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CustomerLinkedIssue:
+      type: object
+      required: [id, identifier, title, teamKey]
+      properties:
+        id: { type: string, format: uuid }
+        identifier: { type: string }
+        title: { type: string }
+        teamKey: { type: string }
+    CustomerLinkedProject:
+      type: object
+      required: [id, slug, name]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+    CustomerListResponse:
+      type: object
+      required: [customers]
+      properties:
+        customers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Customer'
+    CustomerDetailResponse:
+      type: object
+      required: [customer, requests, issues, projects]
+      properties:
+        customer:
+          $ref: '#/components/schemas/Customer'
+        requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerRequest'
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerLinkedIssue'
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerLinkedProject'
+    CreateCustomerRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        domain: { type: [string, 'null'] }
+        revenue: { type: [number, 'null'] }
+        size: { type: [integer, 'null'] }
+        tier: { type: [string, 'null'] }
+        status: { type: [string, 'null'] }
+        ownerId: { type: [string, 'null'] }
+        source: { type: [string, 'null'] }
+    UpdateCustomerRequest:
+      type: object
+      properties:
+        name: { type: string }
+        domain: { type: [string, 'null'] }
+        revenue: { type: [number, 'null'] }
+        size: { type: [integer, 'null'] }
+        tier: { type: [string, 'null'] }
+        status: { type: [string, 'null'] }
+        ownerId: { type: [string, 'null'] }
+        source: { type: [string, 'null'] }
+    CreateCustomerRequestRequest:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        body: { type: [string, 'null'] }
+        source: { type: [string, 'null'] }
+        sourceUrl: { type: [string, 'null'] }
+        externalProvider: { type: [string, 'null'] }
+        externalId: { type: [string, 'null'] }
+        important: { type: boolean }
+        issueId: { type: [string, 'null'] }
+        projectId: { type: [string, 'null'] }
+    UpdateCustomerRequestRequest:
+      type: object
+      properties:
+        title: { type: string }
+        body: { type: [string, 'null'] }
+        source: { type: [string, 'null'] }
+        sourceUrl: { type: [string, 'null'] }
+        externalProvider: { type: [string, 'null'] }
+        externalId: { type: [string, 'null'] }
+        important: { type: boolean }
     WorkspaceRole:
       type: string
       enum: [owner, admin, member, guest]
