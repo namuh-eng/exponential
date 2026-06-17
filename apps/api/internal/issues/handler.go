@@ -1,8 +1,10 @@
 package issues
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -187,6 +189,7 @@ func (h Handler) Routes() chi.Router {
 	r.Get("/{id}/subscription", h.GetSubscription)
 	r.Post("/{id}/subscription", h.Subscribe)
 	r.Delete("/{id}/subscription", h.Unsubscribe)
+	r.Get("/{id}/customer-requests.csv", h.ExportCustomerRequests)
 	r.Post("/{id}/figma-sources/{sourceID}/refresh", h.RefreshFigmaSource)
 	r.Get("/{id}", h.Get)
 	r.Patch("/{id}", h.Update)
@@ -206,6 +209,11 @@ func (h Handler) List(w http.ResponseWriter, r *http.Request) {
 		args = append(args, teamID)
 		where += fmt.Sprintf(" and i.team_id = $%d::uuid", len(args))
 	}
+	if p.Role == "guest" && customerFilterRequested(r) {
+		problem.Write(w, http.StatusForbidden, "Forbidden", "Guests cannot access customer request filters")
+		return
+	}
+	applyCustomerIssueFilters(r, &where, &args)
 	if hasCursor {
 		args = append(args, cursorCreated, cursorID)
 		where += fmt.Sprintf(" and (i.created_at, i.id) < ($%d, $%d::uuid)", len(args)-1, len(args))
@@ -307,7 +315,7 @@ func (h Handler) Get(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusInternalServerError, "Get issue failed", err.Error())
 		return
 	}
-	detail, err := h.issueDetail(r.Context(), issue, p.UserID)
+	detail, err := h.issueDetail(r.Context(), issue, p.UserID, p.Role != "guest")
 	if err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Get issue failed", err.Error())
 		return
@@ -315,7 +323,7 @@ func (h Handler) Get(w http.ResponseWriter, r *http.Request) {
 	problem.JSON(w, http.StatusOK, detail)
 }
 
-func (h Handler) issueDetail(ctx context.Context, issue Issue, userID string) (map[string]any, error) {
+func (h Handler) issueDetail(ctx context.Context, issue Issue, userID string, includeCustomerRequests bool) (map[string]any, error) {
 	state, err := h.issueState(ctx, issue.StateID)
 	if err != nil {
 		return nil, err
@@ -380,6 +388,13 @@ func (h Handler) issueDetail(ctx context.Context, issue Issue, userID string) (m
 	if err != nil {
 		return nil, err
 	}
+	customerRequests := []map[string]any{}
+	if includeCustomerRequests {
+		customerRequests, err = h.issueCustomerRequests(ctx, issue.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return map[string]any{
 		"id":                   issue.ID,
 		"number":               issue.Number,
@@ -407,6 +422,7 @@ func (h Handler) issueDetail(ctx context.Context, issue Issue, userID string) (m
 		"comments":             []any{},
 		"subIssues":            subIssues,
 		"sources":              sources,
+		"customerRequests":     customerRequests,
 		"team_id":              issue.TeamID,
 		"state_id":             issue.StateID,
 		"assignee_id":          issue.AssigneeID,
@@ -416,6 +432,161 @@ func (h Handler) issueDetail(ctx context.Context, issue Issue, userID string) (m
 		"project_milestone_id": issue.ProjectMilestoneID,
 		"cycle_id":             issue.CycleID,
 	}, nil
+}
+
+func (h Handler) ExportCustomerRequests(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	if p.Role == "guest" {
+		problem.Write(w, http.StatusForbidden, "Forbidden", "Guests cannot access customer requests")
+		return
+	}
+	issue, err := h.findIssue(r.Context(), chi.URLParam(r, "id"), p.WorkspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, http.StatusNotFound, "Issue not found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Export customer requests failed", err.Error())
+		return
+	}
+	requests, err := h.issueCustomerRequests(r.Context(), issue.ID)
+	if err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Export customer requests failed", err.Error())
+		return
+	}
+	writeCustomerRequestsCSV(w, "issue-"+issue.Identifier+"-customer-requests.csv", requests)
+}
+
+func (h Handler) issueCustomerRequests(ctx context.Context, issueID string) ([]map[string]any, error) {
+	rows, err := h.DB.Query(ctx, `
+		select cr.id::text, cr.customer_id::text, c.name, c.domain, c.tier, c.status, cr.title, cr.body, cr.important, cr.source, cr.source_url, cr.created_at, cr.updated_at
+		from issue_customer_request icr
+		join customer_request cr on cr.id=icr.customer_request_id
+		join customer c on c.id=cr.customer_id
+		where icr.issue_id=$1::uuid
+		order by cr.important desc, cr.created_at desc`, issueID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanCustomerRequests(rows)
+}
+
+func scanCustomerRequests(rows pgx.Rows) ([]map[string]any, error) {
+	requests := []map[string]any{}
+	for rows.Next() {
+		var id, customerID, customerName, title string
+		var domain, tier, status, body, source, sourceURL pgtype.Text
+		var important bool
+		var createdAt, updatedAt time.Time
+		if err := rows.Scan(&id, &customerID, &customerName, &domain, &tier, &status, &title, &body, &important, &source, &sourceURL, &createdAt, &updatedAt); err != nil {
+			return nil, err
+		}
+		requests = append(requests, map[string]any{
+			"id":         id,
+			"customerId": customerID,
+			"customer":   map[string]any{"id": customerID, "name": customerName, "domain": textValue(domain), "tier": textValue(tier), "status": textValue(status)},
+			"title":      title,
+			"body":       textValue(body),
+			"important":  important,
+			"source":     textValue(source),
+			"sourceUrl":  textValue(sourceURL),
+			"createdAt":  createdAt.UTC().Format(time.RFC3339Nano),
+			"updatedAt":  updatedAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	return requests, rows.Err()
+}
+
+func writeCustomerRequestsCSV(w http.ResponseWriter, filename string, requests []map[string]any) {
+	var buf bytes.Buffer
+	writer := csv.NewWriter(&buf)
+	_ = writer.Write([]string{"request_id", "customer_id", "customer_name", "customer_domain", "title", "body", "important", "source", "source_url", "created_at"})
+	for _, request := range requests {
+		customer, _ := request["customer"].(map[string]any)
+		_ = writer.Write([]string{
+			stringAny(request["id"]),
+			stringAny(request["customerId"]),
+			stringAny(customer["name"]),
+			stringAny(customer["domain"]),
+			stringAny(request["title"]),
+			stringAny(request["body"]),
+			strconv.FormatBool(boolAny(request["important"])),
+			stringAny(request["source"]),
+			stringAny(request["sourceUrl"]),
+			stringAny(request["createdAt"]),
+		})
+	}
+	writer.Flush()
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(buf.Bytes())
+}
+
+func textValue(value pgtype.Text) any {
+	if !value.Valid {
+		return nil
+	}
+	return value.String
+}
+
+func stringAny(value any) string {
+	if value == nil {
+		return ""
+	}
+	if s, ok := value.(string); ok {
+		return s
+	}
+	return fmt.Sprint(value)
+}
+
+func boolAny(value any) bool {
+	if v, ok := value.(bool); ok {
+		return v
+	}
+	return false
+}
+
+func customerFilterRequested(r *http.Request) bool {
+	for _, key := range []string{"customer_count", "customer", "customer_name", "customer_domain", "customer_tier", "customer_status", "important_customer_requests"} {
+		if strings.TrimSpace(r.URL.Query().Get(key)) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func applyCustomerIssueFilters(r *http.Request, where *string, args *[]any) {
+	query := r.URL.Query()
+	if countRaw := strings.TrimSpace(query.Get("customer_count")); countRaw != "" {
+		if count, err := strconv.Atoi(countRaw); err == nil {
+			*args = append(*args, count)
+			*where += fmt.Sprintf(" and (select count(distinct cr.customer_id) from issue_customer_request icr join customer_request cr on cr.id=icr.customer_request_id where icr.issue_id=i.id) >= $%d", len(*args))
+		}
+	}
+	customer := strings.TrimSpace(query.Get("customer"))
+	if customer == "" {
+		customer = strings.TrimSpace(query.Get("customer_name"))
+	}
+	if customer == "" {
+		customer = strings.TrimSpace(query.Get("customer_domain"))
+	}
+	if customer != "" {
+		*args = append(*args, "%"+escapeLike(customer)+"%")
+		*where += fmt.Sprintf(" and exists (select 1 from issue_customer_request icr join customer_request cr on cr.id=icr.customer_request_id join customer c on c.id=cr.customer_id where icr.issue_id=i.id and (c.name ilike $%d or c.domain ilike $%d))", len(*args), len(*args))
+	}
+	if tier := strings.TrimSpace(query.Get("customer_tier")); tier != "" {
+		*args = append(*args, tier)
+		*where += fmt.Sprintf(" and exists (select 1 from issue_customer_request icr join customer_request cr on cr.id=icr.customer_request_id join customer c on c.id=cr.customer_id where icr.issue_id=i.id and c.tier=$%d)", len(*args))
+	}
+	if status := strings.TrimSpace(query.Get("customer_status")); status != "" {
+		*args = append(*args, status)
+		*where += fmt.Sprintf(" and exists (select 1 from issue_customer_request icr join customer_request cr on cr.id=icr.customer_request_id join customer c on c.id=cr.customer_id where icr.issue_id=i.id and c.status=$%d)", len(*args))
+	}
+	if important := strings.TrimSpace(query.Get("important_customer_requests")); important == "true" || important == "1" {
+		*where += " and exists (select 1 from issue_customer_request icr join customer_request cr on cr.id=icr.customer_request_id where icr.issue_id=i.id and cr.important=true)"
+	}
 }
 
 func (h Handler) issueReactions(ctx context.Context, issueID, userID string) ([]map[string]any, error) {
@@ -766,7 +937,8 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "issue", issue.ID, "created", issue, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "issue", issue.ID, "created", issue, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Create issue failed", err.Error())
 		return
 	}
@@ -774,6 +946,7 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create issue failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	h.storeIdempotency(r, p, http.StatusCreated, issue)
 	problem.JSON(w, http.StatusCreated, issue)
 }
@@ -883,7 +1056,8 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "issue", updated.ID, "updated", updated, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "issue", updated.ID, "updated", updated, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Update issue failed", err.Error())
 		return
 	}
@@ -903,6 +1077,7 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update issue failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	h.storeIdempotency(r, p, http.StatusOK, updated)
 	problem.JSON(w, http.StatusOK, updated)
 }
@@ -932,7 +1107,8 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete issue failed", err.Error())
 		return
 	}
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "issue", existing.ID, "deleted", existing, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "issue", existing.ID, "deleted", existing, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Delete issue failed", err.Error())
 		return
 	}
@@ -940,6 +1116,7 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete issue failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	body := map[string]bool{"success": true}
 	h.storeIdempotency(r, p, http.StatusOK, body)
 	problem.JSON(w, http.StatusOK, body)
@@ -1202,7 +1379,7 @@ func assertStateForTeam(ctx context.Context, q queryer, stateID, teamID string) 
 	return q.QueryRow(ctx, `select id::text from workflow_state where id=$1::uuid and team_id=$2::uuid`, stateID, teamID).Scan(&found)
 }
 
-func insertOperation(ctx context.Context, exec syncapi.OperationStore, workspaceID, entityType, entityID, opType string, payload any, userID string) error {
+func insertOperation(ctx context.Context, exec syncapi.OperationStore, workspaceID, entityType, entityID, opType string, payload any, userID string) (syncapi.Operation, error) {
 	return syncapi.InsertOperation(ctx, exec, workspaceID, entityType, entityID, opType, payload, userID)
 }
 

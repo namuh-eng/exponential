@@ -1,6 +1,10 @@
 "use client";
 
 import { useAppShellContext } from "@/app/(app)/app-shell";
+import {
+  SYNC_OPERATIONS_EVENT,
+  type SyncOperationsEvent,
+} from "@/app/(app)/sync-subscription";
 import { EmptyState } from "@/components/empty-state";
 import { NotificationRow } from "@/components/notification-row";
 import { withWorkspaceSlug } from "@/lib/workspace-paths";
@@ -152,7 +156,19 @@ export function InboxClient({
       void loadNotifications();
     }
 
+    function handleSyncEvent(event: Event) {
+      const operations = (event as SyncOperationsEvent).detail.operations;
+      if (
+        operations.some((operation) =>
+          ["notification", "issue", "comment"].includes(operation.entity_type),
+        )
+      ) {
+        void loadNotifications();
+      }
+    }
+
     window.addEventListener("notifications:changed", handleNotificationEvent);
+    window.addEventListener(SYNC_OPERATIONS_EVENT, handleSyncEvent);
 
     return () => {
       cancelled = true;
@@ -160,6 +176,7 @@ export function InboxClient({
         "notifications:changed",
         handleNotificationEvent,
       );
+      window.removeEventListener(SYNC_OPERATIONS_EVENT, handleSyncEvent);
     };
   }, [initialSelectedId, loadNotifications]);
 

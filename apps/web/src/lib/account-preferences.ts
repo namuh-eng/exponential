@@ -29,6 +29,7 @@ export type SidebarVisibilitySettings = {
   inbox: boolean;
   myIssues: boolean;
   projects: boolean;
+  customers: boolean;
   views: boolean;
   initiatives: boolean;
   cycles: boolean;
@@ -83,6 +84,7 @@ export const DEFAULT_ACCOUNT_PREFERENCES: AccountPreferences = {
     inbox: true,
     myIssues: true,
     projects: true,
+    customers: true,
     views: true,
     initiatives: true,
     cycles: true,
@@ -225,6 +227,10 @@ export function normalizeAccountPreferences(
         typeof sidebarVisibility.projects === "boolean"
           ? sidebarVisibility.projects
           : DEFAULT_ACCOUNT_PREFERENCES.sidebarVisibility.projects,
+      customers:
+        typeof sidebarVisibility.customers === "boolean"
+          ? sidebarVisibility.customers
+          : DEFAULT_ACCOUNT_PREFERENCES.sidebarVisibility.customers,
       views:
         typeof sidebarVisibility.views === "boolean"
           ? sidebarVisibility.views
