@@ -39,7 +39,7 @@ type Integration = {
       createdAt: string;
     }[];
   };
-  details: {
+  details?: {
     installationId?: string;
     accountLogin?: string;
     repositorySelection?: "all" | "selected" | "unknown";
@@ -103,11 +103,11 @@ function statusClassName(status: Integration["status"]) {
 
 function integrationDetailSummary(integration: Integration) {
   if (integration.provider !== "github") return null;
-  if (integration.details.repositorySelection === "all") {
+  if (integration.details?.repositorySelection === "all") {
     return "All repositories enabled";
   }
   if (
-    integration.details.repositorySelection === "selected" &&
+    integration.details?.repositorySelection === "selected" &&
     typeof integration.details.selectedRepositoryCount === "number"
   ) {
     return `${integration.details.selectedRepositoryCount} selected repositories enabled`;
@@ -120,7 +120,14 @@ function integrationDetailSummary(integration: Integration) {
 
 function isConnectableProvider(
   provider: string,
-): provider is "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong" | "intercom" {
+): provider is
+  | "github"
+  | "slack"
+  | "discord"
+  | "microsoft_teams"
+  | "sentry"
+  | "gong"
+  | "intercom" {
   return (
     provider === "github" ||
     provider === "slack" ||
@@ -151,7 +158,6 @@ export default function IntegrationsSettingsPage() {
   const [zendeskAPIToken, setZendeskAPIToken] = useState("");
   const [zendeskSetupDetails, setZendeskSetupDetails] =
     useState<ZendeskSetupDetails | null>(null);
-
 
   const loadIntegrations = useCallback(async () => {
     setLoading(true);
@@ -209,7 +215,14 @@ export default function IntegrationsSettingsPage() {
   }, []);
 
   async function connectIntegration(
-    provider: "github" | "slack" | "discord" | "microsoft_teams" | "sentry" | "gong" | "intercom",
+    provider:
+      | "github"
+      | "slack"
+      | "discord"
+      | "microsoft_teams"
+      | "sentry"
+      | "gong"
+      | "intercom",
   ) {
     setPendingProvider(provider);
     setNotice(null);
@@ -312,14 +325,6 @@ export default function IntegrationsSettingsPage() {
     setError(null);
     try {
       const response = await fetch("/api/integrations/front/setup", {
-  async function setupZendesk() {
-    setPendingProvider("zendesk");
-    setNotice(null);
-    setError(null);
-    setZendeskSetupDetails(null);
-    try {
-      const response = await fetch("/api/integrations/zendesk/setup", {
-
         method: "POST",
         headers: {
           Accept: "application/json",
@@ -332,16 +337,6 @@ export default function IntegrationsSettingsPage() {
         }),
       });
       const data = (await response.json().catch(() => ({}))) as {
-          subdomain: zendeskSubdomain,
-          email: zendeskEmail,
-          apiToken: zendeskAPIToken,
-        }),
-      });
-      const data = (await response.json().catch(() => ({}))) as {
-        accountUrl?: string;
-        actionBaseUrl?: string;
-        actionSecret?: string;
-
         error?: string;
         message?: string;
       };
@@ -351,6 +346,45 @@ export default function IntegrationsSettingsPage() {
       setFrontApiToken("");
       setNotice(
         "Front connected. Add the Front sidebar plugin URL from this app to Front.",
+      );
+      await loadIntegrations();
+    } catch (setupError) {
+      setError(
+        setupError instanceof Error
+          ? setupError.message
+          : "Front setup failed.",
+      );
+    } finally {
+      setPendingProvider(null);
+    }
+  }
+
+  async function setupZendesk() {
+    setPendingProvider("zendesk");
+    setNotice(null);
+    setError(null);
+    setZendeskSetupDetails(null);
+    try {
+      const response = await fetch("/api/integrations/zendesk/setup", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          subdomain: zendeskSubdomain,
+          email: zendeskEmail,
+          apiToken: zendeskAPIToken,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        accountUrl?: string;
+        actionBaseUrl?: string;
+        actionSecret?: string;
+        error?: string;
+        message?: string;
+      };
+      if (!response.ok) {
         throw new Error(data.message || data.error || "Zendesk setup failed.");
       }
       if (data.accountUrl && data.actionBaseUrl && data.actionSecret) {
@@ -363,16 +397,13 @@ export default function IntegrationsSettingsPage() {
       setZendeskAPIToken("");
       setNotice(
         "Zendesk connected. Copy the action URL and secret into the Zendesk app.",
-
       );
       await loadIntegrations();
     } catch (setupError) {
       setError(
         setupError instanceof Error
           ? setupError.message
-          : "Front setup failed.",
           : "Zendesk setup failed.",
-
       );
     } finally {
       setPendingProvider(null);
@@ -389,26 +420,21 @@ export default function IntegrationsSettingsPage() {
           ? "/api/integrations/slack/disconnect"
           : provider === "discord"
             ? "/api/integrations/discord/disconnect"
-            : provider === "microsoft_teams"
-              ? "/api/integrations/microsoft-teams/disconnect"
-              : provider === "sentry"
-                ? "/api/integrations/sentry/disconnect"
-                : provider === "front"
-                  ? "/api/integrations/front/disconnect"
             : provider === "github"
               ? "/api/integrations/github/disconnect"
               : provider === "microsoft_teams"
                 ? "/api/integrations/microsoft-teams/disconnect"
                 : provider === "sentry"
                   ? "/api/integrations/sentry/disconnect"
-                  : provider === "gong"
-                    ? "/api/integrations/gong/disconnect"
-                    : provider === "zendesk"
-                      ? "/api/integrations/zendesk/disconnect"
-                      : provider === "intercom"
-                        ? "/api/integrations/intercom/disconnect"
-
-                  : `/api/integrations?provider=${encodeURIComponent(provider)}`;
+                  : provider === "front"
+                    ? "/api/integrations/front/disconnect"
+                    : provider === "gong"
+                      ? "/api/integrations/gong/disconnect"
+                      : provider === "zendesk"
+                        ? "/api/integrations/zendesk/disconnect"
+                        : provider === "intercom"
+                          ? "/api/integrations/intercom/disconnect"
+                          : `/api/integrations?provider=${encodeURIComponent(provider)}`;
       const response = await fetch(endpoint, {
         method:
           provider === "slack" ||
@@ -416,11 +442,10 @@ export default function IntegrationsSettingsPage() {
           provider === "github" ||
           provider === "microsoft_teams" ||
           provider === "sentry" ||
-          provider === "front"
+          provider === "front" ||
           provider === "gong" ||
           provider === "zendesk" ||
           provider === "intercom"
-
             ? "POST"
             : "DELETE",
         headers: { Accept: "application/json" },
@@ -557,9 +582,8 @@ export default function IntegrationsSettingsPage() {
                   <div className="flex shrink-0 gap-2">
                     {integration.actions.canReconnect &&
                     integration.provider !== "gitlab" &&
-                    integration.provider !== "front" ? (
+                    integration.provider !== "front" &&
                     integration.provider !== "zendesk" ? (
-
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
@@ -776,8 +800,6 @@ export default function IntegrationsSettingsPage() {
                         </div>
                       ) : null}
                       {integration.provider === "front" &&
-                      {integration.provider === "zendesk" &&
-
                       (integration.actions.canConnect ||
                         integration.actions.canReconnect) ? (
                         <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
@@ -814,8 +836,31 @@ export default function IntegrationsSettingsPage() {
                               placeholder="Bearer token with conversations/comments permissions"
                               type="password"
                               value={frontApiToken}
+                            />
+                          </label>
+                          <button
+                            className="w-fit rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={
+                              pendingProvider === "front" ||
+                              frontApiToken.trim() === ""
+                            }
+                            onClick={() => void setupFront()}
+                            type="button"
+                          >
+                            {pendingProvider === "front"
+                              ? "Validating..."
+                              : "Connect Front"}
+                          </button>
+                        </div>
+                      ) : null}
+                      {integration.provider === "zendesk" &&
+                      (integration.actions.canConnect ||
+                        integration.actions.canReconnect) ? (
+                        <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
                             Zendesk subdomain
                             <input
+                              aria-label="Zendesk subdomain"
                               className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
                               onChange={(event) =>
                                 setZendeskSubdomain(event.target.value)
@@ -847,21 +892,11 @@ export default function IntegrationsSettingsPage() {
                               placeholder="Zendesk API token"
                               type="password"
                               value={zendeskAPIToken}
-
                             />
                           </label>
                           <button
                             className="w-fit rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
                             disabled={
-                              pendingProvider === "front" ||
-                              frontApiToken.trim() === ""
-                            }
-                            onClick={() => void setupFront()}
-                            type="button"
-                          >
-                            {pendingProvider === "front"
-                              ? "Validating..."
-                              : "Connect Front"}
                               pendingProvider === "zendesk" ||
                               zendeskSubdomain.trim() === "" ||
                               zendeskEmail.trim() === "" ||
@@ -873,7 +908,6 @@ export default function IntegrationsSettingsPage() {
                             {pendingProvider === "zendesk"
                               ? "Validating..."
                               : "Connect Zendesk"}
-
                           </button>
                         </div>
                       ) : null}
@@ -889,9 +923,8 @@ export default function IntegrationsSettingsPage() {
                       </button>
                     ) : integration.actions.canReconnect &&
                       integration.provider !== "gitlab" &&
-                      integration.provider !== "front" ? (
+                      integration.provider !== "front" &&
                       integration.provider !== "zendesk" ? (
-
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
@@ -920,6 +953,7 @@ export default function IntegrationsSettingsPage() {
                           : "Connect"}
                       </button>
                     ) : integration.provider === "gitlab" ||
+                      integration.provider === "front" ||
                       integration.provider === "zendesk" ? null : (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-tertiary)]"
