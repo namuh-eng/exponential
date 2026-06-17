@@ -4587,6 +4587,8 @@ components:
         contextUrl: { type: string }
         isExternalContext: { type: boolean }
         status: { type: string, enum: [open, accepted, declined] }
+        reviewedBy: { type: string }
+        reviewedAt: { type: string, format: date-time }
     AgentRun:
       type: object
       required: [id, title, prompt, teamKey, promptConfig, context, status, owner, target, createdAt, updatedAt, output, logs, suggestions]
@@ -4601,12 +4603,13 @@ components:
           properties:
             guidance: { $ref: '#/components/schemas/AgentGuidance' }
         context: { type: string }
-        status: { type: string, enum: [queued, running, needs_review, completed] }
+        status: { type: string, enum: [queued, running, needs_review, completed, failed] }
         owner: { type: string }
         target: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         output: { type: string }
+        failureReason: { type: string }
         logs:
           type: array
           items: { type: string }
@@ -4615,12 +4618,14 @@ components:
           items: { $ref: '#/components/schemas/AgentSuggestion' }
     AgentRunListResponse:
       type: object
-      required: [runs, canCreateRuns]
+      required: [runs, canCreateRuns, providerConfigured]
       properties:
         runs:
           type: array
           items: { $ref: '#/components/schemas/AgentRun' }
         canCreateRuns: { type: boolean }
+        providerConfigured: { type: boolean }
+        disabledReason: { type: string }
     AgentRunResponse:
       type: object
       required: [run]

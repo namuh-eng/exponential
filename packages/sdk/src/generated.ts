@@ -3183,6 +3183,9 @@ export interface components {
       isExternalContext?: boolean;
       /** @enum {string} */
       status: "open" | "accepted" | "declined";
+      reviewedBy?: string;
+      /** Format: date-time */
+      reviewedAt?: string;
     };
     AgentRun: {
       id: string;
@@ -3194,7 +3197,7 @@ export interface components {
       };
       context: string;
       /** @enum {string} */
-      status: "queued" | "running" | "needs_review" | "completed";
+      status: "queued" | "running" | "needs_review" | "completed" | "failed";
       owner: string;
       target: string;
       /** Format: date-time */
@@ -3202,12 +3205,15 @@ export interface components {
       /** Format: date-time */
       updatedAt: string;
       output: string;
+      failureReason?: string;
       logs: string[];
       suggestions: components["schemas"]["AgentSuggestion"][];
     };
     AgentRunListResponse: {
       runs: components["schemas"]["AgentRun"][];
       canCreateRuns: boolean;
+      providerConfigured: boolean;
+      disabledReason?: string;
     };
     AgentRunResponse: {
       run: components["schemas"]["AgentRun"];
