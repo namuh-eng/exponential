@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,6 +23,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/sanitizehtml"
 	dbsqlc "github.com/namuh-eng/exponential/apps/api/internal/sqlc/generated"
 	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
+	"github.com/namuh-eng/exponential/apps/api/internal/webhooks"
 )
 
 type Handler struct{ DB *pgxpool.Pool }
@@ -722,13 +724,28 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	stateID := valueOrEmpty(input.StateID)
 	if stateID == "" {
-		err = tx.QueryRow(r.Context(), `select id::text from workflow_state where team_id=$1::uuid and category='backlog' order by is_default desc, position asc limit 1`, input.TeamID).Scan(&stateID)
+		err = tx.QueryRow(r.Context(), `select id::text from workflow_state where team_id=$1::uuid and category='backlog' order by is_default desc, position asc limit 1 for share`, input.TeamID).Scan(&stateID)
 		if err != nil {
 			writeLookupErr(w, err, "No default workflow state found")
 			return
 		}
 	} else if err := assertStateForTeam(r.Context(), tx, stateID, input.TeamID); err != nil {
 		writeLookupErr(w, err, "Workflow state not found")
+		return
+	}
+	input.AssigneeID = nullableID(input.AssigneeID)
+	input.ParentIssueID = nullableID(input.ParentIssueID)
+	input.ProjectID = nullableID(input.ProjectID)
+	input.ProjectMilestoneID = nullableID(input.ProjectMilestoneID)
+	input.CycleID = nullableID(input.CycleID)
+	var relErr *relationshipLookupErr
+	input.ProjectID, relErr = normalizeIssueProjectMilestone(r.Context(), tx, p.WorkspaceID, input.ProjectID, input.ProjectMilestoneID)
+	if relErr != nil {
+		writeLookupErr(w, relErr, relErr.title)
+		return
+	}
+	if err := assertIssueRelationships(r.Context(), tx, p.WorkspaceID, input.TeamID, input.AssigneeID, input.ParentIssueID, input.ProjectID, input.ProjectMilestoneID, input.CycleID); err != nil {
+		writeLookupErr(w, err, err.title)
 		return
 	}
 
@@ -766,6 +783,9 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create issue failed", err.Error())
 		return
 	}
+	go func() {
+		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "issue.created", "", issue)
+	}()
 	h.storeIdempotency(r, p, http.StatusCreated, issue)
 	problem.JSON(w, http.StatusCreated, issue)
 }
@@ -781,7 +801,13 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.normalize()
-	existing, err := h.findIssue(r.Context(), chi.URLParam(r, "id"), p.WorkspaceID)
+	tx, err := h.DB.Begin(r.Context())
+	if err != nil {
+		problem.Write(w, 500, "Update issue failed", err.Error())
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	existing, err := h.findIssueForUpdate(r.Context(), tx, chi.URLParam(r, "id"), p.WorkspaceID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		problem.Write(w, 404, "Issue not found", "")
 		return
@@ -808,7 +834,7 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		add("description = $%d", sanitizehtml.RichText(*input.Description))
 	}
 	if input.StateID != nil {
-		if err := assertStateForTeam(r.Context(), h.DB, *input.StateID, existing.TeamID); err != nil {
+		if err := assertStateForTeam(r.Context(), tx, *input.StateID, existing.TeamID); err != nil {
 			writeLookupErr(w, err, "Workflow state not found")
 			return
 		}
@@ -822,19 +848,51 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		add("priority = $%d", *input.Priority)
 	}
 	if input.AssigneeID != nil {
-		add("assignee_id = $%d", input.AssigneeID)
+		assigneeID := nullableID(input.AssigneeID)
+		if err := assertWorkspaceMember(r.Context(), tx, p.WorkspaceID, assigneeID); err != nil {
+			writeLookupErr(w, err, err.title)
+			return
+		}
+		add("assignee_id = $%d", assigneeID)
 	}
-	if input.ProjectID != nil {
-		add("project_id = $%d::uuid", input.ProjectID)
-	}
-	if input.ProjectMilestoneID != nil {
-		add("project_milestone_id = $%d::uuid", input.ProjectMilestoneID)
+	if input.ProjectID != nil || input.ProjectMilestoneID != nil {
+		projectID := existing.ProjectID
+		if input.ProjectID != nil {
+			projectID = nullableID(input.ProjectID)
+		}
+		milestoneID := existing.ProjectMilestoneID
+		if input.ProjectMilestoneID != nil {
+			milestoneID = nullableID(input.ProjectMilestoneID)
+		} else if input.ProjectID != nil && !sameStringPtr(projectID, existing.ProjectID) {
+			milestoneID = nil
+		}
+		normalizedProjectID, err := normalizeIssueProjectMilestone(r.Context(), tx, p.WorkspaceID, projectID, milestoneID)
+		if err != nil {
+			writeLookupErr(w, err, err.title)
+			return
+		}
+		if input.ProjectID != nil || !sameStringPtr(normalizedProjectID, existing.ProjectID) {
+			add("project_id = $%d::uuid", normalizedProjectID)
+		}
+		if input.ProjectMilestoneID != nil || (input.ProjectID != nil && !sameStringPtr(milestoneID, existing.ProjectMilestoneID)) {
+			add("project_milestone_id = $%d::uuid", milestoneID)
+		}
 	}
 	if input.CycleID != nil {
-		add("cycle_id = $%d::uuid", input.CycleID)
+		cycleID := nullableID(input.CycleID)
+		if err := assertCycleForTeam(r.Context(), tx, cycleID, existing.TeamID); err != nil {
+			writeLookupErr(w, err, err.title)
+			return
+		}
+		add("cycle_id = $%d::uuid", cycleID)
 	}
 	if input.ParentIssueID != nil {
-		add("parent_issue_id = $%d::uuid", input.ParentIssueID)
+		parentID := nullableID(input.ParentIssueID)
+		if err := assertParentIssueForTeam(r.Context(), tx, parentID, existing.TeamID, existing.ID); err != nil {
+			writeLookupErr(w, err, err.title)
+			return
+		}
+		add("parent_issue_id = $%d::uuid", parentID)
 	}
 	if input.Estimate != nil {
 		add("estimate = $%d", input.Estimate)
@@ -857,12 +915,6 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 			sets = append(sets, "archived_at = null")
 		}
 	}
-	tx, err := h.DB.Begin(r.Context())
-	if err != nil {
-		problem.Write(w, 500, "Update issue failed", err.Error())
-		return
-	}
-	defer func() { _ = tx.Rollback(r.Context()) }()
 	args = append(args, existing.ID)
 	updated, err := scanIssue(tx.QueryRow(r.Context(), `update issue set `+strings.Join(sets, ", ")+fmt.Sprintf(" where id = $%d::uuid returning ", len(args))+issueReturningColumns(), args...))
 	if err != nil {
@@ -895,6 +947,9 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update issue failed", err.Error())
 		return
 	}
+	go func() {
+		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "issue.updated", "", updated)
+	}()
 	h.storeIdempotency(r, p, http.StatusOK, updated)
 	problem.JSON(w, http.StatusOK, updated)
 }
@@ -932,6 +987,9 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete issue failed", err.Error())
 		return
 	}
+	go func() {
+		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "issue.deleted", "", existing)
+	}()
 	body := map[string]bool{"success": true}
 	h.storeIdempotency(r, p, http.StatusOK, body)
 	problem.JSON(w, http.StatusOK, body)
@@ -959,6 +1017,16 @@ func (h Handler) findIssue(ctx context.Context, id string, workspaceID string) (
 		return Issue{}, err
 	}
 	return issueFromSQLCByIdentifier(row), nil
+}
+
+func (h Handler) findIssueForUpdate(ctx context.Context, q queryer, id string, workspaceID string) (Issue, error) {
+	if strings.Count(id, "-") == 4 && len(id) >= 32 {
+		if _, err := uuid.Parse(id); err != nil {
+			return Issue{}, err
+		}
+		return scanIssue(q.QueryRow(ctx, `select `+issueColumns()+` from issue i join team t on t.id=i.team_id where t.workspace_id=$1::uuid and i.id=$2::uuid limit 1 for update of i`, workspaceID, id))
+	}
+	return scanIssue(q.QueryRow(ctx, `select `+issueColumns()+` from issue i join team t on t.id=i.team_id where t.workspace_id=$1::uuid and i.identifier=$2 limit 1 for update of i`, workspaceID, id))
 }
 
 func uuidParam(value string) (pgtype.UUID, error) {
@@ -1139,6 +1207,16 @@ func valueOrEmpty(value *string) string {
 	}
 	return *value
 }
+func nullableID(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
 func stringPtrDefault(value *string, fallback string) string {
 	if value == nil || *value == "" {
 		return fallback
@@ -1184,14 +1262,237 @@ type queryer interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
+type RelationshipQueryer interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
 func assertTeamInWorkspace(ctx context.Context, q queryer, teamID, workspaceID string) (string, error) {
 	var key string
-	err := q.QueryRow(ctx, `select key from team where id=$1::uuid and workspace_id=$2::uuid and retired_at is null and deleted_at is null`, teamID, workspaceID).Scan(&key)
+	err := q.QueryRow(ctx, `select key from team where id=$1::uuid and workspace_id=$2::uuid and retired_at is null and deleted_at is null for share`, teamID, workspaceID).Scan(&key)
 	return key, err
 }
 func assertStateForTeam(ctx context.Context, q queryer, stateID, teamID string) error {
+	if _, err := uuid.Parse(stateID); err != nil {
+		return &relationshipLookupErr{title: "Workflow state not found", err: fmt.Errorf("invalid workflow state id %q: %w", stateID, err), status: http.StatusBadRequest}
+	}
 	var found string
-	return q.QueryRow(ctx, `select id::text from workflow_state where id=$1::uuid and team_id=$2::uuid`, stateID, teamID).Scan(&found)
+	return q.QueryRow(ctx, `select id::text from workflow_state where id=$1::uuid and team_id=$2::uuid for share`, stateID, teamID).Scan(&found)
+}
+
+type relationshipLookupErr struct {
+	title  string
+	err    error
+	status int
+}
+
+func (e *relationshipLookupErr) Error() string {
+	return e.err.Error()
+}
+
+func (e *relationshipLookupErr) Unwrap() error {
+	return e.err
+}
+
+func (e *relationshipLookupErr) Title() string {
+	return e.title
+}
+
+func (e *relationshipLookupErr) Status() int {
+	return e.status
+}
+
+func relationshipErr(title string, err error) *relationshipLookupErr {
+	if err == nil {
+		return nil
+	}
+	return &relationshipLookupErr{title: title, err: err}
+}
+
+func invalidRelationshipID(title string, id string, err error) *relationshipLookupErr {
+	return &relationshipLookupErr{title: title, err: fmt.Errorf("%s %q: %w", title, id, err), status: http.StatusBadRequest}
+}
+
+func ensureUUIDRelationship(title string, id *string) *relationshipLookupErr {
+	if id == nil {
+		return nil
+	}
+	if _, err := uuid.Parse(*id); err != nil {
+		return invalidRelationshipID(title, *id, err)
+	}
+	return nil
+}
+
+func NormalizeRelationshipID(value *string) *string {
+	return nullableID(value)
+}
+
+func ValidateIssueRelationships(ctx context.Context, q RelationshipQueryer, workspaceID, teamID string, assigneeID, parentIssueID, projectID, milestoneID, cycleID *string) *relationshipLookupErr {
+	return assertIssueRelationships(ctx, q, workspaceID, teamID, assigneeID, parentIssueID, projectID, milestoneID, cycleID)
+}
+
+func ValidateWorkspaceMember(ctx context.Context, q RelationshipQueryer, workspaceID string, userID *string) *relationshipLookupErr {
+	return assertWorkspaceMember(ctx, q, workspaceID, userID)
+}
+
+func ValidateParentIssueForTeam(ctx context.Context, q RelationshipQueryer, parentIssueID *string, teamID, currentIssueID string) *relationshipLookupErr {
+	return assertParentIssueForTeam(ctx, q, parentIssueID, teamID, currentIssueID)
+}
+
+func ValidateCycleForTeam(ctx context.Context, q RelationshipQueryer, cycleID *string, teamID string) *relationshipLookupErr {
+	return assertCycleForTeam(ctx, q, cycleID, teamID)
+}
+
+func ValidateLabelsForTeams(ctx context.Context, q RelationshipQueryer, workspaceID string, teamIDs []string, labelIDs []string) *relationshipLookupErr {
+	return validateLabelsForTeams(ctx, q, workspaceID, teamIDs, labelIDs)
+}
+
+func NormalizeProjectMilestoneRelationship(ctx context.Context, q RelationshipQueryer, workspaceID string, projectID, milestoneID *string) (*string, *relationshipLookupErr) {
+	return normalizeIssueProjectMilestone(ctx, q, workspaceID, projectID, milestoneID)
+}
+
+func assertIssueRelationships(ctx context.Context, q queryer, workspaceID, teamID string, assigneeID, parentIssueID, projectID, milestoneID, cycleID *string) *relationshipLookupErr {
+	if err := assertWorkspaceMember(ctx, q, workspaceID, assigneeID); err != nil {
+		return err
+	}
+	if err := assertParentIssueForTeam(ctx, q, parentIssueID, teamID, ""); err != nil {
+		return err
+	}
+	if err := assertProjectInWorkspace(ctx, q, projectID, workspaceID); err != nil {
+		return err
+	}
+	if err := assertProjectMilestoneInWorkspace(ctx, q, milestoneID, projectID, workspaceID); err != nil {
+		return err
+	}
+	if err := assertCycleForTeam(ctx, q, cycleID, teamID); err != nil {
+		return err
+	}
+	return nil
+}
+
+func assertWorkspaceMember(ctx context.Context, q queryer, workspaceID string, userID *string) *relationshipLookupErr {
+	if userID == nil {
+		return nil
+	}
+	var found int
+	err := q.QueryRow(ctx, `select 1 from member where workspace_id=$1::uuid and user_id=$2 limit 1 for share`, workspaceID, *userID).Scan(&found)
+	return relationshipErr("Assignee is not a workspace member", err)
+}
+
+func assertParentIssueForTeam(ctx context.Context, q queryer, parentIssueID *string, teamID, currentIssueID string) *relationshipLookupErr {
+	if parentIssueID == nil {
+		return nil
+	}
+	if err := ensureUUIDRelationship("Parent issue not found", parentIssueID); err != nil {
+		return err
+	}
+	var found string
+	var err error
+	if currentIssueID == "" {
+		err = q.QueryRow(ctx, `select id::text from issue where id=$1::uuid and team_id=$2::uuid limit 1 for share`, *parentIssueID, teamID).Scan(&found)
+	} else {
+		err = q.QueryRow(ctx, `select id::text from issue where id=$1::uuid and team_id=$2::uuid and id<>$3::uuid limit 1 for share`, *parentIssueID, teamID, currentIssueID).Scan(&found)
+	}
+	return relationshipErr("Parent issue not found", err)
+}
+
+func assertProjectInWorkspace(ctx context.Context, q queryer, projectID *string, workspaceID string) *relationshipLookupErr {
+	if projectID == nil {
+		return nil
+	}
+	if err := ensureUUIDRelationship("Project not found", projectID); err != nil {
+		return err
+	}
+	var found string
+	err := q.QueryRow(ctx, `select id::text from project where id=$1::uuid and workspace_id=$2::uuid limit 1 for share`, *projectID, workspaceID).Scan(&found)
+	return relationshipErr("Project not found", err)
+}
+
+func normalizeIssueProjectMilestone(ctx context.Context, q queryer, workspaceID string, projectID, milestoneID *string) (*string, *relationshipLookupErr) {
+	if err := assertProjectInWorkspace(ctx, q, projectID, workspaceID); err != nil {
+		return nil, err
+	}
+	if milestoneID == nil {
+		return projectID, nil
+	}
+	if err := ensureUUIDRelationship("Project milestone not found", milestoneID); err != nil {
+		return nil, err
+	}
+	milestoneProjectID, err := projectForMilestoneInWorkspace(ctx, q, *milestoneID, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if projectID == nil {
+		return &milestoneProjectID, nil
+	}
+	if *projectID != milestoneProjectID {
+		return nil, relationshipErr("Project milestone not found", pgx.ErrNoRows)
+	}
+	return projectID, nil
+}
+
+func projectForMilestoneInWorkspace(ctx context.Context, q queryer, milestoneID, workspaceID string) (string, *relationshipLookupErr) {
+	var projectID string
+	err := q.QueryRow(ctx, `select pm.project_id::text from project_milestone pm join project p on p.id=pm.project_id where pm.id=$1::uuid and p.workspace_id=$2::uuid limit 1 for share of pm, p`, milestoneID, workspaceID).Scan(&projectID)
+	return projectID, relationshipErr("Project milestone not found", err)
+}
+
+func assertProjectMilestoneInWorkspace(ctx context.Context, q queryer, milestoneID, projectID *string, workspaceID string) *relationshipLookupErr {
+	if milestoneID == nil {
+		return nil
+	}
+	_, err := normalizeIssueProjectMilestone(ctx, q, workspaceID, projectID, milestoneID)
+	return err
+}
+
+func assertCycleForTeam(ctx context.Context, q queryer, cycleID *string, teamID string) *relationshipLookupErr {
+	if cycleID == nil {
+		return nil
+	}
+	if err := ensureUUIDRelationship("Cycle not found", cycleID); err != nil {
+		return err
+	}
+	var found string
+	err := q.QueryRow(ctx, `select id::text from cycle where id=$1::uuid and team_id=$2::uuid limit 1 for share`, *cycleID, teamID).Scan(&found)
+	return relationshipErr("Cycle not found", err)
+}
+
+func validateLabelsForTeams(ctx context.Context, q RelationshipQueryer, workspaceID string, teamIDs []string, labelIDs []string) *relationshipLookupErr {
+	labels := uniqueNonEmpty(labelIDs)
+	if len(labels) == 0 {
+		return nil
+	}
+	for _, labelID := range labels {
+		if _, err := uuid.Parse(labelID); err != nil {
+			return invalidRelationshipID("Invalid label id", labelID, err)
+		}
+	}
+	for _, teamID := range teamIDs {
+		rows, err := q.Query(ctx, `select id::text from label where id = any($1::uuid[]) and workspace_id=$2::uuid and (team_id is null or team_id=$3::uuid) and archived_at is null for share`, labels, workspaceID, teamID)
+		if err != nil {
+			return relationshipErr("Label not found", err)
+		}
+		count := 0
+		for rows.Next() {
+			count++
+		}
+		rowErr := rows.Err()
+		rows.Close()
+		if rowErr != nil {
+			return relationshipErr("Label not found", rowErr)
+		}
+		if count != len(labels) {
+			return relationshipErr("Label not found", pgx.ErrNoRows)
+		}
+	}
+	return nil
+}
+
+func sameStringPtr(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
 }
 
 func insertOperation(ctx context.Context, exec syncapi.OperationStore, workspaceID, entityType, entityID, opType string, payload any, userID string) error {
@@ -1199,7 +1500,10 @@ func insertOperation(ctx context.Context, exec syncapi.OperationStore, workspace
 }
 
 func writeLookupErr(w http.ResponseWriter, err error, title string) {
-	if errors.Is(err, pgx.ErrNoRows) {
+	var relErr *relationshipLookupErr
+	if errors.As(err, &relErr) && relErr.status != 0 {
+		problem.Write(w, relErr.status, title, relErr.Error())
+	} else if errors.Is(err, pgx.ErrNoRows) {
 		problem.Write(w, 404, title, "")
 	} else {
 		problem.Write(w, 500, title, err.Error())

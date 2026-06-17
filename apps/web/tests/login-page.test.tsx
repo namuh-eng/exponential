@@ -128,47 +128,22 @@ describe("Login page", () => {
     });
   });
 
-  it("opens the email magic-link step from the chooser", async () => {
+  it("keeps only Google active and marks the other methods coming soon", () => {
     render(<LoginPage />);
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /Continue with email/ }),
-    );
-
     expect(
-      screen.getByPlaceholderText("Enter your email address…"),
-    ).toBeDefined();
+      screen.getByRole("button", { name: /Continue with Google/ }),
+    ).toBeEnabled();
     expect(
-      screen.getByRole("button", { name: "Continue with email" }),
-    ).toBeDefined();
-  });
-
-  it("requests a first-party magic link and shows the email confirmation", async () => {
-    render(<LoginPage />);
-
-    fireEvent.click(
       screen.getByRole("button", { name: /Continue with email/ }),
-    );
-    fireEvent.change(screen.getByPlaceholderText("Enter your email address…"), {
-      target: { value: "person@example.com" },
-    });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Continue with email" }),
-    );
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/auth/magic-link",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({
-            email: "person@example.com",
-            callbackURL: "/",
-          }),
-        }),
-      );
-      expect(screen.getByText("Check your email")).toBeDefined();
-    });
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /Continue with SAML SSO/ }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /Log in with passkey/ }),
+    ).toBeDisabled();
+    expect(screen.getAllByText("coming soon").length).toBeGreaterThanOrEqual(3);
   });
 
   it("shows SAML when workspace policy disables Google and email/passkey", async () => {

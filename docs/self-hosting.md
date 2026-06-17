@@ -14,16 +14,47 @@ Use Docker Compose for a single-host install. Use the AWS ECS scripts when you
 want managed RDS, ElastiCache, S3, SES, ECR, ALB routing, and task-level
 Secrets Manager wiring.
 
+Pre-built multi-arch images (`linux/amd64` and `linux/arm64`) are published to
+the GitHub Container Registry on every release:
+
+- `ghcr.io/namuh-eng/exponential-api:latest`
+- `ghcr.io/namuh-eng/exponential-web:latest`
+
 ## Requirements
 
 - Docker Engine with the Compose plugin.
-- Git.
-- 4 GiB RAM minimum; 8 GiB is more comfortable while building Next.js and Go
-  images.
+- 2 GiB RAM minimum (image-based path); 8 GiB if building from source.
 - Optional AWS or S3-compatible credentials for attachments.
-- Optional SES or Opensend credentials for production email.
+- Optional SMTP relay, SES, or Opensend credentials for production email.
 
-## Quick Start
+## Quick Start (pre-built images — recommended)
+
+The image-based path pulls pre-built images from GHCR and is ready in under
+five minutes on any machine with Docker. No compiler or Node.js required.
+
+```bash
+# Replace v1.2.3 with the release tag you want to run (see Releases on GitHub).
+# Using the matching tag ensures the .env variables align with the image you pull.
+IMAGE_TAG=v1.2.3
+curl -fsSL "https://raw.githubusercontent.com/namuh-eng/exponential/${IMAGE_TAG}/.env.example" -o .env
+
+# Fill in the required secrets (see Required Environment below)
+openssl rand -hex 32  # paste as EXPONENTIAL_SESSION_SECRET
+openssl rand -hex 32  # paste as EXPONENTIAL_METRICS_TOKEN
+$EDITOR .env
+
+docker compose -f docker-compose.images.yml up
+```
+
+Open `http://localhost:7015`.
+
+To change the release tag, update `IMAGE_TAG` in `.env` and run
+`docker compose -f docker-compose.images.yml pull && docker compose -f docker-compose.images.yml up -d`.
+
+## Quick Start (build from source)
+
+If you prefer to build the images locally from the full source tree (requires
+Git, ~8 GiB RAM, and 10–20 minutes):
 
 ```bash
 git clone https://github.com/namuh-eng/exponential.git
@@ -36,8 +67,6 @@ $EDITOR .env
 
 docker compose up --build
 ```
-
-Open `http://localhost:7015`.
 
 The default Compose stack publishes the web app to all interfaces. Postgres,
 Redis, and the direct API port bind to `127.0.0.1` by default for local admin
@@ -81,16 +110,49 @@ at `http://localhost:7015`.
 | Feature | Variables | Behavior when omitted |
 | --- | --- | --- |
 | Google sign-in | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | Google OAuth is unavailable. |
-| Magic-link email | `SENDER_EMAIL` with SES, or `SENDER_EMAIL` + `OPENSEND_API_KEY` for Opensend | Production magic-link email returns unavailable. |
+| Magic-link email (SMTP) | `SENDER_EMAIL`, `SMTP_HOST` (+ optional `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_TLS`) | Use this for any SMTP relay: Mailgun, Postmark, Gmail app password, your own mail server, or Mailhog in dev. |
+| Magic-link email (Opensend) | `SENDER_EMAIL`, `OPENSEND_API_KEY` (+ optional `OPENSEND_BASE_URL`) | — |
+| Magic-link email (SES) | `SENDER_EMAIL` with AWS credentials or instance/task role | — |
 | Attachments | `AWS_REGION`, `S3_BUCKET`, AWS credentials or instance/task role; optional `S3_ENDPOINT` for S3-compatible storage | Attachment endpoints return service unavailable. |
 | Slack integration | `AUTH_SLACK_ID`, `AUTH_SLACK_SECRET` | Slack installation is unavailable. |
 | Inbound email | `INBOUND_EMAIL_WEBHOOK_SECRET`, `EXPONENTIAL_INBOUND_DOMAIN` | Inbound email routes cannot be used. |
 | AI discussion summaries | `OPENAI_API_KEY`, `DISCUSSION_SUMMARY_PROVIDER=openai` | Summaries stay disabled/fallback-only. |
 | Stripe webhooks | `STRIPE_WEBHOOK_SIGNING_SECRET` in API runtime, or ECS secret ARN | Billing webhook events are rejected. |
 
-Email provider selection is automatic: `OPENSEND_API_KEY` selects Opensend,
-`SENDER_EMAIL` alone selects SES, and `EMAIL_PROVIDER=ses|opensend` can force a
-provider.
+If none of the email providers are configured, production magic-link sign-in
+returns 503 (unavailable). There is no fallback sender.
+
+### Email provider selection
+
+The provider is chosen in this order (first match wins):
+
+1. `EMAIL_PROVIDER=smtp|ses|opensend` — explicit override.
+2. `SMTP_HOST` set — generic SMTP relay (recommended for self-hosters).
+3. `OPENSEND_API_KEY` set — Opensend managed relay.
+4. `SENDER_EMAIL` set without the above — AWS SES.
+
+**SMTP quick-start** (works with any relay; Mailhog in dev):
+
+```bash
+SENDER_EMAIL=no-reply@example.com
+SMTP_HOST=smtp.mailgun.org
+SMTP_PORT=587
+SMTP_USERNAME=postmaster@mg.example.com
+SMTP_PASSWORD=your-mailgun-smtp-password
+```
+
+For implicit TLS on port 465, also set `SMTP_TLS=true`.
+
+**Mailhog in the dev stack** — the dev Compose file already runs Mailhog on
+port 1025. Point the API at it with:
+
+```bash
+SENDER_EMAIL=no-reply@example.com
+SMTP_HOST=mailhog
+SMTP_PORT=1025
+```
+
+No `SMTP_USERNAME`, `SMTP_PASSWORD`, or `SMTP_TLS` needed for Mailhog.
 
 ### Attachment Storage
 
@@ -272,6 +334,18 @@ docker compose exec -T postgres psql -U postgres exponential < exponential.sql
 
 ## Upgrades
 
+Image-based path (pull the new `latest` or a specific tag):
+
+```bash
+# Optional: pin a new release
+# IMAGE_TAG=v1.2.3  # in .env
+
+docker compose -f docker-compose.images.yml pull
+docker compose -f docker-compose.images.yml up -d
+```
+
+Source-based path:
+
 ```bash
 git pull --ff-only
 docker compose build --pull
@@ -298,6 +372,14 @@ RUN_PROD_SMOKE=true scripts/deploy-ecs.sh
 configured, target groups, ALB routing, and secret placeholders.
 `deploy-ecs.sh` builds and pushes API/web images, runs migrations, updates ECS
 services, waits for stability, and can run `scripts/smoke-prod.sh`.
+
+**Stripe is optional for ECS deployments.** `STRIPE_WEBHOOK_SIGNING_SECRET` and
+`STRIPE_SECRET_KEY` are only needed when billing features are enabled (hosted
+SaaS mode). Self-hosted deployments can omit both variables entirely.
+`prepare-ecs-deploy-env.sh` skips the Stripe Secrets Manager entries when
+neither the raw secret value nor an existing ARN is present. When Stripe is not
+configured, the webhook route returns 400 and billing-related API calls are
+unavailable, but all other API and UI functionality works normally.
 
 ### Production sizing
 
@@ -407,6 +489,130 @@ For ECS web-to-API server requests, prefer `WEB_INTERNAL_API_URL` pointing at
 the internal ALB/API route so server-side auth/session checks do not hairpin
 through a public CDN or proxy hostname.
 
+### HTTPS via ACM (recommended for production)
+
+HTTPS is required for Google OAuth redirect URIs and is strongly recommended
+for all production deployments. `preflight.sh` can wire an HTTPS:443 ALB
+listener and convert HTTP:80 to a permanent redirect when you supply an ACM
+certificate ARN.
+
+**1. Request an ACM certificate**
+
+Open the [AWS Certificate Manager console](https://console.aws.amazon.com/acm/)
+(or use the CLI) in the same region as your ALB and request a public
+certificate for your domain:
+
+```bash
+aws acm request-certificate \
+  --domain-name issues.example.com \
+  --validation-method DNS \
+  --region us-east-1
+```
+
+The command returns a `CertificateArn`. Copy it — you will need it in the next
+step.
+
+**2. Complete DNS validation**
+
+ACM generates CNAME records that must be added to your DNS zone before the
+certificate is issued. Look them up with:
+
+```bash
+aws acm describe-certificate \
+  --certificate-arn arn:aws:acm:us-east-1:123456789012:certificate/... \
+  --region us-east-1 \
+  --query 'Certificate.DomainValidationOptions[].ResourceRecord'
+```
+
+Add the CNAME records to your DNS provider and wait for the status to become
+`ISSUED` (typically a few minutes):
+
+```bash
+aws acm wait certificate-validated \
+  --certificate-arn arn:aws:acm:... \
+  --region us-east-1
+```
+
+**Route 53 — automated DNS validation**
+
+If your domain is hosted in Route 53 you can automate the validation step:
+
+```bash
+CERT_ARN=arn:aws:acm:us-east-1:123456789012:certificate/...
+HOSTED_ZONE_ID=Z1234567890ABC   # your Route 53 hosted zone
+
+# Retrieve the CNAME record from ACM and upsert it into Route 53.
+CNAME=$(aws acm describe-certificate --certificate-arn "$CERT_ARN" \
+  --region us-east-1 \
+  --query 'Certificate.DomainValidationOptions[0].ResourceRecord' \
+  --output json)
+NAME=$(echo "$CNAME" | jq -r '.Name')
+VALUE=$(echo "$CNAME" | jq -r '.Value')
+
+aws route53 change-resource-record-sets \
+  --hosted-zone-id "$HOSTED_ZONE_ID" \
+  --change-batch "{
+    \"Changes\": [{
+      \"Action\": \"UPSERT\",
+      \"ResourceRecordSet\": {
+        \"Name\": \"$NAME\",
+        \"Type\": \"CNAME\",
+        \"TTL\": 300,
+        \"ResourceRecords\": [{\"Value\": \"$VALUE\"}]
+      }
+    }]
+  }"
+
+aws acm wait certificate-validated \
+  --certificate-arn "$CERT_ARN" \
+  --region us-east-1
+echo "Certificate validated."
+```
+
+**3. Run preflight with the cert ARN**
+
+Set `ACM_CERT_ARN` in `.env` (edit in place so the key is not duplicated if it
+already exists) and re-run preflight:
+
+```bash
+# Set or update ACM_CERT_ARN in .env — grep+sed edits in place; appends if absent.
+if grep -q '^ACM_CERT_ARN=' .env 2>/dev/null; then
+  sed -i.bak 's|^ACM_CERT_ARN=.*|ACM_CERT_ARN=arn:aws:acm:us-east-1:123456789012:certificate/...|' .env && rm -f .env.bak
+else
+  echo "ACM_CERT_ARN=arn:aws:acm:us-east-1:123456789012:certificate/..." >> .env
+fi
+DB_PASSWORD=<password> bash scripts/preflight.sh
+```
+
+Preflight will:
+- Create an HTTPS:443 listener with your certificate and the
+  `ELBSecurityPolicy-TLS13-1-2-2021-06` security policy.
+- Convert the HTTP:80 listener to a permanent (301) redirect to HTTPS.
+- Route `/api/*` to the Go API on the HTTPS listener.
+
+Re-runs are idempotent — existing listeners are detected and updated, not
+duplicated.
+
+**4. Point your domain at the ALB**
+
+Create a DNS ALIAS (Route 53) or CNAME record pointing your domain to the ALB
+DNS name written to `.env` as `ALB_DNS`:
+
+```bash
+grep ALB_DNS .env
+# → ALB_DNS=exponential-alb-1234567890.us-east-1.elb.amazonaws.com
+```
+
+**5. Update app URLs**
+
+Set the public HTTPS origin in `.env` before deploying:
+
+```bash
+NEXT_PUBLIC_APP_URL=https://issues.example.com
+EXPONENTIAL_APP_URL=https://issues.example.com
+PUBLIC_BASE_URL=https://issues.example.com
+```
+
 ## Development Stack
 
 For hot-reload development, use the dev stack:
@@ -423,8 +629,10 @@ is not the recommended public self-hosting path.
 - Attachment storage is S3/S3-compatible object-storage oriented; local disk
   attachment storage is intentionally deferred to a separate storage-driver
   design.
-- Production email requires SES or Opensend configuration.
-- Compose builds local images from source. If you publish your own registry
-  images, keep the split `web`, `api`, and migration tasks.
+- Production magic-link sign-in requires at least one email provider (SMTP,
+  Opensend, or SES). With no provider configured it returns 503.
+- The pre-built GHCR images bundle the SDK/UI at the commit they were built
+  from. If you modify the source, build your own images or use
+  `docker-compose.yml` (source build path).
 - ELv2 permits self-hosting and internal modification, but it does not permit
   offering exponential as a hosted service to third parties.

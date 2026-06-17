@@ -448,8 +448,10 @@ function ApiKeysList({
   );
 }
 
-function McpAuditLog({ items }: { items: McpAuditLogEntry[] }) {
-  if (items.length === 0) {
+function McpAuditLog({ items }: { items?: McpAuditLogEntry[] }) {
+  const auditItems = items ?? [];
+
+  if (auditItems.length === 0) {
     return (
       <SurfaceRow>
         <div className="text-[13px] text-[var(--color-text-tertiary)]">
@@ -461,7 +463,7 @@ function McpAuditLog({ items }: { items: McpAuditLogEntry[] }) {
 
   return (
     <div className="space-y-3">
-      {items.map((item) => (
+      {auditItems.map((item) => (
         <SurfaceRow key={item.id}>
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
@@ -509,7 +511,7 @@ function buildDefaultWebhookForm(): WebhookFormState {
   return {
     label: "",
     url: "https://example.com/hooks/linear",
-    events: ["created", "updated"],
+    events: ["issue.created", "issue.updated"],
   };
 }
 
@@ -1122,34 +1124,37 @@ export default function ApiSettingsPage() {
                 Subscription scope
               </legend>
               <div className="space-y-2">
-                {(["created", "updated", "deleted"] as WebhookEventType[]).map(
-                  (eventName) => {
-                    const checked = webhookForm.events.includes(eventName);
-                    return (
-                      <label
-                        key={eventName}
-                        className="flex items-center gap-2 text-[13px] text-[var(--color-text-primary)]"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(event) =>
-                            setWebhookForm((current) => ({
-                              ...current,
-                              events: event.target.checked
-                                ? [...current.events, eventName]
-                                : current.events.filter(
-                                    (currentEvent) =>
-                                      currentEvent !== eventName,
-                                  ),
-                            }))
-                          }
-                        />
-                        {WEBHOOK_EVENT_LABELS[eventName]}
-                      </label>
-                    );
-                  },
-                )}
+                {(
+                  [
+                    "issue.created",
+                    "issue.updated",
+                    "issue.deleted",
+                  ] as WebhookEventType[]
+                ).map((eventName) => {
+                  const checked = webhookForm.events.includes(eventName);
+                  return (
+                    <label
+                      key={eventName}
+                      className="flex items-center gap-2 text-[13px] text-[var(--color-text-primary)]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) =>
+                          setWebhookForm((current) => ({
+                            ...current,
+                            events: event.target.checked
+                              ? [...current.events, eventName]
+                              : current.events.filter(
+                                  (currentEvent) => currentEvent !== eventName,
+                                ),
+                          }))
+                        }
+                      />
+                      {WEBHOOK_EVENT_LABELS[eventName]}
+                    </label>
+                  );
+                })}
               </div>
             </fieldset>
 

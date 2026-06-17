@@ -64,6 +64,17 @@ type Health struct {
 	AuditEvents        []AuditEvent `json:"auditEvents"`
 }
 
+// HealthInfo carries lifecycle and health telemetry for an integration.
+// No secret or credential data is included in this struct.
+type HealthInfo struct {
+	LifecycleState     string  `json:"lifecycleState"`
+	LastEventAt        *string `json:"lastEventAt"`
+	LastSuccessAt      *string `json:"lastSuccessAt"`
+	LastFailureAt      *string `json:"lastFailureAt"`
+	LastFailureMessage *string `json:"lastFailureMessage"`
+	HealthSummary      *string `json:"healthSummary"`
+}
+
 type Integration struct {
 	CatalogItem
 	ID               *string           `json:"id"`
@@ -74,7 +85,7 @@ type Integration struct {
 	SetupRequirement *SetupRequirement `json:"setupRequirement"`
 	Actions          Actions           `json:"actions"`
 	Health           Health            `json:"health"`
-	Details          map[string]any     `json:"details"`
+	Details          map[string]any    `json:"details"`
 }
 
 type response struct {
@@ -175,7 +186,10 @@ func (h Handler) List(w http.ResponseWriter, r *http.Request) {
 		status := "not_connected"
 		var id, displayName, externalID, connectedAt *string
 		if ok {
-			status = connected.Status
+			status = connected.LifecycleState
+			if status == "" {
+				status = connected.Status
+			}
 			id = &connected.ID
 			displayName = connected.DisplayName
 			externalID = connected.ExternalID
@@ -324,7 +338,7 @@ func (h Handler) SlackDisconnect(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 403, "Forbidden", "")
 		return
 	}
-	if err := h.revokeProvider(r.Context(), p.WorkspaceID, "slack", p.UserID); err != nil {
+	if err := h.disconnectProvider(r.Context(), p.WorkspaceID, p.UserID, "slack"); err != nil {
 		problem.Write(w, 500, "Disconnect Slack failed", err.Error())
 		return
 	}
@@ -342,7 +356,7 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 400, "Provider is required", "")
 		return
 	}
-	err := h.revokeProvider(r.Context(), p.WorkspaceID, provider, p.UserID)
+	err := h.disconnectProvider(r.Context(), p.WorkspaceID, p.UserID, provider)
 	if err != nil {
 		problem.Write(w, 500, "Delete integration failed", err.Error())
 		return
@@ -357,6 +371,7 @@ type row struct {
 	DisplayName        *string
 	ExternalID         *string
 	ConnectedAt        *time.Time
+	LifecycleState     string
 	LastEventAt        *time.Time
 	LastSuccessAt      *time.Time
 	LastFailureAt      *time.Time
@@ -365,7 +380,8 @@ type row struct {
 	PendingJobCount    int
 	FailedJobCount     int
 	AuditEvents        []AuditEvent
-	Metadata          map[string]any
+	HealthSummary      *string
+	Metadata           map[string]any
 }
 
 func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error) {
@@ -376,10 +392,12 @@ func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error
 			wi.display_name,
 			wi.external_id,
 			wi.connected_at,
+			wi.lifecycle_state,
 			wi.last_event_at,
 			wi.last_success_at,
 			wi.last_failure_at,
 			wi.last_failure_message,
+			wi.health_summary,
 			wi.token_expires_at,
 			wi.metadata,
 			coalesce(count(pj.id) filter (where pj.status in ('queued','running')),0)::int,
@@ -396,7 +414,12 @@ func (h Handler) listRows(ctx context.Context, workspaceID string) ([]row, error
 	for rows.Next() {
 		var r row
 		var metadataRaw []byte
-		if err := rows.Scan(&r.ID, &r.Provider, &r.Status, &r.DisplayName, &r.ExternalID, &r.ConnectedAt, &r.LastEventAt, &r.LastSuccessAt, &r.LastFailureAt, &r.LastFailureMessage, &r.TokenExpiresAt, &metadataRaw, &r.PendingJobCount, &r.FailedJobCount); err != nil {
+		if err := rows.Scan(
+			&r.ID, &r.Provider, &r.Status, &r.DisplayName, &r.ExternalID, &r.ConnectedAt,
+			&r.LifecycleState, &r.LastEventAt, &r.LastSuccessAt,
+			&r.LastFailureAt, &r.LastFailureMessage, &r.HealthSummary,
+			&r.TokenExpiresAt, &metadataRaw, &r.PendingJobCount, &r.FailedJobCount,
+		); err != nil {
 			return nil, err
 		}
 		r.Metadata = map[string]any{}
@@ -522,7 +545,10 @@ func (h Handler) auditEvents(ctx context.Context, integrationID string) ([]Audit
 	return events, rows.Err()
 }
 
-func (h Handler) revokeProvider(ctx context.Context, workspaceID string, provider string, userID string) error {
+// disconnectProvider revokes an integration by marking lifecycle/status as revoked,
+// clearing active credentials, cancelling pending jobs, and disabling team
+// notification integrations without deleting historical links.
+func (h Handler) disconnectProvider(ctx context.Context, workspaceID, userID, provider string) error {
 	tx, err := h.DB.Begin(ctx)
 	if err != nil {
 		return err
@@ -547,10 +573,16 @@ func (h Handler) revokeProvider(ctx context.Context, workspaceID string, provide
 	if _, err := tx.Exec(ctx, `update team_notification_integration set enabled=false, updated_at=now() where workspace_integration_id=$1::uuid`, integrationID); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `update workspace_integration set status='revoked', credentials_revoked_at=now(), revoked_at=now(), revoked_by_user_id=$2, last_event_at=now(), updated_at=now() where id=$1::uuid`, integrationID, userID); err != nil {
+	if _, err := tx.Exec(ctx, `update workspace_integration set status='revoked', lifecycle_state='revoked', credential_ref=null, credential_revoked_at=now(), credentials_revoked_at=now(), disconnected_at=now(), disconnected_by_user_id=$2, last_event_at=now(), health_summary='Disconnected by workspace admin.', updated_at=now() where id=$1::uuid`, integrationID, userID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// deleteProvider is kept for backward compatibility with existing tests.
+// It delegates to disconnectProvider with an empty userID.
+func (h Handler) deleteProvider(ctx context.Context, workspaceID string, provider string) error {
+	return h.disconnectProvider(ctx, workspaceID, "", provider)
 }
 
 func (h Handler) workspaceSlug(ctx context.Context, workspaceID string) (string, error) {
@@ -652,6 +684,7 @@ func (h Handler) completeSlackInstall(ctx context.Context, install slackOAuthIns
 	if _, err := tx.Exec(ctx, `
 		update workspace_integration
 		set status='connected',
+			lifecycle_state='connected',
 			external_id=$2,
 			display_name=$3,
 			metadata=$4::jsonb,
@@ -662,6 +695,11 @@ func (h Handler) completeSlackInstall(ctx context.Context, install slackOAuthIns
 			last_failure_at=null,
 			last_failure_message=null,
 			token_expires_at=null,
+			health_summary=null,
+			credential_ref=null,
+			credential_revoked_at=null,
+			disconnected_at=null,
+			disconnected_by_user_id=null,
 			credentials_revoked_at=null,
 			revoked_at=null,
 			revoked_by_user_id=null,
@@ -698,7 +736,7 @@ func (h Handler) completeSlackInstall(ctx context.Context, install slackOAuthIns
 func (h Handler) recordSlackInstallFailure(ctx context.Context, integrationID string, workspaceID string, message string) error {
 	_, err := h.DB.Exec(ctx, `
 		update workspace_integration
-		set status='error', last_failure_at=now(), last_failure_message=$2, updated_at=now()
+		set status='error', lifecycle_state='error', last_failure_at=now(), last_failure_message=$2, health_summary=$2, updated_at=now()
 		where id=$1::uuid`, integrationID, message)
 	if err != nil {
 		return err
@@ -714,7 +752,7 @@ func (h Handler) queueSlackInboundEvent(ctx context.Context, teamID string, even
 	err := h.DB.QueryRow(ctx, `
 		select workspace_id::text, id::text
 		from workspace_integration
-		where provider='slack' and external_id=$1 and status in ('connected','degraded')
+		where provider='slack' and external_id=$1 and lifecycle_state in ('connected','degraded')
 		limit 1`, teamID).Scan(&workspaceID, &integrationID)
 	if err != nil {
 		return err

@@ -44,10 +44,10 @@ const (
 
 // Defines values for BillingPlanId.
 const (
-	BillingPlanIdBasic      BillingPlanId = "basic"
-	BillingPlanIdBusiness   BillingPlanId = "business"
-	BillingPlanIdEnterprise BillingPlanId = "enterprise"
-	BillingPlanIdFree       BillingPlanId = "free"
+	BillingPlanIdCloudBusiness   BillingPlanId = "cloud_business"
+	BillingPlanIdCloudFree       BillingPlanId = "cloud_free"
+	BillingPlanIdCloudTeam       BillingPlanId = "cloud_team"
+	BillingPlanIdEnterpriseCloud BillingPlanId = "enterprise_cloud"
 )
 
 // Defines values for BulkLabelRequestAction.
@@ -96,6 +96,12 @@ const (
 	CreateInitiativeRequestStatusActive    CreateInitiativeRequestStatus = "active"
 	CreateInitiativeRequestStatusCompleted CreateInitiativeRequestStatus = "completed"
 	CreateInitiativeRequestStatusPlanned   CreateInitiativeRequestStatus = "planned"
+)
+
+// Defines values for CreateWorkspaceBillingCheckoutRequestPlan.
+const (
+	CreateWorkspaceBillingCheckoutRequestPlanCloudBusiness CreateWorkspaceBillingCheckoutRequestPlan = "cloud_business"
+	CreateWorkspaceBillingCheckoutRequestPlanCloudTeam     CreateWorkspaceBillingCheckoutRequestPlan = "cloud_team"
 )
 
 // Defines values for DocumentFolderColor.
@@ -553,10 +559,10 @@ const (
 
 // Defines values for UpdateWorkspaceBillingRequestPlan.
 const (
-	UpdateWorkspaceBillingRequestPlanBasic      UpdateWorkspaceBillingRequestPlan = "basic"
-	UpdateWorkspaceBillingRequestPlanBusiness   UpdateWorkspaceBillingRequestPlan = "business"
-	UpdateWorkspaceBillingRequestPlanEnterprise UpdateWorkspaceBillingRequestPlan = "enterprise"
-	UpdateWorkspaceBillingRequestPlanFree       UpdateWorkspaceBillingRequestPlan = "free"
+	UpdateWorkspaceBillingRequestPlanCloudBusiness   UpdateWorkspaceBillingRequestPlan = "cloud_business"
+	UpdateWorkspaceBillingRequestPlanCloudFree       UpdateWorkspaceBillingRequestPlan = "cloud_free"
+	UpdateWorkspaceBillingRequestPlanCloudTeam       UpdateWorkspaceBillingRequestPlan = "cloud_team"
+	UpdateWorkspaceBillingRequestPlanEnterpriseCloud UpdateWorkspaceBillingRequestPlan = "enterprise_cloud"
 )
 
 // Defines values for UpdateWorkspaceDocumentsRequestDefaultVisibility.
@@ -675,10 +681,10 @@ const (
 
 // Defines values for WorkspaceBillingResponseCurrentPlan.
 const (
-	Basic      WorkspaceBillingResponseCurrentPlan = "basic"
-	Business   WorkspaceBillingResponseCurrentPlan = "business"
-	Enterprise WorkspaceBillingResponseCurrentPlan = "enterprise"
-	Free       WorkspaceBillingResponseCurrentPlan = "free"
+	WorkspaceBillingResponseCurrentPlanCloudBusiness   WorkspaceBillingResponseCurrentPlan = "cloud_business"
+	WorkspaceBillingResponseCurrentPlanCloudFree       WorkspaceBillingResponseCurrentPlan = "cloud_free"
+	WorkspaceBillingResponseCurrentPlanCloudTeam       WorkspaceBillingResponseCurrentPlan = "cloud_team"
+	WorkspaceBillingResponseCurrentPlanEnterpriseCloud WorkspaceBillingResponseCurrentPlan = "enterprise_cloud"
 )
 
 // Defines values for WorkspaceDocumentsSettingsDefaultVisibility.
@@ -1364,6 +1370,25 @@ type CreateTeamRequest struct {
 // CreateTeamResponse defines model for CreateTeamResponse.
 type CreateTeamResponse struct {
 	Team Team `json:"team"`
+}
+
+// CreateWorkspaceBillingCheckoutRequest defines model for CreateWorkspaceBillingCheckoutRequest.
+type CreateWorkspaceBillingCheckoutRequest struct {
+	Plan CreateWorkspaceBillingCheckoutRequestPlan `json:"plan"`
+}
+
+// CreateWorkspaceBillingCheckoutRequestPlan defines model for CreateWorkspaceBillingCheckoutRequest.Plan.
+type CreateWorkspaceBillingCheckoutRequestPlan string
+
+// CreateWorkspaceBillingCheckoutResponse defines model for CreateWorkspaceBillingCheckoutResponse.
+type CreateWorkspaceBillingCheckoutResponse struct {
+	SessionId string `json:"sessionId"`
+	Url       string `json:"url"`
+}
+
+// CreateWorkspaceBillingPortalResponse defines model for CreateWorkspaceBillingPortalResponse.
+type CreateWorkspaceBillingPortalResponse struct {
+	Url string `json:"url"`
 }
 
 // CreateWorkspaceDocumentTemplateRequest defines model for CreateWorkspaceDocumentTemplateRequest.
@@ -4212,6 +4237,9 @@ type MutateCurrentWorkspaceApiJSONRequestBody = WorkspaceApiActionRequest
 
 // UpdateCurrentWorkspaceBillingJSONRequestBody defines body for UpdateCurrentWorkspaceBilling for application/json ContentType.
 type UpdateCurrentWorkspaceBillingJSONRequestBody = UpdateWorkspaceBillingRequest
+
+// CreateCurrentWorkspaceBillingCheckoutJSONRequestBody defines body for CreateCurrentWorkspaceBillingCheckout for application/json ContentType.
+type CreateCurrentWorkspaceBillingCheckoutJSONRequestBody = CreateWorkspaceBillingCheckoutRequest
 
 // UpdateCurrentWorkspaceCollaborationJSONRequestBody defines body for UpdateCurrentWorkspaceCollaboration for application/json ContentType.
 type UpdateCurrentWorkspaceCollaborationJSONRequestBody = UpdateWorkspaceCollaborationRequest
@@ -7942,6 +7970,12 @@ type ServerInterface interface {
 	// (PATCH /workspaces/current/billing)
 	UpdateCurrentWorkspaceBilling(w http.ResponseWriter, r *http.Request)
 
+	// (POST /workspaces/current/billing/checkout)
+	CreateCurrentWorkspaceBillingCheckout(w http.ResponseWriter, r *http.Request)
+
+	// (POST /workspaces/current/billing/portal)
+	CreateCurrentWorkspaceBillingPortal(w http.ResponseWriter, r *http.Request)
+
 	// (GET /workspaces/current/collaboration)
 	GetCurrentWorkspaceCollaboration(w http.ResponseWriter, r *http.Request)
 
@@ -9077,6 +9111,16 @@ func (_ Unimplemented) GetCurrentWorkspaceBilling(w http.ResponseWriter, r *http
 
 // (PATCH /workspaces/current/billing)
 func (_ Unimplemented) UpdateCurrentWorkspaceBilling(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /workspaces/current/billing/checkout)
+func (_ Unimplemented) CreateCurrentWorkspaceBillingCheckout(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /workspaces/current/billing/portal)
+func (_ Unimplemented) CreateCurrentWorkspaceBillingPortal(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -14603,6 +14647,46 @@ func (siw *ServerInterfaceWrapper) UpdateCurrentWorkspaceBilling(w http.Response
 	handler.ServeHTTP(w, r)
 }
 
+// CreateCurrentWorkspaceBillingCheckout operation middleware
+func (siw *ServerInterfaceWrapper) CreateCurrentWorkspaceBillingCheckout(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCurrentWorkspaceBillingCheckout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCurrentWorkspaceBillingPortal operation middleware
+func (siw *ServerInterfaceWrapper) CreateCurrentWorkspaceBillingPortal(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCurrentWorkspaceBillingPortal(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetCurrentWorkspaceCollaboration operation middleware
 func (siw *ServerInterfaceWrapper) GetCurrentWorkspaceCollaboration(w http.ResponseWriter, r *http.Request) {
 
@@ -16014,6 +16098,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/workspaces/current/billing", wrapper.UpdateCurrentWorkspaceBilling)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workspaces/current/billing/checkout", wrapper.CreateCurrentWorkspaceBillingCheckout)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/workspaces/current/billing/portal", wrapper.CreateCurrentWorkspaceBillingPortal)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/workspaces/current/collaboration", wrapper.GetCurrentWorkspaceCollaboration)
@@ -21968,6 +22058,63 @@ func (response UpdateCurrentWorkspaceBillingdefaultApplicationProblemPlusJSONRes
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type CreateCurrentWorkspaceBillingCheckoutRequestObject struct {
+	Body *CreateCurrentWorkspaceBillingCheckoutJSONRequestBody
+}
+
+type CreateCurrentWorkspaceBillingCheckoutResponseObject interface {
+	VisitCreateCurrentWorkspaceBillingCheckoutResponse(w http.ResponseWriter) error
+}
+
+type CreateCurrentWorkspaceBillingCheckout200JSONResponse CreateWorkspaceBillingCheckoutResponse
+
+func (response CreateCurrentWorkspaceBillingCheckout200JSONResponse) VisitCreateCurrentWorkspaceBillingCheckoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCurrentWorkspaceBillingCheckoutdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateCurrentWorkspaceBillingCheckoutdefaultApplicationProblemPlusJSONResponse) VisitCreateCurrentWorkspaceBillingCheckoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateCurrentWorkspaceBillingPortalRequestObject struct {
+}
+
+type CreateCurrentWorkspaceBillingPortalResponseObject interface {
+	VisitCreateCurrentWorkspaceBillingPortalResponse(w http.ResponseWriter) error
+}
+
+type CreateCurrentWorkspaceBillingPortal200JSONResponse CreateWorkspaceBillingPortalResponse
+
+func (response CreateCurrentWorkspaceBillingPortal200JSONResponse) VisitCreateCurrentWorkspaceBillingPortalResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCurrentWorkspaceBillingPortaldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateCurrentWorkspaceBillingPortaldefaultApplicationProblemPlusJSONResponse) VisitCreateCurrentWorkspaceBillingPortalResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type GetCurrentWorkspaceCollaborationRequestObject struct {
 }
 
@@ -23474,6 +23621,12 @@ type StrictServerInterface interface {
 
 	// (PATCH /workspaces/current/billing)
 	UpdateCurrentWorkspaceBilling(ctx context.Context, request UpdateCurrentWorkspaceBillingRequestObject) (UpdateCurrentWorkspaceBillingResponseObject, error)
+
+	// (POST /workspaces/current/billing/checkout)
+	CreateCurrentWorkspaceBillingCheckout(ctx context.Context, request CreateCurrentWorkspaceBillingCheckoutRequestObject) (CreateCurrentWorkspaceBillingCheckoutResponseObject, error)
+
+	// (POST /workspaces/current/billing/portal)
+	CreateCurrentWorkspaceBillingPortal(ctx context.Context, request CreateCurrentWorkspaceBillingPortalRequestObject) (CreateCurrentWorkspaceBillingPortalResponseObject, error)
 
 	// (GET /workspaces/current/collaboration)
 	GetCurrentWorkspaceCollaboration(ctx context.Context, request GetCurrentWorkspaceCollaborationRequestObject) (GetCurrentWorkspaceCollaborationResponseObject, error)
@@ -29215,6 +29368,61 @@ func (sh *strictHandler) UpdateCurrentWorkspaceBilling(w http.ResponseWriter, r 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateCurrentWorkspaceBillingResponseObject); ok {
 		if err := validResponse.VisitUpdateCurrentWorkspaceBillingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateCurrentWorkspaceBillingCheckout operation middleware
+func (sh *strictHandler) CreateCurrentWorkspaceBillingCheckout(w http.ResponseWriter, r *http.Request) {
+	var request CreateCurrentWorkspaceBillingCheckoutRequestObject
+
+	var body CreateCurrentWorkspaceBillingCheckoutJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateCurrentWorkspaceBillingCheckout(ctx, request.(CreateCurrentWorkspaceBillingCheckoutRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateCurrentWorkspaceBillingCheckout")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCurrentWorkspaceBillingCheckoutResponseObject); ok {
+		if err := validResponse.VisitCreateCurrentWorkspaceBillingCheckoutResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateCurrentWorkspaceBillingPortal operation middleware
+func (sh *strictHandler) CreateCurrentWorkspaceBillingPortal(w http.ResponseWriter, r *http.Request) {
+	var request CreateCurrentWorkspaceBillingPortalRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateCurrentWorkspaceBillingPortal(ctx, request.(CreateCurrentWorkspaceBillingPortalRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateCurrentWorkspaceBillingPortal")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCurrentWorkspaceBillingPortalResponseObject); ok {
+		if err := validResponse.VisitCreateCurrentWorkspaceBillingPortalResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

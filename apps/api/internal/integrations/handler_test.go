@@ -278,14 +278,14 @@ func TestGitHubRepositoryMappingActive(t *testing.T) {
 		t.Fatal("all repositories should accept repository payload")
 	}
 	selected := map[string]any{
-		"repositorySelection": "selected",
+		"repositorySelection":  "selected",
 		"selectedRepositories": []map[string]any{{"id": "456", "fullName": "namuh-eng/exponential", "active": true}},
 	}
 	if !githubRepositoryMappingActive(selected, payload) {
 		t.Fatal("selected active repository was rejected")
 	}
 	inactive := map[string]any{
-		"repositorySelection": "selected",
+		"repositorySelection":  "selected",
 		"selectedRepositories": []map[string]any{{"id": "456", "fullName": "namuh-eng/exponential", "active": false}},
 	}
 	if githubRepositoryMappingActive(inactive, payload) {
@@ -299,12 +299,12 @@ func TestGitHubRepositoryMappingActive(t *testing.T) {
 
 func TestGitHubIntegrationDetailsAreSecretFree(t *testing.T) {
 	details := githubIntegrationDetails(map[string]any{
-		"installationId": "12345",
-		"account": map[string]any{"login": "namuh-eng", "type": "Organization"},
-		"repositorySelection": "selected",
+		"installationId":       "12345",
+		"account":              map[string]any{"login": "namuh-eng", "type": "Organization"},
+		"repositorySelection":  "selected",
 		"selectedRepositories": []map[string]any{{"id": "456", "fullName": "namuh-eng/exponential", "active": true}},
-		"privateKey": "do-not-return",
-		"webhookSecret": "do-not-return",
+		"privateKey":           "do-not-return",
+		"webhookSecret":        "do-not-return",
 	})
 	encoded, err := json.Marshal(details)
 	if err != nil {

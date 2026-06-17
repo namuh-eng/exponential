@@ -89,8 +89,28 @@ for (const expected of [
   "put-metric-alarm",
   "${APP_NAME}-api",
   "${APP_NAME}-web",
+  "ALARM_TOPIC_ARN",
 ]) {
   if (!autoscaling.includes(expected)) {
     throw new Error(`configure-ecs-autoscaling.sh missing ${expected}`);
   }
+}
+
+const prepare = readFileSync("scripts/prepare-ecs-deploy-env.sh", "utf8");
+for (const expected of [
+  "sns create-topic",
+  "sns subscribe",
+  "ALARM_EMAIL",
+  "ALARM_TOPIC_ARN",
+]) {
+  if (!prepare.includes(expected)) {
+    throw new Error(`prepare-ecs-deploy-env.sh missing ${expected}`);
+  }
+}
+
+const deployScript = readFileSync("scripts/deploy-ecs.sh", "utf8");
+if (!deployScript.includes("export ALARM_TOPIC_ARN")) {
+  throw new Error(
+    "deploy-ecs.sh must export ALARM_TOPIC_ARN before calling configure-ecs-autoscaling.sh",
+  );
 }

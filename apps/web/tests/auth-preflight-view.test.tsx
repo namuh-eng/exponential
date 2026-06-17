@@ -61,7 +61,7 @@ describe("AuthPage preflight panel", () => {
       screen.getByText(/One or more login dependencies need attention/i),
     ).toBeDefined();
     expect(
-      screen.getByRole("button", { name: /Continue with email/i }),
+      screen.getByRole("button", { name: /Continue with Google/i }),
     ).toBeEnabled();
   });
 
@@ -89,7 +89,27 @@ describe("AuthPage preflight panel", () => {
       screen.queryByLabelText("Authentication preflight checks"),
     ).toBeNull();
     expect(
-      screen.getByRole("button", { name: /Continue with email/i }),
+      screen.getByRole("button", { name: /Continue with Google/i }),
     ).toBeEnabled();
+  });
+
+  it("does not fetch optional diagnostics while Playwright submits empty email", async () => {
+    vi.stubEnv("PLAYWRIGHT_TEST", "true");
+    render(<AuthPage mode="login" />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /Continue with Google/i }),
+      ).toBeEnabled();
+    });
+
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^\/api\/auth\/sessions\/recent/),
+      expect.anything(),
+    );
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/health/preflight",
+      expect.anything(),
+    );
   });
 });

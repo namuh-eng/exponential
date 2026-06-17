@@ -145,3 +145,10 @@ func TestTriageSourceContextLabelsKnownSources(t *testing.T) {
 		t.Fatalf("source context = %#v", got)
 	}
 }
+
+func TestNormalizeRecurringLabelIDs(t *testing.T) {
+	got := normalizeRecurringLabelIDs([]string{" label-a ", "", "label-a", "label-b"})
+	if len(got) != 2 || got[0] != "label-a" || got[1] != "label-b" {
+		t.Fatalf("label ids = %#v", got)
+	}
+}

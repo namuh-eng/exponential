@@ -34,6 +34,12 @@ type Principal struct {
 	IsPersonalAccessToken bool
 }
 
+// IsManager returns true if the given role can manage workspace settings.
+// This is the canonical check used across all packages — do not duplicate it.
+func IsManager(role string) bool {
+	return role == "owner" || role == "admin"
+}
+
 type BrowserSession struct {
 	User BrowserSessionUser `json:"user"`
 }

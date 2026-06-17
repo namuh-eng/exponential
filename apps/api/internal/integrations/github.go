@@ -28,20 +28,20 @@ type githubConnectResponse struct {
 }
 
 type githubRegisterRequest struct {
-	InstallationID      string                 `json:"installationId"`
-	Account             githubAccount         `json:"account"`
-	RepositorySelection string                 `json:"repositorySelection"`
-	Repositories        []githubRepository    `json:"repositories"`
-	Permissions         map[string]string     `json:"permissions"`
-	SetupAction         string                 `json:"setupAction"`
-	Metadata            map[string]any        `json:"metadata"`
+	InstallationID      string             `json:"installationId"`
+	Account             githubAccount      `json:"account"`
+	RepositorySelection string             `json:"repositorySelection"`
+	Repositories        []githubRepository `json:"repositories"`
+	Permissions         map[string]string  `json:"permissions"`
+	SetupAction         string             `json:"setupAction"`
+	Metadata            map[string]any     `json:"metadata"`
 }
 
 type githubRegisterResponse struct {
-	Connected      bool            `json:"connected"`
-	IntegrationID  string          `json:"integrationId"`
-	InstallationID string          `json:"installationId"`
-	Account        githubAccount   `json:"account"`
+	Connected      bool               `json:"connected"`
+	IntegrationID  string             `json:"integrationId"`
+	InstallationID string             `json:"installationId"`
+	Account        githubAccount      `json:"account"`
 	Repositories   []githubRepository `json:"repositories"`
 }
 
@@ -195,7 +195,7 @@ func (h Handler) GitHubDisconnect(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusForbidden, "Forbidden", "")
 		return
 	}
-	if err := h.revokeProvider(r.Context(), p.WorkspaceID, "github", p.UserID); err != nil {
+	if err := h.disconnectProvider(r.Context(), p.WorkspaceID, p.UserID, "github"); err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Disconnect GitHub failed", err.Error())
 		return
 	}
@@ -345,12 +345,12 @@ func (h Handler) completeGitHubInstall(ctx context.Context, workspaceID string, 
 		displayName = "GitHub installation " + input.InstallationID
 	}
 	metadata := map[string]any{
-		"installationId":      input.InstallationID,
-		"account":             account,
-		"repositorySelection": selection,
+		"installationId":       input.InstallationID,
+		"account":              account,
+		"repositorySelection":  selection,
 		"selectedRepositories": repositories,
-		"permissions":         input.Permissions,
-		"installedBy":         userID,
+		"permissions":          input.Permissions,
+		"installedBy":          userID,
 	}
 	if input.SetupAction != "" {
 		metadata["setupAction"] = input.SetupAction
@@ -615,7 +615,6 @@ func normalizeGitHubRepositories(repositories []githubRepository) []githubReposi
 		if repo.ID == "" && repo.FullName == "" {
 			continue
 		}
-		
 		out = append(out, repo)
 	}
 	return out
