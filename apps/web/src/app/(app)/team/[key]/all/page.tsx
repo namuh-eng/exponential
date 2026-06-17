@@ -1,6 +1,10 @@
 "use client";
 
 import { useAppShellContext } from "@/app/(app)/app-shell";
+import {
+  SYNC_OPERATIONS_EVENT,
+  type SyncOperationsEvent,
+} from "@/app/(app)/sync-subscription";
 import { ContextualInsights } from "@/components/contextual-insights";
 import { CreateIssueModal } from "@/components/create-issue-modal";
 import {
@@ -172,6 +176,17 @@ export default function TeamIssuesPage() {
 
   useEffect(() => {
     fetchIssues();
+  }, [fetchIssues]);
+
+  useEffect(() => {
+    const handleSync = (event: Event) => {
+      const operations = (event as SyncOperationsEvent).detail.operations;
+      if (operations.some((operation) => operation.entity_type === "issue")) {
+        void fetchIssues();
+      }
+    };
+    window.addEventListener(SYNC_OPERATIONS_EVENT, handleSync);
+    return () => window.removeEventListener(SYNC_OPERATIONS_EVENT, handleSync);
   }, [fetchIssues]);
 
   useEffect(() => {

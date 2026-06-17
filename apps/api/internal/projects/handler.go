@@ -277,7 +277,8 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 	project.Teams = teams
 	project.AppliedTemplateID = appliedTemplateID
 	project.AppliedMilestones = appliedMilestones
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "project", project.ID, "created", project, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "project", project.ID, "created", project, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Create project failed", err.Error())
 		return
 	}
@@ -285,6 +286,7 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create project failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	problem.JSON(w, 201, project)
 }
 
@@ -435,7 +437,8 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	updated.Teams = teams
 	updated.Progress = existing.Progress
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "project", updated.ID, "updated", updated, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "project", updated.ID, "updated", updated, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Update project failed", err.Error())
 		return
 	}
@@ -443,6 +446,7 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update project failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	detail, err := h.projectDetail(r.Context(), p.WorkspaceID, r.URL.Query().Get("workspaceSlug"), updated)
 	if err != nil {
 		problem.Write(w, 500, "Update project failed", err.Error())
@@ -472,7 +476,8 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete project failed", err.Error())
 		return
 	}
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "project", existing.ID, "deleted", existing, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "project", existing.ID, "deleted", existing, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Delete project failed", err.Error())
 		return
 	}
@@ -480,6 +485,7 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete project failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	problem.JSON(w, 200, map[string]bool{"success": true})
 }
 
@@ -673,7 +679,7 @@ func uniqueSlug(ctx context.Context, tx pgx.Tx, workspaceID, base, existingID st
 	}
 }
 
-func insertOperation(ctx context.Context, tx pgx.Tx, workspaceID, entityType, entityID, opType string, payload any, createdBy string) error {
+func insertOperation(ctx context.Context, tx pgx.Tx, workspaceID, entityType, entityID, opType string, payload any, createdBy string) (syncapi.Operation, error) {
 	return syncapi.InsertOperation(ctx, tx, workspaceID, entityType, entityID, opType, payload, createdBy)
 }
 

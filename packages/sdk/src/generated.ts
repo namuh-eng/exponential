@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+  "/sync/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get current workspace sync version and replay status */
+    get: operations["getSyncStatus"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/attachments": {
     parameters: {
       query?: never;
@@ -6013,6 +6030,37 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  getSyncStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sync status */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** Format: int64 */
+            currentVersion: number;
+            lastReplay?: {
+              /** Format: int64 */
+              requestedVersion: number;
+              operationCount: number;
+              /** Format: date-time */
+              replayedAt: string;
+            };
+          };
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   attachmentsNamespace: {
     parameters: {
       query?: never;
