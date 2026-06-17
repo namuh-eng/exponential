@@ -300,8 +300,9 @@ export function ProjectDetailPage() {
         return false;
       }
 
-      setData(json);
-      setDescriptionDraft(json.project.description ?? "");
+      const normalized = normalizeProjectResponse(json);
+      setData(normalized);
+      setDescriptionDraft(normalized.project.description ?? "");
       return true;
     } catch {
       setErrorMessage("Unable to update project.");

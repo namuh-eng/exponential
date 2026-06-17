@@ -306,7 +306,7 @@ describe("IntegrationsSettingsPage component", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Explore integrations" }),
     );
-    fireEvent.click(screen.getAllByRole("button", { name: "Connect" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Connect" })[1]);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Add AUTH_SLACK_ID",

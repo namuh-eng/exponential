@@ -153,17 +153,24 @@ describe("IssueDetailView UI", () => {
       refreshedAt: "2026-04-25T10:30:00Z",
     };
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
-      const path = url.toString();
+      const path = url instanceof Request ? url.url : url.toString();
       if (path.includes("/api/issues/iss-1/figma-sources/figma-1/refresh")) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => refreshed,
-        } as Response);
+        return Promise.resolve(
+          new Response(JSON.stringify(refreshed), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
       }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ ...mockIssueDetail, figmaSources: [figmaSource] }),
-      } as Response);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ ...mockIssueDetail, figmaSources: [figmaSource] }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
     });
 
     render(<IssueDetailView issueId="iss-1" />);
@@ -181,10 +188,19 @@ describe("IssueDetailView UI", () => {
     fireEvent.click(screen.getByRole("button", { name: "Mark seen" }));
 
     await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalledWith(
-        "/api/issues/iss-1/figma-sources/figma-1/refresh",
-        { method: "POST" },
-      );
+      expect(
+        fetchSpy.mock.calls.some(([request, init]) => {
+          const requestUrl =
+            request instanceof Request ? request.url : request.toString();
+          const method =
+            request instanceof Request ? request.method : init?.method;
+          return (
+            requestUrl.endsWith(
+              "/api/issues/iss-1/figma-sources/figma-1/refresh",
+            ) && method === "POST"
+          );
+        }),
+      ).toBe(true);
       expect(
         screen.getByText("Figma source marked as seen."),
       ).toBeInTheDocument();
