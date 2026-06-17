@@ -901,3 +901,88 @@ func TestSentryIssueActionFromPayload(t *testing.T) {
 		t.Fatalf("parsed Sentry issue = %#v", got)
 	}
 }
+
+func TestZendeskSetupRequirementAndSubdomain(t *testing.T) {
+	if got := setupRequirement("zendesk"); got != nil {
+		t.Fatalf("zendesk should be configurable from admin setup, got %#v", got)
+	}
+	subdomain, accountURL, err := normalizeZendeskSubdomain("https://Acme.zendesk.com/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subdomain != "acme" || accountURL != "https://acme.zendesk.com" {
+		t.Fatalf("normalized = %q %q", subdomain, accountURL)
+	}
+	if _, _, err := normalizeZendeskSubdomain("https://acme.zendesk.com/path"); err == nil {
+		t.Fatal("Zendesk origin with path was accepted")
+	}
+}
+
+func TestZendeskSignatureVerification(t *testing.T) {
+	body := []byte(`{"ticket":{"id":"42"}}`)
+	mac := hmac.New(sha256.New, []byte("secret"))
+	_, _ = mac.Write(body)
+	signature := hex.EncodeToString(mac.Sum(nil))
+	if !verifyZendeskSignature("secret", signature, body) {
+		t.Fatal("valid Zendesk signature was rejected")
+	}
+	if !verifyZendeskSignature("secret", "sha256="+signature, body) {
+		t.Fatal("prefixed Zendesk signature was rejected")
+	}
+	if verifyZendeskSignature("secret", signature, []byte(`{"ticket":{"id":"43"}}`)) {
+		t.Fatal("tampered Zendesk body was accepted")
+	}
+}
+
+func TestZendeskTicketActionFromPayload(t *testing.T) {
+	payload := map[string]any{
+		"query":           "ENG",
+		"teamKey":         "ENG",
+		"issueIdentifier": "ENG-42",
+		"ticket": map[string]any{
+			"id":          "123",
+			"url":         "https://acme.zendesk.com/agent/tickets/123",
+			"subject":     "Customer cannot export",
+			"description": "Export fails",
+			"status":      "open",
+			"requester":   map[string]any{"id": "9", "name": "Ada", "email": "ADA@EXAMPLE.COM"},
+			"organization": map[string]any{"id": "7", "name": "Acme"},
+		},
+	}
+	got := zendeskTicketActionFromPayload(payload)
+	if got.Query != "ENG" || got.TeamKey != "ENG" || got.IssueID != "ENG-42" {
+		t.Fatalf("parsed action = %#v", got)
+	}
+	if got.Subdomain != "acme" || got.Ticket.ID != "123" || got.Ticket.Requester.Email != "ada@example.com" || got.Ticket.Organization.Name != "Acme" {
+		t.Fatalf("parsed ticket = %#v", got.Ticket)
+	}
+}
+
+func TestUpdateZendeskTicket(t *testing.T) {
+	var got map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v2/tickets/123.json" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		username, password, ok := r.BasicAuth()
+		if !ok || username != "admin@example.com/token" || password != "token" {
+			t.Fatalf("basic auth = %q %q %v", username, password, ok)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = w.Write([]byte(`{"ticket":{"id":123}}`))
+	}))
+	defer server.Close()
+	t.Setenv("ZENDESK_API_BASE_URL", server.URL)
+
+	err := updateZendeskTicket(t.Context(), server.Client(), zendeskCredential{Subdomain: "acme", AccountURL: "https://acme.zendesk.com", Email: "admin@example.com", APIToken: "token"}, "123", "Done")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticket := got["ticket"].(map[string]any)
+	comment := ticket["comment"].(map[string]any)
+	if comment["body"] != "Done" || comment["public"] != false || ticket["status"] != "open" {
+		t.Fatalf("payload = %#v", got)
+	}
+}

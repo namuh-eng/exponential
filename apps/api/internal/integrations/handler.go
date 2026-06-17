@@ -133,6 +133,8 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/microsoft-teams/disconnect", h.MicrosoftTeamsDisconnect)
 	r.Post("/sentry/connect", h.SentryConnect)
 	r.Post("/sentry/disconnect", h.SentryDisconnect)
+	r.Post("/zendesk/setup", h.ZendeskSetup)
+	r.Post("/zendesk/disconnect", h.ZendeskDisconnect)
 	r.Post("/gong/connect", h.GongConnect)
 	r.Post("/gong/disconnect", h.GongDisconnect)
 	r.Post("/slack/disconnect", h.SlackDisconnect)
