@@ -83,6 +83,11 @@ func (h Handler) WebSocket(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close(websocket.StatusNormalClosure, "done")
 
 	lastVersion, _ := strconv.ParseInt(r.URL.Query().Get("version"), 10, 64)
+	subscription, _ := SubscribeOperations(r.Context(), principal.WorkspaceID)
+	if subscription != nil {
+		defer subscription.Close()
+	}
+
 	ops, err := h.loadOperations(r.Context(), principal.WorkspaceID, lastVersion)
 	if err != nil {
 		_ = conn.Close(websocket.StatusInternalError, err.Error())
@@ -90,11 +95,6 @@ func (h Handler) WebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = wsjsonWrite(r.Context(), conn, replayMessage{Type: "replay", Operations: ops})
 	recordReplayStatus(principal.WorkspaceID, lastVersion, len(ops))
-
-	subscription, _ := SubscribeOperations(r.Context(), principal.WorkspaceID)
-	if subscription != nil {
-		defer subscription.Close()
-	}
 
 	clientClosed := make(chan struct{})
 	go func() {

@@ -364,11 +364,28 @@ func (h Handler) Bulk(w http.ResponseWriter, r *http.Request) {
 		if input.Action == "archive" {
 			archivedAt = time.Now()
 		}
-		if _, err := h.DB.Exec(r.Context(), `update label set archived_at=$1, updated_at=now() where workspace_id=$2::uuid and id=any($3::uuid[])`, archivedAt, p.WorkspaceID, labelIDs); err != nil {
+		tx, err := h.DB.Begin(r.Context())
+		if err != nil {
 			problem.Write(w, 500, "Bulk label action failed", err.Error())
 			return
 		}
-		problem.JSON(w, 200, bulkResponse{Success: true, UpdatedCount: len(labelIDs)})
+		defer func() { _ = tx.Rollback(r.Context()) }()
+		if _, err := tx.Exec(r.Context(), `update label set archived_at=$1, updated_at=now() where workspace_id=$2::uuid and id=any($3::uuid[])`, archivedAt, p.WorkspaceID, labelIDs); err != nil {
+			problem.Write(w, 500, "Bulk label action failed", err.Error())
+			return
+		}
+		response := bulkResponse{Success: true, UpdatedCount: len(labelIDs)}
+		op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "label", "bulk", "bulk_updated", map[string]any{"action": input.Action, "labelIds": labelIDs, "response": response}, p.UserID)
+		if err != nil {
+			problem.Write(w, 500, "Bulk label action failed", err.Error())
+			return
+		}
+		if err := tx.Commit(r.Context()); err != nil {
+			problem.Write(w, 500, "Bulk label action failed", err.Error())
+			return
+		}
+		syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
+		problem.JSON(w, 200, response)
 	case "delete":
 		tx, err := h.DB.Begin(r.Context())
 		if err != nil {
@@ -384,17 +401,41 @@ func (h Handler) Bulk(w http.ResponseWriter, r *http.Request) {
 			problem.Write(w, 500, "Bulk label action failed", err.Error())
 			return
 		}
+		response := bulkResponse{Success: true, UpdatedCount: len(labelIDs)}
+		op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "label", "bulk", "bulk_deleted", map[string]any{"action": input.Action, "labelIds": labelIDs, "response": response}, p.UserID)
+		if err != nil {
+			problem.Write(w, 500, "Bulk label action failed", err.Error())
+			return
+		}
 		if err := tx.Commit(r.Context()); err != nil {
 			problem.Write(w, 500, "Bulk label action failed", err.Error())
 			return
 		}
-		problem.JSON(w, 200, bulkResponse{Success: true, UpdatedCount: len(labelIDs)})
+		syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
+		problem.JSON(w, 200, response)
 	case "convertToGroup":
-		if _, err := h.DB.Exec(r.Context(), `update label set parent_label_id=null, color='#6b6f76', updated_at=now() where workspace_id=$1::uuid and id=any($2::uuid[])`, p.WorkspaceID, labelIDs); err != nil {
+		tx, err := h.DB.Begin(r.Context())
+		if err != nil {
 			problem.Write(w, 500, "Bulk label action failed", err.Error())
 			return
 		}
-		problem.JSON(w, 200, bulkResponse{Success: true, UpdatedCount: len(labelIDs)})
+		defer func() { _ = tx.Rollback(r.Context()) }()
+		if _, err := tx.Exec(r.Context(), `update label set parent_label_id=null, color='#6b6f76', updated_at=now() where workspace_id=$1::uuid and id=any($2::uuid[])`, p.WorkspaceID, labelIDs); err != nil {
+			problem.Write(w, 500, "Bulk label action failed", err.Error())
+			return
+		}
+		response := bulkResponse{Success: true, UpdatedCount: len(labelIDs)}
+		op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "label", "bulk", "bulk_updated", map[string]any{"action": input.Action, "labelIds": labelIDs, "response": response}, p.UserID)
+		if err != nil {
+			problem.Write(w, 500, "Bulk label action failed", err.Error())
+			return
+		}
+		if err := tx.Commit(r.Context()); err != nil {
+			problem.Write(w, 500, "Bulk label action failed", err.Error())
+			return
+		}
+		syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
+		problem.JSON(w, 200, response)
 	case "rescope":
 		teamID := nullableTrim(input.TeamID)
 		if teamID != nil {
@@ -406,19 +447,36 @@ func (h Handler) Bulk(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if _, err := h.DB.Exec(r.Context(), `update label set team_id=$1::uuid, updated_at=now() where workspace_id=$2::uuid and id=any($3::uuid[])`, teamID, p.WorkspaceID, labelIDs); err != nil {
+		tx, err := h.DB.Begin(r.Context())
+		if err != nil {
 			problem.Write(w, 500, "Bulk label action failed", err.Error())
 			return
 		}
-		problem.JSON(w, 200, bulkResponse{Success: true, UpdatedCount: len(labelIDs)})
+		defer func() { _ = tx.Rollback(r.Context()) }()
+		if _, err := tx.Exec(r.Context(), `update label set team_id=$1::uuid, updated_at=now() where workspace_id=$2::uuid and id=any($3::uuid[])`, teamID, p.WorkspaceID, labelIDs); err != nil {
+			problem.Write(w, 500, "Bulk label action failed", err.Error())
+			return
+		}
+		response := bulkResponse{Success: true, UpdatedCount: len(labelIDs)}
+		op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "label", "bulk", "bulk_updated", map[string]any{"action": input.Action, "labelIds": labelIDs, "teamId": teamID, "response": response}, p.UserID)
+		if err != nil {
+			problem.Write(w, 500, "Bulk label action failed", err.Error())
+			return
+		}
+		if err := tx.Commit(r.Context()); err != nil {
+			problem.Write(w, 500, "Bulk label action failed", err.Error())
+			return
+		}
+		syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
+		problem.JSON(w, 200, response)
 	case "merge":
-		h.bulkMerge(w, r, p.WorkspaceID, labelIDs, nullableTrim(input.DestinationLabelID))
+		h.bulkMerge(w, r, p.WorkspaceID, p.UserID, labelIDs, nullableTrim(input.DestinationLabelID))
 	default:
 		problem.Write(w, 400, "Unsupported action", "")
 	}
 }
 
-func (h Handler) bulkMerge(w http.ResponseWriter, r *http.Request, workspaceID string, labelIDs []string, destinationID *string) {
+func (h Handler) bulkMerge(w http.ResponseWriter, r *http.Request, workspaceID, userID string, labelIDs []string, destinationID *string) {
 	if destinationID == nil {
 		problem.Write(w, 400, "destinationLabelId is required", "")
 		return
@@ -469,11 +527,18 @@ func (h Handler) bulkMerge(w http.ResponseWriter, r *http.Request, workspaceID s
 		problem.Write(w, 500, "Bulk label action failed", err.Error())
 		return
 	}
+	response := bulkResponse{Success: true, DestinationLabelID: destinationID, MergedCount: len(sourceIDs)}
+	op, err := insertOperation(r.Context(), tx, workspaceID, "label", "bulk", "bulk_deleted", map[string]any{"action": "merge", "labelIds": labelIDs, "sourceLabelIds": sourceIDs, "destinationLabelId": destinationID, "response": response}, userID)
+	if err != nil {
+		problem.Write(w, 500, "Bulk label action failed", err.Error())
+		return
+	}
 	if err := tx.Commit(r.Context()); err != nil {
 		problem.Write(w, 500, "Bulk label action failed", err.Error())
 		return
 	}
-	problem.JSON(w, 200, bulkResponse{Success: true, DestinationLabelID: destinationID, MergedCount: len(sourceIDs)})
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
+	problem.JSON(w, 200, response)
 }
 
 func (h Handler) ListProjectLabels(w http.ResponseWriter, r *http.Request) {
@@ -508,7 +573,13 @@ func (h Handler) CreateProjectLabel(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 400, "Name is required", "")
 		return
 	}
-	label, err := scanProjectLabel(h.DB.QueryRow(r.Context(), `insert into project_label (name,color,description,workspace_id) values ($1,$2,$3,$4::uuid) returning id::text,name,color,description,0::int,created_at,updated_at`, name, normalizeColor(value(input.Color), "#6b6f76"), nullableTrim(input.Description), p.WorkspaceID))
+	tx, err := h.DB.Begin(r.Context())
+	if err != nil {
+		problem.Write(w, 500, "Create project label failed", err.Error())
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	label, err := scanProjectLabel(tx.QueryRow(r.Context(), `insert into project_label (name,color,description,workspace_id) values ($1,$2,$3,$4::uuid) returning id::text,name,color,description,0::int,created_at,updated_at`, name, normalizeColor(value(input.Color), "#6b6f76"), nullableTrim(input.Description), p.WorkspaceID))
 	if isUniqueViolation(err) {
 		problem.Write(w, 409, "A project label with this name already exists", "")
 		return
@@ -517,6 +588,16 @@ func (h Handler) CreateProjectLabel(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create project label failed", err.Error())
 		return
 	}
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "project_label", label.ID, "created", label, p.UserID)
+	if err != nil {
+		problem.Write(w, 500, "Create project label failed", err.Error())
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		problem.Write(w, 500, "Create project label failed", err.Error())
+		return
+	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	problem.JSON(w, 201, projectLabelResponse{Label: label})
 }
 
@@ -553,7 +634,13 @@ func (h Handler) UpdateProjectLabel(w http.ResponseWriter, r *http.Request) {
 		add("description=?", nullableTrim(input.Description))
 	}
 	args = append(args, id, p.WorkspaceID)
-	label, err := scanProjectLabel(h.DB.QueryRow(r.Context(), `update project_label set `+strings.Join(sets, ",")+` where id=$`+itoa(len(args)-1)+`::uuid and workspace_id=$`+itoa(len(args))+`::uuid returning id::text,name,color,description,(select count(*)::int from project pr where pr.workspace_id=$`+itoa(len(args))+`::uuid and (pr.settings->'labelIds') ? project_label.id::text),created_at,updated_at`, args...))
+	tx, err := h.DB.Begin(r.Context())
+	if err != nil {
+		problem.Write(w, 500, "Update project label failed", err.Error())
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	label, err := scanProjectLabel(tx.QueryRow(r.Context(), `update project_label set `+strings.Join(sets, ",")+` where id=$`+itoa(len(args)-1)+`::uuid and workspace_id=$`+itoa(len(args))+`::uuid returning id::text,name,color,description,(select count(*)::int from project pr where pr.workspace_id=$`+itoa(len(args))+`::uuid and (pr.settings->'labelIds') ? project_label.id::text),created_at,updated_at`, args...))
 	if isUniqueViolation(err) {
 		problem.Write(w, 409, "A project label with this name already exists", "")
 		return
@@ -566,6 +653,16 @@ func (h Handler) UpdateProjectLabel(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update project label failed", err.Error())
 		return
 	}
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "project_label", label.ID, "updated", label, p.UserID)
+	if err != nil {
+		problem.Write(w, 500, "Update project label failed", err.Error())
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		problem.Write(w, 500, "Update project label failed", err.Error())
+		return
+	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	problem.JSON(w, 200, projectLabelResponse{Label: label})
 }
 
@@ -615,10 +712,16 @@ func (h Handler) DeleteProjectLabel(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 404, "Project label not found", "")
 		return
 	}
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "project_label", id, "deleted", map[string]string{"id": id}, p.UserID)
+	if err != nil {
+		problem.Write(w, 500, "Delete project label failed", err.Error())
+		return
+	}
 	if err := tx.Commit(r.Context()); err != nil {
 		problem.Write(w, 500, "Delete project label failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	problem.JSON(w, 200, map[string]bool{"success": true})
 }
 

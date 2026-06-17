@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
+	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
 )
 
 type Cycle struct {
@@ -148,7 +149,8 @@ func (h Handler) CreateCycle(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create cycle failed", err.Error())
 		return
 	}
-	if err := insertTeamOperation(r.Context(), tx, p.WorkspaceID, "cycle", cycle.ID, "created", cycle, p.UserID); err != nil {
+	op, err := insertTeamOperation(r.Context(), tx, p.WorkspaceID, "cycle", cycle.ID, "created", cycle, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Create cycle failed", err.Error())
 		return
 	}
@@ -156,6 +158,7 @@ func (h Handler) CreateCycle(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create cycle failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	problem.JSON(w, 201, cycle)
 }
 
@@ -300,7 +303,8 @@ func (h Handler) UpdateCycle(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update cycle failed", err.Error())
 		return
 	}
-	if err := insertTeamOperation(r.Context(), tx, p.WorkspaceID, "cycle", updated.ID, "updated", updated, p.UserID); err != nil {
+	op, err := insertTeamOperation(r.Context(), tx, p.WorkspaceID, "cycle", updated.ID, "updated", updated, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Update cycle failed", err.Error())
 		return
 	}
@@ -308,6 +312,7 @@ func (h Handler) UpdateCycle(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update cycle failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	problem.JSON(w, 200, updated)
 }
 
@@ -346,7 +351,8 @@ func (h Handler) DeleteCycle(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete cycle failed", err.Error())
 		return
 	}
-	if err := insertTeamOperation(r.Context(), tx, p.WorkspaceID, "cycle", existing.ID, "deleted", existing, p.UserID); err != nil {
+	op, err := insertTeamOperation(r.Context(), tx, p.WorkspaceID, "cycle", existing.ID, "deleted", existing, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Delete cycle failed", err.Error())
 		return
 	}
@@ -354,6 +360,7 @@ func (h Handler) DeleteCycle(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete cycle failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	problem.JSON(w, 200, map[string]bool{"success": true})
 }
 
@@ -465,13 +472,8 @@ func nullableUUID(value string) *string {
 	}
 	return &value
 }
-func insertTeamOperation(ctx context.Context, tx pgx.Tx, workspaceID, entityType, entityID, opType string, payload any, createdBy string) error {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(ctx, `insert into operation (workspace_id, entity_type, entity_id, op_type, payload, version, created_by) values ($1::uuid,$2,$3,$4,$5::jsonb,nextval('operation_version_seq'),$6)`, workspaceID, entityType, entityID, opType, body, createdBy)
-	return err
+func insertTeamOperation(ctx context.Context, tx pgx.Tx, workspaceID, entityType, entityID, opType string, payload any, createdBy string) (syncapi.Operation, error) {
+	return syncapi.InsertOperation(ctx, tx, workspaceID, entityType, entityID, opType, payload, createdBy)
 }
 func formatNullableTimestamp(ts pgtype.Timestamp) *string {
 	if !ts.Valid {

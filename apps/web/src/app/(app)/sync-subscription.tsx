@@ -14,10 +14,20 @@ function browserApiBaseUrl() {
 }
 
 function shouldRefreshRoute(operations: SyncOperation[]) {
+  const routeRefreshTypes = new Set([
+    "comment",
+    "custom_emoji",
+    "cycle",
+    "issue",
+    "label",
+    "notification",
+    "project",
+    "project_label",
+    "team",
+    "view",
+  ]);
   return operations.some((operation) =>
-    ["issue", "comment", "project", "notification"].includes(
-      operation.entity_type,
-    ),
+    routeRefreshTypes.has(operation.entity_type),
   );
 }
 
