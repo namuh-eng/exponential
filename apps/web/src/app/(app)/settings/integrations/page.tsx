@@ -3,18 +3,20 @@
 import { EmptyState } from "@/components/empty-state";
 import { useCallback, useEffect, useState } from "react";
 
+type IntegrationStatus =
+  | "configuration_required"
+  | "installing"
+  | "connected"
+  | "degraded"
+  | "revoked"
+  | "error"
+  | "not_connected";
+
 type Integration = {
   provider: string;
   name: string;
   description: string;
-  status:
-    | "configuration_required"
-    | "installing"
-    | "connected"
-    | "degraded"
-    | "revoked"
-    | "error"
-    | "not_connected";
+  status: IntegrationStatus;
   displayName: string | null;
   connectedAt: string | null;
   setupRequirement: { type: string; message: string } | null;
@@ -40,20 +42,19 @@ type Integration = {
     }[];
   };
   details?: {
-    // Google Sheets fields
-    spreadsheetUrl?: string;
-    spreadsheetTitle?: string;
-    scopes?: { issues?: boolean; projects?: boolean; initiatives?: boolean };
-    includePrivateTeams?: boolean;
-    schedule?: string;
-    nextRunAt?: string | null;
-    rowCounts?: { issues?: number; projects?: number; initiatives?: number };
-    // GitHub fields
     installationId?: string;
     accountLogin?: string;
     repositorySelection?: "all" | "selected" | "unknown";
     selectedRepositoryCount?: number;
     selectedRepositories?: { id: string; fullName: string; active: boolean }[];
+    spreadsheetUrl?: string;
+    nextRunAt?: string | null;
+    schedule?: string;
+    rowCounts?: {
+      issues?: number;
+      projects?: number;
+      initiatives?: number;
+    };
   } | null;
 };
 
@@ -75,6 +76,12 @@ type ZendeskSetupDetails = {
   actionSecret: string;
 };
 
+type IntegrationsPayload = {
+  integrations?: Integration[];
+  canManageIntegrations?: boolean;
+  error?: string;
+};
+
 type SheetsScopeState = {
   issues: boolean;
   projects: boolean;
@@ -82,11 +89,16 @@ type SheetsScopeState = {
   includePrivateTeams: boolean;
 };
 
-type IntegrationsPayload = {
-  integrations?: Integration[];
-  canManageIntegrations?: boolean;
-  error?: string;
-};
+type ConnectableProvider =
+  | "github"
+  | "slack"
+  | "discord"
+  | "microsoft_teams"
+  | "sentry"
+  | "salesforce"
+  | "gong"
+  | "intercom"
+  | "google_sheets";
 
 function statusLabel(integration: Integration) {
   if (integration.status === "connected") return "Connected";
@@ -110,7 +122,7 @@ function formatTimestamp(value: string | null) {
   }).format(new Date(value));
 }
 
-function statusClassName(status: Integration["status"]) {
+function statusClassName(status: IntegrationStatus) {
   if (status === "connected") {
     return "border-green-500/30 bg-green-500/10 text-green-300";
   }
@@ -130,7 +142,7 @@ function integrationDetailSummary(integration: Integration) {
   }
   if (
     integration.details?.repositorySelection === "selected" &&
-    typeof integration.details?.selectedRepositoryCount === "number"
+    typeof integration.details.selectedRepositoryCount === "number"
   ) {
     return `${integration.details.selectedRepositoryCount} selected repositories enabled`;
   }
@@ -142,27 +154,75 @@ function integrationDetailSummary(integration: Integration) {
 
 function isConnectableProvider(
   provider: string,
-): provider is
-  | "github"
-  | "slack"
-  | "discord"
-  | "microsoft_teams"
-  | "sentry"
-  | "google_sheets"
-  | "salesforce"
-  | "gong"
-  | "intercom" {
-  return (
-    provider === "github" ||
-    provider === "slack" ||
-    provider === "discord" ||
-    provider === "microsoft_teams" ||
-    provider === "sentry" ||
-    provider === "google_sheets" ||
-    provider === "salesforce" ||
-    provider === "gong" ||
-    provider === "intercom"
-  );
+): provider is ConnectableProvider {
+  return [
+    "github",
+    "slack",
+    "discord",
+    "microsoft_teams",
+    "sentry",
+    "salesforce",
+    "gong",
+    "intercom",
+    "google_sheets",
+  ].includes(provider);
+}
+
+function connectEndpoint(provider: ConnectableProvider) {
+  if (provider === "microsoft_teams") {
+    return "/api/integrations/microsoft-teams/connect";
+  }
+  if (provider === "google_sheets") {
+    return "/api/integrations/google-sheets/connect";
+  }
+  return `/api/integrations/${provider}/connect`;
+}
+
+function disconnectEndpoint(provider: string) {
+  if (provider === "microsoft_teams") {
+    return "/api/integrations/microsoft-teams/disconnect";
+  }
+  if (
+    [
+      "github",
+      "slack",
+      "discord",
+      "sentry",
+      "salesforce",
+      "front",
+      "gong",
+      "zendesk",
+      "intercom",
+    ].includes(provider)
+  ) {
+    return `/api/integrations/${provider}/disconnect`;
+  }
+  return `/api/integrations?provider=${encodeURIComponent(provider)}`;
+}
+
+function disconnectMethod(provider: string) {
+  return [
+    "github",
+    "slack",
+    "discord",
+    "microsoft_teams",
+    "sentry",
+    "salesforce",
+    "front",
+    "gong",
+    "zendesk",
+    "intercom",
+  ].includes(provider)
+    ? "POST"
+    : "DELETE";
+}
+
+function providerLabel(provider: string) {
+  if (provider === "microsoft_teams") return "Microsoft Teams";
+  return provider
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 export default function IntegrationsSettingsPage() {
@@ -235,57 +295,27 @@ export default function IntegrationsSettingsPage() {
     const githubParam = params.get("github");
     if (githubParam === "connected") {
       setNotice("GitHub connected successfully.");
-      const cleanUrl =
-        window.location.pathname +
-        (params
-          .toString()
-          .replace(/[&?]?github=[^&]*/g, "")
-          .replace(/^&/, "?") || "");
-      window.history.replaceState(null, "", cleanUrl);
     } else if (githubParam === "canceled") {
       setError("GitHub installation was canceled.");
-      const cleanUrl =
-        window.location.pathname +
-        (params
-          .toString()
-          .replace(/[&?]?github=[^&]*/g, "")
-          .replace(/^&/, "?") || "");
-      window.history.replaceState(null, "", cleanUrl);
+    } else {
+      return;
     }
+    params.delete("github");
+    const query = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}`,
+    );
   }, []);
 
-  async function connectIntegration(
-    provider:
-      | "github"
-      | "slack"
-      | "discord"
-      | "microsoft_teams"
-      | "sentry"
-      | "google_sheets"
-      | "salesforce"
-      | "gong"
-      | "intercom",
-  ) {
+  async function connectIntegration(provider: ConnectableProvider) {
     setPendingProvider(provider);
     setNotice(null);
     setError(null);
-    let label = "GitHub";
-    if (provider === "discord") label = "Discord";
-    if (provider === "slack") label = "Slack";
-    if (provider === "microsoft_teams") label = "Microsoft Teams";
-    if (provider === "sentry") label = "Sentry";
-    if (provider === "google_sheets") label = "Google Sheets";
-    if (provider === "salesforce") label = "Salesforce";
-    if (provider === "gong") label = "Gong";
-    if (provider === "intercom") label = "Intercom";
-    const endpoint =
-      provider === "microsoft_teams"
-        ? "/api/integrations/microsoft-teams/connect"
-        : provider === "google_sheets"
-          ? "/api/integrations/google-sheets/connect"
-          : `/api/integrations/${provider}/connect`;
+    const label = providerLabel(provider);
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetch(connectEndpoint(provider), {
         method: "POST",
         headers: {
           Accept: "application/json",
@@ -558,45 +588,8 @@ export default function IntegrationsSettingsPage() {
     setNotice(null);
     setError(null);
     try {
-      const endpoint =
-        provider === "slack"
-          ? "/api/integrations/slack/disconnect"
-          : provider === "discord"
-            ? "/api/integrations/discord/disconnect"
-            : provider === "github"
-              ? "/api/integrations/github/disconnect"
-              : provider === "microsoft_teams"
-                ? "/api/integrations/microsoft-teams/disconnect"
-                : provider === "sentry"
-                  ? "/api/integrations/sentry/disconnect"
-                  : provider === "google_sheets"
-                    ? "/api/integrations/google-sheets/disconnect"
-                    : provider === "salesforce"
-                      ? "/api/integrations/salesforce/disconnect"
-                      : provider === "front"
-                        ? "/api/integrations/front/disconnect"
-                        : provider === "gong"
-                          ? "/api/integrations/gong/disconnect"
-                          : provider === "zendesk"
-                            ? "/api/integrations/zendesk/disconnect"
-                            : provider === "intercom"
-                              ? "/api/integrations/intercom/disconnect"
-                              : `/api/integrations?provider=${encodeURIComponent(provider)}`;
-      const response = await fetch(endpoint, {
-        method:
-          provider === "slack" ||
-          provider === "discord" ||
-          provider === "github" ||
-          provider === "microsoft_teams" ||
-          provider === "sentry" ||
-          provider === "google_sheets" ||
-          provider === "salesforce" ||
-          provider === "front" ||
-          provider === "gong" ||
-          provider === "zendesk" ||
-          provider === "intercom"
-            ? "POST"
-            : "DELETE",
+      const response = await fetch(disconnectEndpoint(provider), {
+        method: disconnectMethod(provider),
         headers: { Accept: "application/json" },
       });
       const data = (await response.json().catch(() => ({}))) as {
@@ -653,6 +646,7 @@ export default function IntegrationsSettingsPage() {
           {error}
         </div>
       ) : null}
+
       {gitLabSetupDetails ? (
         <div className="mt-6 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
           <div className="font-medium text-[var(--color-text-primary)]">
@@ -674,6 +668,7 @@ export default function IntegrationsSettingsPage() {
           </div>
         </div>
       ) : null}
+
       {jiraSetupDetails ? (
         <div className="mt-6 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
           <div className="font-medium text-[var(--color-text-primary)]">
@@ -685,6 +680,7 @@ export default function IntegrationsSettingsPage() {
           </p>
         </div>
       ) : null}
+
       {zendeskSetupDetails ? (
         <div className="mt-6 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-[13px] text-[var(--color-text-secondary)]">
           <div className="font-medium text-[var(--color-text-primary)]">
@@ -780,18 +776,15 @@ export default function IntegrationsSettingsPage() {
                       </button>
                     ) : null}
                     {integration.actions.canReconnect &&
-                    integration.provider !== "gitlab" &&
-                    integration.provider !== "jira" &&
-                    integration.provider !== "front" &&
-                    integration.provider !== "zendesk" ? (
+                    isConnectableProvider(integration.provider) ? (
                       <button
                         className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-primary)] disabled:opacity-50"
                         disabled={pendingProvider === integration.provider}
-                        onClick={() =>
-                          isConnectableProvider(integration.provider)
-                            ? void connectIntegration(integration.provider)
-                            : undefined
-                        }
+                        onClick={() => {
+                          if (isConnectableProvider(integration.provider)) {
+                            void connectIntegration(integration.provider);
+                          }
+                        }}
                         type="button"
                       >
                         Reconnect
@@ -926,7 +919,7 @@ export default function IntegrationsSettingsPage() {
                 ×
               </button>
             </div>
-            <div className="mt-5 flex flex-col gap-3">
+            <div className="mt-5 flex max-h-[70vh] flex-col gap-3 overflow-y-auto">
               {integrations.map((integration) => (
                 <div
                   className="rounded-lg border border-[var(--color-border)] p-4"
@@ -956,320 +949,49 @@ export default function IntegrationsSettingsPage() {
                           {integration.setupRequirement.message}
                         </p>
                       ) : null}
-                      {integration.provider === "google_sheets" &&
-                      (integration.actions.canConnect ||
-                        integration.actions.canReconnect) ? (
-                        <fieldset className="mt-4 grid gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-[12px] text-[var(--color-text-secondary)]">
-                          <legend className="px-1 text-[12px] text-[var(--color-text-tertiary)]">
-                            Export scopes
-                          </legend>
-                          {(["issues", "projects", "initiatives"] as const).map(
-                            (scope) => (
-                              <label
-                                className="flex items-center gap-2"
-                                key={scope}
-                              >
-                                <input
-                                  checked={sheetsScopes[scope]}
-                                  onChange={(event) =>
-                                    setSheetsScopes((current) => ({
-                                      ...current,
-                                      [scope]: event.target.checked,
-                                    }))
-                                  }
-                                  type="checkbox"
-                                />
-                                {scope[0].toUpperCase() + scope.slice(1)}
-                              </label>
-                            ),
-                          )}
-                          <label className="flex items-center gap-2">
-                            <input
-                              checked={sheetsScopes.includePrivateTeams}
-                              onChange={(event) =>
-                                setSheetsScopes((current) => ({
-                                  ...current,
-                                  includePrivateTeams: event.target.checked,
-                                }))
-                              }
-                              type="checkbox"
-                            />
-                            Include private teams
-                          </label>
-                        </fieldset>
-                      ) : null}
-                      {integration.provider === "gitlab" &&
-                      (integration.actions.canConnect ||
-                        integration.actions.canReconnect) ? (
-                        <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
-                            GitLab origin
-                            <input
-                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
-                              onChange={(event) =>
-                                setGitLabOrigin(event.target.value)
-                              }
-                              placeholder="https://gitlab.com"
-                              type="url"
-                              value={gitLabOrigin}
-                            />
-                          </label>
-                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
-                            Personal access token
-                            <input
-                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
-                              onChange={(event) =>
-                                setGitLabToken(event.target.value)
-                              }
-                              placeholder="glpat-..."
-                              type="password"
-                              value={gitLabToken}
-                            />
-                          </label>
-                          <button
-                            className="w-fit rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-                            disabled={
-                              pendingProvider === "gitlab" ||
-                              gitLabToken.trim() === ""
-                            }
-                            onClick={() => void setupGitLab()}
-                            type="button"
-                          >
-                            {pendingProvider === "gitlab"
-                              ? "Validating..."
-                              : "Connect GitLab"}
-                          </button>
-                        </div>
-                      ) : null}
-                      {integration.provider === "jira" &&
-                      (integration.actions.canConnect ||
-                        integration.actions.canReconnect) ? (
-                        <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
-                            Jira deployment
-                            <select
-                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
-                              onChange={(event) =>
-                                setJiraDeployment(
-                                  event.target.value === "server"
-                                    ? "server"
-                                    : "cloud",
-                                )
-                              }
-                              value={jiraDeployment}
-                            >
-                              <option value="cloud">Jira Cloud</option>
-                              <option value="server">
-                                Jira Server/Data Center
-                              </option>
-                            </select>
-                          </label>
-                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
-                            Base URL
-                            <input
-                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
-                              onChange={(event) =>
-                                setJiraBaseUrl(event.target.value)
-                              }
-                              placeholder="https://acme.atlassian.net"
-                              type="url"
-                              value={jiraBaseUrl}
-                            />
-                          </label>
-                          {jiraDeployment === "cloud" ? (
-                            <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
-                              Atlassian email
-                              <input
-                                className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
-                                onChange={(event) =>
-                                  setJiraEmail(event.target.value)
-                                }
-                                placeholder="admin@example.com"
-                                type="email"
-                                value={jiraEmail}
-                              />
-                            </label>
-                          ) : null}
-                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
-                            API token or PAT
-                            <input
-                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
-                              onChange={(event) =>
-                                setJiraToken(event.target.value)
-                              }
-                              placeholder={
-                                jiraDeployment === "cloud"
-                                  ? "Atlassian API token"
-                                  : "Jira personal access token"
-                              }
-                              type="password"
-                              value={jiraToken}
-                            />
-                          </label>
-                          <button
-                            className="w-fit rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-                            disabled={
-                              pendingProvider === "jira" ||
-                              jiraBaseUrl.trim() === "" ||
-                              jiraToken.trim() === "" ||
-                              (jiraDeployment === "cloud" &&
-                                jiraEmail.trim() === "")
-                            }
-                            onClick={() => void setupJira()}
-                            type="button"
-                          >
-                            {pendingProvider === "jira"
-                              ? "Validating..."
-                              : "Connect Jira"}
-                          </button>
-                        </div>
-                      ) : null}
-                      {integration.provider === "front" &&
-                      (integration.actions.canConnect ||
-                        integration.actions.canReconnect) ? (
-                        <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
-                            Front company ID
-                            <input
-                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
-                              onChange={(event) =>
-                                setFrontCompanyId(event.target.value)
-                              }
-                              placeholder="Optional company identifier"
-                              value={frontCompanyId}
-                            />
-                          </label>
-                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
-                            Front API base URL
-                            <input
-                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
-                              onChange={(event) =>
-                                setFrontBaseUrl(event.target.value)
-                              }
-                              placeholder="https://api2.frontapp.com"
-                              type="url"
-                              value={frontBaseUrl}
-                            />
-                          </label>
-                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
-                            Front API token
-                            <input
-                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
-                              onChange={(event) =>
-                                setFrontApiToken(event.target.value)
-                              }
-                              placeholder="Bearer token with conversations/comments permissions"
-                              type="password"
-                              value={frontApiToken}
-                            />
-                          </label>
-                          <button
-                            className="w-fit rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-                            disabled={
-                              pendingProvider === "front" ||
-                              frontApiToken.trim() === ""
-                            }
-                            onClick={() => void setupFront()}
-                            type="button"
-                          >
-                            {pendingProvider === "front"
-                              ? "Validating..."
-                              : "Connect Front"}
-                          </button>
-                        </div>
-                      ) : null}
-                      {integration.provider === "zendesk" &&
-                      (integration.actions.canConnect ||
-                        integration.actions.canReconnect) ? (
-                        <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
-                            Zendesk subdomain
-                            <input
-                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
-                              onChange={(event) =>
-                                setZendeskSubdomain(event.target.value)
-                              }
-                              placeholder="acme"
-                              type="text"
-                              value={zendeskSubdomain}
-                            />
-                          </label>
-                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
-                            Admin email
-                            <input
-                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
-                              onChange={(event) =>
-                                setZendeskEmail(event.target.value)
-                              }
-                              placeholder="admin@example.com"
-                              type="email"
-                              value={zendeskEmail}
-                            />
-                          </label>
-                          <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
-                            API token
-                            <input
-                              className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
-                              onChange={(event) =>
-                                setZendeskAPIToken(event.target.value)
-                              }
-                              placeholder="Zendesk API token"
-                              type="password"
-                              value={zendeskAPIToken}
-                            />
-                          </label>
-                          <button
-                            className="w-fit rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-                            disabled={
-                              pendingProvider === "zendesk" ||
-                              zendeskSubdomain.trim() === "" ||
-                              zendeskEmail.trim() === "" ||
-                              zendeskAPIToken.trim() === ""
-                            }
-                            onClick={() => void setupZendesk()}
-                            type="button"
-                          >
-                            {pendingProvider === "zendesk"
-                              ? "Validating..."
-                              : "Connect Zendesk"}
-                          </button>
-                        </div>
-                      ) : null}
+                      <IntegrationSetupForm
+                        integration={integration}
+                        pendingProvider={pendingProvider}
+                        gitLabOrigin={gitLabOrigin}
+                        gitLabToken={gitLabToken}
+                        jiraDeployment={jiraDeployment}
+                        jiraBaseUrl={jiraBaseUrl}
+                        jiraEmail={jiraEmail}
+                        jiraToken={jiraToken}
+                        frontCompanyId={frontCompanyId}
+                        frontApiToken={frontApiToken}
+                        frontBaseUrl={frontBaseUrl}
+                        zendeskSubdomain={zendeskSubdomain}
+                        zendeskEmail={zendeskEmail}
+                        zendeskAPIToken={zendeskAPIToken}
+                        sheetsScopes={sheetsScopes}
+                        onGitLabOriginChange={setGitLabOrigin}
+                        onGitLabTokenChange={setGitLabToken}
+                        onJiraDeploymentChange={setJiraDeployment}
+                        onJiraBaseUrlChange={setJiraBaseUrl}
+                        onJiraEmailChange={setJiraEmail}
+                        onJiraTokenChange={setJiraToken}
+                        onFrontCompanyIdChange={setFrontCompanyId}
+                        onFrontApiTokenChange={setFrontApiToken}
+                        onFrontBaseUrlChange={setFrontBaseUrl}
+                        onZendeskSubdomainChange={setZendeskSubdomain}
+                        onZendeskEmailChange={setZendeskEmail}
+                        onZendeskAPITokenChange={setZendeskAPIToken}
+                        onSheetsScopeChange={(key, value) =>
+                          setSheetsScopes((current) => ({
+                            ...current,
+                            [key]: value,
+                          }))
+                        }
+                        onSetupGitLab={() => void setupGitLab()}
+                        onSetupJira={() => void setupJira()}
+                        onSetupFront={() => void setupFront()}
+                        onSetupZendesk={() => void setupZendesk()}
+                        onConnect={(provider) =>
+                          void connectIntegration(provider)
+                        }
+                      />
                     </div>
-                    {isConnectableProvider(integration.provider) ? (
-                      <button
-                        className="rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={
-                          pendingProvider === integration.provider ||
-                          (integration.provider === "google_sheets" &&
-                            !sheetsScopes.issues &&
-                            !sheetsScopes.projects &&
-                            !sheetsScopes.initiatives)
-                        }
-                        onClick={() =>
-                          isConnectableProvider(integration.provider)
-                            ? void connectIntegration(integration.provider)
-                            : undefined
-                        }
-                        type="button"
-                      >
-                        {pendingProvider === integration.provider
-                          ? "Opening..."
-                          : integration.provider === "google_sheets"
-                            ? "Create sheet"
-                            : "Connect"}
-                      </button>
-                    ) : integration.provider === "gitlab" ||
-                      integration.provider === "jira" ||
-                      integration.provider === "zendesk" ? null : (
-                      <button
-                        className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-tertiary)]"
-                        disabled
-                        type="button"
-                      >
-                        Configure
-                      </button>
-                    )}
                   </div>
                 </div>
               ))}
@@ -1278,5 +1000,344 @@ export default function IntegrationsSettingsPage() {
         </dialog>
       ) : null}
     </div>
+  );
+}
+
+type IntegrationSetupFormProps = {
+  integration: Integration;
+  pendingProvider: string | null;
+  gitLabOrigin: string;
+  gitLabToken: string;
+  jiraDeployment: "cloud" | "server";
+  jiraBaseUrl: string;
+  jiraEmail: string;
+  jiraToken: string;
+  frontCompanyId: string;
+  frontApiToken: string;
+  frontBaseUrl: string;
+  zendeskSubdomain: string;
+  zendeskEmail: string;
+  zendeskAPIToken: string;
+  sheetsScopes: SheetsScopeState;
+  onGitLabOriginChange: (value: string) => void;
+  onGitLabTokenChange: (value: string) => void;
+  onJiraDeploymentChange: (value: "cloud" | "server") => void;
+  onJiraBaseUrlChange: (value: string) => void;
+  onJiraEmailChange: (value: string) => void;
+  onJiraTokenChange: (value: string) => void;
+  onFrontCompanyIdChange: (value: string) => void;
+  onFrontApiTokenChange: (value: string) => void;
+  onFrontBaseUrlChange: (value: string) => void;
+  onZendeskSubdomainChange: (value: string) => void;
+  onZendeskEmailChange: (value: string) => void;
+  onZendeskAPITokenChange: (value: string) => void;
+  onSheetsScopeChange: (key: keyof SheetsScopeState, value: boolean) => void;
+  onSetupGitLab: () => void;
+  onSetupJira: () => void;
+  onSetupFront: () => void;
+  onSetupZendesk: () => void;
+  onConnect: (provider: ConnectableProvider) => void;
+};
+
+function IntegrationSetupForm(props: IntegrationSetupFormProps) {
+  const canAct =
+    props.integration.actions.canConnect ||
+    props.integration.actions.canReconnect ||
+    props.integration.status === "configuration_required" ||
+    props.integration.status === "not_connected";
+
+  if (!canAct) return null;
+
+  if (props.integration.provider === "google_sheets") {
+    return (
+      <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <div className="text-[12px] font-medium text-[var(--color-text-primary)]">
+          Export scopes
+        </div>
+        <CheckboxInput
+          checked={props.sheetsScopes.issues}
+          label="Include issues"
+          onChange={(value) => props.onSheetsScopeChange("issues", value)}
+        />
+        <CheckboxInput
+          checked={props.sheetsScopes.projects}
+          label="Include projects"
+          onChange={(value) => props.onSheetsScopeChange("projects", value)}
+        />
+        <CheckboxInput
+          checked={props.sheetsScopes.initiatives}
+          label="Include initiatives"
+          onChange={(value) => props.onSheetsScopeChange("initiatives", value)}
+        />
+        <CheckboxInput
+          checked={props.sheetsScopes.includePrivateTeams}
+          label="Include private teams"
+          onChange={(value) =>
+            props.onSheetsScopeChange("includePrivateTeams", value)
+          }
+        />
+        <SetupButton
+          disabled={props.pendingProvider === "google_sheets"}
+          label="Create sheet"
+          loading={props.pendingProvider === "google_sheets"}
+          onClick={() => props.onConnect("google_sheets")}
+        />
+      </div>
+    );
+  }
+
+  if (props.integration.provider === "gitlab") {
+    return (
+      <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <TextInput
+          label="GitLab origin"
+          onChange={props.onGitLabOriginChange}
+          placeholder="https://gitlab.com"
+          type="url"
+          value={props.gitLabOrigin}
+        />
+        <TextInput
+          label="Personal access token"
+          onChange={props.onGitLabTokenChange}
+          placeholder="glpat-..."
+          type="password"
+          value={props.gitLabToken}
+        />
+        <SetupButton
+          disabled={
+            props.pendingProvider === "gitlab" ||
+            props.gitLabToken.trim() === ""
+          }
+          label="Connect GitLab"
+          loading={props.pendingProvider === "gitlab"}
+          onClick={props.onSetupGitLab}
+        />
+      </div>
+    );
+  }
+
+  if (props.integration.provider === "jira") {
+    return (
+      <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+          Jira deployment
+          <select
+            className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+            onChange={(event) =>
+              props.onJiraDeploymentChange(
+                event.target.value === "server" ? "server" : "cloud",
+              )
+            }
+            value={props.jiraDeployment}
+          >
+            <option value="cloud">Jira Cloud</option>
+            <option value="server">Jira Server/Data Center</option>
+          </select>
+        </label>
+        <TextInput
+          label="Base URL"
+          onChange={props.onJiraBaseUrlChange}
+          placeholder="https://acme.atlassian.net"
+          type="url"
+          value={props.jiraBaseUrl}
+        />
+        {props.jiraDeployment === "cloud" ? (
+          <TextInput
+            label="Atlassian email"
+            onChange={props.onJiraEmailChange}
+            placeholder="admin@example.com"
+            type="email"
+            value={props.jiraEmail}
+          />
+        ) : null}
+        <TextInput
+          label="API token or PAT"
+          onChange={props.onJiraTokenChange}
+          placeholder={
+            props.jiraDeployment === "cloud"
+              ? "Atlassian API token"
+              : "Jira personal access token"
+          }
+          type="password"
+          value={props.jiraToken}
+        />
+        <SetupButton
+          disabled={
+            props.pendingProvider === "jira" ||
+            props.jiraBaseUrl.trim() === "" ||
+            props.jiraToken.trim() === "" ||
+            (props.jiraDeployment === "cloud" && props.jiraEmail.trim() === "")
+          }
+          label="Connect Jira"
+          loading={props.pendingProvider === "jira"}
+          onClick={props.onSetupJira}
+        />
+      </div>
+    );
+  }
+
+  if (props.integration.provider === "front") {
+    return (
+      <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <TextInput
+          label="Front company ID"
+          onChange={props.onFrontCompanyIdChange}
+          placeholder="Optional company identifier"
+          value={props.frontCompanyId}
+        />
+        <TextInput
+          label="Front API base URL"
+          onChange={props.onFrontBaseUrlChange}
+          placeholder="https://api2.frontapp.com"
+          type="url"
+          value={props.frontBaseUrl}
+        />
+        <TextInput
+          label="Front API token"
+          onChange={props.onFrontApiTokenChange}
+          placeholder="Bearer token with conversations/comments permissions"
+          type="password"
+          value={props.frontApiToken}
+        />
+        <SetupButton
+          disabled={
+            props.pendingProvider === "front" ||
+            props.frontApiToken.trim() === ""
+          }
+          label="Connect Front"
+          loading={props.pendingProvider === "front"}
+          onClick={props.onSetupFront}
+        />
+      </div>
+    );
+  }
+
+  if (props.integration.provider === "zendesk") {
+    return (
+      <div className="mt-4 grid gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <TextInput
+          label="Zendesk subdomain"
+          onChange={props.onZendeskSubdomainChange}
+          placeholder="acme"
+          value={props.zendeskSubdomain}
+        />
+        <TextInput
+          label="Admin email"
+          onChange={props.onZendeskEmailChange}
+          placeholder="admin@example.com"
+          type="email"
+          value={props.zendeskEmail}
+        />
+        <TextInput
+          label="API token"
+          onChange={props.onZendeskAPITokenChange}
+          placeholder="Zendesk API token"
+          type="password"
+          value={props.zendeskAPIToken}
+        />
+        <SetupButton
+          disabled={
+            props.pendingProvider === "zendesk" ||
+            props.zendeskSubdomain.trim() === "" ||
+            props.zendeskEmail.trim() === "" ||
+            props.zendeskAPIToken.trim() === ""
+          }
+          label="Connect Zendesk"
+          loading={props.pendingProvider === "zendesk"}
+          onClick={props.onSetupZendesk}
+        />
+      </div>
+    );
+  }
+
+  if (!isConnectableProvider(props.integration.provider)) return null;
+  if (
+    props.integration.provider === "github" &&
+    !props.integration.actions.canConnect
+  ) {
+    return null;
+  }
+
+  return (
+    <button
+      className="mt-3 rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+      disabled={props.pendingProvider === props.integration.provider}
+      onClick={() =>
+        props.onConnect(props.integration.provider as ConnectableProvider)
+      }
+      type="button"
+    >
+      Connect
+    </button>
+  );
+}
+
+type TextInputProps = {
+  label: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: string;
+  value: string;
+};
+
+function TextInput({
+  label,
+  onChange,
+  placeholder,
+  type = "text",
+  value,
+}: TextInputProps) {
+  return (
+    <label className="grid gap-1 text-[12px] text-[var(--color-text-secondary)]">
+      {label}
+      <input
+        aria-label={label}
+        className="rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        type={type}
+        value={value}
+      />
+    </label>
+  );
+}
+
+type CheckboxInputProps = {
+  checked: boolean;
+  label: string;
+  onChange: (value: boolean) => void;
+};
+
+function CheckboxInput({ checked, label, onChange }: CheckboxInputProps) {
+  return (
+    <label className="flex items-center gap-2 text-[12px] text-[var(--color-text-secondary)]">
+      <input
+        aria-label={label}
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        type="checkbox"
+      />
+      {label}
+    </label>
+  );
+}
+
+type SetupButtonProps = {
+  disabled: boolean;
+  label: string;
+  loading: boolean;
+  onClick: () => void;
+};
+
+function SetupButton({ disabled, label, loading, onClick }: SetupButtonProps) {
+  return (
+    <button
+      className="w-fit rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+      disabled={disabled}
+      onClick={onClick}
+      type="button"
+    >
+      {loading ? "Validating..." : label}
+    </button>
   );
 }
