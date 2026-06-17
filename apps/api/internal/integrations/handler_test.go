@@ -174,7 +174,7 @@ func TestGoogleSheetsSettingsRequireAtLeastOneScope(t *testing.T) {
 
 func TestGoogleSheetsDetailsExposeAnalyticsStatus(t *testing.T) {
 	raw, err := json.Marshal(googleSheetsMetadata{
-		googleSheetsSettings: googleSheetsSettings{Scopes: map[string]bool{"issues": true, "projects": false, "initiatives": true}, IncludePrivateTeams: false, Schedule: "hourly", Enabled: true},
+		googleSheetsSettings:     googleSheetsSettings{Scopes: map[string]bool{"issues": true, "projects": false, "initiatives": true}, IncludePrivateTeams: false, Schedule: "hourly", Enabled: true},
 		SpreadsheetID:            "sheet-1",
 		SpreadsheetURL:           "https://docs.google.com/spreadsheets/d/sheet-1/edit",
 		SpreadsheetTitle:         "workspace analytics",
@@ -338,14 +338,14 @@ func TestGitHubRepositoryMappingActive(t *testing.T) {
 		t.Fatal("all repositories should accept repository payload")
 	}
 	selected := map[string]any{
-		"repositorySelection": "selected",
+		"repositorySelection":  "selected",
 		"selectedRepositories": []map[string]any{{"id": "456", "fullName": "namuh-eng/exponential", "active": true}},
 	}
 	if !githubRepositoryMappingActive(selected, payload) {
 		t.Fatal("selected active repository was rejected")
 	}
 	inactive := map[string]any{
-		"repositorySelection": "selected",
+		"repositorySelection":  "selected",
 		"selectedRepositories": []map[string]any{{"id": "456", "fullName": "namuh-eng/exponential", "active": false}},
 	}
 	if githubRepositoryMappingActive(inactive, payload) {
@@ -359,12 +359,12 @@ func TestGitHubRepositoryMappingActive(t *testing.T) {
 
 func TestGitHubIntegrationDetailsAreSecretFree(t *testing.T) {
 	details := githubIntegrationDetails(map[string]any{
-		"installationId": "12345",
-		"account": map[string]any{"login": "namuh-eng", "type": "Organization"},
-		"repositorySelection": "selected",
+		"installationId":       "12345",
+		"account":              map[string]any{"login": "namuh-eng", "type": "Organization"},
+		"repositorySelection":  "selected",
 		"selectedRepositories": []map[string]any{{"id": "456", "fullName": "namuh-eng/exponential", "active": true}},
-		"privateKey": "do-not-return",
-		"webhookSecret": "do-not-return",
+		"privateKey":           "do-not-return",
+		"webhookSecret":        "do-not-return",
 	})
 	encoded, err := json.Marshal(details)
 	if err != nil {
@@ -1103,16 +1103,18 @@ func TestSalesforceCaseActionFromPayload(t *testing.T) {
 
 func TestSalesforceCasePatchBody(t *testing.T) {
 	t.Setenv("SALESFORCE_STATUS_FIELD", "Linear_Status__c")
+	t.Setenv("SALESFORCE_PROJECT_URL_FIELD", "Linear_Project_URL__c")
 	body := salesforceCasePatchBody(map[string]any{
-		"status":   "Done",
-		"priority": "high",
-		"issueUrl": "https://app.example/team/ENG/issue/ENG-42",
-		"followUp": "Issue completed.",
+		"status":     "Done",
+		"priority":   "high",
+		"issueUrl":   "https://app.example/team/ENG/issue/ENG-42",
+		"projectUrl": "https://app.example/project/customer-portal",
+		"followUp":   "Issue completed.",
 	})
 	if body["Linear_Status__c"] != "Done" || body["Exponential_Priority__c"] != "high" {
 		t.Fatalf("patch body = %#v", body)
 	}
-	if body["Exponential_Issue_URL__c"] == "" || body["Exponential_Follow_Up__c"] == "" {
+	if body["Exponential_Issue_URL__c"] == "" || body["Linear_Project_URL__c"] == "" || body["Exponential_Follow_Up__c"] == "" {
 		t.Fatalf("missing backlink/follow-up fields = %#v", body)
 	}
 }
@@ -1174,7 +1176,7 @@ func TestPostFrontJSONReopensConversation(t *testing.T) {
 func TestFrontReopenCommentBody(t *testing.T) {
 	body := frontReopenCommentBody(map[string]any{"identifier": "ENG-7", "title": "Fix exports", "category": "canceled", "issueUrl": "https://app.example/team/ENG/issue/ENG-7"})
 	if !strings.Contains(body, "ENG-7 Fix exports was canceled") || !strings.Contains(body, "https://app.example/team/ENG/issue/ENG-7") {
-			t.Fatalf("body = %q", body)
+		t.Fatalf("body = %q", body)
 	}
 }
 
@@ -1216,12 +1218,12 @@ func TestZendeskTicketActionFromPayload(t *testing.T) {
 		"teamKey":         "ENG",
 		"issueIdentifier": "ENG-42",
 		"ticket": map[string]any{
-			"id":          "123",
-			"url":         "https://acme.zendesk.com/agent/tickets/123",
-			"subject":     "Customer cannot export",
-			"description": "Export fails",
-			"status":      "open",
-			"requester":   map[string]any{"id": "9", "name": "Ada", "email": "ADA@EXAMPLE.COM"},
+			"id":           "123",
+			"url":          "https://acme.zendesk.com/agent/tickets/123",
+			"subject":      "Customer cannot export",
+			"description":  "Export fails",
+			"status":       "open",
+			"requester":    map[string]any{"id": "9", "name": "Ada", "email": "ADA@EXAMPLE.COM"},
 			"organization": map[string]any{"id": "7", "name": "Acme"},
 		},
 	}

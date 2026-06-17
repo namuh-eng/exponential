@@ -94,15 +94,15 @@ type salesforceCaseActionRequest struct {
 }
 
 type salesforceIssueActionResponse struct {
-	WebURL        string `json:"webUrl"`
-	IssueID       string `json:"issueId,omitempty"`
-	Project       string `json:"project"`
-	Identifier    string `json:"identifier"`
-	Status        string `json:"status"`
+	WebURL         string `json:"webUrl"`
+	IssueID        string `json:"issueId,omitempty"`
+	Project        string `json:"project"`
+	Identifier     string `json:"identifier"`
+	Status         string `json:"status"`
 	StatusCategory string `json:"statusCategory"`
-	Priority      string `json:"priority"`
-	CaseID        string `json:"caseId,omitempty"`
-	CaseNumber    string `json:"caseNumber,omitempty"`
+	Priority       string `json:"priority"`
+	CaseID         string `json:"caseId,omitempty"`
+	CaseNumber     string `json:"caseNumber,omitempty"`
 }
 
 type salesforceIssueSearchResponse struct {
@@ -366,6 +366,10 @@ func (h Handler) SalesforceProjectLink(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.insertSalesforceCaseProjectLink(r.Context(), install, project.ID, input.Case, input.Raw); err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Link Salesforce case failed", err.Error())
+		return
+	}
+	if err := h.queueSalesforceCaseProjectStatus(r.Context(), install, project, input.Case); err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Queue Salesforce project status sync failed", err.Error())
 		return
 	}
 	_ = h.recordSalesforceEvent(r.Context(), install, "case_project_linked", "info", "Salesforce case linked to Exponential project.", map[string]any{"projectId": project.ID, "caseId": input.Case.ID, "caseNumber": input.Case.Number})
@@ -696,6 +700,26 @@ func (h Handler) queueSalesforceCaseStatusTx(ctx context.Context, tx pgx.Tx, ins
 		return err
 	}
 	_, err = tx.Exec(ctx, `insert into provider_job (workspace_id, workspace_integration_id, provider, kind, status, payload, scheduled_at, updated_at) values ($1::uuid,$2::uuid,'salesforce','outbound_delivery','queued',$3::jsonb,now(),now())`, install.WorkspaceID, install.IntegrationID, raw)
+	return err
+}
+
+func (h Handler) queueSalesforceCaseProjectStatus(ctx context.Context, install salesforceInstallRecord, project salesforceProjectRow, caseRef salesforceCaseRef) error {
+	payload := map[string]any{
+		"type":        "sync_project_status",
+		"caseId":      caseRef.ID,
+		"caseNumber":  caseRef.Number,
+		"projectId":   project.ID,
+		"projectName": project.Name,
+		"projectSlug": project.Slug,
+		"status":      project.Status,
+		"priority":    project.Priority,
+		"projectUrl":  project.salesforceResponse().WebURL,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	_, err = h.DB.Exec(ctx, `insert into provider_job (workspace_id, workspace_integration_id, provider, kind, status, payload, scheduled_at, updated_at) values ($1::uuid,$2::uuid,'salesforce','outbound_delivery','queued',$3::jsonb,now(),now())`, install.WorkspaceID, install.IntegrationID, raw)
 	return err
 }
 
