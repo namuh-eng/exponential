@@ -5,6 +5,8 @@ import type {
   ExternalAgentProvider,
 } from "@/lib/agent-runs";
 
+type SourceMetadataValue = string | number | boolean | null;
+
 export const EXTERNAL_AGENT_PROVIDERS = [
   "slack",
   "teams",
@@ -57,6 +59,44 @@ function readRecord(value: unknown) {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function readOptionalMetadataValue(
+  value: unknown,
+): SourceMetadataValue | undefined {
+  if (value === null) return null;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") return value.trim().slice(0, 500);
+  return undefined;
+}
+
+function isSensitiveMetadataKey(key: string) {
+  return /token|secret|password|credential|authorization|api[-_]?key|cookie/i.test(
+    key,
+  );
+}
+
+function readSourceMetadata(value: unknown) {
+  const record = readRecord(value);
+  const entries: Array<[string, SourceMetadataValue]> = [];
+
+  for (const [key, rawValue] of Object.entries(record).slice(0, 20)) {
+    const normalizedKey = key.trim().slice(0, 64);
+    if (!normalizedKey) continue;
+
+    if (isSensitiveMetadataKey(normalizedKey)) {
+      entries.push([normalizedKey, "[redacted]"]);
+      continue;
+    }
+
+    const normalizedValue = readOptionalMetadataValue(rawValue);
+    if (normalizedValue !== undefined) {
+      entries.push([normalizedKey, normalizedValue]);
+    }
+  }
+
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
 export function getAgentActionsProviderState():
@@ -169,10 +209,14 @@ export function parseExternalAgentAction(
       messageId: readOptionalString(sourceRecord.messageId),
       channelId: readOptionalString(sourceRecord.channelId),
       channelName: readOptionalString(sourceRecord.channelName),
+      externalTeamId: readOptionalString(sourceRecord.externalTeamId),
       ticketId: readOptionalString(sourceRecord.ticketId),
       customerId: readOptionalString(sourceRecord.customerId),
       permalink: readOptionalString(sourceRecord.permalink),
       excerpt: readOptionalString(sourceRecord.excerpt),
+      metadata: readSourceMetadata(
+        sourceRecord.metadata ?? sourceRecord.sourceMetadata,
+      ),
     },
     actor: {
       externalUserId,

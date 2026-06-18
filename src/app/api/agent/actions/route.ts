@@ -122,6 +122,10 @@ export async function POST(request: Request) {
   const run = createExternalAgentRun(access.workspaceId, {
     ...parsed,
     teamKey: resolvedTeamKey,
+    source: {
+      ...parsed.source,
+      workspaceIntegrationId: integration.id,
+    },
     actor: {
       ...parsed.actor,
       mappedUserId,

@@ -95,10 +95,17 @@ const createIssuePayload = {
   source: {
     provider: "slack",
     conversationId: "C123",
+    externalTeamId: "T123",
+    channelId: "C123",
     threadId: "1717000000.000100",
     channelName: "customer-help",
     permalink: "https://slack.example.com/archives/C123/p1717000000000100",
     excerpt: "Customer cannot finish onboarding after SSO redirect.",
+    metadata: {
+      eventType: "message_action",
+      responseUrl: "https://hooks.slack.example/respond",
+      botToken: "xoxb-secret",
+    },
   },
   actor: {
     externalUserId: "U123",
@@ -132,7 +139,15 @@ describe("agent actions route", () => {
       source: {
         provider: "slack",
         conversationId: "C123",
+        workspaceIntegrationId: "integration-1",
+        externalTeamId: "T123",
+        channelId: "C123",
         channelName: "customer-help",
+        metadata: {
+          eventType: "message_action",
+          responseUrl: "https://hooks.slack.example/respond",
+          botToken: "[redacted]",
+        },
       },
       actor: {
         externalUserId: "U123",

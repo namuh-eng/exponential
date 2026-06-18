@@ -19,17 +19,25 @@ export type ExternalAgentProvider =
   | "intercom"
   | "front";
 
+export type AgentSourceMetadata = Record<
+  string,
+  string | number | boolean | null
+>;
+
 export interface AgentSourceContext {
   provider: ExternalAgentProvider;
+  workspaceIntegrationId?: string;
   conversationId: string;
   threadId?: string;
   messageId?: string;
   channelId?: string;
+  externalTeamId?: string;
   channelName?: string;
   ticketId?: string;
   customerId?: string;
   permalink?: string;
   excerpt?: string;
+  metadata?: AgentSourceMetadata;
 }
 
 export interface AgentActorContext {
@@ -225,12 +233,26 @@ const seededRuns: AgentRun[] = [
 
 const runsByWorkspace = new Map<string, AgentRun[]>();
 
+function cloneSourceContext(source: AgentSourceContext): AgentSourceContext {
+  return {
+    ...source,
+    metadata: source.metadata ? { ...source.metadata } : undefined,
+  };
+}
+
+function cloneReviewGate(reviewGate: AgentReviewGate): AgentReviewGate {
+  return {
+    ...reviewGate,
+    decision: reviewGate.decision ? { ...reviewGate.decision } : undefined,
+  };
+}
+
 function cloneRun(run: AgentRun): AgentRun {
   return {
     ...run,
-    source: run.source ? { ...run.source } : undefined,
+    source: run.source ? cloneSourceContext(run.source) : undefined,
     actor: run.actor ? { ...run.actor } : undefined,
-    reviewGate: run.reviewGate ? { ...run.reviewGate } : undefined,
+    reviewGate: run.reviewGate ? cloneReviewGate(run.reviewGate) : undefined,
     logs: [...run.logs],
     suggestions: run.suggestions.map((suggestion) => ({ ...suggestion })),
   };
@@ -424,7 +446,7 @@ export function createExternalAgentRun(
     },
     context: target,
     actionType: input.actionType,
-    source: { ...input.source },
+    source: cloneSourceContext(input.source),
     actor: { ...input.actor },
     reviewGate,
     status: mutationAction ? "needs_review" : "completed",
