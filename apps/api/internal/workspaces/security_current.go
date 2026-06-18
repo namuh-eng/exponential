@@ -141,6 +141,7 @@ func (h Handler) currentSecurityPayload(r *http.Request, current currentWorkspac
 		"hipaa":                boolSetting(security, "hipaa", false),
 		"ipRestrictions":       firstNonNil(security["ipRestrictions"], []any{}),
 		"saml":                 readSAMLSettings(current.Settings),
+		"oidc":                 publicOIDCSettings(readOIDCSettings(current.Settings)),
 		"scim":                 publicSCIM(withSCIMTokens(readSCIMSettings(current.Settings, scimBaseURL(r, current.ID)), current.SCIMTokens)),
 		"capabilities": map[string]any{
 			"canInviteMembers":            canPermission(current.Role, permissions["invitationsRole"]),

@@ -196,6 +196,11 @@ async function main() {
     return;
   }
 
+  if (resource === "auth") {
+    await authCommand();
+    return;
+  }
+
   if (resource === "whoami") {
     const { data, error, response } = await client.GET("/account/profile");
     printResult(data, error, response.status, "whoami", true);
@@ -688,6 +693,34 @@ async function workspaceCommand() {
     const { data, error, response } = await client.POST("/workspaces/invite", {
       body: { invites: [{ email, role }] },
     });
+    printResult(data, error, response.status);
+    return;
+  }
+
+  usage();
+}
+
+async function authCommand() {
+  if (action === "oidc") {
+    const issuerUrl = requireOption(args, "issuer");
+    const clientId = requireOption(args, "client-id");
+    const clientSecret = requireOption(args, "client-secret");
+    const domains = readRepeatedOption(args, "domain");
+    if (domains.length === 0) {
+      throw new Error("--domain is required");
+    }
+    const { data, error, response } = await client.PATCH(
+      "/workspaces/current/security/oidc",
+      {
+        body: {
+          enabled: readFlag(args, "enable"),
+          issuerUrl,
+          clientId,
+          clientSecret,
+          domains,
+        },
+      },
+    );
     printResult(data, error, response.status);
     return;
   }
@@ -1409,6 +1442,23 @@ function readJSONOption(args: string[], name: string) {
   return raw ? JSON.parse(raw) : undefined;
 }
 
+function readRepeatedOption(args: string[], name: string) {
+  const values: string[] = [];
+  const flag = `--${name}`;
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] !== flag) continue;
+    const value = args[i + 1];
+    if (!value) continue;
+    values.push(
+      ...value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    );
+  }
+  return values;
+}
+
 function usage(code = 1): never {
   const write = code === 0 ? writeStdout : writeStderr;
   write(`Usage:
@@ -1419,6 +1469,7 @@ function usage(code = 1): never {
   expn doctor [--json]
   expn config get [token|baseUrl] [--json]
   expn config set [--token pat_<token>] [--api-url http://localhost:7016/v1]
+  expn auth oidc --issuer <url> --client-id <id> --client-secret <secret> --domain example.com [--domain example.org] [--enable]
   expn issue ls [--team-id <uuid>] [--cursor <cursor>] [--limit <n>]
   expn issue view <id-or-identifier>
   expn issue create --title <title> --team-id <uuid> [--idempotency-key <key>]

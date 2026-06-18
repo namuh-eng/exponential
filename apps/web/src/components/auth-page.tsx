@@ -32,6 +32,8 @@ type PreflightResponse = { checks?: PreflightCheck[] };
 type ProviderCapabilities = {
   providers?: {
     google?: ProviderCapabilityValue;
+    saml?: ProviderCapabilityValue;
+    oidc?: ProviderCapabilityValue;
     passkey?: boolean;
     googleAllowed?: boolean;
     emailPasskey?: boolean;
@@ -933,6 +935,8 @@ export function AuthPage({
   );
   const [passkeySupported, setPasskeySupported] = useState(false);
   const [emailConfigured, setEmailConfigured] = useState(true);
+  const [samlConfigured, setSamlConfigured] = useState<boolean | null>(null);
+  const [oidcConfigured, setOidcConfigured] = useState<boolean | null>(null);
   const [googleDisabledByWorkspace, setGoogleDisabledByWorkspace] =
     useState(false);
   const [error, setError] = useState("");
@@ -1032,6 +1036,8 @@ export function AuthPage({
         }
         const data = (await response.json()) as ProviderCapabilities;
         setGoogleConfigured(isProviderEnabled(data.providers?.google));
+        setSamlConfigured(isProviderEnabled(data.providers?.saml));
+        setOidcConfigured(isProviderEnabled(data.providers?.oidc));
         setGoogleAllowed(data.providers?.googleAllowed !== false);
         setPasskeyConfigured(
           data.providers?.emailPasskey !== false &&
@@ -1051,6 +1057,8 @@ export function AuthPage({
         setGoogleAllowed(true);
         setPasskeyConfigured(true);
         setEmailConfigured(true);
+        setSamlConfigured(false);
+        setOidcConfigured(false);
         setGoogleDisabledByWorkspace(false);
       }
     }
@@ -1244,27 +1252,39 @@ export function AuthPage({
 
     try {
       const callbackPath = getSafeCallbackPath();
-      const response = await fetch("/api/auth/saml/discovery", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: normalizedSsoIdentifier,
-          isDesktop: false,
-          type: "login",
-          callbackURL: getAbsoluteCallbackUrl(callbackPath),
-        }),
-      });
-      const data = (await response.json()) as SamlDiscoveryResponse;
+      const endpoints =
+        oidcConfigured === true
+          ? ["/api/auth/oidc/discovery", "/api/auth/saml/discovery"]
+          : ["/api/auth/saml/discovery", "/api/auth/oidc/discovery"];
+      let lastError = "No SSO enabled workspace could be found.";
 
-      if (!response.ok || !data.url) {
-        setError(data.error ?? "No SAML SSO enabled workspace could be found.");
-        setLoading(false);
-        return;
+      for (const endpoint of endpoints) {
+        if (endpoint.includes("saml") && samlConfigured === false) continue;
+        if (endpoint.includes("oidc") && oidcConfigured === false) continue;
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: normalizedSsoIdentifier,
+            isDesktop: false,
+            type: "login",
+            callbackURL: getAbsoluteCallbackUrl(callbackPath),
+          }),
+        });
+        const data = (await response.json()) as SamlDiscoveryResponse;
+        if (response.ok && data.url) {
+          window.location.assign(data.url);
+          return;
+        }
+        lastError = data.error ?? lastError;
+        if (response.status !== 404) break;
       }
 
-      window.location.assign(data.url);
+      setError(lastError);
+      setLoading(false);
+      return;
     } catch {
-      setError("Failed to look up SAML SSO. Please try again.");
+      setError("Failed to look up SSO. Please try again.");
       setLoading(false);
     }
   }
@@ -1449,45 +1469,52 @@ export function AuthPage({
                 )}
               </div>
 
-              {/* Divider */}
-              <div className="flex items-center gap-3 py-1 text-[10.5px] text-[var(--auth-faint)]">
-                <span className="h-px flex-1 bg-[var(--auth-secondary-border)]" />
-                <span>── or with SAML / passkey ──</span>
-                <span className="h-px flex-1 bg-[var(--auth-secondary-border)]" />
-              </div>
+              {(samlConfigured !== false || oidcConfigured !== false) && (
+                <>
+                  {/* Divider */}
+                  <div className="flex items-center gap-3 py-1 text-[10.5px] text-[var(--auth-faint)]">
+                    <span className="h-px flex-1 bg-[var(--auth-secondary-border)]" />
+                    <span>── or with SSO / passkey ──</span>
+                    <span className="h-px flex-1 bg-[var(--auth-secondary-border)]" />
+                  </div>
 
-              {/* SAML SSO */}
-              <button
-                type="button"
-                onClick={() => {
-                  setStep("sso-input");
-                  setPasskeyPending(false);
-                  setError("");
-                }}
-                className="flex w-full items-center gap-3 border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-3 py-2.5 text-[13px] text-[var(--auth-text)] transition-colors hover:bg-[var(--auth-secondary-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span aria-hidden="true" className="text-[var(--auth-prompt)]">
-                  {">"}
-                </span>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  role="img"
-                  aria-label="SAML"
-                >
-                  <path d="M4 7h16" />
-                  <path d="M7 11h10" />
-                  <path d="M9 15h6" />
-                  <path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" />
-                </svg>
-                <span>Continue with SAML SSO</span>
-              </button>
+                  {/* Enterprise SSO */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep("sso-input");
+                      setPasskeyPending(false);
+                      setError("");
+                    }}
+                    className="flex w-full items-center gap-3 border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-3 py-2.5 text-[13px] text-[var(--auth-text)] transition-colors hover:bg-[var(--auth-secondary-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="text-[var(--auth-prompt)]"
+                    >
+                      {">"}
+                    </span>
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      role="img"
+                      aria-label="SSO"
+                    >
+                      <path d="M4 7h16" />
+                      <path d="M7 11h10" />
+                      <path d="M9 15h6" />
+                      <path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" />
+                    </svg>
+                    <span>Continue with SSO</span>
+                  </button>
+                </>
+              )}
 
               {mode === "login" && passkeyConfigured !== false && (
                 <button
@@ -1723,9 +1750,7 @@ export function AuthPage({
               >
                 <span className="inline-flex items-center gap-3">
                   <span aria-hidden="true">{"[↵]"}</span>
-                  <span>
-                    {loading ? "Checking SAML…" : "Continue with SAML"}
-                  </span>
+                  <span>{loading ? "Checking SSO…" : "Continue with SSO"}</span>
                 </span>
                 <span
                   aria-hidden="true"

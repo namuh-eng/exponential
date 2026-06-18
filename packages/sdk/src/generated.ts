@@ -750,6 +750,38 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/auth/oidc/discovery": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["discoverOidcUrl"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/auth/oidc/callback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["oidcCallback"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/auth/saml/acs": {
     parameters: {
       query?: never;
@@ -2956,6 +2988,22 @@ export interface paths {
     patch: operations["updateCurrentWorkspaceSaml"];
     trace?: never;
   };
+  "/workspaces/current/security/oidc": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations["updateCurrentWorkspaceOidc"];
+    trace?: never;
+  };
   "/workspaces/current/security/scim": {
     parameters: {
       query?: never;
@@ -3567,6 +3615,14 @@ export interface components {
       /** Format: uri */
       url: string;
     };
+    OidcDiscoveryRequest: {
+      email: string;
+      callbackURL?: string;
+    };
+    OidcDiscoveryResponse: {
+      /** Format: uri */
+      url: string;
+    };
     AuthSessionUser: {
       id: string;
       name: string;
@@ -3662,6 +3718,8 @@ export interface components {
         github: components["schemas"]["AccountProviderCapability"];
         gitlab: components["schemas"]["AccountProviderCapability"];
         slack: components["schemas"]["AccountProviderCapability"];
+        saml: components["schemas"]["AccountProviderCapability"];
+        oidc: components["schemas"]["AccountProviderCapability"];
         passkey: boolean;
         googleAllowed: boolean;
         emailPasskey: boolean;
@@ -5664,6 +5722,25 @@ export interface components {
     };
     SamlSettingsResponse: {
       saml: components["schemas"]["SamlSettings"];
+    };
+    OidcSettings: {
+      enabled: boolean;
+      issuerUrl: string;
+      clientId: string;
+      clientSecret?: string;
+      clientSecretConfigured: boolean;
+      domains: string[];
+      /** Format: date-time */
+      lastTestedAt: string | null;
+      /** @enum {string} */
+      status: "not_configured" | "configured" | "verified" | "error";
+      lastError: string | null;
+    };
+    OidcSettingsPatch: {
+      [key: string]: unknown;
+    };
+    OidcSettingsResponse: {
+      oidc: components["schemas"]["OidcSettings"];
     };
     PublicScimToken: {
       id: string;
@@ -8008,6 +8085,54 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["SamlDiscoveryResponse"];
         };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  discoverOidcUrl: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["OidcDiscoveryRequest"];
+      };
+    };
+    responses: {
+      /** @description Discovered OIDC URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OidcDiscoveryResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  oidcCallback: {
+    parameters: {
+      query?: {
+        code?: string;
+        state?: string;
+        error?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OIDC accepted and browser session cookie issued */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       default: components["responses"]["Problem"];
     };
@@ -12436,6 +12561,31 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SamlSettingsResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateCurrentWorkspaceOidc: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["OidcSettingsPatch"];
+      };
+    };
+    responses: {
+      /** @description Updated OIDC settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OidcSettingsResponse"];
         };
       };
       default: components["responses"]["Problem"];

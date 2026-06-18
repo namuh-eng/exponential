@@ -24,7 +24,9 @@ import LoginPage from "@/app/(auth)/login/page";
 import SignupPage from "@/app/(auth)/signup/page";
 
 function providerCapabilities(
-  body: Record<string, unknown> = { providers: { google: true } },
+  body: Record<string, unknown> = {
+    providers: { google: true, saml: true, oidc: false },
+  },
 ) {
   return { ok: true, json: async () => body };
 }
@@ -65,7 +67,7 @@ describe("Login page", () => {
       screen.getByRole("button", { name: /Continue with email/ }),
     ).toBeDefined();
     expect(
-      screen.getByRole("button", { name: /Continue with SAML SSO/ }),
+      screen.getByRole("button", { name: /Continue with SSO/ }),
     ).toBeDefined();
     expect(
       screen.getByRole("button", { name: /Log in with passkey/ }),
@@ -128,7 +130,7 @@ describe("Login page", () => {
     });
   });
 
-  it("keeps Google and SAML active while marking email and passkey coming soon", () => {
+  it("keeps Google and SSO active while marking email and passkey coming soon", () => {
     render(<LoginPage />);
 
     expect(
@@ -138,7 +140,7 @@ describe("Login page", () => {
       screen.getByRole("button", { name: /Continue with email/ }),
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: /Continue with SAML SSO/ }),
+      screen.getByRole("button", { name: /Continue with SSO/ }),
     ).toBeEnabled();
     expect(
       screen.getByRole("button", { name: /Log in with passkey/ }),
@@ -146,7 +148,7 @@ describe("Login page", () => {
     expect(screen.getAllByText("coming soon").length).toBeGreaterThanOrEqual(2);
   });
 
-  it("shows SAML when workspace policy disables Google and email/passkey", async () => {
+  it("shows SSO when workspace policy disables Google and email/passkey", async () => {
     fetchMock.mockResolvedValueOnce(
       providerCapabilities({
         providers: {
@@ -154,6 +156,8 @@ describe("Login page", () => {
           googleAllowed: false,
           emailPasskey: false,
           passkey: false,
+          saml: true,
+          oidc: false,
         },
       }),
     );
@@ -171,7 +175,7 @@ describe("Login page", () => {
         screen.queryByRole("button", { name: /Log in with passkey/ }),
       ).toBeNull();
       expect(
-        screen.getByRole("button", { name: /Continue with SAML SSO/ }),
+        screen.getByRole("button", { name: /Continue with SSO/ }),
       ).toBeDefined();
     });
   });

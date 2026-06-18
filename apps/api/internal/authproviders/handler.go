@@ -60,6 +60,8 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/saml/discovery", h.SAMLDiscovery)
 	r.Post("/saml/acs", h.SAMLACS)
 	r.Get("/saml/metadata", h.SAMLMetadata)
+	r.Post("/oidc/discovery", h.OIDCDiscovery)
+	r.Get("/oidc/callback", h.OIDCCallback)
 	return r
 }
 
@@ -87,6 +89,8 @@ func (h Handler) ProviderCapabilities(w http.ResponseWriter, r *http.Request) {
 		"slack":         accountProviderCapability(oauthConfigured("AUTH_SLACK_ID", "AUTH_SLACK_SECRET"), "Slack"),
 		"discord":      accountProviderCapability(oauthConfigured("AUTH_DISCORD_ID", "AUTH_DISCORD_SECRET"), "Discord"),
 		"microsoft":     accountProviderCapability(oauthConfigured("AUTH_MICROSOFT_ID", "AUTH_MICROSOFT_SECRET"), "Microsoft"),
+		"saml":          h.samlCapability(r, policy),
+		"oidc":          h.oidcCapability(r, policy),
 		"passkey":       emailPasskeyAllowed && passkeyAuthEnabled(),
 		"googleAllowed": googleAllowed,
 		"emailPasskey":  emailPasskeyAllowed,
@@ -131,6 +135,61 @@ func accountProviderCapability(configured bool, label string) providerCapability
 		reason = &message
 	}
 	return providerCapability{Supported: true, Configured: configured, DevLinking: devLinking, UnavailableReason: reason}
+}
+
+func enterpriseProviderCapability(configured bool, label string) providerCapability {
+	var reason *string
+	if !configured {
+		message := label + " is not configured for any matching workspace."
+		reason = &message
+	}
+	return providerCapability{Supported: true, Configured: configured, DevLinking: false, UnavailableReason: reason}
+}
+
+func (h Handler) samlCapability(r *http.Request, policy *workspaceInfo) providerCapability {
+	return enterpriseProviderCapability(h.anySSOConfigured(r, policy, "saml"), "SAML SSO")
+}
+
+func (h Handler) oidcCapability(r *http.Request, policy *workspaceInfo) providerCapability {
+	return enterpriseProviderCapability(h.anySSOConfigured(r, policy, "oidc"), "OIDC SSO")
+}
+
+func (h Handler) anySSOConfigured(r *http.Request, policy *workspaceInfo, provider string) bool {
+	if h.DB == nil {
+		return false
+	}
+	if policy != nil && policy.Slug != "" {
+		var raw []byte
+		err := h.DB.QueryRow(r.Context(), `select coalesce(settings,'{}'::jsonb) from workspace where url_slug=$1 limit 1`, policy.Slug).Scan(&raw)
+		if err != nil {
+			return false
+		}
+		return ssoSettingsConfigured(provider, raw)
+	}
+	rows, err := h.DB.Query(r.Context(), `select coalesce(settings,'{}'::jsonb) from workspace`)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var raw []byte
+		if err := rows.Scan(&raw); err != nil {
+			return false
+		}
+		if ssoSettingsConfigured(provider, raw) {
+			return true
+		}
+	}
+	return false
+}
+
+func ssoSettingsConfigured(provider string, raw []byte) bool {
+	if provider == "saml" {
+		settings := readSAMLWorkspaceSettings(raw)
+		return settings.Enabled && len(settings.Domains) > 0 && (settings.IDPSSOURL != "" || settings.MetadataURL != "" || settings.MetadataXML != "")
+	}
+	settings := readOIDCWorkspaceSettings(raw)
+	return settings.Enabled && settings.configured()
 }
 
 func oauthConfigured(idKey, secretKey string) bool {

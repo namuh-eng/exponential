@@ -1016,6 +1016,42 @@ paths:
                 $ref: '#/components/schemas/SamlDiscoveryResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /auth/oidc/discovery:
+    post:
+      operationId: discoverOidcUrl
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OidcDiscoveryRequest'
+      responses:
+        '200':
+          description: Discovered OIDC URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OidcDiscoveryResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /auth/oidc/callback:
+    get:
+      operationId: oidcCallback
+      parameters:
+        - name: code
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+        - name: error
+          in: query
+          schema: { type: string }
+      responses:
+        '302':
+          description: OIDC accepted and browser session cookie issued
+        default:
+          $ref: '#/components/responses/Problem'
   /auth/saml/acs:
     post:
       operationId: samlAcs
@@ -4064,6 +4100,24 @@ paths:
                 $ref: '#/components/schemas/SamlSettingsResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /workspaces/current/security/oidc:
+    patch:
+      operationId: updateCurrentWorkspaceOidc
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OidcSettingsPatch'
+      responses:
+        '200':
+          description: Updated OIDC settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OidcSettingsResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /workspaces/current/security/scim:
     patch:
       operationId: updateCurrentWorkspaceScim
@@ -5045,6 +5099,17 @@ components:
       required: [url]
       properties:
         url: { type: string, format: uri }
+    OidcDiscoveryRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string }
+        callbackURL: { type: string }
+    OidcDiscoveryResponse:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, format: uri }
     AuthSessionUser:
       type: object
       required: [id, name, email]
@@ -5170,12 +5235,14 @@ components:
       properties:
         providers:
           type: object
-          required: [google, github, gitlab, slack, passkey, googleAllowed, emailPasskey]
+          required: [google, github, gitlab, slack, passkey, googleAllowed, emailPasskey, saml, oidc]
           properties:
             google: { $ref: '#/components/schemas/AccountProviderCapability' }
             github: { $ref: '#/components/schemas/AccountProviderCapability' }
             gitlab: { $ref: '#/components/schemas/AccountProviderCapability' }
             slack: { $ref: '#/components/schemas/AccountProviderCapability' }
+            saml: { $ref: '#/components/schemas/AccountProviderCapability' }
+            oidc: { $ref: '#/components/schemas/AccountProviderCapability' }
             passkey: { type: boolean }
             googleAllowed: { type: boolean }
             emailPasskey: { type: boolean }
@@ -7501,6 +7568,29 @@ components:
       required: [saml]
       properties:
         saml: { $ref: '#/components/schemas/SamlSettings' }
+    OidcSettings:
+      type: object
+      required: [enabled, issuerUrl, clientId, clientSecretConfigured, domains, lastTestedAt, status, lastError]
+      properties:
+        enabled: { type: boolean }
+        issuerUrl: { type: string }
+        clientId: { type: string }
+        clientSecret: { type: string, writeOnly: true }
+        clientSecretConfigured: { type: boolean }
+        domains:
+          type: array
+          items: { type: string }
+        lastTestedAt: { type: [string, 'null'], format: date-time }
+        status: { type: string, enum: [not_configured, configured, verified, error] }
+        lastError: { type: [string, 'null'] }
+    OidcSettingsPatch:
+      type: object
+      additionalProperties: true
+    OidcSettingsResponse:
+      type: object
+      required: [oidc]
+      properties:
+        oidc: { $ref: '#/components/schemas/OidcSettings' }
     PublicScimToken:
       type: object
       required: [id, name, prefix, createdAt, revokedAt, lastUsedAt]

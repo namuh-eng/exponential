@@ -203,6 +203,7 @@ func (h Handler) Routes() chi.Router {
 	r.Post("/imports", h.CreateLegacyImport)
 	r.Post("/imports/preview", h.PreviewImport)
 	r.Patch("/current/security/saml", h.UpdateSAML)
+	r.Patch("/current/security/oidc", h.UpdateOIDC)
 	r.Patch("/current/security/scim", h.UpdateSCIM)
 	r.Post("/current/security/scim", h.CreateSCIMToken)
 	r.Delete("/current/security/scim/tokens/{tokenId}", h.RevokeSCIMToken)
@@ -828,6 +829,18 @@ type samlSettings struct {
 	LastError    *string  `json:"lastError"`
 }
 
+type oidcSettings struct {
+	Enabled                bool     `json:"enabled"`
+	IssuerURL              string   `json:"issuerUrl"`
+	ClientID               string   `json:"clientId"`
+	ClientSecret           string   `json:"clientSecret,omitempty"`
+	ClientSecretConfigured bool     `json:"clientSecretConfigured"`
+	Domains                []string `json:"domains"`
+	LastTestedAt           *string  `json:"lastTestedAt"`
+	Status                 string   `json:"status"`
+	LastError              *string  `json:"lastError"`
+}
+
 type scimToken struct {
 	ID         string  `json:"id"`
 	Name       string  `json:"name"`
@@ -904,6 +917,41 @@ func (h Handler) UpdateSAML(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	problem.JSON(w, 200, map[string]any{"saml": saml})
+}
+
+func (h Handler) UpdateOIDC(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	if !isManager(p.Role) {
+		problem.Write(w, 403, "You do not have permission to manage OIDC settings", "")
+		return
+	}
+	settings, err := h.workspaceSettings(r.Context(), p.WorkspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "No active workspace found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Update OIDC settings failed", err.Error())
+		return
+	}
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		problem.Write(w, 400, "Invalid JSON body", err.Error())
+		return
+	}
+	oidc := normalizeOIDCInput(body, readOIDCSettings(settings))
+	if validation := validateOIDCSettings(oidc); validation != "" {
+		problem.Write(w, 400, validation, "")
+		return
+	}
+	security := recordFromAny(settings["security"])
+	security["oidc"] = oidc
+	settings["security"] = security
+	if err := h.saveWorkspaceSettings(r.Context(), p.WorkspaceID, settings); err != nil {
+		problem.Write(w, 500, "Update OIDC settings failed", err.Error())
+		return
+	}
+	problem.JSON(w, 200, map[string]any{"oidc": publicOIDCSettings(oidc)})
 }
 
 func (h Handler) UpdateSCIM(w http.ResponseWriter, r *http.Request) {
@@ -3267,6 +3315,74 @@ func validateSAMLSettings(settings samlSettings) string {
 		}
 	}
 	return ""
+}
+
+func readOIDCSettings(settings map[string]any) oidcSettings {
+	security := recordFromAny(settings["security"])
+	oidc := recordFromAny(firstNonNil(security["oidc"], settings["oidc"]))
+	issuer := strings.TrimRight(strings.TrimSpace(firstString(oidc["issuerUrl"], oidc["issuerURL"], oidc["issuer"])), "/")
+	clientID := strings.TrimSpace(asStringValue(oidc["clientId"]))
+	secret := strings.TrimSpace(asStringValue(oidc["clientSecret"]))
+	domains := normalizeSAMLDomainList(firstNonNil(oidc["domains"], oidc["emailDomains"], oidc["allowedDomains"]))
+	hasConfig := issuer != "" || clientID != "" || secret != "" || len(domains) > 0
+	return oidcSettings{Enabled: boolFromAny(oidc["enabled"], false), IssuerURL: issuer, ClientID: clientID, ClientSecret: secret, ClientSecretConfigured: secret != "", Domains: domains, LastTestedAt: nullableStringPtr(oidc["lastTestedAt"]), Status: samlStatus(oidc["status"], hasConfig), LastError: nullableStringPtr(oidc["lastError"])}
+}
+
+func normalizeOIDCInput(input map[string]any, current oidcSettings) oidcSettings {
+	next := current
+	if v, ok := input["enabled"].(bool); ok {
+		next.Enabled = v
+	}
+	if _, ok := input["domains"]; ok {
+		next.Domains = normalizeSAMLDomainList(input["domains"])
+	}
+	if _, ok := input["issuerUrl"]; ok {
+		next.IssuerURL = strings.TrimRight(strings.TrimSpace(asStringValue(input["issuerUrl"])), "/")
+	}
+	if _, ok := input["issuer"]; ok {
+		next.IssuerURL = strings.TrimRight(strings.TrimSpace(asStringValue(input["issuer"])), "/")
+	}
+	if _, ok := input["clientId"]; ok {
+		next.ClientID = strings.TrimSpace(asStringValue(input["clientId"]))
+	}
+	if _, ok := input["clientSecret"]; ok {
+		next.ClientSecret = strings.TrimSpace(asStringValue(input["clientSecret"]))
+	}
+	next.ClientSecretConfigured = next.ClientSecret != ""
+	if next.IssuerURL == "" && next.ClientID == "" && next.ClientSecret == "" && len(next.Domains) == 0 {
+		next.Status = "not_configured"
+		next.LastError = nil
+	} else if input["status"] == "verified" || input["test"] == true {
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		next.Status = "verified"
+		next.LastTestedAt = &now
+		next.LastError = nil
+	} else if next.Status == "not_configured" {
+		next.Status = "configured"
+	}
+	return next
+}
+
+func validateOIDCSettings(settings oidcSettings) string {
+	if err := validateHTTPURL(settings.IssuerURL, "Issuer URL", settings.Enabled); err != "" {
+		return err
+	}
+	if settings.Enabled && len(settings.Domains) == 0 {
+		return "At least one OIDC email domain is required before enabling OIDC."
+	}
+	if settings.Enabled && strings.TrimSpace(settings.ClientID) == "" {
+		return "OIDC client ID is required before enabling OIDC."
+	}
+	if settings.Enabled && strings.TrimSpace(settings.ClientSecret) == "" {
+		return "OIDC client secret is required before enabling OIDC."
+	}
+	return ""
+}
+
+func publicOIDCSettings(settings oidcSettings) oidcSettings {
+	settings.ClientSecret = ""
+	settings.ClientSecretConfigured = strings.TrimSpace(settings.ClientSecret) != "" || settings.ClientSecretConfigured
+	return settings
 }
 
 func validateHTTPURL(value string, label string, required bool) string {
