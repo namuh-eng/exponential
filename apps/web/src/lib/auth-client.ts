@@ -96,6 +96,13 @@ function googleStartURL(callbackURL: string) {
   return `/api/auth/google/start?${params.toString()}`;
 }
 
+function githubStartURL(callbackURL: string) {
+  const params = new URLSearchParams({
+    callback_url: localPathFromCallback(callbackURL),
+  });
+  return `/api/auth/github/start?${params.toString()}`;
+}
+
 function discordStartURL(callbackURL: string) {
   const params = new URLSearchParams({
     callback_url: localPathFromCallback(callbackURL),
@@ -114,6 +121,10 @@ export const signIn = {
   async social(options: SocialSignInOptions): Promise<LinkSocialAccountResult> {
     if (options.provider === "google") {
       const url = googleStartURL(options.callbackURL);
+      return { data: { url, redirect: true }, url };
+    }
+    if (options.provider === "github") {
+      const url = githubStartURL(options.callbackURL);
       return { data: { url, redirect: true }, url };
     }
     if (options.provider === "discord") {

@@ -90,8 +90,8 @@ Full self-hosting guide: [docs/self-hosting.md](docs/self-hosting.md)
 - **Keyboard-first UI**: command palette, shortcut registry, dense list/board
   views, and terminal/editorial visual direction.
 - **Self-hosting controls**: Compose defaults, bind-address controls, optional
-  Google OAuth, Slack OAuth, S3 attachments, SES or Opensend email, metrics
-  token, and ECS deployment scripts.
+  Google/GitHub OAuth, Slack OAuth, S3 attachments, SES or Opensend email,
+  metrics token, and ECS deployment scripts.
 - **MCP server**: expose your exponential workspace to AI agents via the local
   stdio MCP runtime — read issues, projects, cycles, and more.
 
@@ -210,7 +210,7 @@ curl -H "Authorization: Bearer $EXPONENTIAL_TOKEN" \
 | API | Go, chi, pgx, sqlc, OpenAPI strict server stubs |
 | Data | PostgreSQL 15+, SQL migrations, Redis 7+ |
 | Contract | `packages/proto/openapi.yaml` + generated TypeScript SDK |
-| Auth | First-party Go auth, Google OAuth, magic links, session cookies, PATs |
+| Auth | First-party Go auth, Google/GitHub OAuth, magic links, session cookies, PATs |
 | Optional integrations | S3 attachments, SES/Opensend email, Slack OAuth, OpenAI summaries |
 | Deployment | Docker Compose (one host) · AWS ECS Fargate (managed) |
 | Validation | `make check`, `make test`, `make test-e2e`, Biome, Vitest, Go tests, Playwright |

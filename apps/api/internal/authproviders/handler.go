@@ -50,6 +50,8 @@ func (h Handler) Routes() chi.Router {
 	r.Get("/provider-capabilities", h.ProviderCapabilities)
 	r.Get("/google/start", h.StartGoogle)
 	r.Get("/google/callback", h.GoogleCallback)
+	r.Get("/github/start", h.StartGitHub)
+	r.Get("/github/callback", h.GitHubCallback)
 	r.Get("/discord/start", h.StartDiscord)
 	r.Get("/discord/callback", h.DiscordCallback)
 	r.Get("/microsoft/start", h.StartMicrosoft)
@@ -85,7 +87,7 @@ func (h Handler) ProviderCapabilities(w http.ResponseWriter, r *http.Request) {
 		"github":        accountProviderCapability(oauthConfigured("AUTH_GITHUB_ID", "AUTH_GITHUB_SECRET"), "GitHub"),
 		"gitlab":        accountProviderCapability(oauthConfigured("AUTH_GITLAB_ID", "AUTH_GITLAB_SECRET"), "GitLab"),
 		"slack":         accountProviderCapability(oauthConfigured("AUTH_SLACK_ID", "AUTH_SLACK_SECRET"), "Slack"),
-		"discord":      accountProviderCapability(oauthConfigured("AUTH_DISCORD_ID", "AUTH_DISCORD_SECRET"), "Discord"),
+		"discord":       accountProviderCapability(oauthConfigured("AUTH_DISCORD_ID", "AUTH_DISCORD_SECRET"), "Discord"),
 		"microsoft":     accountProviderCapability(oauthConfigured("AUTH_MICROSOFT_ID", "AUTH_MICROSOFT_SECRET"), "Microsoft"),
 		"passkey":       emailPasskeyAllowed && passkeyAuthEnabled(),
 		"googleAllowed": googleAllowed,
@@ -285,7 +287,6 @@ func extractEmailDomain(email string) string {
 	}
 	return domain
 }
-
 
 type samlDiscoverySettings struct {
 	enabled bool

@@ -47,6 +47,8 @@ func TestRouterPrometheusMetricsUseRouteLabels(t *testing.T) {
 func TestRouterServesFirstPartyAuthRoutes(t *testing.T) {
 	t.Setenv("AUTH_GOOGLE_ID", "")
 	t.Setenv("AUTH_GOOGLE_SECRET", "")
+	t.Setenv("AUTH_GITHUB_ID", "")
+	t.Setenv("AUTH_GITHUB_SECRET", "")
 	router := NewRouter(zap.NewNop(), nil)
 
 	recorder := httptest.NewRecorder()
@@ -59,6 +61,12 @@ func TestRouterServesFirstPartyAuthRoutes(t *testing.T) {
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/auth/google/start?callback_url=/team/ABC", nil))
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("google start status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	recorder = httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/auth/github/start?callback_url=/team/ABC", nil))
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("github start status = %d body = %s", recorder.Code, recorder.Body.String())
 	}
 }
 
