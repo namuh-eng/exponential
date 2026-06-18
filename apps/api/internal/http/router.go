@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/namuh-eng/exponential/apps/api/internal/account"
+	"github.com/namuh-eng/exponential/apps/api/internal/airbyte"
 	"github.com/namuh-eng/exponential/apps/api/internal/agentruns"
 	"github.com/namuh-eng/exponential/apps/api/internal/analytics"
 	"github.com/namuh-eng/exponential/apps/api/internal/attachments"
@@ -194,6 +195,7 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 			protected.Post("/issues/{id}/reactions", commentsHandler.ToggleIssueReaction)
 			protected.Delete("/issues/{id}/reactions", commentsHandler.DeleteIssueReaction)
 			protected.Mount("/account", account.Handler{DB: db}.Routes())
+			protected.Mount("/airbyte", airbyte.Handler{DB: db}.Routes())
 			protected.Mount("/analytics", analytics.Handler{DB: db}.Routes())
 			protected.Mount("/agent/runs", agentruns.Handler{DB: db}.Routes())
 			protected.Mount("/attachments", attachments.Handler{DB: db}.Routes())

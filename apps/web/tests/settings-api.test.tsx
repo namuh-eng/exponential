@@ -26,10 +26,12 @@ function buildApiSettings(
       oauthApplications:
         "https://exponential.app/developers/oauth-2-0-authentication",
       webhooks: "https://exponential.app/developers/webhooks",
+      airbyte: "/docs/airbyte",
     },
     oauthApplications: [],
     webhooks: [],
     apiKeys: [],
+    airbyteTokens: [],
     mcpAuditLog: [],
     ...overrides,
   };
@@ -353,7 +355,58 @@ describe("API settings page", () => {
     expect(screen.getByText("lin_api_secret")).toBeInTheDocument();
   });
 
-  it("exposes lifecycle controls for OAuth apps, webhooks, and API keys", async () => {
+  it("generates a read-only Airbyte token and renders its scopes", async () => {
+    mockApiLoad();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        api: buildApiSettings({
+          airbyteTokens: [
+            {
+              id: "airbyte_1",
+              name: "Airbyte warehouse sync",
+              keyPrefix: "pat_1234567890123456…",
+              scopes: ["read"],
+              createdAt: "2026-04-08T10:00:00.000Z",
+              lastUsedAt: null,
+              creator: {
+                name: "QA User",
+                email: "qa@example.com",
+                image: null,
+              },
+            },
+          ],
+        }),
+        createdCredential: {
+          label: "Airbyte warehouse sync Airbyte token",
+          secret: "pat_secret",
+        },
+      }),
+    });
+
+    render(<ApiSettingsPage />);
+    await waitForLoaded();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Generate Airbyte token" }),
+    );
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Generate Airbyte token" })[1],
+    );
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String(mockFetch.mock.calls[1][1]?.body))).toMatchObject({
+      action: "createAirbyteToken",
+      name: "Airbyte warehouse sync",
+    });
+    expect(screen.getByText("pat_secret")).toBeInTheDocument();
+    expect(screen.getByText("Scopes: read")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Private team data is included/),
+    ).toBeInTheDocument();
+  });
+
+  it("exposes lifecycle controls for OAuth apps, webhooks, API keys, and Airbyte tokens", async () => {
     mockApiLoad({
       oauthApplications: [
         {
@@ -387,6 +440,17 @@ describe("API settings page", () => {
           creator: { name: "QA User", email: "qa@example.com", image: null },
         },
       ],
+      airbyteTokens: [
+        {
+          id: "airbyte_1",
+          name: "Airbyte warehouse sync",
+          keyPrefix: "pat_1234567890123456…",
+          scopes: ["read"],
+          createdAt: "2026-04-08T10:00:00.000Z",
+          lastUsedAt: null,
+          creator: { name: "QA User", email: "qa@example.com", image: null },
+        },
+      ],
     });
 
     render(<ApiSettingsPage />);
@@ -403,6 +467,9 @@ describe("API settings page", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Revoke API key" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Revoke Airbyte token" }),
     ).toBeInTheDocument();
   });
 
@@ -517,5 +584,40 @@ describe("API settings page", () => {
     });
     expect(screen.getByText("API key revoked.")).toBeInTheDocument();
     expect(screen.queryByText("Workspace automation")).not.toBeInTheDocument();
+  });
+
+  it("confirms and revokes an Airbyte token", async () => {
+    vi.spyOn(window, "confirm").mockReturnValueOnce(true);
+    mockApiLoad({
+      airbyteTokens: [
+        {
+          id: "airbyte_1",
+          name: "Airbyte warehouse sync",
+          keyPrefix: "pat_1234567890123456…",
+          scopes: ["read"],
+          createdAt: "2026-04-08T10:00:00.000Z",
+          lastUsedAt: null,
+          creator: { name: "QA User", email: "qa@example.com", image: null },
+        },
+      ],
+    });
+    mockMutationResponse({ airbyteTokens: [] });
+
+    render(<ApiSettingsPage />);
+    await waitForLoaded();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Revoke Airbyte token" }),
+    );
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String(mockFetch.mock.calls[1][1]?.body))).toMatchObject({
+      action: "deleteAirbyteToken",
+      id: "airbyte_1",
+    });
+    expect(screen.getByText("Airbyte token revoked.")).toBeInTheDocument();
+    expect(screen.getByText("No Airbyte tokens")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Revoke Airbyte token" }),
+    ).not.toBeInTheDocument();
   });
 });
