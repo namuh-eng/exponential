@@ -16,7 +16,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
 )
 
-var oauthScopes = map[string]bool{"read": true, "write": true, "issues:read": true, "issues:write": true, "comments:write": true, "webhooks:write": true}
+var oauthScopes = map[string]bool{"read": true, "write": true, "issues:read": true, "issues:write": true, "comments:write": true, "projects:read": true, "projects:write": true, "attachments:write": true, "webhooks:write": true}
 
 type oauthWorkspace struct {
 	ID       string
