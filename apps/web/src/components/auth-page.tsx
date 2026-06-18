@@ -451,14 +451,14 @@ function CliPairingSnippet({ hostLabel }: { hostLabel: string }) {
         # pair from terminal
       </div>
       <pre className="px-3 py-3 text-[11px] leading-relaxed text-[var(--auth-muted)]">
-        {"$ exponential login --host "}
-        <span className="text-[var(--auth-text)]">{hostLabel}</span>
+        {"$ exponential login --api-url https://"}
+        <span className="text-[var(--auth-text)]">{hostLabel}/v1</span>
         {"\n→ visit "}
         <span className="text-[var(--auth-text)]">
-          https://{hostLabel}/auth/cli
+          https://{hostLabel}/auth/device
         </span>
-        {"\n→ paste code: "}
-        <span className="text-[var(--auth-accent)]">H7K-4QM-92T</span>
+        {"\n→ enter code: "}
+        <span className="text-[var(--auth-accent)]">123456</span>
       </pre>
     </section>
   );

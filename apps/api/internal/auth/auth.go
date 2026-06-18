@@ -147,6 +147,9 @@ func scopesAllowRequest(scopes []string, r *http.Request) bool {
 		// Browser sessions and legacy workspace API keys are not scoped here.
 		return true
 	}
+	if hasScope(scopes, "cli") {
+		return true
+	}
 	if isMCPRequest(r) {
 		return hasScope(scopes, "read") || hasScope(scopes, "write")
 	}

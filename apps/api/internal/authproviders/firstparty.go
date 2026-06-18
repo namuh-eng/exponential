@@ -544,6 +544,9 @@ func (h Handler) linkMicrosoftAccount(ctx context.Context, userID string, claims
 }
 
 func appURL(r *http.Request) string {
+	if value := strings.TrimRight(strings.TrimSpace(os.Getenv("EXPONENTIAL_APP_URL")), "/"); value != "" {
+		return value
+	}
 	if value := strings.TrimRight(strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL")), "/"); value != "" {
 		return value
 	}

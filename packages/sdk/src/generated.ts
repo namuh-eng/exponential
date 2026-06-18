@@ -734,6 +734,58 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/auth/device/code": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Start a CLI device-code login request */
+    post: operations["createDeviceCode"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/auth/device/token": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Poll a CLI device-code login request */
+    post: operations["pollDeviceToken"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/auth/device/grant": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Review a CLI device-code login request */
+    get: operations["getDeviceGrant"];
+    put?: never;
+    /** Approve or deny a CLI device-code login request */
+    post: operations["updateDeviceGrant"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/auth/saml/discovery": {
     parameters: {
       query?: never;
@@ -4598,6 +4650,47 @@ export interface components {
     OAuthErrorResponse: {
       error: string;
     };
+    DeviceCodeResponse: {
+      device_code: string;
+      user_code: string;
+      /** Format: uri */
+      verification_uri: string;
+      interval: number;
+      expires_in: number;
+    };
+    DeviceTokenRequest: {
+      device_code: string;
+    };
+    DeviceTokenResponse: {
+      access_token: string;
+      /** @enum {string} */
+      token_type: "Bearer";
+      /** @enum {string} */
+      scope: "cli";
+    };
+    DeviceTokenError: {
+      /** @enum {string} */
+      error:
+        | "authorization_pending"
+        | "slow_down"
+        | "access_denied"
+        | "expired_token"
+        | "invalid_grant"
+        | "invalid_request";
+      interval?: number;
+    };
+    DeviceGrantRequest: {
+      user_code: string;
+      /** @enum {string} */
+      action: "approve" | "deny";
+    };
+    DeviceGrantResponse: {
+      user_code: string;
+      /** @enum {string} */
+      status: "pending" | "approved" | "denied" | "expired";
+      /** Format: date-time */
+      expires_at: string;
+    };
     PersonalAccessToken: {
       /** Format: uuid */
       id: string;
@@ -7984,6 +8077,109 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
+      default: components["responses"]["Problem"];
+    };
+  };
+  createDeviceCode: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Device code challenge */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DeviceCodeResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  pollDeviceToken: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DeviceTokenRequest"];
+      };
+    };
+    responses: {
+      /** @description Approved CLI token */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DeviceTokenResponse"];
+        };
+      };
+      /** @description Authorization pending or polling too quickly */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DeviceTokenError"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getDeviceGrant: {
+    parameters: {
+      query: {
+        user_code: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Device grant */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DeviceGrantResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateDeviceGrant: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DeviceGrantRequest"];
+      };
+    };
+    responses: {
+      /** @description Updated device grant */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DeviceGrantResponse"];
+        };
+      };
       default: components["responses"]["Problem"];
     };
   };

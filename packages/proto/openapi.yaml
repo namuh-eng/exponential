@@ -998,6 +998,82 @@ paths:
       responses:
         default:
           $ref: '#/components/responses/Problem'
+  /auth/device/code:
+    post:
+      operationId: createDeviceCode
+      summary: Start a CLI device-code login request
+      security: []
+      responses:
+        '200':
+          description: Device code challenge
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceCodeResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+  /auth/device/token:
+    post:
+      operationId: pollDeviceToken
+      summary: Poll a CLI device-code login request
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceTokenRequest'
+      responses:
+        '200':
+          description: Approved CLI token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceTokenResponse'
+        '428':
+          description: Authorization pending or polling too quickly
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceTokenError'
+        default:
+          $ref: '#/components/responses/Problem'
+  /auth/device/grant:
+    get:
+      operationId: getDeviceGrant
+      summary: Review a CLI device-code login request
+      parameters:
+        - name: user_code
+          in: query
+          required: true
+          schema: { type: string, pattern: '^[0-9]{6}$' }
+      responses:
+        '200':
+          description: Device grant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceGrantResponse'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: updateDeviceGrant
+      summary: Approve or deny a CLI device-code login request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceGrantRequest'
+      responses:
+        '200':
+          description: Updated device grant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceGrantResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /auth/saml/discovery:
     post:
       operationId: discoverSamlUrl
@@ -6245,6 +6321,48 @@ components:
       required: [error]
       properties:
         error: { type: string }
+    DeviceCodeResponse:
+      type: object
+      required: [device_code, user_code, verification_uri, interval, expires_in]
+      properties:
+        device_code: { type: string }
+        user_code: { type: string, pattern: '^[0-9]{6}$' }
+        verification_uri: { type: string, format: uri }
+        interval: { type: integer, minimum: 1 }
+        expires_in: { type: integer, minimum: 1 }
+    DeviceTokenRequest:
+      type: object
+      required: [device_code]
+      properties:
+        device_code: { type: string, minLength: 1 }
+    DeviceTokenResponse:
+      type: object
+      required: [access_token, token_type, scope]
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, enum: [Bearer] }
+        scope: { type: string, enum: [cli] }
+    DeviceTokenError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: [authorization_pending, slow_down, access_denied, expired_token, invalid_grant, invalid_request]
+        interval: { type: integer }
+    DeviceGrantRequest:
+      type: object
+      required: [user_code, action]
+      properties:
+        user_code: { type: string, pattern: '^[0-9]{6}$' }
+        action: { type: string, enum: [approve, deny] }
+    DeviceGrantResponse:
+      type: object
+      required: [user_code, status, expires_at]
+      properties:
+        user_code: { type: string, pattern: '^[0-9]{6}$' }
+        status: { type: string, enum: [pending, approved, denied, expired] }
+        expires_at: { type: string, format: date-time }
     PersonalAccessToken:
       type: object
       required: [id, name, token_prefix, scopes, created_at]

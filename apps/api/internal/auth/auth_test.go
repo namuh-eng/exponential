@@ -133,6 +133,9 @@ func TestScopesAllowRequest(t *testing.T) {
 	if !scopesAllowRequest([]string{"read"}, httptest.NewRequest("POST", "/v1/mcp", nil)) {
 		t.Fatal("read scope should reach MCP handler for per-tool enforcement")
 	}
+	if !scopesAllowRequest([]string{"cli"}, httptest.NewRequest("POST", "/v1/issues", nil)) {
+		t.Fatal("cli scope should allow CLI API requests")
+	}
 }
 
 func TestRequestedWorkspaceID(t *testing.T) {

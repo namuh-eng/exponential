@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -25,6 +26,8 @@ export type RunCliOptions = {
   stderr?: CliWritable;
   isStdoutTTY?: boolean;
   fetch?: typeof fetch;
+  openUrl?: (url: string) => Promise<boolean> | boolean;
+  sleepMs?: (ms: number) => Promise<void>;
 };
 
 type CliState = {
@@ -40,6 +43,8 @@ type CliState = {
   stderr: CliWritable;
   isStdoutTTY: boolean;
   fetch?: typeof fetch;
+  openUrl: (url: string) => Promise<boolean> | boolean;
+  sleepMs: (ms: number) => Promise<void>;
 };
 
 class CliExit extends Error {
@@ -86,6 +91,8 @@ export async function runCli(options: RunCliOptions = {}) {
     stderr,
     isStdoutTTY,
     fetch: options.fetch,
+    openUrl: options.openUrl ?? openBrowser,
+    sleepMs: options.sleepMs ?? sleep,
   };
   rawArgs = state.rawArgs;
   resource = state.resource;
@@ -182,7 +189,7 @@ async function streamSyncWatch(input: { version: number; once: boolean }) {
 
 async function main() {
   if (resource === "login") {
-    loginCommand();
+    await loginCommand();
     return;
   }
 
@@ -421,12 +428,145 @@ async function main() {
   usage();
 }
 
-function loginCommand() {
+async function loginCommand() {
   const loginArgs = rawArgs.slice(1);
-  const loginToken = assertPatToken(requireOption(loginArgs, "token"));
   const loginBaseUrl = readOption(loginArgs, "api-url") ?? baseUrl;
-  writeConfig({ token: loginToken, baseUrl: loginBaseUrl }, state.env);
-  printJson({ ok: true, baseUrl: loginBaseUrl });
+  const manualToken = readOption(loginArgs, "token");
+  if (manualToken) {
+    const loginToken = assertPatToken(manualToken);
+    writeConfig({ token: loginToken, baseUrl: loginBaseUrl }, state.env);
+    printJson({ ok: true, baseUrl: loginBaseUrl });
+    return;
+  }
+
+  const fetcher = state.fetch ?? fetch;
+  const codeResponse = await postJson<DeviceCodeResponse>(
+    fetcher,
+    apiUrl(loginBaseUrl, "/auth/device/code"),
+    {},
+  );
+  const opened = await state.openUrl(codeResponse.verification_uri);
+  writeStdout(
+    `Open ${codeResponse.verification_uri} and enter code ${codeResponse.user_code}\n`,
+  );
+  if (!opened) {
+    writeStdout(
+      "Browser launch unavailable; copy the URL above into a browser.\n",
+    );
+  }
+  let intervalSeconds = codeResponse.interval;
+  const deadline = Date.now() + codeResponse.expires_in * 1000;
+  while (Date.now() < deadline) {
+    await state.sleepMs(intervalSeconds * 1000);
+    const response = await fetcher(apiUrl(loginBaseUrl, "/auth/device/token"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ device_code: codeResponse.device_code }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (response.ok) {
+      const token = parseDeviceToken(body);
+      writeConfig({ token, baseUrl: loginBaseUrl }, state.env);
+      printJson({ ok: true, baseUrl: loginBaseUrl });
+      return;
+    }
+    const error = parseDeviceError(body);
+    if (response.status === 428 && error.error === "authorization_pending") {
+      intervalSeconds = error.interval ?? intervalSeconds;
+      continue;
+    }
+    if (response.status === 428 && error.error === "slow_down") {
+      intervalSeconds = error.interval ?? intervalSeconds + 5;
+      continue;
+    }
+    if (error.error === "access_denied") {
+      throw new Error("CLI login was denied in the browser.");
+    }
+    if (error.error === "expired_token") {
+      throw new Error("CLI login code expired. Run `expn login` again.");
+    }
+    throw new Error(`CLI login failed: ${error.error}`);
+  }
+  throw new Error("CLI login timed out. Run `expn login` again.");
+}
+type DeviceCodeResponse = {
+  device_code: string;
+  user_code: string;
+  verification_uri: string;
+  interval: number;
+  expires_in: number;
+};
+
+type DeviceTokenError = {
+  error: string;
+  interval?: number;
+};
+
+async function postJson<T>(fetcher: typeof fetch, url: string, body: unknown) {
+  const response = await fetcher(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = parseDeviceError(data);
+    throw new Error(`CLI login failed: ${error.error}`);
+  }
+  return data as T;
+}
+
+function parseDeviceToken(value: unknown) {
+  if (value && typeof value === "object" && "access_token" in value) {
+    const token = String(value.access_token);
+    return assertPatToken(token);
+  }
+  throw new Error("CLI login response did not include a token.");
+}
+
+function parseDeviceError(value: unknown): DeviceTokenError {
+  if (value && typeof value === "object" && "error" in value) {
+    const record = value as Record<string, unknown>;
+    return {
+      error: String(record.error),
+      interval:
+        typeof record.interval === "number" ? record.interval : undefined,
+    };
+  }
+  return { error: "request_failed" };
+}
+
+function apiUrl(apiBaseUrl: string, path: string) {
+  return new URL(
+    path.replace(/^\//, ""),
+    `${apiBaseUrl.replace(/\/$/, "")}/`,
+  ).toString();
+}
+
+async function sleep(ms: number) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function openBrowser(url: string) {
+  const platform = process.platform;
+  const command =
+    state.env.BROWSER ??
+    (platform === "darwin"
+      ? "open"
+      : platform === "win32"
+        ? "cmd"
+        : "xdg-open");
+  const args =
+    platform === "win32" && !state.env.BROWSER
+      ? ["/c", "start", "", url]
+      : [url];
+  try {
+    const child = spawn(command, args, { detached: true, stdio: "ignore" });
+    child.unref();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function configCommand() {
@@ -1413,6 +1553,7 @@ function usage(code = 1): never {
   const write = code === 0 ? writeStdout : writeStderr;
   write(`Usage:
   expn --version
+  expn login [--api-url http://localhost:7016/v1]
   expn login --token pat_<token> [--api-url http://localhost:7016/v1]
   expn --help
   expn whoami [--json]
