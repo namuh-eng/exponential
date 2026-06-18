@@ -648,6 +648,23 @@ export interface paths {
     patch: operations["updateAccountPreferences"];
     trace?: never;
   };
+  "/agent/external-actions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create a review-gated Agent action from an external provider source */
+    post: operations["createExternalAgentAction"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/agent/runs": {
     parameters: {
       query?: never;
@@ -3704,6 +3721,28 @@ export interface components {
       /** Format: date-time */
       reviewedAt?: string;
     };
+    AgentSourceActor: {
+      externalId?: string;
+      displayName?: string;
+      email?: string;
+      mappedUserId?: string;
+    };
+    AgentSourceContext: {
+      /** @enum {string} */
+      provider: "slack" | "microsoft_teams" | "zendesk" | "intercom" | "front";
+      workspaceIntegrationId?: string;
+      externalTeamId?: string;
+      externalChannelId?: string;
+      externalThreadId?: string;
+      externalMessageId?: string;
+      externalTicketId?: string;
+      externalConversationId?: string;
+      permalink?: string;
+      metadata?: {
+        [key: string]: string;
+      };
+      actor: components["schemas"]["AgentSourceActor"];
+    };
     AgentRun: {
       id: string;
       title: string;
@@ -3725,6 +3764,7 @@ export interface components {
       failureReason?: string;
       logs: string[];
       suggestions: components["schemas"]["AgentSuggestion"][];
+      sourceContext?: components["schemas"]["AgentSourceContext"];
     };
     AgentRunListResponse: {
       runs: components["schemas"]["AgentRun"][];
@@ -3740,6 +3780,25 @@ export interface components {
       prompt: string;
       teamKey?: string;
       context?: string;
+    };
+    CreateExternalAgentActionRequest: {
+      /** @enum {string} */
+      action:
+        | "summarize_thread"
+        | "propose_issue"
+        | "propose_update"
+        | "route_request"
+        | "answer_question";
+      title?: string;
+      prompt?: string;
+      teamKey?: string;
+      source: components["schemas"]["AgentSourceContext"];
+    };
+    ExternalAgentActionResponse: {
+      /** @enum {string} */
+      state: "created" | "disabled" | "provider_missing";
+      run?: components["schemas"]["AgentRun"];
+      disabledReason?: string;
     };
     UpdateAgentRunSuggestionRequest: {
       suggestionId: string;
@@ -7994,6 +8053,31 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["AccountPreferencesResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createExternalAgentAction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateExternalAgentActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Created or recorded external Agent action */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExternalAgentActionResponse"];
         };
       };
       default: components["responses"]["Problem"];

@@ -88,3 +88,53 @@ func TestReviewSuggestionRecordsReviewerAndDecision(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildExternalActionRunProposesIssueWithSourceContext(t *testing.T) {
+	mappedUserID := "user-1"
+	source := SourceContext{
+		Provider:               "slack",
+		WorkspaceIntegrationID: "11111111-1111-4111-8111-111111111111",
+		ExternalTeamID:         "T123",
+		ExternalChannelID:      "C123",
+		ExternalThreadID:       "1718123456.000100",
+		Permalink:              "https://acme.slack.com/archives/C123/p1718123456000100",
+		Metadata:               map[string]any{"token": "[redacted]", "locale": "en-US"},
+		Actor:                  SourceActor{ExternalID: "U123", DisplayName: "Riley", MappedUserID: &mappedUserID},
+	}
+	run, snapshot := buildExternalActionRun(externalActionRequest{Action: "propose_issue", Prompt: "Customer is blocked on exports; propose the right issue.", TeamKey: "ENG", Source: source}, "Riley", buildGuidance("Cite sources.", "", "", false, "ENG"), providerStatus{Configured: true, Provider: "workspace", Model: "workspace-summarizer"})
+	if run.Status != "needs_review" || len(run.Suggestions) != 1 {
+		t.Fatalf("run = %#v", run)
+	}
+	if run.SourceContext == nil || run.SourceContext.Provider != "slack" || snapshot.Source == nil || snapshot.Source.ExternalThreadID == "" {
+		t.Fatalf("source not captured: run=%#v snapshot=%#v", run.SourceContext, snapshot.Source)
+	}
+	if !run.Suggestions[0].IsExternalContext || run.Suggestions[0].ContextURL != source.Permalink {
+		t.Fatalf("suggestion = %#v", run.Suggestions[0])
+	}
+	if !strings.Contains(run.Output, "Slack") || !strings.Contains(run.Output, "Riley") {
+		t.Fatalf("output = %q", run.Output)
+	}
+}
+
+func TestBuildExternalActionRunFailsWithProviderDisabled(t *testing.T) {
+	source := SourceContext{Provider: "zendesk", ExternalTicketID: "123", Actor: SourceActor{ExternalID: "agent-1"}}
+	reason := "AI provider is not configured"
+	run, _ := buildExternalActionRun(externalActionRequest{Action: "propose_issue", Prompt: "Propose an issue from this ticket.", TeamKey: "ENG", Source: source}, "Support Agent", buildGuidance("", "", "", false, "ENG"), providerStatus{Configured: false, Reason: reason})
+	if run.Status != "failed" || run.FailureReason == nil || *run.FailureReason != reason || len(run.Suggestions) != 0 {
+		t.Fatalf("run = %#v", run)
+	}
+}
+
+func TestNormalizeExternalActionRedactsMetadataAndAliasesProvider(t *testing.T) {
+	mappedUserID := " user-1 "
+	input := normalizeExternalActionRequest(externalActionRequest{Action: " Propose_Issue ", TeamKey: " eng ", Source: SourceContext{Provider: "Teams", Metadata: map[string]any{"botToken": "secret", "ticketId": "123"}, Actor: SourceActor{MappedUserID: &mappedUserID}}})
+	if input.Action != "propose_issue" || input.TeamKey != "ENG" || input.Source.Provider != "microsoft_teams" {
+		t.Fatalf("normalized = %#v", input)
+	}
+	if input.Source.Metadata["botToken"] != "[redacted]" || input.Source.Metadata["ticketId"] != "123" {
+		t.Fatalf("metadata = %#v", input.Source.Metadata)
+	}
+	if input.Source.Actor.MappedUserID == nil || *input.Source.Actor.MappedUserID != "user-1" {
+		t.Fatalf("mapped user = %#v", input.Source.Actor.MappedUserID)
+	}
+}

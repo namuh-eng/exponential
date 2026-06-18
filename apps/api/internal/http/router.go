@@ -198,6 +198,7 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 			protected.Mount("/airbyte", airbyte.Handler{DB: db}.Routes())
 			protected.Mount("/analytics", analytics.Handler{DB: db}.Routes())
 			protected.Mount("/agent/runs", agentruns.Handler{DB: db}.Routes())
+			protected.Post("/agent/external-actions", agentruns.Handler{DB: db}.CreateExternalAction)
 			protected.Mount("/attachments", attachments.Handler{DB: db}.Routes())
 			protected.Patch("/comments/{id}", commentsHandler.Update)
 			protected.Mount("/customer-requests", customers.Handler{DB: db}.RequestRoutes())

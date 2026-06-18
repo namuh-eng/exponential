@@ -44,6 +44,26 @@ type Suggestion struct {
 	ReviewedBy        *string `json:"reviewedBy,omitempty"`
 	ReviewedAt        *string `json:"reviewedAt,omitempty"`
 }
+type SourceActor struct {
+	ExternalID   string  `json:"externalId,omitempty"`
+	DisplayName  string  `json:"displayName,omitempty"`
+	Email        string  `json:"email,omitempty"`
+	MappedUserID *string `json:"mappedUserId,omitempty"`
+}
+
+type SourceContext struct {
+	Provider               string         `json:"provider"`
+	WorkspaceIntegrationID string         `json:"workspaceIntegrationId,omitempty"`
+	ExternalTeamID         string         `json:"externalTeamId,omitempty"`
+	ExternalChannelID      string         `json:"externalChannelId,omitempty"`
+	ExternalThreadID       string         `json:"externalThreadId,omitempty"`
+	ExternalMessageID      string         `json:"externalMessageId,omitempty"`
+	ExternalTicketID       string         `json:"externalTicketId,omitempty"`
+	ExternalConversationID string         `json:"externalConversationId,omitempty"`
+	Permalink              string         `json:"permalink,omitempty"`
+	Metadata               map[string]any `json:"metadata,omitempty"`
+	Actor                  SourceActor    `json:"actor"`
+}
 type Run struct {
 	ID           string `json:"id"`
 	Title        string `json:"title"`
@@ -52,16 +72,17 @@ type Run struct {
 	PromptConfig struct {
 		Guidance Guidance `json:"guidance"`
 	} `json:"promptConfig"`
-	Context       string       `json:"context"`
-	Status        string       `json:"status"`
-	Owner         string       `json:"owner"`
-	Target        string       `json:"target"`
-	CreatedAt     string       `json:"createdAt"`
-	UpdatedAt     string       `json:"updatedAt"`
-	Output        string       `json:"output"`
-	FailureReason *string      `json:"failureReason,omitempty"`
-	Logs          []string     `json:"logs"`
-	Suggestions   []Suggestion `json:"suggestions"`
+	Context       string         `json:"context"`
+	Status        string         `json:"status"`
+	Owner         string         `json:"owner"`
+	Target        string         `json:"target"`
+	CreatedAt     string         `json:"createdAt"`
+	UpdatedAt     string         `json:"updatedAt"`
+	Output        string         `json:"output"`
+	FailureReason *string        `json:"failureReason,omitempty"`
+	Logs          []string       `json:"logs"`
+	Suggestions   []Suggestion   `json:"suggestions"`
+	SourceContext *SourceContext `json:"sourceContext,omitempty"`
 }
 
 type listResponse struct {
@@ -85,6 +106,19 @@ type providerStatus struct {
 	Reason     string
 }
 type request struct{ Title, Prompt, TeamKey, Context string }
+type externalActionRequest struct {
+	Action  string        `json:"action"`
+	Title   string        `json:"title"`
+	Prompt  string        `json:"prompt"`
+	TeamKey string        `json:"teamKey"`
+	Source  SourceContext `json:"source"`
+}
+
+type externalActionResponse struct {
+	State          string  `json:"state"`
+	Run            *Run    `json:"run,omitempty"`
+	DisabledReason *string `json:"disabledReason,omitempty"`
+}
 
 type promptConfig struct {
 	Guidance Guidance `json:"guidance"`
@@ -105,6 +139,7 @@ type contextSnapshot struct {
 	IssueCount   int             `json:"issueCount,omitempty"`
 	RecentIssues []snapshotIssue `json:"recentIssues,omitempty"`
 	Query        string          `json:"query,omitempty"`
+	Source       *SourceContext  `json:"source,omitempty"`
 }
 
 type snapshotIssue struct {
@@ -235,6 +270,105 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 	problem.JSON(w, 201, runResponse{Run: run})
 }
 
+func (h Handler) CreateExternalAction(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	var raw externalActionRequest
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		problem.JSON(w, 400, map[string]string{"error": "Invalid JSON"})
+		return
+	}
+	input := normalizeExternalActionRequest(raw)
+	if input.Action == "" || !externalActionSupported(input.Action) {
+		problem.JSON(w, 400, map[string]string{"error": "Unsupported external agent action"})
+		return
+	}
+	if input.Source.Provider == "" || !externalProviderSupported(input.Source.Provider) {
+		reason := "External provider is not implemented for agent actions"
+		_ = h.recordExternalAgentEvent(r.Context(), p.WorkspaceID, nil, input.Source.Provider, "external_agent_provider_missing", "warning", reason, externalActionEventPayload(input, "provider_missing", ""))
+		problem.JSON(w, 200, externalActionResponse{State: "provider_missing", DisabledReason: &reason})
+		return
+	}
+	integrationID, reason, err := h.connectedSourceIntegration(r.Context(), p.WorkspaceID, input.Source)
+	if err != nil {
+		problem.Write(w, 500, "Resolve source integration failed", err.Error())
+		return
+	}
+	if reason != "" {
+		_ = h.recordExternalAgentEvent(r.Context(), p.WorkspaceID, nil, input.Source.Provider, "external_agent_provider_missing", "warning", reason, externalActionEventPayload(input, "provider_missing", ""))
+		problem.JSON(w, 200, externalActionResponse{State: "provider_missing", DisabledReason: &reason})
+		return
+	}
+	input.Source.WorkspaceIntegrationID = integrationID
+	mappedUserID := ""
+	if input.Source.Actor.MappedUserID != nil {
+		mappedUserID = strings.TrimSpace(*input.Source.Actor.MappedUserID)
+	}
+	if mappedUserID == "" {
+		reason := "External actor is not mapped to a workspace member"
+		_ = h.recordExternalAgentEvent(r.Context(), p.WorkspaceID, &integrationID, input.Source.Provider, "external_agent_action_disabled", "warning", reason, externalActionEventPayload(input, "disabled", ""))
+		problem.JSON(w, 200, externalActionResponse{State: "disabled", DisabledReason: &reason})
+		return
+	}
+	memberPrincipal := p
+	memberPrincipal.UserID = mappedUserID
+	cap, err := h.capabilityForUser(r.Context(), p.WorkspaceID, mappedUserID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			reason := "External actor is not mapped to a workspace member"
+			_ = h.recordExternalAgentEvent(r.Context(), p.WorkspaceID, &integrationID, input.Source.Provider, "external_agent_action_disabled", "warning", reason, externalActionEventPayload(input, "disabled", ""))
+			problem.JSON(w, 200, externalActionResponse{State: "disabled", DisabledReason: &reason})
+			return
+		}
+		problem.Write(w, 500, "Load agent capability failed", err.Error())
+		return
+	}
+	if !cap.CanCreate {
+		reason := "Workspace AI and agent features are disabled"
+		if cap.FeaturesEnabled {
+			reason = "Mapped workspace user is not permitted to create agent actions"
+		}
+		_ = h.recordExternalAgentEvent(r.Context(), p.WorkspaceID, &integrationID, input.Source.Provider, "external_agent_action_disabled", "warning", reason, externalActionEventPayload(input, "disabled", ""))
+		problem.JSON(w, 200, externalActionResponse{State: "disabled", DisabledReason: &reason})
+		return
+	}
+	teamKey, err := h.externalActionTeamKey(r, memberPrincipal, input.TeamKey)
+	if err != nil {
+		problem.Write(w, 500, "Load team failed", err.Error())
+		return
+	}
+	if teamKey == "" {
+		reason := "No permitted workspace team is available for this external action"
+		_ = h.recordExternalAgentEvent(r.Context(), p.WorkspaceID, &integrationID, input.Source.Provider, "external_agent_action_disabled", "warning", reason, externalActionEventPayload(input, "disabled", ""))
+		problem.JSON(w, 200, externalActionResponse{State: "disabled", DisabledReason: &reason})
+		return
+	}
+	input.TeamKey = teamKey
+	guidance, err := h.guidance(r, memberPrincipal, teamKey)
+	if err != nil {
+		problem.Write(w, 500, "Load agent guidance failed", err.Error())
+		return
+	}
+	owner := h.ownerName(r, mappedUserID)
+	provider := currentProviderStatus()
+	run, snapshot := buildExternalActionRun(input, owner, guidance, provider)
+	if err := h.insertRun(r.Context(), p.WorkspaceID, mappedUserID, run, snapshot); err != nil {
+		problem.Write(w, 500, "Create external agent action failed", err.Error())
+		return
+	}
+	eventType := "external_agent_action_created"
+	severity := "info"
+	state := "created"
+	message := "External agent action created for review."
+	if !provider.Configured {
+		eventType = "external_agent_action_disabled"
+		severity = "warning"
+		state = "disabled"
+		message = provider.Reason
+	}
+	_ = h.recordExternalAgentEvent(r.Context(), p.WorkspaceID, &integrationID, input.Source.Provider, eventType, severity, message, externalActionEventPayload(input, state, run.ID))
+	problem.JSON(w, 201, externalActionResponse{State: state, Run: &run, DisabledReason: run.FailureReason})
+}
+
 func (h Handler) UpdateSuggestion(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
 	var raw map[string]any
@@ -261,9 +395,13 @@ func (h Handler) UpdateSuggestion(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h Handler) capability(r *http.Request, p auth.Principal) (capability, error) {
+	return h.capabilityForUser(r.Context(), p.WorkspaceID, p.UserID)
+}
+
+func (h Handler) capabilityForUser(ctx context.Context, workspaceID, userID string) (capability, error) {
 	var settings []byte
 	var role string
-	err := h.DB.QueryRow(r.Context(), `select coalesce(w.settings,'{}'::jsonb), m.role::text from workspace w join member m on m.workspace_id=w.id and m.user_id=$2 where w.id=$1::uuid limit 1`, p.WorkspaceID, p.UserID).Scan(&settings, &role)
+	err := h.DB.QueryRow(ctx, `select coalesce(w.settings,'{}'::jsonb), m.role::text from workspace w join member m on m.workspace_id=w.id and m.user_id=$2 where w.id=$1::uuid limit 1`, workspaceID, userID).Scan(&settings, &role)
 	if err != nil {
 		return capability{}, err
 	}
@@ -288,6 +426,14 @@ func (h Handler) defaultTeamKey(r *http.Request, p auth.Principal) (string, erro
 		return "", nil
 	}
 	return key, err
+}
+
+func (h Handler) externalActionTeamKey(r *http.Request, p auth.Principal, requested string) (string, error) {
+	teamKey := strings.ToUpper(strings.TrimSpace(requested))
+	if teamKey != "" {
+		return h.teamAccessible(r, p, teamKey)
+	}
+	return h.defaultTeamKey(r, p)
 }
 
 func (h Handler) ownerName(r *http.Request, userID string) string {
@@ -318,7 +464,7 @@ func (h Handler) guidance(r *http.Request, p auth.Principal, teamKey string) (Gu
 }
 
 func (h Handler) listRuns(ctx context.Context, workspaceID string) ([]Run, error) {
-	rows, err := h.DB.Query(ctx, `select id::text,title,prompt,team_key,context,status,owner_name,target,created_at,updated_at,output,failure_reason,prompt_config,logs,suggestions from agent_run where workspace_id=$1::uuid order by updated_at desc, created_at desc`, workspaceID)
+	rows, err := h.DB.Query(ctx, `select id::text,title,prompt,team_key,context,status,owner_name,target,created_at,updated_at,output,failure_reason,prompt_config,logs,suggestions,coalesce(source_context,'{}'::jsonb) from agent_run where workspace_id=$1::uuid order by updated_at desc, created_at desc`, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +501,14 @@ func (h Handler) insertRun(ctx context.Context, workspaceID, actorUserID string,
 	if err != nil {
 		return err
 	}
-	_, err = h.DB.Exec(ctx, `insert into agent_run (id,workspace_id,actor_user_id,title,prompt,team_key,context,context_snapshot,prompt_config,status,owner_name,target,output,provider,model,provider_result,failure_reason,logs,suggestions,created_at,updated_at) values ($1::uuid,$2::uuid,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18::jsonb,$19::jsonb,$20,$21)`, run.ID, workspaceID, actorUserID, run.Title, run.Prompt, run.TeamKey, run.Context, snapshotRaw, promptConfigRaw, run.Status, run.Owner, run.Target, run.Output, currentProviderStatus().Provider, currentProviderStatus().Model, providerResultRaw, run.FailureReason, logsRaw, suggestionsRaw, parseTime(run.CreatedAt), parseTime(run.UpdatedAt))
+	sourceContextRaw, err := json.Marshal(map[string]any{})
+	if run.SourceContext != nil {
+		sourceContextRaw, err = json.Marshal(run.SourceContext)
+	}
+	if err != nil {
+		return err
+	}
+	_, err = h.DB.Exec(ctx, `insert into agent_run (id,workspace_id,actor_user_id,title,prompt,team_key,context,context_snapshot,prompt_config,status,owner_name,target,output,provider,model,provider_result,failure_reason,logs,suggestions,source_context,created_at,updated_at) values ($1::uuid,$2::uuid,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18::jsonb,$19::jsonb,$20::jsonb,$21,$22)`, run.ID, workspaceID, actorUserID, run.Title, run.Prompt, run.TeamKey, run.Context, snapshotRaw, promptConfigRaw, run.Status, run.Owner, run.Target, run.Output, currentProviderStatus().Provider, currentProviderStatus().Model, providerResultRaw, run.FailureReason, logsRaw, suggestionsRaw, sourceContextRaw, parseTime(run.CreatedAt), parseTime(run.UpdatedAt))
 	return err
 }
 
@@ -406,7 +559,7 @@ func (h Handler) updateSuggestion(ctx context.Context, p auth.Principal, runID, 
 }
 
 func loadRun(ctx context.Context, q rowQuerier, workspaceID, runID string, forUpdate bool) (Run, bool, error) {
-	query := `select id::text,title,prompt,team_key,context,status,owner_name,target,created_at,updated_at,output,failure_reason,prompt_config,logs,suggestions from agent_run where workspace_id=$1::uuid and id=$2::uuid`
+	query := `select id::text,title,prompt,team_key,context,status,owner_name,target,created_at,updated_at,output,failure_reason,prompt_config,logs,suggestions,coalesce(source_context,'{}'::jsonb) from agent_run where workspace_id=$1::uuid and id=$2::uuid`
 	if forUpdate {
 		query += ` for update`
 	}
@@ -424,8 +577,8 @@ func scanRun(scanner interface{ Scan(...any) error }) (Run, error) {
 	var run Run
 	var createdAt, updatedAt time.Time
 	var failureReason sql.NullString
-	var promptConfigRaw, logsRaw, suggestionsRaw []byte
-	if err := scanner.Scan(&run.ID, &run.Title, &run.Prompt, &run.TeamKey, &run.Context, &run.Status, &run.Owner, &run.Target, &createdAt, &updatedAt, &run.Output, &failureReason, &promptConfigRaw, &logsRaw, &suggestionsRaw); err != nil {
+	var promptConfigRaw, logsRaw, suggestionsRaw, sourceContextRaw []byte
+	if err := scanner.Scan(&run.ID, &run.Title, &run.Prompt, &run.TeamKey, &run.Context, &run.Status, &run.Owner, &run.Target, &createdAt, &updatedAt, &run.Output, &failureReason, &promptConfigRaw, &logsRaw, &suggestionsRaw, &sourceContextRaw); err != nil {
 		return Run{}, err
 	}
 	run.CreatedAt = formatTime(createdAt)
@@ -443,6 +596,12 @@ func scanRun(scanner interface{ Scan(...any) error }) (Run, error) {
 	}
 	if len(suggestionsRaw) > 0 {
 		_ = json.Unmarshal(suggestionsRaw, &run.Suggestions)
+	}
+	if len(sourceContextRaw) > 0 && string(sourceContextRaw) != "{}" {
+		var source SourceContext
+		if err := json.Unmarshal(sourceContextRaw, &source); err == nil && source.Provider != "" {
+			run.SourceContext = &source
+		}
 	}
 	if run.Logs == nil {
 		run.Logs = []string{}
@@ -590,6 +749,45 @@ func buildRun(input request, owner string, guidance Guidance, snapshot contextSn
 	return run
 }
 
+func buildExternalActionRun(input externalActionRequest, owner string, guidance Guidance, provider providerStatus) (Run, contextSnapshot) {
+	now := time.Now().UTC()
+	source := input.Source
+	label := externalSourceLabel(source)
+	prompt := strings.TrimSpace(input.Prompt)
+	if prompt == "" {
+		prompt = defaultExternalActionPrompt(input.Action, label)
+	}
+	title := strings.TrimSpace(input.Title)
+	if title == "" {
+		title = externalActionTitle(input.Action, source.Provider)
+	}
+	snapshot := contextSnapshot{Type: "external_conversation", Title: label, TeamKey: strings.ToUpper(input.TeamKey), Query: prompt, Source: &source}
+	run := Run{ID: uuid.NewString(), Title: title, Prompt: prompt, TeamKey: strings.ToUpper(input.TeamKey), Context: label, Owner: owner, Target: strings.ToUpper(input.TeamKey) + " · " + label, CreatedAt: formatTime(now), UpdatedAt: formatTime(now), SourceContext: &source}
+	run.PromptConfig.Guidance = guidance
+	run.Logs = []string{"Created run from external " + source.Provider + " action.", "Captured external source context for " + label + ".", "Queued review-gated external agent action."}
+	if guidance.EffectiveInstructions != "" {
+		run.Logs = append(run.Logs, "Applied workspace/account/team agent guidance to the prompt configuration.")
+	}
+	if !provider.Configured {
+		run.Status = "failed"
+		run.Output = provider.Reason
+		run.FailureReason = &provider.Reason
+		run.Logs = append(run.Logs, "Execution stopped because no AI provider is configured.")
+		return run, snapshot
+	}
+	run.Logs = append(run.Logs, "Started provider execution with "+provider.Provider+" ("+provider.Model+").")
+	run.Output = externalActionOutput(input.Action, prompt, source, provider)
+	run.Suggestions = externalActionSuggestions(run.ID, input.Action, prompt, source, input.TeamKey)
+	if len(run.Suggestions) > 0 {
+		run.Status = "needs_review"
+		run.Logs = append(run.Logs, fmt.Sprintf("Prepared %d review-gated suggestion(s) from external source context.", len(run.Suggestions)))
+	} else {
+		run.Status = "completed"
+		run.Logs = append(run.Logs, "Completed read-only external agent action with no mutation suggestions.")
+	}
+	return run, snapshot
+}
+
 func buildSuggestions(runID string, snapshot contextSnapshot, prompt string) []Suggestion {
 	switch snapshot.Type {
 	case "issue":
@@ -651,6 +849,243 @@ func workspaceSummary(input request, guidance Guidance, snapshot contextSnapshot
 	}
 	lines = append(lines, "Requested action: "+compact(input.Prompt, 180))
 	return strings.Join(lines, " ")
+}
+
+func externalActionSuggestions(runID, action, prompt string, source SourceContext, teamKey string) []Suggestion {
+	target := firstNonEmptyString(source.Permalink, source.ExternalTicketID, source.ExternalConversationID, source.ExternalThreadID, source.ExternalMessageID, source.ExternalChannelID, externalSourceLabel(source))
+	switch action {
+	case "propose_issue":
+		return []Suggestion{suggestion(runID+"-suggestion-propose-issue", "Propose issue from "+providerDisplayName(source.Provider), fmt.Sprintf("Create a new issue for %s using external source context %s. Request: %s", strings.ToUpper(teamKey), externalSourceLabel(source), compact(prompt, 140)), target, teamKey)}
+	case "propose_update":
+		return []Suggestion{suggestion(runID+"-suggestion-propose-update", "Propose update from "+providerDisplayName(source.Provider), fmt.Sprintf("Apply a review-gated update from %s context %s. Request: %s", providerDisplayName(source.Provider), externalSourceLabel(source), compact(prompt, 140)), target, teamKey)}
+	case "route_request":
+		return []Suggestion{suggestion(runID+"-suggestion-route-request", "Route request from "+providerDisplayName(source.Provider), fmt.Sprintf("Route the external request to %s with source context %s. Request: %s", strings.ToUpper(teamKey), externalSourceLabel(source), compact(prompt, 140)), target, teamKey)}
+	default:
+		return []Suggestion{}
+	}
+}
+
+func externalActionOutput(action, prompt string, source SourceContext, provider providerStatus) string {
+	parts := []string{fmt.Sprintf("External agent action %q prepared by %s/%s for %s.", action, provider.Provider, provider.Model, externalSourceLabel(source))}
+	if source.Actor.DisplayName != "" || source.Actor.ExternalID != "" {
+		parts = append(parts, "Provider actor: "+firstNonEmptyString(source.Actor.DisplayName, source.Actor.ExternalID)+".")
+	}
+	if source.Permalink != "" {
+		parts = append(parts, "Source permalink: "+source.Permalink+".")
+	}
+	parts = append(parts, "Requested action: "+compact(prompt, 180))
+	return strings.Join(parts, " ")
+}
+
+func externalSourceLabel(source SourceContext) string {
+	provider := providerDisplayName(source.Provider)
+	for _, value := range []string{source.ExternalTicketID, source.ExternalConversationID, source.ExternalThreadID, source.ExternalMessageID, source.ExternalChannelID} {
+		if strings.TrimSpace(value) != "" {
+			return provider + " " + strings.TrimSpace(value)
+		}
+	}
+	if source.Permalink != "" {
+		return provider + " " + source.Permalink
+	}
+	return provider + " conversation"
+}
+
+func externalActionTitle(action, provider string) string {
+	switch action {
+	case "summarize_thread":
+		return "Summarize " + providerDisplayName(provider) + " conversation"
+	case "propose_issue":
+		return "Propose issue from " + providerDisplayName(provider)
+	case "propose_update":
+		return "Propose update from " + providerDisplayName(provider)
+	case "route_request":
+		return "Route " + providerDisplayName(provider) + " request"
+	case "answer_question":
+		return "Answer " + providerDisplayName(provider) + " workspace question"
+	default:
+		return "External agent action"
+	}
+}
+
+func defaultExternalActionPrompt(action, label string) string {
+	switch action {
+	case "summarize_thread":
+		return "Summarize the external conversation at " + label + "."
+	case "propose_issue":
+		return "Propose an issue from the external conversation at " + label + "."
+	case "propose_update":
+		return "Propose updates from the external conversation at " + label + "."
+	case "route_request":
+		return "Route the external request at " + label + "."
+	case "answer_question":
+		return "Answer the workspace question from " + label + "."
+	default:
+		return "Review the external conversation at " + label + "."
+	}
+}
+
+func normalizeExternalActionRequest(input externalActionRequest) externalActionRequest {
+	input.Action = strings.ToLower(strings.TrimSpace(input.Action))
+	input.Title = strings.TrimSpace(input.Title)
+	input.Prompt = strings.TrimSpace(input.Prompt)
+	input.TeamKey = strings.ToUpper(strings.TrimSpace(input.TeamKey))
+	input.Source.Provider = normalizeExternalProvider(input.Source.Provider)
+	input.Source.WorkspaceIntegrationID = strings.TrimSpace(input.Source.WorkspaceIntegrationID)
+	input.Source.ExternalTeamID = strings.TrimSpace(input.Source.ExternalTeamID)
+	input.Source.ExternalChannelID = strings.TrimSpace(input.Source.ExternalChannelID)
+	input.Source.ExternalThreadID = strings.TrimSpace(input.Source.ExternalThreadID)
+	input.Source.ExternalMessageID = strings.TrimSpace(input.Source.ExternalMessageID)
+	input.Source.ExternalTicketID = strings.TrimSpace(input.Source.ExternalTicketID)
+	input.Source.ExternalConversationID = strings.TrimSpace(input.Source.ExternalConversationID)
+	input.Source.Permalink = strings.TrimSpace(input.Source.Permalink)
+	input.Source.Actor.ExternalID = strings.TrimSpace(input.Source.Actor.ExternalID)
+	input.Source.Actor.DisplayName = strings.TrimSpace(input.Source.Actor.DisplayName)
+	input.Source.Actor.Email = strings.TrimSpace(input.Source.Actor.Email)
+	if input.Source.Actor.MappedUserID != nil {
+		mapped := strings.TrimSpace(*input.Source.Actor.MappedUserID)
+		input.Source.Actor.MappedUserID = &mapped
+	}
+	input.Source.Metadata = redactedSourceMetadata(input.Source.Metadata)
+	return input
+}
+
+func normalizeExternalProvider(provider string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "teams", "msteams", "microsoft-teams":
+		return "microsoft_teams"
+	default:
+		return strings.ToLower(strings.TrimSpace(provider))
+	}
+}
+
+func externalActionSupported(action string) bool {
+	switch action {
+	case "summarize_thread", "propose_issue", "propose_update", "route_request", "answer_question":
+		return true
+	default:
+		return false
+	}
+}
+
+func externalProviderSupported(provider string) bool {
+	switch provider {
+	case "slack", "microsoft_teams", "zendesk", "intercom", "front":
+		return true
+	default:
+		return false
+	}
+}
+
+func providerDisplayName(provider string) string {
+	switch provider {
+	case "microsoft_teams":
+		return "Microsoft Teams"
+	case "slack":
+		return "Slack"
+	case "zendesk":
+		return "Zendesk"
+	case "intercom":
+		return "Intercom"
+	case "front":
+		return "Front"
+	default:
+		if strings.TrimSpace(provider) == "" {
+			return "External"
+		}
+		return strings.ToUpper(provider[:1]) + provider[1:]
+	}
+}
+
+func redactedSourceMetadata(metadata map[string]any) map[string]any {
+	if len(metadata) == 0 {
+		return nil
+	}
+	out := map[string]any{}
+	for key, value := range metadata {
+		lower := strings.ToLower(key)
+		if strings.Contains(lower, "token") || strings.Contains(lower, "secret") || strings.Contains(lower, "signature") || strings.Contains(lower, "authorization") || strings.Contains(lower, "cookie") {
+			out[key] = "[redacted]"
+			continue
+		}
+		out[key] = value
+	}
+	return out
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func (h Handler) connectedSourceIntegration(ctx context.Context, workspaceID string, source SourceContext) (string, string, error) {
+	provider := normalizeExternalProvider(source.Provider)
+	if source.WorkspaceIntegrationID != "" {
+		var id, status, lifecycle string
+		err := h.DB.QueryRow(ctx, `select id::text,status,coalesce(lifecycle_state,status) from workspace_integration where id=$1::uuid and workspace_id=$2::uuid and provider=$3 limit 1`, source.WorkspaceIntegrationID, workspaceID, provider).Scan(&id, &status, &lifecycle)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", providerDisplayName(provider) + " integration is not connected for this workspace", nil
+		}
+		if err != nil {
+			return "", "", err
+		}
+		if !integrationActionable(status, lifecycle) {
+			return "", providerDisplayName(provider) + " integration is not connected for this workspace", nil
+		}
+		return id, "", nil
+	}
+	var id string
+	err := h.DB.QueryRow(ctx, `select id::text from workspace_integration where workspace_id=$1::uuid and provider=$2 and status in ('connected','degraded') and coalesce(lifecycle_state,status) in ('connected','degraded') order by connected_at desc nulls last, updated_at desc limit 1`, workspaceID, provider).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", providerDisplayName(provider) + " integration is not connected for this workspace", nil
+	}
+	if err != nil {
+		return "", "", err
+	}
+	return id, "", nil
+}
+
+func integrationActionable(status, lifecycle string) bool {
+	return (status == "connected" || status == "degraded") && (lifecycle == "connected" || lifecycle == "degraded")
+}
+
+func (h Handler) recordExternalAgentEvent(ctx context.Context, workspaceID string, integrationID *string, provider, eventType, severity, message string, payload map[string]any) error {
+	provider = normalizeExternalProvider(provider)
+	if provider == "" {
+		provider = "external"
+	}
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	var integration any
+	if integrationID != nil && strings.TrimSpace(*integrationID) != "" {
+		integration = strings.TrimSpace(*integrationID)
+	}
+	_, err = h.DB.Exec(ctx, `insert into provider_event (workspace_id, workspace_integration_id, provider, event_type, severity, message, payload) values ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb)`, workspaceID, integration, provider, eventType, severity, message, raw)
+	return err
+}
+
+func externalActionEventPayload(input externalActionRequest, state, runID string) map[string]any {
+	payload := map[string]any{
+		"action": input.Action,
+		"state":  state,
+		"source": input.Source,
+		"actor":  input.Source.Actor,
+	}
+	if input.TeamKey != "" {
+		payload["teamKey"] = input.TeamKey
+	}
+	if runID != "" {
+		payload["agentRunId"] = runID
+	}
+	return payload
 }
 
 func currentProviderStatus() providerStatus {
@@ -839,6 +1274,16 @@ func cloneRun(r Run) Run {
 	r.Logs = append([]string{}, r.Logs...)
 	r.Suggestions = append([]Suggestion{}, r.Suggestions...)
 	r.PromptConfig.Guidance.Entries = append([]GuidanceEntry{}, r.PromptConfig.Guidance.Entries...)
+	if r.SourceContext != nil {
+		source := *r.SourceContext
+		if source.Metadata != nil {
+			source.Metadata = map[string]any{}
+			for key, value := range r.SourceContext.Metadata {
+				source.Metadata[key] = value
+			}
+		}
+		r.SourceContext = &source
+	}
 	return r
 }
 func trim(v any) string {
