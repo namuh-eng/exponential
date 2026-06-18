@@ -82,10 +82,12 @@ Before exposing the instance to your team, configure at least one of:
 
 - **Google sign-in** — set `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` (requires
   an HTTPS public URL for the OAuth redirect).
+- **GitHub sign-in** — set `AUTH_GITHUB_ID` and `AUTH_GITHUB_SECRET` (requires
+  an HTTPS public URL for the OAuth redirect).
 - **Magic-link email** — set `SENDER_EMAIL` with SES credentials, or
   `SENDER_EMAIL` + `OPENSEND_API_KEY` for Opensend.
 
-Without either, magic-link requests return `503` and there is no way to sign
+Without any of these, magic-link requests return `503` and there is no way to sign
 in. For a quick local trial without any email or OAuth setup, use the
 development stack instead (`docker compose -f docker-compose.dev.yml up
 --build`): in non-production mode the API returns the magic-link URL directly
@@ -120,6 +122,7 @@ at `http://localhost:7015`.
 | Feature | Variables | Behavior when omitted |
 | --- | --- | --- |
 | Google sign-in | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | Google OAuth is unavailable. |
+| GitHub sign-in | `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` | GitHub OAuth is unavailable. |
 | Magic-link email (SMTP) | `SENDER_EMAIL`, `SMTP_HOST` (+ optional `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_TLS`) | Use this for any SMTP relay: Mailgun, Postmark, Gmail app password, your own mail server, or Mailhog in dev. |
 | Magic-link email (Opensend) | `SENDER_EMAIL`, `OPENSEND_API_KEY` (+ optional `OPENSEND_BASE_URL`) | — |
 | Magic-link email (SES) | `SENDER_EMAIL` with AWS credentials or instance/task role | — |
@@ -501,7 +504,7 @@ through a public CDN or proxy hostname.
 
 ### HTTPS via ACM (recommended for production)
 
-HTTPS is required for Google OAuth redirect URIs and is strongly recommended
+HTTPS is required for Google and GitHub OAuth redirect URIs and is strongly recommended
 for all production deployments. `preflight.sh` can wire an HTTPS:443 ALB
 listener and convert HTTP:80 to a permanent redirect when you supply an ACM
 certificate ARN.
