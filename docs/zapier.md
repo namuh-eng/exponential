@@ -13,6 +13,8 @@ Zapier can authenticate with either:
 - OAuth 2.0 authorization code flow:
   - Authorize URL: `/api/oauth/authorize`
   - Token URL: `/api/oauth/token`
+  - Access tokens expire after one hour; use the returned refresh token with
+    `grant_type=refresh_token` at the token URL to rotate credentials.
   - Supported scopes: `read`, `write`, `issues:read`, `issues:write`, `comments:read`, `comments:write`, `projects:read`, `projects:write`, `webhooks:read`, `webhooks:write`
 - API key auth:
   - Header: `Authorization: Bearer <lin_api_...>`

@@ -2,6 +2,7 @@ type ZapierHttpMethod = "GET" | "POST";
 
 type ZapierAuthData = {
   access_token?: string;
+  refresh_token?: string;
   api_key?: string;
   baseUrl?: string;
 };
@@ -69,6 +70,10 @@ type ZapierAppDefinition = {
         params: Record<string, string>;
       };
       getAccessToken: (z: ZapierZ, bundle: ZapierBundle) => Promise<unknown>;
+      refreshAccessToken?: (
+        z: ZapierZ,
+        bundle: ZapierBundle,
+      ) => Promise<unknown>;
       autoRefresh: boolean;
     };
     fields: ZapierInputField[];
@@ -447,7 +452,18 @@ const app: ZapierAppDefinition = {
             redirect_uri: bundle.inputData?.redirect_uri,
           },
         }),
-      autoRefresh: false,
+      refreshAccessToken: (z, bundle) =>
+        requestExponential(z, bundle, {
+          path: "/api/oauth/token",
+          method: "POST",
+          body: {
+            grant_type: "refresh_token",
+            refresh_token: bundle.authData?.refresh_token,
+            client_id: bundle.inputData?.client_id,
+            client_secret: bundle.inputData?.client_secret,
+          },
+        }),
+      autoRefresh: true,
     },
   },
   triggers: {

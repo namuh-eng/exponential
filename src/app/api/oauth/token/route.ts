@@ -1,5 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import {
+  type OAuthTokenRecord,
+  type WorkspaceApiSettingsState,
   asRecord,
   readWorkspaceApiSettings,
   serializeWorkspaceApiSettings,
@@ -25,14 +27,72 @@ async function readBody(request: Request) {
   return Object.fromEntries(form.entries());
 }
 
-export async function POST(request: Request) {
-  const body = await readBody(request);
-  if (body.grant_type !== "authorization_code") {
-    return NextResponse.json(
-      { error: "unsupported_grant_type" },
-      { status: 400 },
-    );
-  }
+type WorkspaceApiRow = {
+  workspaceId: string;
+  settings: Record<string, unknown>;
+  api: WorkspaceApiSettingsState;
+};
+
+async function readWorkspaceApiRows(): Promise<WorkspaceApiRow[]> {
+  const workspaces = await db
+    .select({ id: workspace.id, settings: workspace.settings })
+    .from(workspace);
+
+  return workspaces.map((item) => ({
+    workspaceId: item.id,
+    settings: asRecord(item.settings),
+    api: readWorkspaceApiSettings(item.settings),
+  }));
+}
+
+function issueOAuthTokens(
+  token: Omit<
+    OAuthTokenRecord,
+    | "id"
+    | "tokenHash"
+    | "refreshTokenHash"
+    | "createdAt"
+    | "expiresAt"
+    | "revokedAt"
+  > & {
+    id?: string;
+  },
+) {
+  const accessToken = `lin_oauth_at_${randomBytes(24).toString("hex")}`;
+  const refreshToken = `lin_oauth_rt_${randomBytes(24).toString("hex")}`;
+  const now = new Date();
+  const tokenRecord: OAuthTokenRecord = {
+    id: token.id ?? `tok_${randomBytes(8).toString("hex")}`,
+    tokenHash: hashSecret(accessToken),
+    refreshTokenHash: hashSecret(refreshToken),
+    applicationId: token.applicationId,
+    clientId: token.clientId,
+    workspaceId: token.workspaceId,
+    userId: token.userId,
+    scopes: token.scopes,
+    revokedAt: null,
+    createdAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
+  };
+
+  return { accessToken, refreshToken, tokenRecord };
+}
+
+function tokenResponse(
+  accessToken: string,
+  refreshToken: string,
+  tokenRecord: OAuthTokenRecord,
+) {
+  return NextResponse.json({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+    token_type: "Bearer",
+    expires_in: 3600,
+    scope: tokenRecord.scopes.join(" "),
+  });
+}
+
+async function handleAuthorizationCode(body: Record<string, unknown>) {
   const code = typeof body.code === "string" ? body.code : "";
   const clientId = typeof body.client_id === "string" ? body.client_id : "";
   const clientSecret =
@@ -43,16 +103,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
 
-  const workspaces = await db
-    .select({ id: workspace.id, settings: workspace.settings })
-    .from(workspace);
   const codeHash = hashSecret(code);
-  const found = workspaces
-    .map((item) => ({
-      workspaceId: item.id,
-      settings: asRecord(item.settings),
-      api: readWorkspaceApiSettings(item.settings),
-    }))
+  const found = (await readWorkspaceApiRows())
     .map((item) => ({
       ...item,
       codeRecord: item.api.oauthAuthorizationCodes.find(
@@ -81,9 +133,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_grant" }, { status: 400 });
   }
 
-  const accessToken = `lin_oauth_at_${randomBytes(24).toString("hex")}`;
-  const refreshToken = `lin_oauth_rt_${randomBytes(24).toString("hex")}`;
-  const now = new Date();
+  const { accessToken, refreshToken, tokenRecord } = issueOAuthTokens({
+    applicationId: application.id,
+    clientId,
+    workspaceId: found.workspaceId,
+    userId: found.codeRecord.userId,
+    scopes: found.codeRecord.scopes,
+  });
   const nextSettings = {
     ...found.settings,
     api: serializeWorkspaceApiSettings({
@@ -91,21 +147,77 @@ export async function POST(request: Request) {
       oauthAuthorizationCodes: found.api.oauthAuthorizationCodes.filter(
         (record) => record.codeHash !== codeHash,
       ),
+      oauthTokens: [tokenRecord, ...found.api.oauthTokens],
+    }),
+  };
+  await db
+    .update(workspace)
+    .set({ settings: nextSettings, updatedAt: new Date() })
+    .where(eq(workspace.id, found.workspaceId));
+
+  return tokenResponse(accessToken, refreshToken, tokenRecord);
+}
+
+async function handleRefreshToken(body: Record<string, unknown>) {
+  const refreshToken =
+    typeof body.refresh_token === "string" ? body.refresh_token : "";
+  const clientId = typeof body.client_id === "string" ? body.client_id : "";
+  const clientSecret =
+    typeof body.client_secret === "string" ? body.client_secret : "";
+  if (!refreshToken || !clientId || !clientSecret) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+
+  const refreshTokenHash = hashSecret(refreshToken);
+  const found = (await readWorkspaceApiRows())
+    .flatMap((item) =>
+      item.api.oauthTokens.map((oauthToken) => ({
+        ...item,
+        oauthToken,
+      })),
+    )
+    .find(
+      (item) =>
+        item.oauthToken.refreshTokenHash === refreshTokenHash &&
+        !item.oauthToken.revokedAt,
+    );
+  if (!found) {
+    return NextResponse.json({ error: "invalid_grant" }, { status: 400 });
+  }
+
+  const application = found.api.oauthApplications.find(
+    (app) =>
+      app.clientId === clientId && app.id === found.oauthToken.applicationId,
+  );
+  if (
+    !application ||
+    !application.clientSecretHash ||
+    application.clientSecretHash !== hashSecret(clientSecret)
+  ) {
+    return NextResponse.json({ error: "invalid_client" }, { status: 401 });
+  }
+
+  const {
+    accessToken,
+    refreshToken: nextRefreshToken,
+    tokenRecord,
+  } = issueOAuthTokens({
+    id: found.oauthToken.id,
+    applicationId: found.oauthToken.applicationId,
+    clientId,
+    workspaceId: found.workspaceId,
+    userId: found.oauthToken.userId,
+    scopes: found.oauthToken.scopes,
+  });
+  const nextSettings = {
+    ...found.settings,
+    api: serializeWorkspaceApiSettings({
+      ...found.api,
       oauthTokens: [
-        {
-          id: `tok_${randomBytes(8).toString("hex")}`,
-          tokenHash: hashSecret(accessToken),
-          refreshTokenHash: hashSecret(refreshToken),
-          applicationId: application.id,
-          clientId,
-          workspaceId: found.workspaceId,
-          userId: found.codeRecord.userId,
-          scopes: found.codeRecord.scopes,
-          revokedAt: null,
-          createdAt: now.toISOString(),
-          expiresAt: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
-        },
-        ...found.api.oauthTokens,
+        tokenRecord,
+        ...found.api.oauthTokens.filter(
+          (record) => record.id !== found.oauthToken.id,
+        ),
       ],
     }),
   };
@@ -114,11 +226,20 @@ export async function POST(request: Request) {
     .set({ settings: nextSettings, updatedAt: new Date() })
     .where(eq(workspace.id, found.workspaceId));
 
-  return NextResponse.json({
-    access_token: accessToken,
-    refresh_token: refreshToken,
-    token_type: "Bearer",
-    expires_in: 3600,
-    scope: found.codeRecord.scopes.join(" "),
-  });
+  return tokenResponse(accessToken, nextRefreshToken, tokenRecord);
+}
+
+export async function POST(request: Request) {
+  const body = await readBody(request);
+  if (body.grant_type === "authorization_code") {
+    return handleAuthorizationCode(body);
+  }
+  if (body.grant_type === "refresh_token") {
+    return handleRefreshToken(body);
+  }
+
+  return NextResponse.json(
+    { error: "unsupported_grant_type" },
+    { status: 400 },
+  );
 }

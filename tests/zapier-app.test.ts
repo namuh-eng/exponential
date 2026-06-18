@@ -90,6 +90,27 @@ describe("Zapier public app", () => {
         code: "lincode_test",
       },
     });
+    expect(zapierApp.authentication.oauth2Config.autoRefresh).toBe(true);
+    await expect(
+      zapierApp.authentication.oauth2Config.refreshAccessToken?.(z, {
+        authData: {
+          baseUrl: "https://linear.example.test",
+          refresh_token: "lin_oauth_rt_test",
+        },
+        inputData: {
+          client_id: "lin_client_test",
+          client_secret: "linsec_test",
+        },
+      }),
+    ).resolves.toMatchObject({ refresh_token: "lin_oauth_rt_test" });
+    expect(requests[1]).toMatchObject({
+      url: "https://linear.example.test/api/oauth/token",
+      method: "POST",
+      body: {
+        grant_type: "refresh_token",
+        refresh_token: "lin_oauth_rt_test",
+      },
+    });
   });
 
   it("polls and subscribes triggers with bearer auth", async () => {
