@@ -8,6 +8,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import WorkspaceSettingsPage from "@/app/(app)/settings/workspace/page";
+import { workspaceUrlHost } from "@/lib/workspace-url";
 
 const routerPushMock = vi.fn();
 const routerRefreshMock = vi.fn();
@@ -106,7 +107,7 @@ describe("Workspace Settings Page", () => {
     mockWorkspace();
     render(<WorkspaceSettingsPage />);
     await waitForLoaded();
-    expect(screen.getByText("exponential.app/")).toBeInTheDocument();
+    expect(screen.getByText(`${workspaceUrlHost()}/`)).toBeInTheDocument();
     const urlInput = screen.getByLabelText(
       "Workspace URL slug",
     ) as HTMLInputElement;

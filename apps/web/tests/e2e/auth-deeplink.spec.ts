@@ -159,7 +159,7 @@ test.describe("Unauthenticated workspace deep links", () => {
     ).toHaveAttribute("href", "/login");
   });
 
-  test("only Google is active; other methods show coming soon", async ({
+  test("Google and SAML are active; email and passkey show coming soon", async ({
     page,
   }) => {
     await page.goto("/login");
@@ -172,11 +172,11 @@ test.describe("Unauthenticated workspace deep links", () => {
     ).toBeDisabled();
     await expect(
       page.getByRole("button", { name: "Continue with SAML SSO" }),
-    ).toBeDisabled();
+    ).toBeEnabled();
     await expect(
       page.getByRole("button", { name: "Log in with passkey" }),
     ).toBeDisabled();
-    await expect(page.getByText("coming soon")).toHaveCount(3);
+    await expect(page.getByText("coming soon")).toHaveCount(2);
   });
 
   test("first-party Go auth renders the provider chooser", async ({ page }) => {

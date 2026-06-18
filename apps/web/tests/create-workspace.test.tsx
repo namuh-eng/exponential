@@ -14,6 +14,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import CreateWorkspacePage from "@/app/create-workspace/page";
+import { workspaceUrlHost } from "@/lib/workspace-url";
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -241,8 +242,8 @@ describe("Create Workspace page", () => {
     expect(screen.getByText("Creating...")).toBeDefined();
   });
 
-  it("displays the exponential.app/ prefix in URL field", () => {
+  it("displays the configured workspace URL prefix in URL field", () => {
     render(<CreateWorkspacePage />);
-    expect(screen.getByText("exponential.app/")).toBeDefined();
+    expect(screen.getByText(`${workspaceUrlHost()}/`)).toBeDefined();
   });
 });
