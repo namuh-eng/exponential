@@ -918,6 +918,31 @@ paths:
                 $ref: '#/components/schemas/AccountPreferencesResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /agent/external-actions:
+    post:
+      operationId: createExternalAgentAction
+      summary: Create a review-gated Agent action from an external provider source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExternalAgentActionRequest'
+      responses:
+        '200':
+          description: Disabled or provider-missing external Agent action state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExternalAgentActionResponse'
+        '201':
+          description: Created or recorded external Agent action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExternalAgentActionResponse'
+        default:
+          $ref: '#/components/responses/Problem'
   /agent/runs:
     get:
       operationId: listAgentRuns
@@ -5172,6 +5197,30 @@ components:
         status: { type: string, enum: [open, accepted, declined] }
         reviewedBy: { type: string }
         reviewedAt: { type: string, format: date-time }
+    AgentSourceActor:
+      type: object
+      properties:
+        externalId: { type: string }
+        displayName: { type: string }
+        email: { type: string }
+        mappedUserId: { type: string }
+    AgentSourceContext:
+      type: object
+      required: [provider, actor]
+      properties:
+        provider: { type: string, enum: [slack, microsoft_teams, zendesk, intercom, front] }
+        workspaceIntegrationId: { type: string }
+        externalTeamId: { type: string }
+        externalChannelId: { type: string }
+        externalThreadId: { type: string }
+        externalMessageId: { type: string }
+        externalTicketId: { type: string }
+        externalConversationId: { type: string }
+        permalink: { type: string }
+        metadata:
+          type: object
+          additionalProperties: { type: string }
+        actor: { $ref: '#/components/schemas/AgentSourceActor' }
     AgentRun:
       type: object
       required: [id, title, prompt, teamKey, promptConfig, context, status, owner, target, createdAt, updatedAt, output, logs, suggestions]
@@ -5199,6 +5248,7 @@ components:
         suggestions:
           type: array
           items: { $ref: '#/components/schemas/AgentSuggestion' }
+        sourceContext: { $ref: '#/components/schemas/AgentSourceContext' }
     AgentRunListResponse:
       type: object
       required: [runs, canCreateRuns, providerConfigured]
@@ -5222,6 +5272,22 @@ components:
         prompt: { type: string }
         teamKey: { type: string }
         context: { type: string }
+    CreateExternalAgentActionRequest:
+      type: object
+      required: [action, source]
+      properties:
+        action: { type: string, enum: [summarize_thread, propose_issue, propose_update, route_request, answer_question] }
+        title: { type: string }
+        prompt: { type: string }
+        teamKey: { type: string }
+        source: { $ref: '#/components/schemas/AgentSourceContext' }
+    ExternalAgentActionResponse:
+      type: object
+      required: [state]
+      properties:
+        state: { type: string, enum: [created, disabled, provider_missing] }
+        run: { $ref: '#/components/schemas/AgentRun' }
+        disabledReason: { type: string }
     UpdateAgentRunSuggestionRequest:
       type: object
       required: [suggestionId, status]
