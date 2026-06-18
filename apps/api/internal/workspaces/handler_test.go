@@ -437,3 +437,14 @@ func TestSAMLAndSCIMSettingsHelpers(t *testing.T) {
 		t.Fatalf("public token = %#v", public)
 	}
 }
+
+func TestParseSAMLMetadataNormalizesIdPFields(t *testing.T) {
+	metadata := `<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.example.com/entity"><IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><KeyDescriptor use="signing"><KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#"><X509Data><X509Certificate> CERT\nDATA </X509Certificate></X509Data></KeyInfo></KeyDescriptor><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/></IDPSSODescriptor></EntityDescriptor>`
+	parsed, err := parseSAMLMetadata(metadata)
+	if err != nil {
+		t.Fatalf("parse metadata: %v", err)
+	}
+	if parsed.EntityID != "https://idp.example.com/entity" || parsed.SSOURL != "https://idp.example.com/sso" || parsed.Certificate != "CERTDATA" {
+		t.Fatalf("metadata = %#v", parsed)
+	}
+}

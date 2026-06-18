@@ -18,6 +18,7 @@ type SamlSettings = {
   entityId: string;
   certificate: string;
   metadataUrl: string;
+  metadataXml?: string;
   lastTestedAt: string | null;
   status: "not_configured" | "configured" | "verified" | "error";
   lastError: string | null;
@@ -74,6 +75,7 @@ const DEFAULT_SAML: SamlSettings = {
   entityId: "",
   certificate: "",
   metadataUrl: "",
+  metadataXml: "",
   lastTestedAt: null,
   status: "not_configured",
   lastError: null,
@@ -907,12 +909,11 @@ export default function SecurityPage() {
                   Configure identity provider details for workspace login. ACS
                   URL:{" "}
                   <code className="text-[var(--color-text-secondary)]">
-                    /api/auth/saml/callback
+                    /api/auth/saml/acs
                   </code>
                   . SP entity ID:{" "}
                   <code className="text-[var(--color-text-secondary)]">
-                    exponential:
-                    {security.inviteUrl.split("/").at(2) ?? "workspace"}
+                    /api/auth/saml/metadata
                   </code>
                   .{" "}
                   <a
@@ -996,6 +997,21 @@ export default function SecurityPage() {
                       })
                     }
                     placeholder="Paste X.509 certificate"
+                    rows={4}
+                    className="mt-1.5 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+                  />
+                </label>
+                <label className="mt-3 block text-[12px] text-[var(--color-text-secondary)]">
+                  Metadata XML (optional)
+                  <textarea
+                    value={samlDraft.metadataXml ?? ""}
+                    onChange={(event) =>
+                      setSamlDraft({
+                        ...samlDraft,
+                        metadataXml: event.target.value,
+                      })
+                    }
+                    placeholder="Paste IdP metadata XML"
                     rows={4}
                     className="mt-1.5 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
                   />

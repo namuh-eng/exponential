@@ -58,7 +58,7 @@ function formatDate(dateStr: string): string {
     "Nov",
     "Dec",
   ];
-  return `${months[date.getMonth()]} ${date.getDate()}`;
+  return `${months[date.getUTCMonth()]} ${date.getUTCDate()}`;
 }
 
 export { priorityMap };

@@ -133,7 +133,7 @@ describe("IssueDetailView UI", () => {
     expect(screen.getByText("Sentry · api · 987")).toBeInTheDocument();
   });
 
-  it("renders safe Figma preview cards and refreshes them", async () => {
+  it("renders safe Figma preview cards and marks them as seen", async () => {
     const figmaSource = {
       id: "figma-1",
       url: "https://figma.com/design/file123/Product?node-id=1-2",
@@ -153,12 +153,13 @@ describe("IssueDetailView UI", () => {
       refreshedAt: "2026-04-25T10:30:00Z",
     };
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
-      const path = url.toString();
+      const path = url instanceof Request ? url.url : url.toString();
       if (path.includes("/api/issues/iss-1/figma-sources/figma-1/refresh")) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => refreshed,
-        } as Response);
+        return Promise.resolve(
+          new Response(JSON.stringify(refreshed), {
+            headers: { "content-type": "application/json" },
+          }),
+        );
       }
       return Promise.resolve({
         ok: true,
@@ -178,14 +179,19 @@ describe("IssueDetailView UI", () => {
       "https://www.figma.com/design/file123?node-id=1%3A2",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark seen" }));
 
     await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalledWith(
-        "/api/issues/iss-1/figma-sources/figma-1/refresh",
-        { method: "POST" },
-      );
-      expect(screen.getByText("Figma preview refreshed.")).toBeInTheDocument();
+      const refreshCall = fetchSpy.mock.calls.find(([input]) => {
+        const path = input instanceof Request ? input.url : input.toString();
+        return path.includes("/api/issues/iss-1/figma-sources/figma-1/refresh");
+      });
+      expect(refreshCall).toBeDefined();
+      expect(refreshCall?.[0]).toBeInstanceOf(Request);
+      expect((refreshCall?.[0] as Request).method).toBe("POST");
+      expect(
+        screen.getByText("Figma source marked as seen."),
+      ).toBeInTheDocument();
     });
   });
 

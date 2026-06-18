@@ -1016,6 +1016,35 @@ paths:
                 $ref: '#/components/schemas/SamlDiscoveryResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /auth/saml/acs:
+    post:
+      operationId: samlAcs
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [SAMLResponse, RelayState]
+              properties:
+                SAMLResponse: { type: string }
+                RelayState: { type: string }
+      responses:
+        '302':
+          description: SAML accepted and browser session cookie issued
+        default:
+          $ref: '#/components/responses/Problem'
+  /auth/saml/metadata:
+    get:
+      operationId: getSamlMetadata
+      responses:
+        '200':
+          description: SAML service provider metadata
+          content:
+            application/samlmetadata+xml:
+              schema: { type: string }
+        default:
+          $ref: '#/components/responses/Problem'
   /auth/provider-capabilities:
     get:
       operationId: getAuthProviderCapabilities
@@ -7460,6 +7489,7 @@ components:
         entityId: { type: string }
         certificate: { type: string }
         metadataUrl: { type: string }
+        metadataXml: { type: string, writeOnly: true }
         lastTestedAt: { type: [string, 'null'], format: date-time }
         status: { type: string, enum: [not_configured, configured, verified, error] }
         lastError: { type: [string, 'null'] }

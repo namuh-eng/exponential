@@ -1464,7 +1464,6 @@ export function AuthPage({
                   setPasskeyPending(false);
                   setError("");
                 }}
-                disabled
                 className="flex w-full items-center gap-3 border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-3 py-2.5 text-[13px] text-[var(--auth-text)] transition-colors hover:bg-[var(--auth-secondary-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span aria-hidden="true" className="text-[var(--auth-prompt)]">
@@ -1488,9 +1487,6 @@ export function AuthPage({
                   <path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" />
                 </svg>
                 <span>Continue with SAML SSO</span>
-                <span className="ml-auto shrink-0 border border-[var(--auth-secondary-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-[var(--auth-muted)]">
-                  coming soon
-                </span>
               </button>
 
               {mode === "login" && passkeyConfigured !== false && (
