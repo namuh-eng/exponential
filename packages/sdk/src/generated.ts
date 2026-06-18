@@ -750,6 +750,38 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/auth/saml/acs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["samlAcs"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/auth/saml/metadata": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getSamlMetadata"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/auth/provider-capabilities": {
     parameters: {
       query?: never;
@@ -3319,6 +3351,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/workspaces/current/webhook-deliveries": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List recent webhook delivery attempts for the current workspace */
+    get: operations["listWebhookDeliveries"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/workspaces/current/webhook-deliveries/{id}/retry": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Re-queue a failed or dead webhook delivery for immediate retry */
+    post: operations["retryWebhookDelivery"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/sync/ws": {
     parameters: {
       query?: never;
@@ -3340,6 +3406,25 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    WebhookDelivery: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      webhookId: string;
+      eventType: string;
+      /** @enum {string} */
+      status: "pending" | "delivering" | "delivered" | "failed" | "dead";
+      attempts: number;
+      responseCode?: number | null;
+      responseBody?: string | null;
+      /** Format: date-time */
+      lastAttemptedAt?: string | null;
+      /** Format: date-time */
+      nextAttemptAt?: string | null;
+      sourceOperationId?: string | null;
+      /** Format: date-time */
+      createdAt: string;
+    };
     Problem: {
       /** Format: uri-reference */
       type: string;
@@ -3750,6 +3835,7 @@ export interface components {
       /** Format: date-time */
       createdAt: string;
     };
+    /** @description Lifecycle and health telemetry for an integration. No secrets or raw credential metadata are included. */
     IntegrationHealth: {
       /** Format: date-time */
       lastEventAt: string | null;
@@ -5566,6 +5652,7 @@ export interface components {
       entityId: string;
       certificate: string;
       metadataUrl: string;
+      metadataXml?: string;
       /** Format: date-time */
       lastTestedAt: string | null;
       /** @enum {string} */
@@ -7920,6 +8007,53 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SamlDiscoveryResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  samlAcs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/x-www-form-urlencoded": {
+          SAMLResponse: string;
+          RelayState: string;
+        };
+      };
+    };
+    responses: {
+      /** @description SAML accepted and browser session cookie issued */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getSamlMetadata: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description SAML service provider metadata */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/samlmetadata+xml": string;
         };
       };
       default: components["responses"]["Problem"];
@@ -13359,6 +13493,61 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["InviteWorkspaceMembersResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  listWebhookDeliveries: {
+    parameters: {
+      query?: {
+        /** @description Filter by webhook ID */
+        webhook_id?: string;
+        /** @description Filter by delivery status */
+        status?: "pending" | "delivering" | "delivered" | "failed" | "dead";
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Webhook delivery list */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            deliveries: components["schemas"]["WebhookDelivery"][];
+          };
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  retryWebhookDelivery: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Delivery reset to pending */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @example pending */
+            status: string;
+          };
         };
       };
       default: components["responses"]["Problem"];

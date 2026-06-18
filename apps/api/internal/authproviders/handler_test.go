@@ -1,6 +1,7 @@
 package authproviders
 
 import (
+	"encoding/base64"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -126,5 +127,35 @@ func TestSetSessionCookieClearsParentDomainVariants(t *testing.T) {
 	}
 	if cookies[3].Value != "signed-token" || cookies[3].Domain != "" {
 		t.Fatalf("session cookie = %#v", cookies[3])
+	}
+}
+
+func TestReadSAMLWorkspaceSettingsIncludesMetadata(t *testing.T) {
+	settings := readSAMLWorkspaceSettings([]byte(`{"security":{"saml":{"enabled":true,"domains":["Example.com"],"idpSsoUrl":"https://idp.example.com/sso","entityId":"https://idp.example.com/entity","certificate":"CERT","metadataXml":"<xml/>"}}}`))
+	if !settings.Enabled || settings.IDPSSOURL != "https://idp.example.com/sso" || settings.IDPEntityID != "https://idp.example.com/entity" || settings.MetadataXML == "" || len(settings.Domains) != 1 || settings.Domains[0] != "example.com" {
+		t.Fatalf("settings = %#v", settings)
+	}
+}
+
+func TestSAMLResponseRequiresStrongSignature(t *testing.T) {
+	strong := base64.StdEncoding.EncodeToString([]byte(`<Response><Signature><SignedInfo><SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/></SignedInfo></Signature></Response>`))
+	if !samlResponseUsesStrongSignature(strong) {
+		t.Fatal("expected rsa-sha256 signature to be accepted")
+	}
+	weak := base64.StdEncoding.EncodeToString([]byte(`<Response><Signature><SignedInfo><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/></SignedInfo></Signature></Response>`))
+	if samlResponseUsesStrongSignature(weak) {
+		t.Fatal("expected rsa-sha1 signature to be rejected")
+	}
+}
+
+func TestSafeSAMLCallbackPathAllowsSameOriginAbsoluteURL(t *testing.T) {
+	t.Setenv("PUBLIC_BASE_URL", "https://app.example")
+	req := httptest.NewRequest("POST", "https://app.example/api/auth/saml/discovery", nil)
+	got := safeSAMLCallbackPath(req, "https://app.example/acme/inbox?view=all")
+	if got != "/acme/inbox?view=all" {
+		t.Fatalf("callback = %q", got)
+	}
+	if got := safeSAMLCallbackPath(req, "https://evil.example/acme/inbox"); got != "/" {
+		t.Fatalf("cross-origin callback = %q", got)
 	}
 }

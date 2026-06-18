@@ -128,7 +128,7 @@ describe("Login page", () => {
     });
   });
 
-  it("keeps only Google active and marks the other methods coming soon", () => {
+  it("keeps Google and SAML active while marking email and passkey coming soon", () => {
     render(<LoginPage />);
 
     expect(
@@ -139,11 +139,11 @@ describe("Login page", () => {
     ).toBeDisabled();
     expect(
       screen.getByRole("button", { name: /Continue with SAML SSO/ }),
-    ).toBeDisabled();
+    ).toBeEnabled();
     expect(
       screen.getByRole("button", { name: /Log in with passkey/ }),
     ).toBeDisabled();
-    expect(screen.getAllByText("coming soon").length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByText("coming soon").length).toBeGreaterThanOrEqual(2);
   });
 
   it("shows SAML when workspace policy disables Google and email/passkey", async () => {

@@ -141,6 +141,7 @@ function formatRelativeTime(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
+    timeZone: "UTC",
   });
 }
 
@@ -149,6 +150,7 @@ function formatCompactDate(dateStr: string | null) {
   return new Date(dateStr).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
+    timeZone: "UTC",
   });
 }
 
@@ -300,8 +302,9 @@ export function ProjectDetailPage() {
         return false;
       }
 
-      setData(json);
-      setDescriptionDraft(json.project.description ?? "");
+      const normalized = normalizeProjectResponse(json);
+      setData(normalized);
+      setDescriptionDraft(normalized.project.description ?? "");
       return true;
     } catch {
       setErrorMessage("Unable to update project.");
