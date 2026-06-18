@@ -428,6 +428,17 @@ func TestSAMLAndSCIMSettingsHelpers(t *testing.T) {
 	if saml.Status != "verified" || len(saml.Domains) != 1 || saml.Domains[0] != "example.com" {
 		t.Fatalf("saml = %#v", saml)
 	}
+	oidc := normalizeOIDCInput(map[string]any{"enabled": true, "domains": []any{"Example.com"}, "issuerUrl": "https://idp.example.com/", "clientId": "client", "clientSecret": "secret"}, readOIDCSettings(map[string]any{}))
+	if validation := validateOIDCSettings(oidc); validation != "" {
+		t.Fatalf("unexpected oidc validation: %s", validation)
+	}
+	if oidc.IssuerURL != "https://idp.example.com" || !oidc.ClientSecretConfigured || oidc.Domains[0] != "example.com" {
+		t.Fatalf("oidc = %#v", oidc)
+	}
+	publicOIDC := publicOIDCSettings(oidc)
+	if publicOIDC.ClientSecret != "" || !publicOIDC.ClientSecretConfigured {
+		t.Fatalf("public oidc leaked or lost secret status: %#v", publicOIDC)
+	}
 	secret, token := createSCIMToken("Okta")
 	if !strings.HasPrefix(secret, "scim_") || token.TokenHash == "" || token.TokenHash == secret {
 		t.Fatalf("secret/token = %q %#v", secret, token)

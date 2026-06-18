@@ -8,10 +8,12 @@ type CapturedRequest = {
   url: string;
   method: string;
   headers: Headers;
+  body: string;
 };
 
 const commandGroups = [
   "login",
+  "auth",
   "issues",
   "workspaces",
   "teams",
@@ -69,6 +71,7 @@ async function execute(input: {
       url: request.url,
       method: request.method,
       headers: request.headers,
+      body: await request.clone().text(),
     });
     return responseFor(request);
   };
@@ -174,6 +177,41 @@ describe("cli command runner", () => {
     expect(JSON.parse(result.stdout)).toMatchObject({ ok: true });
   });
 
+  it("bootstraps OIDC settings without printing the client secret", async () => {
+    const result = await execute({
+      argv: [
+        "auth",
+        "oidc",
+        "--issuer",
+        "https://idp.example.com",
+        "--client-id",
+        "client_123",
+        "--client-secret",
+        "super-secret",
+        "--domain",
+        "Example.com,example.org",
+        "--enable",
+      ],
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).not.toContain("super-secret");
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      oidc: { enabled: true, issuerUrl: "https://idp.example.com" },
+    });
+    expect(result.requests[0]).toMatchObject({
+      method: "PATCH",
+      url: "https://api.example/v1/workspaces/current/security/oidc",
+    });
+    expect(JSON.parse(result.requests[0]?.body ?? "{}")).toMatchObject({
+      enabled: true,
+      issuerUrl: "https://idp.example.com",
+      clientId: "client_123",
+      clientSecret: "super-secret",
+      domains: ["Example.com", "example.org"],
+    });
+  });
+
   it("reports missing token through doctor JSON instead of the auth preflight", async () => {
     const result = await execute({
       argv: ["doctor", "--json"],
@@ -258,6 +296,21 @@ function responseFor(request: Request) {
     return json({
       profile: { id: "user-1", name: "Ada", email: "ada@example.com" },
       workspaceAccess: { workspaceId: "workspace-1", role: "admin" },
+    });
+  }
+
+  if (url.pathname === "/v1/workspaces/current/security/oidc") {
+    return json({
+      oidc: {
+        enabled: true,
+        issuerUrl: "https://idp.example.com",
+        clientId: "client_123",
+        clientSecretConfigured: true,
+        domains: ["example.com", "example.org"],
+        status: "configured",
+        lastTestedAt: null,
+        lastError: null,
+      },
     });
   }
 

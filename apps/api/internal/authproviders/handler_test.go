@@ -54,6 +54,32 @@ func TestReadSAMLDiscoverySettings(t *testing.T) {
 	}
 }
 
+func TestReadOIDCWorkspaceSettings(t *testing.T) {
+	settings := readOIDCWorkspaceSettings([]byte(`{"security":{"oidc":{"enabled":true,"issuerUrl":"https://idp.example.com/","clientId":"client","clientSecret":"secret","domains":["Example.com"]}}}`))
+	if !settings.Enabled || settings.IssuerURL != "https://idp.example.com" || settings.ClientID != "client" || settings.ClientSecret != "secret" || len(settings.Domains) != 1 || settings.Domains[0] != "example.com" || !settings.configured() {
+		t.Fatalf("settings = %#v", settings)
+	}
+}
+
+func TestValidateOIDCClaims(t *testing.T) {
+	verified := true
+	claims := oidcIDTokenClaims{Subject: "sub", Email: "Person@Example.com", EmailVerified: &verified, Nonce: "nonce"}
+	if err := validateOIDCClaims(claims, "nonce", []string{"example.com"}); err != nil {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+	if err := validateOIDCClaims(claims, "other", []string{"example.com"}); err == nil {
+		t.Fatal("expected nonce mismatch to fail")
+	}
+	if err := validateOIDCClaims(claims, "nonce", []string{"other.example"}); err == nil {
+		t.Fatal("expected domain mismatch to fail")
+	}
+	unverified := false
+	claims.EmailVerified = &unverified
+	if err := validateOIDCClaims(claims, "nonce", []string{"example.com"}); err == nil {
+		t.Fatal("expected unverified email to fail")
+	}
+}
+
 // Fix 3: PKCE S256 challenge derivation (RFC 7636 §4.2).
 func TestPKCES256Challenge(t *testing.T) {
 	// Known vector: verifier "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
