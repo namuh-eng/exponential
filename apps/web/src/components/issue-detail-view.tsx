@@ -1555,10 +1555,16 @@ export function IssueDetailView({
     const end = textarea.selectionEnd;
     const beforeCaret = commentBody.slice(0, start);
     const triggerMatch = beforeCaret.match(/(^|\s)@([\w.-]*)$/);
-    const replaceStart = triggerMatch
-      ? start - triggerMatch[0].trimStart().length
+    const fallbackTriggerMatch = triggerMatch
+      ? null
+      : commentBody.match(/(^|\s)@([\w.-]*)$/);
+    const activeTriggerMatch = triggerMatch ?? fallbackTriggerMatch;
+    const replaceEnd = triggerMatch ? end : commentBody.length;
+    const triggerEnd = triggerMatch ? start : commentBody.length;
+    const replaceStart = activeTriggerMatch
+      ? triggerEnd - activeTriggerMatch[0].trimStart().length
       : start;
-    const nextBody = `${commentBody.slice(0, replaceStart)}${token}${suffix}${commentBody.slice(end)}`;
+    const nextBody = `${commentBody.slice(0, replaceStart)}${token}${suffix}${commentBody.slice(replaceEnd)}`;
     const nextCaret = replaceStart + token.length + suffix.length;
 
     setCommentBody(nextBody);
@@ -2694,6 +2700,7 @@ export function IssueDetailView({
                             index === mentionActiveIndex ? "true" : undefined
                           }
                           onMouseEnter={() => setMentionActiveIndex(index)}
+                          onMouseDown={(event) => event.preventDefault()}
                           onClick={() => insertMention(member)}
                           className={`tty-row flex w-full items-center gap-3 px-3 py-2 text-left text-[13px] ${
                             index === mentionActiveIndex
