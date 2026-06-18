@@ -929,6 +929,12 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateExternalAgentActionRequest'
       responses:
+        '200':
+          description: Disabled or provider-missing external Agent action state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExternalAgentActionResponse'
         '201':
           description: Created or recorded external Agent action
           content:

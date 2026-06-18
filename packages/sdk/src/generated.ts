@@ -8071,6 +8071,15 @@ export interface operations {
       };
     };
     responses: {
+      /** @description Disabled or provider-missing external Agent action state */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExternalAgentActionResponse"];
+        };
+      };
       /** @description Created or recorded external Agent action */
       201: {
         headers: {
