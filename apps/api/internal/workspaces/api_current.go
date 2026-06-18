@@ -147,11 +147,14 @@ func (h Handler) MutateCurrentAPI(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		_, err := h.DB.Exec(r.Context(), `insert into webhook (url,label,workspace_id,secret,enabled,events) values ($1,$2,$3::uuid,$4,true,$5)`, url, nullString(strings.TrimSpace(body.Label)), p.WorkspaceID, "whsec_"+randomHexString(24), events)
+		secret := "whsec_" + randomHexString(24)
+		var webhookID string
+		err := h.DB.QueryRow(r.Context(), `insert into webhook (url,label,workspace_id,secret,enabled,events) values ($1,$2,$3::uuid,$4,true,$5) returning id::text`, url, nullString(strings.TrimSpace(body.Label)), p.WorkspaceID, secret, events).Scan(&webhookID)
 		if err != nil {
 			problem.Write(w, 500, "Create webhook failed", err.Error())
 			return
 		}
+		credential = map[string]any{"kind": "webhook", "id": webhookID, "label": strings.TrimSpace(body.Label), "secret": secret}
 	case "updateWebhook":
 		if !isManager(p.Role) {
 			problem.Write(w, 403, "Forbidden", "")
@@ -588,7 +591,7 @@ func validatedOAuthRedirects(body workspaceAPIAction) ([]string, error) {
 	return out, nil
 }
 
-var allowedOAuthScopes = map[string]bool{"read": true, "write": true, "issues:read": true, "issues:write": true, "comments:write": true, "webhooks:write": true}
+var allowedOAuthScopes = map[string]bool{"read": true, "write": true, "issues:read": true, "issues:write": true, "comments:write": true, "projects:read": true, "projects:write": true, "attachments:write": true, "webhooks:write": true}
 
 func validatedOAuthScopes(v any) ([]string, error) {
 	scopes := scopeList(v)

@@ -3158,10 +3158,16 @@ func applicationScopePresentation(scope string) (string, string) {
 		return "Issues", "View issues and related metadata"
 	case "issues:write":
 		return "Issues", "Create and update issues"
+	case "projects:read":
+		return "Projects", "View projects and related metadata"
+	case "projects:write":
+		return "Projects", "Create and update projects"
 	case "comments:read":
 		return "Comments", "View comments"
 	case "comments:write":
 		return "Comments", "Create and update comments"
+	case "attachments:write":
+		return "Attachments", "Create upload URLs for attachments"
 	case "webhooks:read":
 		return "Webhooks", "View webhook subscriptions"
 	case "webhooks:write":

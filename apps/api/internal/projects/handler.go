@@ -19,6 +19,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
 	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
+	"github.com/namuh-eng/exponential/apps/api/internal/webhooks"
 )
 
 type Handler struct{ DB *pgxpool.Pool }
@@ -319,6 +320,9 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
+	go func() {
+		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "project.created", "", project)
+	}()
 	problem.JSON(w, 201, project)
 }
 

@@ -186,6 +186,22 @@ importers:
         specifier: ^4.1.4
         version: 4.1.7(@types/node@20.19.41)(jsdom@25.0.1)(vite@7.3.3(@types/node@20.19.41)(jiti@1.21.7)(tsx@4.22.3))
 
+  apps/zapier:
+    dependencies:
+      '@namuh-eng/expn-sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.0
+        version: 20.19.41
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.4
+        version: 4.1.7(@types/node@20.19.41)(jsdom@25.0.1)(vite@7.3.3(@types/node@20.19.41)(jiti@1.21.7)(tsx@4.22.3))
+
   packages/mcp-server:
     dependencies:
       '@modelcontextprotocol/sdk':

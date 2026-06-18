@@ -1124,6 +1124,9 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	go func() {
 		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "issue.updated", "", updated)
+		if updated.StateID != existing.StateID {
+			_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "issue.status_changed", "", map[string]any{"issue": updated, "previousStateId": existing.StateID, "currentStateId": updated.StateID})
+		}
 	}()
 	h.storeIdempotency(r, p, http.StatusOK, updated)
 	problem.JSON(w, http.StatusOK, updated)

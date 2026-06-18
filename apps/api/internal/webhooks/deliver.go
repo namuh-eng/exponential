@@ -403,6 +403,7 @@ func VerifySignature(secret string, payload []byte, signature string) bool {
 var KnownEventTypes = []string{
 	"issue.created",
 	"issue.updated",
+	"issue.status_changed",
 	"issue.deleted",
 	"comment.created",
 	"comment.updated",
@@ -411,6 +412,7 @@ var KnownEventTypes = []string{
 	"label.updated",
 	"label.deleted",
 	"project.updated",
+	"project.created",
 }
 
 // ValidEventType returns true if e is a recognised event type.
