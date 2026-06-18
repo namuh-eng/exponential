@@ -3984,6 +3984,70 @@ paths:
                 $ref: '#/components/schemas/AcceptWorkspaceInviteResponse'
         default:
           $ref: '#/components/responses/Problem'
+  /airbyte:
+    get:
+      operationId: airbyteNamespace
+      summary: Airbyte route namespace; concrete resources are check, catalog, discover, and streams.
+      responses:
+        default:
+          $ref: '#/components/responses/Problem'
+  /airbyte/check:
+    get:
+      operationId: checkAirbyteSource
+      summary: Validate an Airbyte read-only token for the current workspace
+      responses:
+        '200':
+          description: Airbyte check result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AirbyteCheckResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+  /airbyte/discover:
+    get:
+      operationId: discoverAirbyteSource
+      summary: Discover Airbyte source catalog metadata
+      responses:
+        '200':
+          description: Airbyte catalog
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AirbyteCatalogResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+  /airbyte/catalog:
+    get:
+      operationId: getAirbyteCatalog
+      summary: Get Airbyte source catalog metadata
+      responses:
+        '200':
+          description: Airbyte catalog
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AirbyteCatalogResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+  /airbyte/streams/{stream}:
+    parameters:
+      - name: stream
+        in: path
+        required: true
+        schema: { type: string, enum: [issues, projects, comments, cycles, initiatives] }
+      - name: cursor
+        in: query
+        required: false
+        schema: { type: string, format: date-time }
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+    get:
+      operationId: readAirbyteStream
+      summary: Read full-refresh or incremental Airbyte stream records
+      responses:
+        '200':
+          description: Airbyte stream records
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AirbyteStreamResponse' }
+        default: { $ref: '#/components/responses/Problem' }
   /workspaces/current/api:
     get:
       operationId: getCurrentWorkspaceApi
@@ -7257,6 +7321,55 @@ components:
         externalProvider: { type: [string, 'null'] }
         externalId: { type: [string, 'null'] }
         important: { type: boolean }
+    AirbyteCheckResponse:
+      type: object
+      required: [status, message]
+      properties:
+        status: { type: string, enum: [SUCCEEDED] }
+        message: { type: string }
+    AirbyteStreamDefinition:
+      type: object
+      required: [name, cursor_field, primary_key, supported_sync_modes, json_schema]
+      properties:
+        name: { type: string, enum: [issues, projects, comments, cycles, initiatives] }
+        cursor_field: { type: string }
+        primary_key: { type: string }
+        supported_sync_modes:
+          type: array
+          items: { type: string, enum: [full_refresh, incremental] }
+        json_schema:
+          type: object
+          additionalProperties: true
+    AirbyteCatalogResponse:
+      type: object
+      required: [connector, streams, private_data]
+      properties:
+        connector:
+          type: object
+          additionalProperties: true
+        streams:
+          type: array
+          items: { $ref: '#/components/schemas/AirbyteStreamDefinition' }
+        private_data:
+          type: object
+          additionalProperties: true
+    AirbyteStreamResponse:
+      type: object
+      required: [stream, sync_mode, cursor_field, records, has_more, private_data]
+      properties:
+        stream: { type: string, enum: [issues, projects, comments, cycles, initiatives] }
+        sync_mode: { type: string, enum: [full_refresh, incremental] }
+        cursor_field: { type: string }
+        records:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        next_cursor: { type: [string, 'null'], format: date-time }
+        has_more: { type: boolean }
+        private_data:
+          type: object
+          additionalProperties: true
     WorkspaceRole:
       type: string
       enum: [owner, admin, member, guest]

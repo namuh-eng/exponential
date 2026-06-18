@@ -144,6 +144,7 @@ test.describe("Settings API OAuth applications", () => {
     const oauthName = `Lifecycle OAuth ${suffix}`;
     const webhookName = `Lifecycle webhook ${suffix}`;
     const apiKeyName = `Lifecycle key ${suffix}`;
+    const airbyteName = `Lifecycle Airbyte ${suffix}`;
 
     const createOAuthResponse = await page.request.post(
       "/api/workspaces/current/api",
@@ -181,10 +182,35 @@ test.describe("Settings API OAuth applications", () => {
     );
     expect(createApiKeyResponse.status()).toBe(200);
 
+    const createAirbyteResponse = await page.request.post(
+      "/api/workspaces/current/api",
+      {
+        data: {
+          action: "createAirbyteToken",
+          name: airbyteName,
+        },
+      },
+    );
+    expect(createAirbyteResponse.status()).toBe(200);
+    const createdAirbyte = await createAirbyteResponse.json();
+    const airbyteSecret = createdAirbyte.createdCredential.secret;
+    expect(airbyteSecret).toMatch(/^pat_/);
+
+    const catalogResponse = await page.request.get("/api/airbyte/catalog", {
+      headers: { authorization: `Bearer ${airbyteSecret}` },
+    });
+    expect(catalogResponse.status()).toBe(200);
+    await expect(catalogResponse.json()).resolves.toMatchObject({
+      streams: expect.arrayContaining([
+        expect.objectContaining({ name: "issues", cursor_field: "updated_at" }),
+      ]),
+    });
+
     await page.goto(`/${workspaceSlug}/settings/api`);
     await expect(page.getByText(oauthName, { exact: true })).toBeVisible();
     await expect(page.getByText(webhookName, { exact: true })).toBeVisible();
     await expect(page.getByText(apiKeyName, { exact: true })).toBeVisible();
+    await expect(page.getByText(airbyteName, { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Disable webhook" }).click();
     await expect(page.getByText("Webhook disabled.")).toBeVisible();
@@ -204,6 +230,12 @@ test.describe("Settings API OAuth applications", () => {
     await expect(page.getByText("API key revoked.")).toBeVisible();
     await page.reload();
     await expect(page.getByText(apiKeyName, { exact: true })).toHaveCount(0);
+
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Revoke Airbyte token" }).click();
+    await expect(page.getByText("Airbyte token revoked.")).toBeVisible();
+    await page.reload();
+    await expect(page.getByText(airbyteName, { exact: true })).toHaveCount(0);
 
     page.once("dialog", (dialog) => dialog.accept());
     await page

@@ -2908,6 +2908,96 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/airbyte": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Airbyte route namespace; concrete resources are check, catalog, discover, and streams. */
+    get: operations["airbyteNamespace"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/airbyte/check": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Validate an Airbyte read-only token for the current workspace */
+    get: operations["checkAirbyteSource"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/airbyte/discover": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Discover Airbyte source catalog metadata */
+    get: operations["discoverAirbyteSource"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/airbyte/catalog": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Airbyte source catalog metadata */
+    get: operations["getAirbyteCatalog"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/airbyte/streams/{stream}": {
+    parameters: {
+      query?: {
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        stream: "issues" | "projects" | "comments" | "cycles" | "initiatives";
+      };
+      cookie?: never;
+    };
+    /** Read full-refresh or incremental Airbyte stream records */
+    get: operations["readAirbyteStream"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/workspaces/current/api": {
     parameters: {
       query?: never;
@@ -5454,6 +5544,46 @@ export interface components {
       externalProvider?: string | null;
       externalId?: string | null;
       important?: boolean;
+    };
+    AirbyteCheckResponse: {
+      /** @enum {string} */
+      status: "SUCCEEDED";
+      message: string;
+    };
+    AirbyteStreamDefinition: {
+      /** @enum {string} */
+      name: "issues" | "projects" | "comments" | "cycles" | "initiatives";
+      cursor_field: string;
+      primary_key: string;
+      supported_sync_modes: ("full_refresh" | "incremental")[];
+      json_schema: {
+        [key: string]: unknown;
+      };
+    };
+    AirbyteCatalogResponse: {
+      connector: {
+        [key: string]: unknown;
+      };
+      streams: components["schemas"]["AirbyteStreamDefinition"][];
+      private_data: {
+        [key: string]: unknown;
+      };
+    };
+    AirbyteStreamResponse: {
+      /** @enum {string} */
+      stream: "issues" | "projects" | "comments" | "cycles" | "initiatives";
+      /** @enum {string} */
+      sync_mode: "full_refresh" | "incremental";
+      cursor_field: string;
+      records: {
+        [key: string]: unknown;
+      }[];
+      /** Format: date-time */
+      next_cursor?: string | null;
+      has_more: boolean;
+      private_data: {
+        [key: string]: unknown;
+      };
     };
     /** @enum {string} */
     WorkspaceRole: "owner" | "admin" | "member" | "guest";
@@ -12294,6 +12424,107 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["AcceptWorkspaceInviteResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  airbyteNamespace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      default: components["responses"]["Problem"];
+    };
+  };
+  checkAirbyteSource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Airbyte check result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AirbyteCheckResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  discoverAirbyteSource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Airbyte catalog */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AirbyteCatalogResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getAirbyteCatalog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Airbyte catalog */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AirbyteCatalogResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  readAirbyteStream: {
+    parameters: {
+      query?: {
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        stream: "issues" | "projects" | "comments" | "cycles" | "initiatives";
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Airbyte stream records */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AirbyteStreamResponse"];
         };
       };
       default: components["responses"]["Problem"];
