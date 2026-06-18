@@ -196,6 +196,49 @@ test.describe("Unauthenticated workspace deep links", () => {
     await expect(page.getByText("Authentication is handled by")).toHaveCount(0);
     await expect(page.getByText(/password/i)).toHaveCount(0);
   });
+
+  test("renders GitHub login only when provider capabilities configure it", async ({
+    page,
+  }) => {
+    await page.route("**/api/auth/provider-capabilities**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          providers: {
+            google: true,
+            github: false,
+            emailPasskey: true,
+            passkey: false,
+          },
+        }),
+      });
+    });
+    await page.goto("/login");
+    await expect(
+      page.getByRole("button", { name: "Continue with GitHub" }),
+    ).toHaveCount(0);
+
+    await page.unroute("**/api/auth/provider-capabilities**");
+    await page.route("**/api/auth/provider-capabilities**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          providers: {
+            google: true,
+            github: true,
+            emailPasskey: true,
+            passkey: false,
+          },
+        }),
+      });
+    });
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "Continue with GitHub" }),
+    ).toBeEnabled();
+  });
 });
 
 test("first-party auth hides legacy workspace provider controls", async ({

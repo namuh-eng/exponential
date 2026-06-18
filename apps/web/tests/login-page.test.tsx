@@ -128,6 +128,41 @@ describe("Login page", () => {
     });
   });
 
+  it("renders configured GitHub login and starts the first-party flow", async () => {
+    fetchMock.mockResolvedValueOnce(
+      providerCapabilities({ providers: { google: true, github: true } }),
+    );
+
+    render(<LoginPage />);
+    await waitForProviderProbe();
+
+    const githubButton = await screen.findByRole("button", {
+      name: /Continue with GitHub/,
+    });
+    expect(githubButton).toBeEnabled();
+
+    fireEvent.click(githubButton);
+
+    await waitFor(() => {
+      expect(assignMock).toHaveBeenCalledWith(
+        "/api/auth/github/start?callback_url=%2F",
+      );
+    });
+  });
+
+  it("hides GitHub login when the provider is not configured", async () => {
+    fetchMock.mockResolvedValueOnce(
+      providerCapabilities({ providers: { google: true, github: false } }),
+    );
+
+    render(<LoginPage />);
+    await waitForProviderProbe();
+
+    expect(
+      screen.queryByRole("button", { name: /Continue with GitHub/ }),
+    ).toBeNull();
+  });
+
   it("keeps Google and SAML active while marking email and passkey coming soon", () => {
     render(<LoginPage />);
 
