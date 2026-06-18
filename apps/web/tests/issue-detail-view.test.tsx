@@ -133,7 +133,7 @@ describe("IssueDetailView UI", () => {
     expect(screen.getByText("Sentry · api · 987")).toBeInTheDocument();
   });
 
-  it("renders safe Figma preview cards and refreshes them", async () => {
+  it("renders safe Figma preview cards and marks them as seen", async () => {
     const figmaSource = {
       id: "figma-1",
       url: "https://figma.com/design/file123/Product?node-id=1-2",
@@ -188,19 +188,13 @@ describe("IssueDetailView UI", () => {
     fireEvent.click(screen.getByRole("button", { name: "Mark seen" }));
 
     await waitFor(() => {
-      expect(
-        fetchSpy.mock.calls.some(([request, init]) => {
-          const requestUrl =
-            request instanceof Request ? request.url : request.toString();
-          const method =
-            request instanceof Request ? request.method : init?.method;
-          return (
-            requestUrl.endsWith(
-              "/api/issues/iss-1/figma-sources/figma-1/refresh",
-            ) && method === "POST"
-          );
-        }),
-      ).toBe(true);
+      const refreshCall = fetchSpy.mock.calls.find(([input]) => {
+        const path = input instanceof Request ? input.url : input.toString();
+        return path.includes("/api/issues/iss-1/figma-sources/figma-1/refresh");
+      });
+      expect(refreshCall).toBeDefined();
+      expect(refreshCall?.[0]).toBeInstanceOf(Request);
+      expect((refreshCall?.[0] as Request).method).toBe("POST");
       expect(
         screen.getByText("Figma source marked as seen."),
       ).toBeInTheDocument();

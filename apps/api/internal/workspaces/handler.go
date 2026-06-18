@@ -7,10 +7,12 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"math"
 	"net/http"
+	"io"
 	"net/url"
 	"os"
 	"regexp"
@@ -820,6 +822,7 @@ type samlSettings struct {
 	EntityID     string   `json:"entityId"`
 	Certificate  string   `json:"certificate"`
 	MetadataURL  string   `json:"metadataUrl"`
+	MetadataXML  string   `json:"metadataXml,omitempty"`
 	LastTestedAt *string  `json:"lastTestedAt"`
 	Status       string   `json:"status"`
 	LastError    *string  `json:"lastError"`
@@ -879,6 +882,14 @@ func (h Handler) UpdateSAML(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		problem.Write(w, 400, "Invalid JSON body", err.Error())
 		return
+	}
+	if strings.TrimSpace(asStringValue(body["metadataXml"])) == "" && strings.TrimSpace(asStringValue(body["metadataUrl"])) != "" {
+		metadataXML, err := fetchSAMLMetadataXML(r.Context(), asStringValue(body["metadataUrl"]))
+		if err != nil {
+			problem.Write(w, 400, "SAML metadata URL could not be fetched", err.Error())
+			return
+		}
+		body["metadataXml"] = metadataXML
 	}
 	saml := normalizeSAMLInput(body, readSAMLSettings(settings))
 	if validation := validateSAMLSettings(saml); validation != "" {
@@ -3182,8 +3193,8 @@ func readSAMLSettings(settings map[string]any) samlSettings {
 	security := recordFromAny(settings["security"])
 	saml := recordFromAny(firstNonNil(security["saml"], settings["saml"], settings["sso"]))
 	url := firstString(saml["idpSsoUrl"], saml["ssoUrl"], saml["ssoURL"], saml["url"])
-	hasConfig := url != "" || asStringValue(saml["entityId"]) != "" || asStringValue(saml["certificate"]) != "" || asStringValue(saml["metadataUrl"]) != ""
-	return samlSettings{Enabled: boolFromAny(saml["enabled"], false), Domains: normalizeSAMLDomainList(firstNonNil(saml["domains"], saml["emailDomains"])), IDPSSOURL: url, EntityID: asStringValue(saml["entityId"]), Certificate: asStringValue(saml["certificate"]), MetadataURL: asStringValue(saml["metadataUrl"]), LastTestedAt: nullableStringPtr(saml["lastTestedAt"]), Status: samlStatus(saml["status"], hasConfig), LastError: nullableStringPtr(saml["lastError"])}
+	hasConfig := url != "" || asStringValue(saml["entityId"]) != "" || asStringValue(saml["certificate"]) != "" || asStringValue(saml["metadataUrl"]) != "" || asStringValue(saml["metadataXml"]) != ""
+	return samlSettings{Enabled: boolFromAny(saml["enabled"], false), Domains: normalizeSAMLDomainList(firstNonNil(saml["domains"], saml["emailDomains"])), IDPSSOURL: url, EntityID: asStringValue(saml["entityId"]), Certificate: asStringValue(saml["certificate"]), MetadataURL: asStringValue(saml["metadataUrl"]), MetadataXML: asStringValue(saml["metadataXml"]), LastTestedAt: nullableStringPtr(saml["lastTestedAt"]), Status: samlStatus(saml["status"], hasConfig), LastError: nullableStringPtr(saml["lastError"])}
 }
 
 func normalizeSAMLInput(input map[string]any, current samlSettings) samlSettings {
@@ -3206,7 +3217,21 @@ func normalizeSAMLInput(input map[string]any, current samlSettings) samlSettings
 	if _, ok := input["metadataUrl"]; ok {
 		next.MetadataURL = strings.TrimSpace(asStringValue(input["metadataUrl"]))
 	}
-	if next.IDPSSOURL == "" && next.MetadataURL == "" && next.EntityID == "" && next.Certificate == "" {
+	if _, ok := input["metadataXml"]; ok {
+		next.MetadataXML = strings.TrimSpace(asStringValue(input["metadataXml"]))
+	}
+	if parsed, err := parseSAMLMetadata(next.MetadataXML); err == nil {
+		if parsed.EntityID != "" {
+			next.EntityID = parsed.EntityID
+		}
+		if parsed.SSOURL != "" {
+			next.IDPSSOURL = parsed.SSOURL
+		}
+		if parsed.Certificate != "" {
+			next.Certificate = parsed.Certificate
+		}
+	}
+	if next.IDPSSOURL == "" && next.MetadataURL == "" && next.EntityID == "" && next.Certificate == "" && next.MetadataXML == "" {
 		next.Status = "not_configured"
 		next.LastError = nil
 	} else if input["status"] == "verified" || input["test"] == true {
@@ -3233,8 +3258,13 @@ func validateSAMLSettings(settings samlSettings) string {
 	if settings.Enabled && strings.TrimSpace(settings.EntityID) == "" {
 		return "IdP entity ID is required before enabling SAML."
 	}
-	if settings.Enabled && strings.TrimSpace(settings.Certificate) == "" && strings.TrimSpace(settings.MetadataURL) == "" {
-		return "Certificate or metadata URL is required before enabling SAML."
+	if settings.Enabled && strings.TrimSpace(settings.Certificate) == "" && strings.TrimSpace(settings.MetadataURL) == "" && strings.TrimSpace(settings.MetadataXML) == "" {
+		return "Certificate, metadata XML, or metadata URL is required before enabling SAML."
+	}
+	if strings.TrimSpace(settings.MetadataXML) != "" {
+		if _, err := parseSAMLMetadata(settings.MetadataXML); err != nil {
+			return "SAML metadata XML could not be parsed."
+		}
 	}
 	return ""
 }
@@ -3255,6 +3285,122 @@ func validateHTTPURL(value string, label string, required bool) string {
 		return label + " must be an http or https URL."
 	}
 	return ""
+}
+
+type parsedSAMLMetadata struct {
+	EntityID    string
+	SSOURL      string
+	Certificate string
+}
+
+type samlMetadataEntities struct {
+	Entities []samlMetadataEntity `xml:"EntityDescriptor"`
+}
+
+type samlMetadataEntity struct {
+	EntityID       string                       `xml:"entityID,attr"`
+	IDPDescriptors []samlMetadataIDPDescriptor `xml:"IDPSSODescriptor"`
+}
+
+type samlMetadataIDPDescriptor struct {
+	KeyDescriptors      []samlMetadataKeyDescriptor `xml:"KeyDescriptor"`
+	SingleSignOnService []samlMetadataEndpoint      `xml:"SingleSignOnService"`
+}
+
+type samlMetadataKeyDescriptor struct {
+	Use     string              `xml:"use,attr"`
+	KeyInfo samlMetadataKeyInfo `xml:"KeyInfo"`
+}
+
+type samlMetadataKeyInfo struct {
+	X509Data samlMetadataX509Data `xml:"X509Data"`
+}
+
+type samlMetadataX509Data struct {
+	Certificates []string `xml:"X509Certificate"`
+}
+
+type samlMetadataEndpoint struct {
+	Binding  string `xml:"Binding,attr"`
+	Location string `xml:"Location,attr"`
+}
+
+func parseSAMLMetadata(value string) (parsedSAMLMetadata, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return parsedSAMLMetadata{}, nil
+	}
+	var entity samlMetadataEntity
+	if err := xml.Unmarshal([]byte(value), &entity); err != nil || len(entity.IDPDescriptors) == 0 {
+		var entities samlMetadataEntities
+		if err := xml.Unmarshal([]byte(value), &entities); err != nil {
+			return parsedSAMLMetadata{}, err
+		}
+		for _, candidate := range entities.Entities {
+			if len(candidate.IDPDescriptors) > 0 {
+				entity = candidate
+				break
+			}
+		}
+	}
+	if len(entity.IDPDescriptors) == 0 {
+		return parsedSAMLMetadata{}, fmt.Errorf("metadata does not contain an IDPSSODescriptor")
+	}
+	parsed := parsedSAMLMetadata{EntityID: strings.TrimSpace(entity.EntityID)}
+	for _, endpoint := range entity.IDPDescriptors[0].SingleSignOnService {
+		if strings.Contains(endpoint.Binding, "HTTP-Redirect") && strings.TrimSpace(endpoint.Location) != "" {
+			parsed.SSOURL = strings.TrimSpace(endpoint.Location)
+			break
+		}
+		if parsed.SSOURL == "" && strings.TrimSpace(endpoint.Location) != "" {
+			parsed.SSOURL = strings.TrimSpace(endpoint.Location)
+		}
+	}
+	for _, descriptor := range entity.IDPDescriptors[0].KeyDescriptors {
+		if descriptor.Use != "" && descriptor.Use != "signing" {
+			continue
+		}
+		for _, cert := range descriptor.KeyInfo.X509Data.Certificates {
+			if normalized := normalizeSAMLCertificate(cert); normalized != "" {
+				parsed.Certificate = normalized
+				return parsed, nil
+			}
+		}
+	}
+	return parsed, nil
+}
+
+func normalizeSAMLCertificate(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.ReplaceAll(value, "-----BEGIN CERTIFICATE-----", "")
+	value = strings.ReplaceAll(value, "-----END CERTIFICATE-----", "")
+	value = strings.ReplaceAll(value, `\r`, "")
+	value = strings.ReplaceAll(value, `\n`, "")
+	return regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(value), "")
+}
+
+func fetchSAMLMetadataXML(ctx context.Context, rawURL string) (string, error) {
+	metadataURL, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, metadataURL.String(), nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return "", fmt.Errorf("metadata URL returned HTTP %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 func normalizeSAMLDomainList(value any) []string {
