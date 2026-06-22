@@ -50,4 +50,73 @@ test.describe("Import/export settings", () => {
     ).toBeVisible();
     expect(messages).not.toContain("Import");
   });
+
+  test("admin can complete mocked GitHub guided import", async ({ page }) => {
+    await page.route(
+      "**/api/workspaces/current/import-export",
+      async (route) => {
+        const body = route.request().postDataJSON() as { action?: string };
+        if (body.action === "fetch_provider_snapshot") {
+          await route.fulfill({
+            json: {
+              import: {
+                id: "import-gh-e2e",
+                provider: "github",
+                status: "review",
+                createdAt: "2026-06-16T00:00:00.000Z",
+                message: "GitHub review snapshot fetched with 1 issues.",
+              },
+              snapshot: {
+                totals: { issues: 1, comments: 1, open: 1, closed: 0 },
+                repositories: [{ fullName: "namuh-eng/exponential" }],
+                issues: [
+                  {
+                    externalId: "namuh-eng/exponential#559",
+                    repository: "namuh-eng/exponential",
+                    number: 559,
+                    title: "Parity importer issue",
+                    state: "open",
+                    labels: [{ name: "enhancement" }],
+                  },
+                ],
+              },
+            },
+          });
+          return;
+        }
+        await route.fulfill({
+          json: {
+            import: {
+              id: "import-gh-e2e",
+              provider: "github",
+              status: "completed",
+              createdAt: "2026-06-16T00:00:00.000Z",
+              message:
+                "GitHub import completed with 1 created, 0 skipped, and 0 failed.",
+              importedCount: 1,
+              errorCount: 0,
+            },
+          },
+        });
+      },
+    );
+
+    await page.goto("/settings/import-export");
+    await page.getByRole("button", { name: "Start import" }).click();
+    const dialog = page.getByRole("dialog", { name: "Start import" });
+    await dialog.getByRole("button", { name: /GitHub/ }).click();
+    await dialog.getByLabel("GitHub token").fill("ghp_mocked");
+    await dialog
+      .getByLabel("GitHub repositories")
+      .fill("namuh-eng/exponential");
+    await dialog.getByRole("button", { name: "Fetch GitHub issues" }).click();
+    await expect(
+      dialog.getByText(/Review GitHub snapshot: 1 issues/),
+    ).toBeVisible();
+    await expect(dialog.getByText("Parity importer issue")).toBeVisible();
+    await dialog.getByRole("button", { name: "Confirm GitHub import" }).click();
+    await expect(
+      dialog.getByText(/GitHub import completed with 1 created/),
+    ).toBeVisible();
+  });
 });

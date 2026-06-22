@@ -40,6 +40,15 @@ type team struct {
 	Key  string `json:"key"`
 }
 
+type demoInitiativeSeed struct {
+	ID, Name, Status, Health string
+}
+
+var demoInitiatives = []demoInitiativeSeed{
+	{"77777777-0000-4000-8000-000000000001", "Make hosted evaluation effortless", "active", "onTrack"},
+	{"77777777-0000-4000-8000-000000000002", "Operator-grade self hosting", "planned", "atRisk"},
+}
+
 type sessionResponse struct {
 	Success     bool      `json:"success"`
 	SessionURL  string    `json:"sessionUrl"`
@@ -301,6 +310,7 @@ func resetTx(ctx context.Context, tx pgx.Tx) error {
 		`delete from provider_job where workspace_id=$1::uuid`,
 		`delete from provider_credential where workspace_integration_id in (select id from workspace_integration where workspace_id=$1::uuid)`,
 		`delete from integration_thread_link where workspace_id=$1::uuid`,
+		`delete from zendesk_ticket_link where workspace_id=$1::uuid`,
 		`delete from team_notification_integration where team_id in (select id from team where workspace_id=$1::uuid)`,
 		`delete from workspace_integration where workspace_id=$1::uuid`,
 		`delete from personal_access_token_audit_log where workspace_id=$1::uuid`,
@@ -317,10 +327,12 @@ func resetTx(ctx context.Context, tx pgx.Tx) error {
 		`delete from comment_attachment where comment_id in (select c.id from comment c join issue i on i.id=c.issue_id join team t on t.id=i.team_id where t.workspace_id=$1::uuid)`,
 		`delete from comment where issue_id in (select i.id from issue i join team t on t.id=i.team_id where t.workspace_id=$1::uuid)`,
 		`delete from issue_history where issue_id in (select i.id from issue i join team t on t.id=i.team_id where t.workspace_id=$1::uuid)`,
+		`delete from customer_request where workspace_id=$1::uuid`,
 		`delete from issue_label where issue_id in (select i.id from issue i join team t on t.id=i.team_id where t.workspace_id=$1::uuid)`,
 		`delete from issue_relation where issue_id in (select i.id from issue i join team t on t.id=i.team_id where t.workspace_id=$1::uuid) or related_issue_id in (select i.id from issue i join team t on t.id=i.team_id where t.workspace_id=$1::uuid)`,
 		`delete from recurring_issue where workspace_id=$1::uuid`,
 		`delete from issue where team_id in (select id from team where workspace_id=$1::uuid)`,
+		`delete from customer where workspace_id=$1::uuid`,
 		`delete from cycle where team_id in (select id from team where workspace_id=$1::uuid)`,
 		`delete from initiative_project where initiative_id in (select id from initiative where workspace_id=$1::uuid)`,
 		`delete from initiative_team where initiative_id in (select id from initiative where workspace_id=$1::uuid)`,
@@ -453,13 +465,7 @@ func seedProjectsInitiatives(ctx context.Context, tx pgx.Tx, workspaceID string,
 			return err
 		}
 	}
-	initiatives := []struct {
-		ID, Name, Status, Health string
-	}{
-		{"77777777-0000-4000-8000-000000000001", "Make hosted evaluation effortless", "active", "on_track"},
-		{"77777777-0000-4000-8000-000000000002", "Operator-grade self hosting", "planned", "at_risk"},
-	}
-	for _, in := range initiatives {
+	for _, in := range demoInitiatives {
 		if _, err := tx.Exec(ctx, `insert into initiative (id,name,description,status,health,owner_id,workspace_id,timeframe,created_at,updated_at) values ($1::uuid,$2,'Seeded public demo initiative.',$3::initiative_status,$4,'demo-founder',$5::uuid,'H1 Launch',$6,$6)`, in.ID, in.Name, in.Status, in.Health, workspaceID, now.AddDate(0, 0, -18)); err != nil {
 			return err
 		}

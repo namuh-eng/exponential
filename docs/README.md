@@ -23,6 +23,8 @@ planning docs are kept for decision history.
   config, smoke tests, and follow-up boundaries.
 - [cli-publishing.md](cli-publishing.md) - maintainer flow for publishing the
   SDK and CLI packages.
+- [zapier.md](zapier.md) - Zapier Platform app setup, OAuth scopes, triggers,
+  actions, webhook signing, and attachment upload behavior.
 
 ## Secrets and Operations
 

@@ -109,6 +109,43 @@ func TestDuplicateIssueStatusIDDoesNotFallbackToTriage(t *testing.T) {
 	}
 }
 
+func TestTriageDecisionRequestTracksPresentFields(t *testing.T) {
+	var input triageDecisionRequest
+	if err := input.UnmarshalJSON([]byte(`{"action":"accept","assigneeId":null,"labelIds":[]}`)); err != nil {
+		t.Fatal(err)
+	}
+	if !input.hasField("assigneeId") || !input.hasField("labelIds") || input.hasField("projectId") {
+		t.Fatalf("present fields = %#v", input.fieldsPresent)
+	}
+}
+
+func TestApplyTriageDefaultMetadataOnlyForOmittedFields(t *testing.T) {
+	settings := map[string]any{
+		triageDefaultAssigneeKey: "user-default",
+		triageDefaultLabelIDsKey: []any{"label-a", "label-b"},
+		triageDefaultProjectKey:  "project-default",
+		triageDefaultCycleKey:    "cycle-default",
+	}
+	input := triageDecisionRequest{fieldsPresent: map[string]bool{"assigneeId": true}, AssigneeID: nil}
+	applyTriageDefaultMetadata(settings, &input)
+	if input.AssigneeID != nil {
+		t.Fatal("explicit null assignee should not be replaced by default")
+	}
+	if input.ProjectID == nil || *input.ProjectID != "project-default" || input.CycleID == nil || *input.CycleID != "cycle-default" {
+		t.Fatalf("defaults not applied: %#v", input)
+	}
+	if len(input.LabelIDs) != 2 || input.LabelIDs[0] != "label-a" || input.LabelIDs[1] != "label-b" {
+		t.Fatalf("label defaults = %#v", input.LabelIDs)
+	}
+}
+
+func TestTriageSourceContextLabelsKnownSources(t *testing.T) {
+	got := triageSourceContext(map[string]any{"source": "inbound_email", "sender": "customer@example.com", "title": "Need help"})
+	if got["label"] != "Email" || got["sender"] != "customer@example.com" || got["title"] != "Need help" {
+		t.Fatalf("source context = %#v", got)
+	}
+}
+
 func TestNormalizeRecurringLabelIDs(t *testing.T) {
 	got := normalizeRecurringLabelIDs([]string{" label-a ", "", "label-a", "label-b"})
 	if len(got) != 2 || got[0] != "label-a" || got[1] != "label-b" {

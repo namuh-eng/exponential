@@ -29,6 +29,7 @@ setup("authenticate playwright browser", async ({ page }) => {
           credentials: "include",
           headers: {
             "Content-Type": "application/json",
+            "X-Set-Test-Session-Cookies": "true",
           },
           body: JSON.stringify({
             email: sessionEmail,

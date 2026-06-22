@@ -4,7 +4,7 @@ import fs from "node:fs";
 const openapi = fs.readFileSync("packages/proto/openapi.yaml", "utf8");
 const routerFiles = ["apps/api/internal/http/router.go"];
 const mountedRoutes = new Set();
-const nonContractProxyMounts = new Set();
+const nonContractProxyMounts = new Set(["/scim/v2"]);
 const nonContractProviderCallbacks = new Set([
   // Inbound Stripe provider callback. This route is not a client/business API
   // surface and must not appear in the generated public SDK.
@@ -17,6 +17,7 @@ const nonContractProviderCallbacks = new Set([
   "/integrations/discord/interactions",
   "/integrations/microsoft-teams/oauth/callback",
   "/integrations/microsoft-teams/activities",
+  "/integrations/gong/oauth/callback",
 ]);
 
 for (const file of routerFiles) {

@@ -14,6 +14,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
@@ -102,7 +103,7 @@ func (m Middleware) Require(next http.Handler) http.Handler {
 			return
 		}
 		if !scopesAllowRequest(principal.Scopes, r) {
-			problem.Write(w, http.StatusForbidden, "Insufficient token scope", "This personal access token is not allowed to perform this request.")
+			problem.Write(w, http.StatusForbidden, "Insufficient token scope", "This token is not allowed to perform this request.")
 			return
 		}
 		// CSRF: for browser-session (cookie) auth on state-mutating methods,
@@ -154,13 +155,48 @@ func scopesAllowRequest(scopes []string, r *http.Request) bool {
 	if isUnsafeMethod(r.Method) {
 		required = "write"
 	}
-	for _, scope := range scopes {
-		scope = strings.TrimSpace(strings.ToLower(scope))
-		if scope == required {
-			return true
+	if hasScope(scopes, required) || (required == "read" && hasScope(scopes, "write")) {
+		return true
+	}
+	return resourceScopeAllowsRequest(scopes, r, required)
+}
+
+func resourceScopeAllowsRequest(scopes []string, r *http.Request, required string) bool {
+	resource := scopeResourceForRequest(r)
+	if resource == "" {
+		return false
+	}
+	if hasScope(scopes, resource+":"+required) {
+		return true
+	}
+	return required == "read" && hasScope(scopes, resource+":write")
+}
+
+func scopeResourceForRequest(r *http.Request) string {
+	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api"), "/")
+	path = strings.Trim(strings.TrimPrefix(path, "v1"), "/")
+	segments := strings.Split(path, "/")
+	if len(segments) == 0 || segments[0] == "" {
+		return ""
+	}
+	if segments[0] == "issues" && len(segments) >= 3 && segments[2] == "comments" {
+		return "comments"
+	}
+	switch segments[0] {
+	case "issues":
+		return "issues"
+	case "comments":
+		return "comments"
+	case "projects", "project-statuses", "project-labels", "project-templates", "project-updates", "project-update-configurations":
+		return "projects"
+	case "attachments":
+		return "attachments"
+	case "workspaces":
+		if len(segments) >= 3 && segments[1] == "current" && (segments[2] == "api" || segments[2] == "webhook-deliveries") {
+			return "webhooks"
 		}
 	}
-	return false
+	return ""
 }
 
 func isMCPRequest(r *http.Request) bool {
@@ -396,7 +432,7 @@ func (m Middleware) authenticate(ctx context.Context, r *http.Request) (Principa
 		_, principal, err := m.BrowserSession(ctx, r)
 		return principal, err
 	}
-	if !(strings.HasPrefix(token, "lin_api_") || strings.HasPrefix(token, "pat_")) {
+	if !(strings.HasPrefix(token, "lin_api_") || strings.HasPrefix(token, "pat_") || strings.HasPrefix(token, "lin_oauth_at_")) {
 		return Principal{}, errUnauthorized("unsupported token prefix")
 	}
 
@@ -404,6 +440,9 @@ func (m Middleware) authenticate(ctx context.Context, r *http.Request) (Principa
 	keyHash := hex.EncodeToString(hash[:])
 	if strings.HasPrefix(token, "pat_") {
 		return m.authenticatePAT(ctx, keyHash)
+	}
+	if strings.HasPrefix(token, "lin_oauth_at_") {
+		return m.authenticateOAuthAccessToken(ctx, keyHash)
 	}
 	return m.authenticateLegacyAPIKey(ctx, keyHash)
 }
@@ -545,7 +584,7 @@ func (m Middleware) browserSessionByToken(ctx context.Context, r *http.Request, 
 			from session s
 			join "user" u on u.id = s.user_id
 			join member m on m.user_id = u.id
-			where s.token_hash = $1 and s.expires_at > now() and m.workspace_id = $2::uuid
+			where s.token_hash = $1 and s.expires_at > now() and m.workspace_id = $2::uuid and m.deleted_at is null
 			limit 1`, tokenHash, requested.ID).Scan(
 			&session.User.ID,
 			&session.User.Name,
@@ -567,7 +606,7 @@ func (m Middleware) browserSessionByToken(ctx context.Context, r *http.Request, 
 			join "user" u on u.id = s.user_id
 			join member m on m.user_id = u.id
 			join workspace w on w.id = m.workspace_id
-			where s.token_hash = $1 and s.expires_at > now() and w.url_slug = $2
+			where s.token_hash = $1 and s.expires_at > now() and w.url_slug = $2 and m.deleted_at is null
 			limit 1`, tokenHash, requested.Slug).Scan(
 			&session.User.ID,
 			&session.User.Name,
@@ -587,7 +626,7 @@ func (m Middleware) browserSessionByToken(ctx context.Context, r *http.Request, 
 		select u.id, u.name, u.email, u.image, m.workspace_id::text, m.role::text
 		from session s
 		join "user" u on u.id = s.user_id
-		left join member m on m.user_id = u.id
+		left join member m on m.user_id = u.id and m.deleted_at is null
 		where s.token_hash = $1 and s.expires_at > now()
 		order by m.created_at desc nulls last
 		limit 1`, tokenHash).Scan(
@@ -694,7 +733,7 @@ func (m Middleware) authenticateLegacyAPIKey(ctx context.Context, keyHash string
 		select ak.id::text, ak.user_id, ak.workspace_id::text, m.role::text
 		from api_key ak
 		join member m on m.user_id = ak.user_id and m.workspace_id = ak.workspace_id
-		where ak.key_hash = $1
+		where ak.key_hash = $1 and m.deleted_at is null
 		limit 1`, keyHash).Scan(&p.APIKeyID, &p.UserID, &p.WorkspaceID, &p.Role)
 	if err != nil {
 		return Principal{}, errUnauthorized("invalid token")
@@ -710,7 +749,7 @@ func (m Middleware) authenticatePAT(ctx context.Context, keyHash string) (Princi
 		select pat.id::text, pat.user_id, pat.workspace_id::text, m.role::text, coalesce(pat.scopes,'[]'::jsonb)
 		from personal_access_token pat
 		join member m on m.user_id = pat.user_id and m.workspace_id = pat.workspace_id
-		where pat.token_hash = $1 and pat.revoked_at is null
+		where pat.token_hash = $1 and pat.revoked_at is null and m.deleted_at is null
 		limit 1`, keyHash).Scan(&p.APIKeyID, &p.UserID, &p.WorkspaceID, &p.Role, &scopesRaw)
 	if err != nil {
 		return Principal{}, errUnauthorized("invalid token")
@@ -723,6 +762,99 @@ func (m Middleware) authenticatePAT(ctx context.Context, keyHash string) (Princi
 	_, _ = m.DB.Exec(ctx, `update personal_access_token set last_used_at = now() where id = $1::uuid`, p.APIKeyID)
 	_, _ = m.DB.Exec(ctx, `insert into personal_access_token_audit_log (token_id, user_id, workspace_id, action) values ($1::uuid, $2, $3::uuid, 'used')`, p.APIKeyID, p.UserID, p.WorkspaceID)
 	return p, nil
+}
+
+func (m Middleware) authenticateOAuthAccessToken(ctx context.Context, tokenHash string) (Principal, error) {
+	rows, err := m.DB.Query(ctx, `select id::text, coalesce(settings,'{}'::jsonb) from workspace`)
+	if err != nil {
+		return Principal{}, errUnauthorized("invalid token")
+	}
+	defer rows.Close()
+
+	now := time.Now().UTC()
+	for rows.Next() {
+		var workspaceID string
+		var rawSettings []byte
+		if err := rows.Scan(&workspaceID, &rawSettings); err != nil {
+			return Principal{}, errUnauthorized("invalid token")
+		}
+		settings := map[string]any{}
+		_ = json.Unmarshal(rawSettings, &settings)
+		api := authRecord(settings["api"])
+		for _, item := range authMapSlice(api["oauthTokens"]) {
+			token := authRecord(item)
+			if authString(token["tokenHash"]) != tokenHash || authString(token["revokedAt"]) != "" {
+				continue
+			}
+			if expiresAt := authString(token["expiresAt"]); expiresAt != "" {
+				expires, err := time.Parse(time.RFC3339Nano, expiresAt)
+				if err != nil || !expires.After(now) {
+					continue
+				}
+			}
+			p := Principal{
+				APIKeyID:    authString(token["id"]),
+				UserID:      authString(token["userId"]),
+				WorkspaceID: workspaceID,
+				Scopes:      authStringArray(token["scopes"]),
+			}
+			if p.APIKeyID == "" {
+				p.APIKeyID = "oauth_token"
+			}
+			if p.UserID == "" {
+				return Principal{}, errUnauthorized("invalid token")
+			}
+			if len(p.Scopes) == 0 {
+				p.Scopes = []string{"read"}
+			}
+			if err := m.DB.QueryRow(ctx, `select role::text from member where user_id=$1 and workspace_id=$2::uuid and deleted_at is null limit 1`, p.UserID, p.WorkspaceID).Scan(&p.Role); err != nil {
+				return Principal{}, errUnauthorized("invalid token")
+			}
+			return p, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return Principal{}, errUnauthorized("invalid token")
+	}
+	return Principal{}, errUnauthorized("invalid token")
+}
+
+func authRecord(value any) map[string]any {
+	if typed, ok := value.(map[string]any); ok {
+		return typed
+	}
+	return map[string]any{}
+}
+
+func authMapSlice(value any) []any {
+	if typed, ok := value.([]any); ok {
+		return typed
+	}
+	return []any{}
+}
+
+func authString(value any) string {
+	if typed, ok := value.(string); ok {
+		return strings.TrimSpace(typed)
+	}
+	return ""
+}
+
+func authStringArray(value any) []string {
+	if typed, ok := value.([]string); ok {
+		return typed
+	}
+	items, ok := value.([]any)
+	if !ok {
+		return []string{}
+	}
+	out := []string{}
+	for _, item := range items {
+		if s := authString(item); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 type unauthorized string

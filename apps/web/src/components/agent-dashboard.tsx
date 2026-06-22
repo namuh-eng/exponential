@@ -23,6 +23,8 @@ import {
 interface AgentRunsResponse {
   runs: AgentRun[];
   canCreateRuns: boolean;
+  providerConfigured: boolean;
+  disabledReason?: string;
 }
 
 const apiClient = createBrowserApiClient();
@@ -32,6 +34,7 @@ const statusLabels: Record<AgentRun["status"], string> = {
   running: "Running",
   needs_review: "Needs review",
   completed: "Completed",
+  failed: "Failed",
 };
 
 const suggestionActionLabels: Record<AgentSuggestionStatus, string> = {
@@ -78,6 +81,9 @@ function statusClassName(status: AgentRun["status"]) {
   if (status === "running") {
     return "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300";
   }
+  if (status === "failed") {
+    return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300";
+  }
   return "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]";
 }
 
@@ -102,6 +108,7 @@ export function AgentDashboard() {
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [canCreateRuns, setCanCreateRuns] = useState(true);
+  const [disabledReason, setDisabledReason] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -128,6 +135,7 @@ export function AgentDashboard() {
       const nextRuns = response?.runs ?? [];
       setRuns(nextRuns);
       setCanCreateRuns(response?.canCreateRuns ?? false);
+      setDisabledReason(response?.disabledReason ?? null);
       setSelectedRunId((current) =>
         current && nextRuns.some((run) => run.id === current)
           ? current
@@ -156,7 +164,8 @@ export function AgentDashboard() {
 
     if (!canCreateRuns) {
       setFormError(
-        "You do not have permission to create agent runs in this workspace.",
+        disabledReason ??
+          "Agent runs are disabled for this workspace or your role.",
       );
       return;
     }
@@ -225,8 +234,9 @@ export function AgentDashboard() {
               Agent workspace
             </h2>
             <p className="mt-2 max-w-[760px] text-[13px] leading-5 text-[var(--color-text-secondary)]">
-              Start deterministic agent runs, review history, and accept or
-              decline suggested actions from the current workspace context.
+              Start workspace-aware agent runs, review persisted history, and
+              accept or decline suggested issue updates from current workspace
+              data.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -256,13 +266,13 @@ export function AgentDashboard() {
               Start an agent run
             </h2>
             <p className="mt-1 text-[12px] leading-5 text-[var(--color-text-secondary)]">
-              Mock execution is enabled for this workspace so the route remains
-              actionable until a live executor is wired in.
+              Agent runs summarize selected workspace context and prepare
+              review-gated suggestions before any mutation is applied.
             </p>
             {!canCreateRuns && (
               <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-[12px] leading-5 text-amber-700 dark:text-amber-300">
-                Permission state: your role can view agent history but cannot
-                create or manage runs.
+                {disabledReason ??
+                  "Permission state: your role can view agent history but cannot create or manage runs."}
               </div>
             )}
             <form className="mt-4 space-y-3" onSubmit={createRun}>
@@ -293,12 +303,12 @@ export function AgentDashboard() {
                 </select>
               </label>
               <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">
-                Issue, PR, or project context
+                Issue, project, or team context
                 <input
                   value={context}
                   onChange={(event) => setContext(event.target.value)}
                   className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-content-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-text-secondary)]"
-                  placeholder="EXP-300, PR URL, project"
+                  placeholder="ENG-300, project: Platform Polish, or team backlog"
                   disabled={!canCreateRuns || creating}
                 />
               </label>
@@ -323,7 +333,7 @@ export function AgentDashboard() {
                 disabled={!canCreateRuns || creating}
                 className="w-full rounded-md bg-[var(--color-text-primary)] px-3 py-2 text-[13px] font-medium text-[var(--color-content-bg)] transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {creating ? "Creating run..." : "Start mock agent run"}
+                {creating ? "Creating run..." : "Start agent run"}
               </button>
             </form>
           </section>
@@ -422,6 +432,11 @@ export function AgentDashboard() {
                     {selectedRun.output}
                   </p>
                 </div>
+                {selectedRun.failureReason && (
+                  <p className="mt-2 text-[12px] leading-5 text-red-700 dark:text-red-300">
+                    {selectedRun.failureReason}
+                  </p>
+                )}
               </div>
 
               <div className="grid gap-5 xl:grid-cols-2">
@@ -530,8 +545,8 @@ export function AgentDashboard() {
                   Create your first agent run
                 </h2>
                 <p className="mt-2 max-w-[420px] text-[13px] leading-5 text-[var(--color-text-secondary)]">
-                  The composer starts a persisted mock run and this panel shows
-                  the detail, output, suggestions, and history.
+                  The composer starts a persisted workspace-aware run and this
+                  panel shows the detail, output, suggestions, and history.
                 </p>
               </div>
             </div>

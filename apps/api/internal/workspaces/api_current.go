@@ -147,11 +147,14 @@ func (h Handler) MutateCurrentAPI(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		_, err := h.DB.Exec(r.Context(), `insert into webhook (url,label,workspace_id,secret,enabled,events) values ($1,$2,$3::uuid,$4,true,$5)`, url, nullString(strings.TrimSpace(body.Label)), p.WorkspaceID, "whsec_"+randomHexString(24), events)
+		secret := "whsec_" + randomHexString(24)
+		var webhookID string
+		err := h.DB.QueryRow(r.Context(), `insert into webhook (url,label,workspace_id,secret,enabled,events) values ($1,$2,$3::uuid,$4,true,$5) returning id::text`, url, nullString(strings.TrimSpace(body.Label)), p.WorkspaceID, secret, events).Scan(&webhookID)
 		if err != nil {
 			problem.Write(w, 500, "Create webhook failed", err.Error())
 			return
 		}
+		credential = map[string]any{"kind": "webhook", "id": webhookID, "label": strings.TrimSpace(body.Label), "secret": secret}
 	case "updateWebhook":
 		if !isManager(p.Role) {
 			problem.Write(w, 403, "Forbidden", "")
@@ -199,6 +202,44 @@ func (h Handler) MutateCurrentAPI(w http.ResponseWriter, r *http.Request) {
 			problem.Write(w, 500, "Update OAuth applications failed", err.Error())
 			return
 		}
+	case "createAirbyteToken":
+		if !isManager(p.Role) {
+			problem.Write(w, 403, "Forbidden", "")
+			return
+		}
+		name := strings.TrimSpace(body.Name)
+		if name == "" {
+			problem.Write(w, 400, "Airbyte token name is required.", "")
+			return
+		}
+		secret := "pat_" + randomHexString(24)
+		hash := sha256.Sum256([]byte(secret))
+		scopes, _ := json.Marshal([]string{"read"})
+		_, err := h.DB.Exec(r.Context(), `insert into personal_access_token (name, token_hash, token_prefix, user_id, workspace_id, scopes) values ($1,$2,$3,$4,$5::uuid,$6::jsonb)`, name, hex.EncodeToString(hash[:]), secret[:20], p.UserID, p.WorkspaceID, scopes)
+		if err != nil {
+			problem.Write(w, 500, "Create Airbyte token failed", err.Error())
+			return
+		}
+		credential = map[string]any{"kind": "airbyteToken", "label": name + " Airbyte token", "secret": secret}
+	case "deleteAirbyteToken":
+		if !isManager(p.Role) {
+			problem.Write(w, 403, "Forbidden", "")
+			return
+		}
+		id := strings.TrimSpace(body.ID)
+		if id == "" {
+			problem.Write(w, 400, "Airbyte token id is required.", "")
+			return
+		}
+		ct, err := h.DB.Exec(r.Context(), `update personal_access_token set revoked_at=coalesce(revoked_at, now()) where id=$1::uuid and workspace_id=$2::uuid and scopes='["read"]'::jsonb`, id, p.WorkspaceID)
+		if err != nil {
+			problem.Write(w, 500, "Revoke Airbyte token failed", err.Error())
+			return
+		}
+		if ct.RowsAffected() == 0 {
+			problem.Write(w, 404, "Airbyte token not found.", "")
+			return
+		}
 	default:
 		problem.Write(w, 400, "Unsupported action.", "")
 		return
@@ -221,6 +262,10 @@ func (h Handler) workspaceAPIPayload(r *http.Request, p auth.Principal, settings
 	if err != nil {
 		return nil, err
 	}
+	airbyteTokens, err := h.workspaceAirbyteTokens(r, p.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
 
 	mcpAuditLog := []map[string]any{}
 	if isManager(p.Role) {
@@ -229,7 +274,37 @@ func (h Handler) workspaceAPIPayload(r *http.Request, p auth.Principal, settings
 			return nil, err
 		}
 	}
-	return map[string]any{"permissionLevel": permission, "viewerRole": p.Role, "canManageWorkspaceApi": isManager(p.Role), "canCreateApiKeys": canAPIKeyRole(p.Role, permission), "docs": map[string]string{"graphql": "/docs/graphql", "oauthApplications": "/docs/oauth-applications", "webhooks": "/docs/webhooks"}, "oauthApplications": readOAuthApplications(settings), "webhooks": webhooks, "apiKeys": keys, "supportedWebhookEvents": webhookspkg.KnownEventTypes, "mcpAuditLog": mcpAuditLog}, nil
+	return map[string]any{"permissionLevel": permission, "viewerRole": p.Role, "canManageWorkspaceApi": isManager(p.Role), "canCreateApiKeys": canAPIKeyRole(p.Role, permission), "docs": map[string]string{"graphql": "/docs/graphql", "oauthApplications": "/docs/oauth-applications", "webhooks": "/docs/webhooks", "airbyte": "/docs/airbyte"}, "oauthApplications": readOAuthApplications(settings), "webhooks": webhooks, "apiKeys": keys, "airbyteTokens": airbyteTokens, "supportedWebhookEvents": webhookspkg.KnownEventTypes, "mcpAuditLog": mcpAuditLog}, nil
+}
+
+func (h Handler) workspaceAirbyteTokens(r *http.Request, workspaceID string) ([]map[string]any, error) {
+	rows, err := h.DB.Query(r.Context(), `select pat.id::text, pat.name, pat.token_prefix, pat.scopes, pat.created_at, pat.last_used_at, u.name, u.email, u.image from personal_access_token pat join "user" u on u.id=pat.user_id where pat.workspace_id=$1::uuid and pat.revoked_at is null and pat.scopes='["read"]'::jsonb order by pat.created_at desc`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	for rows.Next() {
+		var id, name, prefix, creatorName, creatorEmail string
+		var creatorImage *string
+		var scopesRaw []byte
+		var scopes []string
+		var created time.Time
+		var last *time.Time
+		if err := rows.Scan(&id, &name, &prefix, &scopesRaw, &created, &last, &creatorName, &creatorEmail, &creatorImage); err != nil {
+			return nil, err
+		}
+		_ = json.Unmarshal(scopesRaw, &scopes)
+		if scopes == nil {
+			scopes = []string{"read"}
+		}
+		var lastAt any = nil
+		if last != nil {
+			lastAt = last.UTC().Format(time.RFC3339Nano)
+		}
+		out = append(out, map[string]any{"id": id, "name": name, "keyPrefix": prefix + "…", "scopes": scopes, "createdAt": created.UTC().Format(time.RFC3339Nano), "lastUsedAt": lastAt, "creator": map[string]any{"name": creatorName, "email": creatorEmail, "image": creatorImage}})
+	}
+	return out, rows.Err()
 }
 
 func (h Handler) workspaceWebhooks(r *http.Request, workspaceID string) ([]map[string]any, error) {
@@ -516,7 +591,7 @@ func validatedOAuthRedirects(body workspaceAPIAction) ([]string, error) {
 	return out, nil
 }
 
-var allowedOAuthScopes = map[string]bool{"read": true, "write": true, "issues:read": true, "issues:write": true, "comments:write": true, "webhooks:write": true}
+var allowedOAuthScopes = map[string]bool{"read": true, "write": true, "issues:read": true, "issues:write": true, "comments:write": true, "projects:read": true, "projects:write": true, "attachments:write": true, "webhooks:write": true}
 
 func validatedOAuthScopes(v any) ([]string, error) {
 	scopes := scopeList(v)

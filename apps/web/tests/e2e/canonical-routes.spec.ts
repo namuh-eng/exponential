@@ -29,7 +29,10 @@ test.describe("Canonical Forever Browsing routes", () => {
       const response = await fetch("/api/test/create-session", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Set-Test-Session-Cookies": "true",
+        },
         body: JSON.stringify({ email: "test@example.com" }),
       });
 

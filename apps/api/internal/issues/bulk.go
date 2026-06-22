@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
+	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
 )
 
 type bulkRequest struct {
@@ -89,17 +90,21 @@ func (h Handler) Bulk(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	operations := []syncapi.Operation{}
 	for _, issue := range selected {
 		payload := map[string]any{"id": issue.ID, "identifier": issue.Identifier, "changedFields": changed, "bulk": true}
-		if err := insertOperation(r.Context(), tx, p.WorkspaceID, "issue", issue.ID, "updated", payload, p.UserID); err != nil {
+		op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "issue", issue.ID, "updated", payload, p.UserID)
+		if err != nil {
 			problem.Write(w, 500, "Record bulk operation failed", err.Error())
 			return
 		}
+		operations = append(operations, op)
 	}
 	if err := tx.Commit(r.Context()); err != nil {
 		problem.Write(w, 500, "Bulk update failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), operations)
 	problem.JSON(w, 200, map[string]int{"updatedCount": len(selected)})
 }
 

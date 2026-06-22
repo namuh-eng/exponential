@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+  "/sync/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get current workspace sync version and replay status */
+    get: operations["getSyncStatus"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/attachments": {
     parameters: {
       query?: never;
@@ -52,6 +69,197 @@ export interface paths {
     put?: never;
     post?: never;
     delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customers": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List customers in the authenticated workspace */
+    get: operations["listCustomers"];
+    put?: never;
+    /** Create a customer in the authenticated workspace */
+    post: operations["createCustomer"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customers/{customerID}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerID: string;
+      };
+      cookie?: never;
+    };
+    /** Get a customer with requests and linked work */
+    get: operations["getCustomer"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Update a customer */
+    patch: operations["updateCustomer"];
+    trace?: never;
+  };
+  "/customers/{customerID}/requests": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerID: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create a customer request and optionally link it to work */
+    post: operations["createCustomerRequest"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customers/{customerID}/requests.csv": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerID: string;
+      };
+      cookie?: never;
+    };
+    /** Export a customer's requests as CSV */
+    get: operations["exportCustomerRequestsForCustomer"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-requests": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Customer request route namespace; mutate concrete request resources by id. */
+    get: operations["customerRequestsNamespace"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-requests/{requestID}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Delete a customer request */
+    delete: operations["deleteCustomerRequest"];
+    options?: never;
+    head?: never;
+    /** Update a customer request */
+    patch: operations["updateCustomerRequest"];
+    trace?: never;
+  };
+  "/customer-requests/{requestID}/issues": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Link a customer request to an issue */
+    post: operations["linkCustomerRequestIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-requests/{requestID}/issues/{issueID}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+        issueID: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Unlink a customer request from an issue */
+    delete: operations["unlinkCustomerRequestIssue"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-requests/{requestID}/projects": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Link a customer request to a project */
+    post: operations["linkCustomerRequestProject"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/customer-requests/{requestID}/projects/{projectID}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+        projectID: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Unlink a customer request from a project */
+    delete: operations["unlinkCustomerRequestProject"];
     options?: never;
     head?: never;
     patch?: never;
@@ -110,6 +318,26 @@ export interface paths {
     patch: operations["updateIssue"];
     trace?: never;
   };
+  "/issues/{id}/figma-sources/{sourceId}/refresh": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Mark a linked Figma source as seen (stamps refreshed_at; does not fetch from Figma API) */
+    post: operations["refreshIssueFigmaSource"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/issues/{id}/comments": {
     parameters: {
       query?: never;
@@ -141,6 +369,25 @@ export interface paths {
     put?: never;
     post: operations["toggleIssueReaction"];
     delete: operations["deleteIssueReaction"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/issues/{id}/customer-requests.csv": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    /** Export customer requests linked to an issue as CSV */
+    get: operations["exportCustomerRequestsForIssue"];
+    put?: never;
+    post?: never;
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
@@ -401,6 +648,23 @@ export interface paths {
     patch: operations["updateAccountPreferences"];
     trace?: never;
   };
+  "/agent/external-actions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create a review-gated Agent action from an external provider source */
+    post: operations["createExternalAgentAction"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/agent/runs": {
     parameters: {
       query?: never;
@@ -497,6 +761,38 @@ export interface paths {
     get?: never;
     put?: never;
     post: operations["discoverSamlUrl"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/auth/saml/acs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["samlAcs"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/auth/saml/metadata": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getSamlMetadata"];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -915,6 +1211,54 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/google-sheets/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectGoogleSheetsIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/google-sheets/refresh": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["refreshGoogleSheetsIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/google-sheets/oauth/callback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["googleSheetsOAuthCallback"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/discord/connect": {
     parameters: {
       query?: never;
@@ -963,6 +1307,134 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/intercom/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectIntercomIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectIntercomIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/oauth/callback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["intercomOAuthCallback"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/issues/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["searchIntercomLinkableIssues"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/issues/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["getIntercomLinkedIssueStatus"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/issues/link": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["linkIntercomIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/issues/unlink": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["unlinkIntercomIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/intercom/issues/create": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createIssueFromIntercom"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/sentry/disconnect": {
     parameters: {
       query?: never;
@@ -973,6 +1445,54 @@ export interface paths {
     get?: never;
     put?: never;
     post: operations["disconnectSentryIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gong/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectGongIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gong/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectGongIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/gong/{integrationId}/calls": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["ingestGongCall"];
     delete?: never;
     options?: never;
     head?: never;
@@ -1043,6 +1563,326 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/integrations/front/setup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["setupFrontIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/front/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectFrontIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/front/issues/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["searchFrontLinkableIssues"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/front/issues/link": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["linkFrontIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/front/issues/unlink": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["unlinkFrontIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/front/issues/create": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createIssueFromFront"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/salesforce/connect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["connectSalesforceIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/salesforce/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectSalesforceIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/salesforce/oauth/callback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["salesforceOAuthCallback"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/salesforce/issues/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["searchSalesforceLinkableIssues"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/salesforce/issues/link": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["linkSalesforceCaseToIssue"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/salesforce/issues/create": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createIssueFromSalesforceCase"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/salesforce/projects/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["searchSalesforceLinkableProjects"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/salesforce/projects/link": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["linkSalesforceCaseToProject"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/zendesk/setup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["setupZendeskIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/zendesk/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectZendeskIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/zendesk/tickets/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["searchZendeskLinkableIssues"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/zendesk/tickets/link": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["linkZendeskTicket"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/zendesk/tickets/create": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createIssueFromZendesk"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/zendesk/tickets/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["getZendeskTicketStatus"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/integrations/microsoft-teams/disconnect": {
     parameters: {
       query?: never;
@@ -1085,6 +1925,22 @@ export interface paths {
     get?: never;
     put?: never;
     post: operations["disconnectSlackIntegration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/integrations/google-sheets/disconnect": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["disconnectGoogleSheetsIntegration"];
     delete?: never;
     options?: never;
     head?: never;
@@ -1514,6 +2370,25 @@ export interface paths {
     put?: never;
     /** Create a project */
     post: operations["createProject"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/projects/{slug}/customer-requests.csv": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        slug: string;
+      };
+      cookie?: never;
+    };
+    /** Export customer requests linked to a project as CSV */
+    get: operations["exportCustomerRequestsForProject"];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -2050,6 +2925,96 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/airbyte": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Airbyte route namespace; concrete resources are check, catalog, discover, and streams. */
+    get: operations["airbyteNamespace"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/airbyte/check": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Validate an Airbyte read-only token for the current workspace */
+    get: operations["checkAirbyteSource"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/airbyte/discover": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Discover Airbyte source catalog metadata */
+    get: operations["discoverAirbyteSource"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/airbyte/catalog": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Airbyte source catalog metadata */
+    get: operations["getAirbyteCatalog"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/airbyte/streams/{stream}": {
+    parameters: {
+      query?: {
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        stream: "issues" | "projects" | "comments" | "cycles" | "initiatives";
+      };
+      cookie?: never;
+    };
+    /** Read full-refresh or incremental Airbyte stream records */
+    get: operations["readAirbyteStream"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/workspaces/current/api": {
     parameters: {
       query?: never;
@@ -2493,6 +3458,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/workspaces/current/webhook-deliveries": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List recent webhook delivery attempts for the current workspace */
+    get: operations["listWebhookDeliveries"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/workspaces/current/webhook-deliveries/{id}/retry": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Re-queue a failed or dead webhook delivery for immediate retry */
+    post: operations["retryWebhookDelivery"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/sync/ws": {
     parameters: {
       query?: never;
@@ -2514,6 +3513,25 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    WebhookDelivery: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      webhookId: string;
+      eventType: string;
+      /** @enum {string} */
+      status: "pending" | "delivering" | "delivered" | "failed" | "dead";
+      attempts: number;
+      responseCode?: number | null;
+      responseBody?: string | null;
+      /** Format: date-time */
+      lastAttemptedAt?: string | null;
+      /** Format: date-time */
+      nextAttemptAt?: string | null;
+      sourceOperationId?: string | null;
+      /** Format: date-time */
+      createdAt: string;
+    };
     Problem: {
       /** Format: uri-reference */
       type: string;
@@ -2699,6 +3717,31 @@ export interface components {
       isExternalContext?: boolean;
       /** @enum {string} */
       status: "open" | "accepted" | "declined";
+      reviewedBy?: string;
+      /** Format: date-time */
+      reviewedAt?: string;
+    };
+    AgentSourceActor: {
+      externalId?: string;
+      displayName?: string;
+      email?: string;
+      mappedUserId?: string;
+    };
+    AgentSourceContext: {
+      /** @enum {string} */
+      provider: "slack" | "microsoft_teams" | "zendesk" | "intercom" | "front";
+      workspaceIntegrationId?: string;
+      externalTeamId?: string;
+      externalChannelId?: string;
+      externalThreadId?: string;
+      externalMessageId?: string;
+      externalTicketId?: string;
+      externalConversationId?: string;
+      permalink?: string;
+      metadata?: {
+        [key: string]: string;
+      };
+      actor: components["schemas"]["AgentSourceActor"];
     };
     AgentRun: {
       id: string;
@@ -2710,7 +3753,7 @@ export interface components {
       };
       context: string;
       /** @enum {string} */
-      status: "queued" | "running" | "needs_review" | "completed";
+      status: "queued" | "running" | "needs_review" | "completed" | "failed";
       owner: string;
       target: string;
       /** Format: date-time */
@@ -2718,12 +3761,16 @@ export interface components {
       /** Format: date-time */
       updatedAt: string;
       output: string;
+      failureReason?: string;
       logs: string[];
       suggestions: components["schemas"]["AgentSuggestion"][];
+      sourceContext?: components["schemas"]["AgentSourceContext"];
     };
     AgentRunListResponse: {
       runs: components["schemas"]["AgentRun"][];
       canCreateRuns: boolean;
+      providerConfigured: boolean;
+      disabledReason?: string;
     };
     AgentRunResponse: {
       run: components["schemas"]["AgentRun"];
@@ -2733,6 +3780,25 @@ export interface components {
       prompt: string;
       teamKey?: string;
       context?: string;
+    };
+    CreateExternalAgentActionRequest: {
+      /** @enum {string} */
+      action:
+        | "summarize_thread"
+        | "propose_issue"
+        | "propose_update"
+        | "route_request"
+        | "answer_question";
+      title?: string;
+      prompt?: string;
+      teamKey?: string;
+      source: components["schemas"]["AgentSourceContext"];
+    };
+    ExternalAgentActionResponse: {
+      /** @enum {string} */
+      state: "created" | "disabled" | "provider_missing";
+      run?: components["schemas"]["AgentRun"];
+      disabledReason?: string;
     };
     UpdateAgentRunSuggestionRequest: {
       suggestionId: string;
@@ -2918,6 +3984,7 @@ export interface components {
       /** Format: date-time */
       createdAt: string;
     };
+    /** @description Lifecycle and health telemetry for an integration. No secrets or raw credential metadata are included. */
     IntegrationHealth: {
       /** Format: date-time */
       lastEventAt: string | null;
@@ -2932,6 +3999,37 @@ export interface components {
       failedJobCount: number;
       auditEvents: components["schemas"]["IntegrationAuditEvent"][];
     };
+    GoogleSheetsScopeSelection: {
+      issues: boolean;
+      projects: boolean;
+      initiatives: boolean;
+    };
+    GoogleSheetsConnectRequest: {
+      scopes: components["schemas"]["GoogleSheetsScopeSelection"];
+      /** @default false */
+      includePrivateTeams: boolean;
+    };
+    GoogleSheetsRowCounts: {
+      issues: number;
+      projects: number;
+      initiatives: number;
+    };
+    GoogleSheetsIntegrationDetails: {
+      spreadsheetId: string;
+      spreadsheetUrl: string;
+      spreadsheetTitle: string;
+      scopes: components["schemas"]["GoogleSheetsScopeSelection"];
+      includePrivateTeams: boolean;
+      /** @enum {string} */
+      schedule: "hourly";
+      enabled: boolean;
+      /** Format: date-time */
+      nextRunAt: string | null;
+      rowCounts: components["schemas"]["GoogleSheetsRowCounts"];
+      sheetSchemas?: {
+        [key: string]: string[];
+      };
+    };
     Integration: {
       /** @enum {string} */
       provider:
@@ -2942,7 +4040,9 @@ export interface components {
         | "sentry"
         | "zendesk"
         | "discord"
-        | "microsoft_teams";
+        | "microsoft_teams"
+        | "google_sheets"
+        | "figma";
       name: string;
       description: string;
       /** Format: uuid */
@@ -2965,9 +4065,12 @@ export interface components {
         | null;
       actions: components["schemas"]["IntegrationActions"];
       health: components["schemas"]["IntegrationHealth"];
-      details: {
-        [key: string]: unknown;
-      };
+      details:
+        | components["schemas"]["GoogleSheetsIntegrationDetails"]
+        | {
+            [key: string]: unknown;
+          }
+        | null;
     };
     GitHubAccount: {
       id: string;
@@ -3091,6 +4194,42 @@ export interface components {
       state: string;
       workspaceSlug: string;
     };
+    IntercomConnectResponse: never;
+    GongConnectRequest: {
+      /** Format: uuid */
+      destinationTeamId?: string;
+      routingGuidance?: string;
+      mentionParticipants?: boolean;
+      pollingCursor?: string;
+    };
+    GongConnectResponse: {
+      /** Format: uri */
+      authorizationUrl: string;
+      state: string;
+      workspaceSlug: string;
+    };
+    GongConfigurationRequiredResponse: {
+      error: string;
+      message: string;
+    };
+    GongIngestCallRequest: {
+      call: {
+        [key: string]: unknown;
+      };
+    };
+    GongFindingResult: {
+      findingId: string;
+      /** Format: uuid */
+      issueId: string;
+      identifier: string;
+      linked: boolean;
+    };
+    GongIngestCallResponse: {
+      processed: boolean;
+      skipped: boolean;
+      reason?: string;
+      findings: components["schemas"]["GongFindingResult"][];
+    };
     DiscordConfigurationRequiredResponse: {
       error: string;
       message: string;
@@ -3104,6 +4243,10 @@ export interface components {
       message: string;
     };
     SentryConfigurationRequiredResponse: {
+      error: string;
+      message: string;
+    };
+    IntercomConfigurationRequiredResponse: {
       error: string;
       message: string;
     };
@@ -3134,6 +4277,235 @@ export interface components {
     };
     SentryIssueSearchResponse: {
       issues: components["schemas"]["SentryIssueActionResponse"][];
+    };
+    IntercomIssueActionRequest: {
+      appId?: string;
+      conversationId?: string;
+      issueId?: string;
+      /** Format: uuid */
+      teamId?: string;
+      title?: string;
+      description?: string;
+      contactId?: string;
+      contactEmail?: string;
+      companyId?: string;
+    } & {
+      [key: string]: unknown;
+    };
+    IntercomIssue: {
+      /** Format: uuid */
+      id: string;
+      identifier: string;
+      title: string;
+      /** Format: uri */
+      webUrl: string;
+      status: string;
+      assignee: string;
+    };
+    IntercomIssueActionResponse: {
+      ok: boolean;
+      message?: string;
+      issue?: components["schemas"]["IntercomIssue"] | null;
+      meta?: {
+        [key: string]: unknown;
+      };
+    };
+    IntercomIssueSearchResponse: {
+      ok: boolean;
+      issues: components["schemas"]["IntercomIssue"][];
+    };
+    FrontSetupRequest: {
+      apiToken: string;
+      companyId?: string;
+      /** Format: uri */
+      baseUrl?: string;
+    };
+    FrontSetupResponse: {
+      /** Format: uuid */
+      id: string;
+      /** @enum {string} */
+      provider: "front";
+      /** @enum {string} */
+      status: "connected";
+      displayName: string;
+    };
+    FrontIssueActionRequest: {
+      workspaceSlug?: string;
+      companyId?: string;
+      query?: string;
+      issueId?: string;
+      identifier?: string;
+      /** Format: uuid */
+      teamId?: string;
+      teamKey?: string;
+      title?: string;
+      description?: string;
+      /** @enum {string} */
+      priority?: "none" | "urgent" | "high" | "medium" | "low";
+      conversation?: components["schemas"]["FrontConversationReference"];
+    } & {
+      [key: string]: unknown;
+    };
+    FrontConversationReference: {
+      id: string;
+      subject?: string;
+      /** Format: uri */
+      permalink?: string;
+      messageId?: string;
+      inboxId?: string;
+      contactId?: string;
+      /** Format: email */
+      contactEmail?: string;
+      contactName?: string;
+      accountId?: string;
+      accountName?: string;
+      metadata?: {
+        [key: string]: unknown;
+      };
+    } & {
+      [key: string]: unknown;
+    };
+    FrontIssueActionResponse: {
+      /** Format: uuid */
+      id: string;
+      identifier: string;
+      title: string;
+      status: string;
+      assignee: string | null;
+      /** Format: uri */
+      webUrl: string;
+    };
+    FrontIssueSearchResponse: {
+      issues: components["schemas"]["FrontIssueActionResponse"][];
+    };
+    SalesforceConnectResponse: {
+      /** Format: uri */
+      authorizationUrl: string;
+      state: string;
+      workspaceSlug: string;
+    };
+    SalesforceConfigurationRequiredResponse: {
+      error: string;
+      message: string;
+    };
+    SalesforceCaseActionRequest: {
+      organizationId?: string;
+      orgId?: string;
+      query?: string;
+      exponentialIssueId?: string;
+      issueIdentifier?: string;
+      /** Format: uuid */
+      projectId?: string;
+      projectSlug?: string;
+      /** Format: uuid */
+      teamId?: string;
+      teamKey?: string;
+      title?: string;
+      description?: string;
+      /** @enum {string} */
+      priority?: "none" | "urgent" | "high" | "medium" | "low";
+      case?: {
+        [key: string]: unknown;
+      };
+    } & {
+      [key: string]: unknown;
+    };
+    SalesforceIssueActionResponse: {
+      /** Format: uri */
+      webUrl: string;
+      /** Format: uuid */
+      issueId?: string;
+      project: string;
+      identifier: string;
+      status: string;
+      statusCategory: string;
+      priority: string;
+      caseId?: string;
+      caseNumber?: string;
+    };
+    SalesforceIssueSearchResponse: {
+      issues: components["schemas"]["SalesforceIssueActionResponse"][];
+    };
+    SalesforceProjectActionResponse: {
+      /** Format: uri */
+      webUrl: string;
+      /** Format: uuid */
+      projectId: string;
+      name: string;
+      slug: string;
+      status: string;
+      priority: string;
+      caseId?: string;
+      caseNumber?: string;
+    };
+    SalesforceProjectSearchResponse: {
+      projects: components["schemas"]["SalesforceProjectActionResponse"][];
+    };
+    ZendeskSetupRequest: {
+      subdomain: string;
+      /** Format: email */
+      email: string;
+      apiToken: string;
+    };
+    ZendeskSetupResponse: {
+      connected: boolean;
+      /** Format: uuid */
+      integrationId: string;
+      subdomain: string;
+      /** Format: uri */
+      accountUrl: string;
+      displayName: string;
+      /** Format: uri */
+      actionBaseUrl: string;
+      actionSecret: string;
+    };
+    ZendeskTicketActionRequest: {
+      query?: string;
+      exponentialIssueId?: string;
+      issueIdentifier?: string;
+      /** Format: uuid */
+      teamId?: string;
+      teamKey?: string;
+      title?: string;
+      description?: string;
+      /** @enum {string} */
+      priority?: "none" | "urgent" | "high" | "medium" | "low";
+      subdomain?: string;
+      ticket?: {
+        id?: string;
+        /** Format: uri */
+        url?: string;
+        subject?: string;
+        description?: string;
+        status?: string;
+        requester?: {
+          [key: string]: unknown;
+        };
+        organization?: {
+          [key: string]: unknown;
+        };
+      } & {
+        [key: string]: unknown;
+      };
+    } & {
+      [key: string]: unknown;
+    };
+    ZendeskIssueActionResponse: {
+      /** Format: uri */
+      webUrl: string;
+      project: string;
+      identifier: string;
+      title?: string;
+      stateName?: string;
+      stateCategory?: string;
+    };
+    ZendeskIssueSearchResponse: {
+      issues: components["schemas"]["ZendeskIssueActionResponse"][];
+    };
+    ZendeskTicketStatusResponse: {
+      ticketId: string;
+      linked: boolean;
+      issues: components["schemas"]["ZendeskIssueActionResponse"][];
     };
     IntegrationListResponse: {
       canManageIntegrations: boolean;
@@ -3891,6 +5263,9 @@ export interface components {
       metadataOptions?: {
         [key: string]: unknown;
       };
+      defaults?: {
+        [key: string]: unknown;
+      };
     } & {
       [key: string]: unknown;
     };
@@ -3914,6 +5289,8 @@ export interface components {
       projectMilestoneId?: string | null;
       assigneeId?: string | null;
       comment?: string | null;
+      /** Format: date */
+      dueDate?: string | null;
       subscribe?: boolean;
     } & {
       [key: string]: unknown;
@@ -4113,6 +5490,160 @@ export interface components {
       end_date?: string;
       auto_rollover?: boolean;
     };
+    Customer: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      workspaceId: string;
+      domain?: string | null;
+      name: string;
+      revenue?: number | null;
+      size?: number | null;
+      tier?: string | null;
+      status?: string | null;
+      ownerId?: string | null;
+      source?: string | null;
+      requestCount: number;
+      issueCount: number;
+      projectCount: number;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    CustomerSummary: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      domain?: string | null;
+      tier?: string | null;
+      status?: string | null;
+    };
+    CustomerRequest: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      workspaceId: string;
+      /** Format: uuid */
+      customerId: string;
+      customer: components["schemas"]["CustomerSummary"];
+      title: string;
+      body?: string | null;
+      source?: string | null;
+      sourceUrl?: string | null;
+      externalProvider?: string | null;
+      externalId?: string | null;
+      important: boolean;
+      createdByUserId?: string | null;
+      linkedIssues: components["schemas"]["CustomerLinkedIssue"][];
+      linkedProjects: components["schemas"]["CustomerLinkedProject"][];
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    CustomerLinkedIssue: {
+      /** Format: uuid */
+      id: string;
+      identifier: string;
+      title: string;
+      teamKey: string;
+    };
+    CustomerLinkedProject: {
+      /** Format: uuid */
+      id: string;
+      slug: string;
+      name: string;
+    };
+    CustomerListResponse: {
+      customers: components["schemas"]["Customer"][];
+    };
+    CustomerDetailResponse: {
+      customer: components["schemas"]["Customer"];
+      requests: components["schemas"]["CustomerRequest"][];
+      issues: components["schemas"]["CustomerLinkedIssue"][];
+      projects: components["schemas"]["CustomerLinkedProject"][];
+    };
+    CreateCustomerRequest: {
+      name: string;
+      domain?: string | null;
+      revenue?: number | null;
+      size?: number | null;
+      tier?: string | null;
+      status?: string | null;
+      ownerId?: string | null;
+      source?: string | null;
+    };
+    UpdateCustomerRequest: {
+      name?: string;
+      domain?: string | null;
+      revenue?: number | null;
+      size?: number | null;
+      tier?: string | null;
+      status?: string | null;
+      ownerId?: string | null;
+      source?: string | null;
+    };
+    CreateCustomerRequestRequest: {
+      title: string;
+      body?: string | null;
+      source?: string | null;
+      sourceUrl?: string | null;
+      externalProvider?: string | null;
+      externalId?: string | null;
+      important?: boolean;
+      issueId?: string | null;
+      projectId?: string | null;
+    };
+    UpdateCustomerRequestRequest: {
+      title?: string;
+      body?: string | null;
+      source?: string | null;
+      sourceUrl?: string | null;
+      externalProvider?: string | null;
+      externalId?: string | null;
+      important?: boolean;
+    };
+    AirbyteCheckResponse: {
+      /** @enum {string} */
+      status: "SUCCEEDED";
+      message: string;
+    };
+    AirbyteStreamDefinition: {
+      /** @enum {string} */
+      name: "issues" | "projects" | "comments" | "cycles" | "initiatives";
+      cursor_field: string;
+      primary_key: string;
+      supported_sync_modes: ("full_refresh" | "incremental")[];
+      json_schema: {
+        [key: string]: unknown;
+      };
+    };
+    AirbyteCatalogResponse: {
+      connector: {
+        [key: string]: unknown;
+      };
+      streams: components["schemas"]["AirbyteStreamDefinition"][];
+      private_data: {
+        [key: string]: unknown;
+      };
+    };
+    AirbyteStreamResponse: {
+      /** @enum {string} */
+      stream: "issues" | "projects" | "comments" | "cycles" | "initiatives";
+      /** @enum {string} */
+      sync_mode: "full_refresh" | "incremental";
+      cursor_field: string;
+      records: {
+        [key: string]: unknown;
+      }[];
+      /** Format: date-time */
+      next_cursor?: string | null;
+      has_more: boolean;
+      private_data: {
+        [key: string]: unknown;
+      };
+    };
     /** @enum {string} */
     WorkspaceRole: "owner" | "admin" | "member" | "guest";
     WorkspaceMembership: {
@@ -4218,16 +5749,50 @@ export interface components {
         | "request_export"
         | "preview_csv"
         | "start_csv_import"
-        | "prepare_provider";
+        | "prepare_provider"
+        | "fetch_provider_snapshot"
+        | "confirm_provider_import"
+        | "cancel_provider_import"
+        | "configure_jira"
+        | "preview_jira_import"
+        | "start_jira_import"
+        | "retry_jira_import"
+        | "sync_jira_project"
+        | "pause_jira_sync"
+        | "resume_jira_sync";
       fileName?: string;
       csv?: string;
       /** @enum {string} */
       provider?: "github" | "jira";
+      jobId?: string;
+      repositories?: string[];
+      repositoriesText?: string;
+      /** @enum {string} */
+      scope?: "open" | "all" | "include_closed";
+      includeClosed?: boolean;
+      apiBaseUrl?: string;
       /** Format: uuid */
       defaultTeamId?: string;
       mapping?: {
         [key: string]: unknown;
       };
+      /** @enum {string} */
+      deployment?: "cloud" | "server";
+      /** Format: uri */
+      baseUrl?: string;
+      /** Format: email */
+      email?: string;
+      /** @description API token or personal access token for authenticating with the provider. Write-only: never returned in responses. */
+      token?: string;
+      projectKey?: string;
+      /** Format: uuid */
+      teamId?: string;
+      statusMapping?: {
+        [key: string]: string;
+      };
+      importComments?: boolean;
+      importLabels?: boolean;
+      forwardSyncEnabled?: boolean;
     } & {
       [key: string]: unknown;
     };
@@ -4276,6 +5841,7 @@ export interface components {
       entityId: string;
       certificate: string;
       metadataUrl: string;
+      metadataXml?: string;
       /** Format: date-time */
       lastTestedAt: string | null;
       /** @enum {string} */
@@ -4957,6 +6523,28 @@ export interface components {
     };
     /** @enum {string} */
     IssuePriority: "none" | "urgent" | "high" | "medium" | "low";
+    FigmaSource: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uri */
+      url: string;
+      /** Format: uri */
+      normalizedUrl: string;
+      fileKey: string;
+      nodeId?: string | null;
+      /** @enum {string} */
+      kind: "file" | "design" | "proto";
+      name?: string | null;
+      /** Format: uri */
+      thumbnailUrl?: string | null;
+      /** @enum {string} */
+      containerType: "issue_description" | "comment" | "document" | "plugin";
+      /** Format: date-time */
+      capturedAt: string;
+      /** Format: date-time */
+      refreshedAt?: string | null;
+      lastError?: string | null;
+    };
     IssueExternalSource: {
       provider: string;
       label: string;
@@ -5003,6 +6591,7 @@ export interface components {
       canceled_at?: string | null;
       /** Format: date-time */
       completed_at?: string | null;
+      figmaSources?: components["schemas"]["FigmaSource"][];
       sources?: components["schemas"]["IssueExternalSource"][];
     };
     IssueListResponse: {
@@ -5218,6 +6807,37 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  getSyncStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sync status */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** Format: int64 */
+            currentVersion: number;
+            lastReplay?: {
+              /** Format: int64 */
+              requestedVersion: number;
+              operationCount: number;
+              /** Format: date-time */
+              replayedAt: string;
+            };
+          };
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   attachmentsNamespace: {
     parameters: {
       query?: never;
@@ -5273,6 +6893,326 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["AttachmentDownloadUrlResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  listCustomers: {
+    parameters: {
+      query?: {
+        q?: string;
+        tier?: string;
+        status?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Customers */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerListResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createCustomer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateCustomerRequest"];
+      };
+    };
+    responses: {
+      /** @description Customer */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Customer"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getCustomer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerID: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Customer detail */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerDetailResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateCustomer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerID: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateCustomerRequest"];
+      };
+    };
+    responses: {
+      /** @description Customer */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Customer"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createCustomerRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerID: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateCustomerRequestRequest"];
+      };
+    };
+    responses: {
+      /** @description Customer request */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerRequest"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  exportCustomerRequestsForCustomer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerID: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description CSV export */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  customerRequestsNamespace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      default: components["responses"]["Problem"];
+    };
+  };
+  deleteCustomerRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            success?: boolean;
+          };
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  updateCustomerRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateCustomerRequestRequest"];
+      };
+    };
+    responses: {
+      /** @description Customer request */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerRequest"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkCustomerRequestIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          issueId: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Customer request */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerRequest"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  unlinkCustomerRequestIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+        issueID: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Customer request */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerRequest"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkCustomerRequestProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          projectId: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Customer request */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerRequest"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  unlinkCustomerRequestProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestID: string;
+        projectID: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Customer request */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CustomerRequest"];
         };
       };
       default: components["responses"]["Problem"];
@@ -5437,6 +7377,30 @@ export interface operations {
       default: components["responses"]["Problem"];
     };
   };
+  refreshIssueFigmaSource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Refreshed Figma source */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FigmaSource"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   createIssueComment: {
     parameters: {
       query?: never;
@@ -5513,6 +7477,29 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ReactionSummaryList"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  exportCustomerRequestsForIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description CSV export */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
         };
       };
       default: components["responses"]["Problem"];
@@ -6071,6 +8058,40 @@ export interface operations {
       default: components["responses"]["Problem"];
     };
   };
+  createExternalAgentAction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateExternalAgentActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Disabled or provider-missing external Agent action state */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExternalAgentActionResponse"];
+        };
+      };
+      /** @description Created or recorded external Agent action */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExternalAgentActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   listAgentRuns: {
     parameters: {
       query?: never;
@@ -6209,6 +8230,53 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SamlDiscoveryResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  samlAcs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/x-www-form-urlencoded": {
+          SAMLResponse: string;
+          RelayState: string;
+        };
+      };
+    };
+    responses: {
+      /** @description SAML accepted and browser session cookie issued */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getSamlMetadata: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description SAML service provider metadata */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/samlmetadata+xml": string;
         };
       };
       default: components["responses"]["Problem"];
@@ -6934,6 +9002,83 @@ export interface operations {
       default: components["responses"]["Problem"];
     };
   };
+  connectGoogleSheetsIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["GoogleSheetsConnectRequest"];
+      };
+    };
+    responses: {
+      /** @description Google authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SlackConnectResponse"];
+        };
+      };
+      /** @description Google OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SlackConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  refreshGoogleSheetsIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Google Sheets refresh queued and run */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  googleSheetsOAuthCallback: {
+    parameters: {
+      query?: {
+        code?: string;
+        state?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Redirects to integration settings */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   connectDiscordIntegration: {
     parameters: {
       query?: never;
@@ -7024,6 +9169,204 @@ export interface operations {
       default: components["responses"]["Problem"];
     };
   };
+  connectIntercomIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Intercom authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomConnectResponse"];
+        };
+      };
+      /** @description Intercom OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectIntercomIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Intercom disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  intercomOAuthCallback: {
+    parameters: {
+      query?: {
+        code?: string;
+        state?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Redirects to integration settings */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  searchIntercomLinkableIssues: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntercomIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linkable Exponential issues for Intercom */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomIssueSearchResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getIntercomLinkedIssueStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntercomIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked issue status for an Intercom conversation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkIntercomIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntercomIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked issue for an Intercom conversation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  unlinkIntercomIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntercomIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Unlinked issue for an Intercom conversation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createIssueFromIntercom: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntercomIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Created issue from an Intercom conversation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IntercomIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   disconnectSentryIntegration: {
     parameters: {
       query?: never;
@@ -7040,6 +9383,88 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  connectGongIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["GongConnectRequest"];
+      };
+    };
+    responses: {
+      /** @description Gong authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GongConnectResponse"];
+        };
+      };
+      /** @description Gong OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GongConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectGongIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Gong disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  ingestGongCall: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        integrationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["GongIngestCallRequest"];
+      };
+    };
+    responses: {
+      /** @description Gong call ingestion result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GongIngestCallResponse"];
         };
       };
       default: components["responses"]["Problem"];
@@ -7142,6 +9567,496 @@ export interface operations {
       default: components["responses"]["Problem"];
     };
   };
+  setupFrontIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FrontSetupRequest"];
+      };
+    };
+    responses: {
+      /** @description Front connected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FrontSetupResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectFrontIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Front disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  searchFrontLinkableIssues: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FrontIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linkable Exponential issues for Front */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FrontIssueSearchResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkFrontIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FrontIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked Exponential issue descriptor for Front */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FrontIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  unlinkFrontIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FrontIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Front conversation unlinked */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createIssueFromFront: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FrontIssueActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Created Exponential issue descriptor for Front */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FrontIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  connectSalesforceIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Salesforce authorization URL */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SalesforceConnectResponse"];
+        };
+      };
+      /** @description Salesforce OAuth is not configured */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SalesforceConfigurationRequiredResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectSalesforceIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Salesforce disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  salesforceOAuthCallback: {
+    parameters: {
+      query?: {
+        code?: string;
+        state?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Redirects to integration settings */
+      302: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  searchSalesforceLinkableIssues: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SalesforceCaseActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linkable Exponential issues for Salesforce cases */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SalesforceIssueSearchResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkSalesforceCaseToIssue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SalesforceCaseActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked Exponential issue descriptor for Salesforce */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SalesforceIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createIssueFromSalesforceCase: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SalesforceCaseActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Created Exponential issue descriptor for Salesforce */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SalesforceIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  searchSalesforceLinkableProjects: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SalesforceCaseActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linkable Exponential projects for Salesforce cases */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SalesforceProjectSearchResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkSalesforceCaseToProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SalesforceCaseActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked Exponential project descriptor for Salesforce */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SalesforceProjectActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  setupZendeskIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ZendeskSetupRequest"];
+      };
+    };
+    responses: {
+      /** @description Zendesk connected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ZendeskSetupResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectZendeskIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Zendesk disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  searchZendeskLinkableIssues: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ZendeskTicketActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linkable Exponential issues for Zendesk */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ZendeskIssueSearchResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  linkZendeskTicket: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ZendeskTicketActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked Exponential issue descriptor for Zendesk */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ZendeskIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  createIssueFromZendesk: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ZendeskTicketActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Created Exponential issue descriptor for Zendesk */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ZendeskIssueActionResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getZendeskTicketStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ZendeskTicketActionRequest"];
+      };
+    };
+    responses: {
+      /** @description Linked issue status for a Zendesk ticket */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ZendeskTicketStatusResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   disconnectMicrosoftTeamsIntegration: {
     parameters: {
       query?: never;
@@ -7194,6 +10109,27 @@ export interface operations {
     requestBody?: never;
     responses: {
       /** @description Slack disconnected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuccessResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  disconnectGoogleSheetsIntegration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Google Sheets disconnected */
       200: {
         headers: {
           [name: string]: unknown;
@@ -8193,6 +11129,29 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Project"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  exportCustomerRequestsForProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        slug: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description CSV export */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
         };
       };
       default: components["responses"]["Problem"];
@@ -9563,6 +12522,107 @@ export interface operations {
       default: components["responses"]["Problem"];
     };
   };
+  airbyteNamespace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      default: components["responses"]["Problem"];
+    };
+  };
+  checkAirbyteSource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Airbyte check result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AirbyteCheckResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  discoverAirbyteSource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Airbyte catalog */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AirbyteCatalogResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  getAirbyteCatalog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Airbyte catalog */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AirbyteCatalogResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  readAirbyteStream: {
+    parameters: {
+      query?: {
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        stream: "issues" | "projects" | "comments" | "cycles" | "initiatives";
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Airbyte stream records */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AirbyteStreamResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
   getCurrentWorkspaceApi: {
     parameters: {
       query?: never;
@@ -10757,6 +13817,61 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["InviteWorkspaceMembersResponse"];
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  listWebhookDeliveries: {
+    parameters: {
+      query?: {
+        /** @description Filter by webhook ID */
+        webhook_id?: string;
+        /** @description Filter by delivery status */
+        status?: "pending" | "delivering" | "delivered" | "failed" | "dead";
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Webhook delivery list */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            deliveries: components["schemas"]["WebhookDelivery"][];
+          };
+        };
+      };
+      default: components["responses"]["Problem"];
+    };
+  };
+  retryWebhookDelivery: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Delivery reset to pending */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @example pending */
+            status: string;
+          };
         };
       };
       default: components["responses"]["Problem"];

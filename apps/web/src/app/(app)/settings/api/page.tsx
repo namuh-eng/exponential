@@ -14,6 +14,7 @@ import type {
   OAuthScope,
   PermissionLevel,
   WebhookEventType,
+  WorkspaceAirbyteTokenRecord,
   WorkspaceApiKeyRecord,
   WorkspaceWebhookRecord,
 } from "@/lib/api-settings";
@@ -22,7 +23,7 @@ import { useEffect, useState } from "react";
 type CreateResponse = {
   api: ApiSettingsPayload;
   createdCredential?: {
-    kind: "oauthApplication" | "apiKey";
+    kind: "oauthApplication" | "apiKey" | "airbyteToken";
     label: string;
     secret: string;
   };
@@ -448,6 +449,75 @@ function ApiKeysList({
   );
 }
 
+function AirbyteTokensList({
+  items,
+  canManage,
+  onCreate,
+  onDelete,
+}: {
+  items: WorkspaceAirbyteTokenRecord[];
+  canManage: boolean;
+  onCreate: () => void;
+  onDelete: (item: WorkspaceAirbyteTokenRecord) => void;
+}) {
+  if (items.length === 0) {
+    return (
+      <EmptyActionRow
+        text="No Airbyte tokens"
+        actionLabel="Generate Airbyte token"
+        onAction={onCreate}
+        disabled={!canManage}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <ActionButton
+          label="Generate Airbyte token"
+          onClick={onCreate}
+          disabled={!canManage}
+        />
+      </div>
+      {items.map((item) => (
+        <SurfaceRow key={item.id}>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0">
+              <div className="text-[13px] font-medium text-[var(--color-text-primary)]">
+                {item.name}
+              </div>
+              <div className="mt-1 text-[12px] text-[var(--color-text-secondary)]">
+                {item.keyPrefix} • read-only warehouse sync
+              </div>
+              <div className="mt-1 text-[12px] text-[var(--color-text-tertiary)]">
+                Scopes: {item.scopes.join(", ")}
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Avatar
+                name={item.creator.name || item.creator.email}
+                src={item.creator.image ?? undefined}
+                size="md"
+              />
+              <div className="text-[12px] text-[var(--color-text-tertiary)]">
+                <div>Created by {item.creator.name}</div>
+                <div>Created {formatDate(item.createdAt)}</div>
+                <div>Last used {formatDate(item.lastUsedAt)}</div>
+              </div>
+              <ActionButton
+                label="Revoke Airbyte token"
+                onClick={() => onDelete(item)}
+                disabled={!canManage}
+              />
+            </div>
+          </div>
+        </SurfaceRow>
+      ))}
+    </div>
+  );
+}
+
 function McpAuditLog({ items }: { items?: McpAuditLogEntry[] }) {
   const auditItems = items ?? [];
 
@@ -524,6 +594,7 @@ export default function ApiSettingsPage() {
   const [oauthModalOpen, setOauthModalOpen] = useState(false);
   const [webhookModalOpen, setWebhookModalOpen] = useState(false);
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
+  const [airbyteModalOpen, setAirbyteModalOpen] = useState(false);
   const [oauthForm, setOauthForm] = useState<OAuthFormState>(
     buildDefaultOauthForm(),
   );
@@ -531,6 +602,9 @@ export default function ApiSettingsPage() {
     buildDefaultWebhookForm(),
   );
   const [apiKeyName, setApiKeyName] = useState("Workspace automation");
+  const [airbyteTokenName, setAirbyteTokenName] = useState(
+    "Airbyte warehouse sync",
+  );
   const [revealedCredential, setRevealedCredential] = useState<{
     label: string;
     secret: string;
@@ -728,6 +802,25 @@ export default function ApiSettingsPage() {
     }
   }
 
+  async function submitAirbyteToken() {
+    const didPersist = await mutate(
+      "/api/workspaces/current/api",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "createAirbyteToken",
+          name: airbyteTokenName,
+        }),
+      },
+      "Airbyte token generated.",
+    );
+
+    if (didPersist) {
+      setAirbyteModalOpen(false);
+      setAirbyteTokenName("Airbyte warehouse sync");
+    }
+  }
+
   function editOAuthApplication(item: OAuthApplicationRecord) {
     setOauthForm(buildOauthFormFromApplication(item));
     setOauthModalOpen(true);
@@ -824,6 +917,24 @@ export default function ApiSettingsPage() {
         }),
       },
       "API key revoked.",
+    );
+  }
+
+  async function deleteAirbyteToken(item: WorkspaceAirbyteTokenRecord) {
+    if (!window.confirm(`Revoke Airbyte token "${item.name}"?`)) {
+      return;
+    }
+
+    await mutate(
+      "/api/workspaces/current/api",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "deleteAirbyteToken",
+          id: item.id,
+        }),
+      },
+      "Airbyte token revoked.",
     );
   }
 
@@ -970,6 +1081,19 @@ export default function ApiSettingsPage() {
           canCreate={data.canCreateApiKeys}
           onCreate={() => setApiKeyModalOpen(true)}
           onDelete={deleteApiKey}
+        />
+
+        <SectionHeader>Airbyte warehouse sync</SectionHeader>
+        <p className="mb-4 text-[13px] text-[var(--color-text-tertiary)]">
+          Generate read-only personal access tokens for Airbyte Open Source full
+          refresh and incremental syncs. Private team data is included.{" "}
+          <DocsLink href={data.docs.airbyte} />
+        </p>
+        <AirbyteTokensList
+          items={data.airbyteTokens}
+          canManage={data.canManageWorkspaceApi}
+          onCreate={() => setAirbyteModalOpen(true)}
+          onDelete={deleteAirbyteToken}
         />
 
         {data.canManageWorkspaceApi ? (
@@ -1188,6 +1312,32 @@ export default function ApiSettingsPage() {
               <ActionButton
                 label="Create API key"
                 onClick={submitApiKey}
+                disabled={saving}
+              />
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {airbyteModalOpen ? (
+        <Modal
+          title="Generate Airbyte token"
+          description="Create a read-only token for Airbyte warehouse sync. The secret is shown once."
+          onClose={() => setAirbyteModalOpen(false)}
+        >
+          <div className="space-y-4">
+            <Field label="Token name">
+              <TextInput
+                aria-label="Token name"
+                value={airbyteTokenName}
+                onChange={(event) => setAirbyteTokenName(event.target.value)}
+                placeholder="Airbyte warehouse sync"
+              />
+            </Field>
+            <div className="flex justify-end gap-3">
+              <ActionButton
+                label="Generate Airbyte token"
+                onClick={submitAirbyteToken}
                 disabled={saving}
               />
             </div>

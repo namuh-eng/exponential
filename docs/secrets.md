@@ -19,8 +19,11 @@ contains no secret values and is committed.
 | `database`      | `url`          | `DATABASE_URL`                   |
 | `redis`         | `url`          | `REDIS_URL`                      |
 | `session`       | `secret`       | `EXPONENTIAL_SESSION_SECRET`     |
+| `provider-credential-encryption` | `key` | `EXPONENTIAL_PROVIDER_CREDENTIAL_ENCRYPTION_KEY` |
 | `google-oauth`  | `id`           | `AUTH_GOOGLE_ID`                 |
 | `google-oauth`  | `secret`       | `AUTH_GOOGLE_SECRET`             |
+| `github-oauth`  | `id`           | `AUTH_GITHUB_ID`                 |
+| `github-oauth`  | `secret`       | `AUTH_GITHUB_SECRET`             |
 | `stripe`        | `webhook-signing-secret` | `STRIPE_WEBHOOK_SIGNING_SECRET` |
 | `aws`           | `s3-bucket`    | `S3_BUCKET`                      |
 | `aws`           | `sender-email` | `SENDER_EMAIL`                   |

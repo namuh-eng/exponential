@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/namuh-eng/exponential/apps/api/internal/account"
+	"github.com/namuh-eng/exponential/apps/api/internal/airbyte"
 	"github.com/namuh-eng/exponential/apps/api/internal/agentruns"
 	"github.com/namuh-eng/exponential/apps/api/internal/analytics"
 	"github.com/namuh-eng/exponential/apps/api/internal/attachments"
@@ -18,6 +19,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/authproviders"
 	"github.com/namuh-eng/exponential/apps/api/internal/billing"
 	"github.com/namuh-eng/exponential/apps/api/internal/comments"
+	"github.com/namuh-eng/exponential/apps/api/internal/customers"
 	"github.com/namuh-eng/exponential/apps/api/internal/demo"
 	"github.com/namuh-eng/exponential/apps/api/internal/documents"
 	"github.com/namuh-eng/exponential/apps/api/internal/email"
@@ -38,6 +40,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/projectupdateconfigs"
 	"github.com/namuh-eng/exponential/apps/api/internal/projectupdates"
 	"github.com/namuh-eng/exponential/apps/api/internal/ratelimit"
+	"github.com/namuh-eng/exponential/apps/api/internal/scim"
 	"github.com/namuh-eng/exponential/apps/api/internal/sidebar"
 	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
 	"github.com/namuh-eng/exponential/apps/api/internal/teams"
@@ -99,6 +102,7 @@ func NewRouter(logger *zap.Logger, db *pgxpool.Pool) stdhttp.Handler {
 	r.Get("/metrics/red", redMetricsHandler)
 	r.Get("/api/metrics/red", redMetricsHandler)
 
+	r.Mount("/scim/v2", scim.Handler{DB: db}.Routes())
 	mountAPIRoutes(r, "/v1", db, emailSender, logger)
 	mountAPIRoutes(r, "/api", db, emailSender, logger)
 	return r
@@ -127,17 +131,41 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 		v1.Group(func(publicProvider chi.Router) {
 			publicProvider.Use(ratelimit.PublicMiddleware())
 			publicProvider.Get("/integrations/slack/oauth/callback", integrationsHandler.SlackOAuthCallback)
+			publicProvider.Get("/integrations/google-sheets/oauth/callback", integrationsHandler.GoogleSheetsOAuthCallback)
 			publicProvider.Get("/integrations/discord/oauth/callback", integrationsHandler.DiscordOAuthCallback)
 			publicProvider.Post("/integrations/discord/interactions", integrationsHandler.DiscordInteractions)
 			publicProvider.Get("/integrations/microsoft-teams/oauth/callback", integrationsHandler.MicrosoftTeamsOAuthCallback)
 			publicProvider.Get("/integrations/sentry/oauth/callback", integrationsHandler.SentryOAuthCallback)
+			publicProvider.Get("/integrations/salesforce/oauth/callback", integrationsHandler.SalesforceOAuthCallback)
+			publicProvider.Post("/integrations/salesforce/issues/search", integrationsHandler.SalesforceIssueSearch)
+			publicProvider.Post("/integrations/salesforce/issues/link", integrationsHandler.SalesforceIssueLink)
+			publicProvider.Post("/integrations/salesforce/issues/create", integrationsHandler.SalesforceIssueCreate)
+			publicProvider.Post("/integrations/salesforce/projects/search", integrationsHandler.SalesforceProjectSearch)
+			publicProvider.Post("/integrations/salesforce/projects/link", integrationsHandler.SalesforceProjectLink)
+			publicProvider.Get("/integrations/intercom/oauth/callback", integrationsHandler.IntercomOAuthCallback)
+			publicProvider.Get("/integrations/gong/oauth/callback", integrationsHandler.GongOAuthCallback)
 			publicProvider.Get("/integrations/github/setup/callback", integrationsHandler.GitHubSetupCallback)
 			publicProvider.Post("/integrations/sentry/issues/search", integrationsHandler.SentryIssueSearch)
 			publicProvider.Post("/integrations/sentry/issues/link", integrationsHandler.SentryIssueLink)
 			publicProvider.Post("/integrations/sentry/issues/create", integrationsHandler.SentryIssueCreate)
+			publicProvider.Post("/integrations/front/issues/search", integrationsHandler.FrontIssueSearch)
+			publicProvider.Post("/integrations/front/issues/link", integrationsHandler.FrontIssueLink)
+			publicProvider.Post("/integrations/front/issues/unlink", integrationsHandler.FrontIssueUnlink)
+			publicProvider.Post("/integrations/front/issues/create", integrationsHandler.FrontIssueCreate)
+			publicProvider.Post("/integrations/intercom/issues/search", integrationsHandler.IntercomIssueSearch)
+			publicProvider.Post("/integrations/intercom/issues/status", integrationsHandler.IntercomIssueStatus)
+			publicProvider.Post("/integrations/intercom/issues/link", integrationsHandler.IntercomIssueLink)
+			publicProvider.Post("/integrations/intercom/issues/unlink", integrationsHandler.IntercomIssueUnlink)
+			publicProvider.Post("/integrations/intercom/issues/create", integrationsHandler.IntercomIssueCreate)
+			publicProvider.Post("/integrations/zendesk/tickets/search", integrationsHandler.ZendeskTicketSearch)
+			publicProvider.Post("/integrations/zendesk/tickets/link", integrationsHandler.ZendeskTicketLink)
+			publicProvider.Post("/integrations/zendesk/tickets/create", integrationsHandler.ZendeskTicketCreate)
+			publicProvider.Post("/integrations/zendesk/tickets/status", integrationsHandler.ZendeskTicketStatus)
+
 			publicProvider.Post("/integrations/microsoft-teams/activities", integrationsHandler.MicrosoftTeamsActivities)
 			publicProvider.Post("/integrations/slack/events", integrationsHandler.SlackEvents)
 			publicProvider.Post("/integrations/gitlab/webhook/{integrationID}", integrationsHandler.GitLabWebhook)
+			publicProvider.Post("/integrations/gong/{integrationID}/calls", integrationsHandler.GongIngestCall)
 			publicProvider.Post("/integrations/github/webhook", integrationsHandler.GitHubWebhook)
 			publicProvider.Post("/integrations/slack/interactivity", integrationsHandler.SlackInteractivity)
 		})
@@ -167,10 +195,14 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 			protected.Post("/issues/{id}/reactions", commentsHandler.ToggleIssueReaction)
 			protected.Delete("/issues/{id}/reactions", commentsHandler.DeleteIssueReaction)
 			protected.Mount("/account", account.Handler{DB: db}.Routes())
+			protected.Mount("/airbyte", airbyte.Handler{DB: db}.Routes())
 			protected.Mount("/analytics", analytics.Handler{DB: db}.Routes())
 			protected.Mount("/agent/runs", agentruns.Handler{DB: db}.Routes())
+			protected.Post("/agent/external-actions", agentruns.Handler{DB: db}.CreateExternalAction)
 			protected.Mount("/attachments", attachments.Handler{DB: db}.Routes())
 			protected.Patch("/comments/{id}", commentsHandler.Update)
+			protected.Mount("/customer-requests", customers.Handler{DB: db}.RequestRoutes())
+			protected.Mount("/customers", customers.Handler{DB: db}.Routes())
 			protected.Mount("/custom-emojis", emojis.Handler{DB: db}.Routes())
 			protected.Mount("/document-folders", documentsHandler.FolderRoutes())
 			protected.Mount("/document-settings", documentsHandler.SettingsRoutes())
@@ -200,6 +232,7 @@ func mountAPIRoutes(r chi.Router, prefix string, db *pgxpool.Pool, emailSender e
 			protected.Mount("/workspaces", workspacesHandler.Routes())
 			protected.Mount("/workspaces/current/webhook-deliveries", webhooks.Handler{DB: db}.Routes())
 			protected.Get("/sync/ws", syncapi.Handler{DB: db}.WebSocket)
+			protected.Get("/sync/status", syncapi.Handler{DB: db}.Status)
 		})
 	})
 }

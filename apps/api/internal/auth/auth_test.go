@@ -130,6 +130,21 @@ func TestScopesAllowRequest(t *testing.T) {
 	if !scopesAllowRequest([]string{"write"}, httptest.NewRequest("PATCH", "/v1/issues/1", nil)) {
 		t.Fatal("write scope should allow state-changing requests")
 	}
+	if !scopesAllowRequest([]string{"issues:write"}, httptest.NewRequest("PATCH", "/v1/issues/1", nil)) {
+		t.Fatal("issues:write scope should allow issue writes")
+	}
+	if !scopesAllowRequest([]string{"projects:read"}, httptest.NewRequest("GET", "/api/projects", nil)) {
+		t.Fatal("projects:read scope should allow project reads through /api")
+	}
+	if scopesAllowRequest([]string{"projects:read"}, httptest.NewRequest("POST", "/api/projects", nil)) {
+		t.Fatal("projects:read scope must not allow project writes")
+	}
+	if !scopesAllowRequest([]string{"comments:write"}, httptest.NewRequest("POST", "/v1/issues/issue-1/comments", nil)) {
+		t.Fatal("comments:write scope should allow issue comment creation")
+	}
+	if !scopesAllowRequest([]string{"webhooks:write"}, httptest.NewRequest("POST", "/api/workspaces/current/api", nil)) {
+		t.Fatal("webhooks:write scope should allow webhook subscription management")
+	}
 	if !scopesAllowRequest([]string{"read"}, httptest.NewRequest("POST", "/v1/mcp", nil)) {
 		t.Fatal("read scope should reach MCP handler for per-tool enforcement")
 	}

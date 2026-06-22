@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
+	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
 )
 
 type Handler struct{ DB *pgxpool.Pool }
@@ -102,17 +103,34 @@ func (h Handler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h Handler) BulkRead(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
-	cmd, err := h.DB.Exec(r.Context(), `update notification set read_at=now() where user_id=$1 and read_at is null and type <> 'comment'`, p.UserID)
+	tx, err := h.DB.Begin(r.Context())
 	if err != nil {
 		problem.Write(w, 500, "Mark notifications read failed", err.Error())
 		return
 	}
-	count, err := h.unreadCount(r.Context(), p.UserID)
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	cmd, err := tx.Exec(r.Context(), `update notification set read_at=now() where user_id=$1 and read_at is null and type <> 'comment'`, p.UserID)
 	if err != nil {
 		problem.Write(w, 500, "Mark notifications read failed", err.Error())
 		return
 	}
-	problem.JSON(w, 200, bulkReadResponse{Success: true, UpdatedCount: cmd.RowsAffected(), UnreadCount: count})
+	count, err := h.unreadCountTx(r.Context(), tx, p.UserID)
+	if err != nil {
+		problem.Write(w, 500, "Mark notifications read failed", err.Error())
+		return
+	}
+	response := bulkReadResponse{Success: true, UpdatedCount: cmd.RowsAffected(), UnreadCount: count}
+	op, err := syncapi.InsertOperation(r.Context(), tx, p.WorkspaceID, "notification", p.UserID, "bulk_read", response, p.UserID)
+	if err != nil {
+		problem.Write(w, 500, "Mark notifications read failed", err.Error())
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		problem.Write(w, 500, "Mark notifications read failed", err.Error())
+		return
+	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
+	problem.JSON(w, 200, response)
 }
 
 func (h Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
@@ -125,22 +143,43 @@ func (h Handler) MarkUnread(w http.ResponseWriter, r *http.Request) {
 
 func (h Handler) updateReadState(w http.ResponseWriter, r *http.Request, read bool) {
 	p, _ := auth.FromContext(r.Context())
-	var err error
+	tx, err := h.DB.Begin(r.Context())
+	if err != nil {
+		problem.Write(w, 500, "Update notification failed", err.Error())
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	var id string
 	if read {
-		err = h.DB.QueryRow(r.Context(), `update notification set read_at=now() where id=$1::uuid and user_id=$2 returning id`, chi.URLParam(r, "id"), p.UserID).Scan(new(string))
+		err = tx.QueryRow(r.Context(), `update notification set read_at=now() where id=$1::uuid and user_id=$2 returning id::text`, chi.URLParam(r, "id"), p.UserID).Scan(&id)
 	} else {
-		err = h.DB.QueryRow(r.Context(), `update notification set read_at=null where id=$1::uuid and user_id=$2 returning id`, chi.URLParam(r, "id"), p.UserID).Scan(new(string))
+		err = tx.QueryRow(r.Context(), `update notification set read_at=null where id=$1::uuid and user_id=$2 returning id::text`, chi.URLParam(r, "id"), p.UserID).Scan(&id)
 	}
 	if err != nil {
 		writeNotificationUpdateErr(w, err)
 		return
 	}
-	count, err := h.unreadCount(r.Context(), p.UserID)
+	count, err := h.unreadCountTx(r.Context(), tx, p.UserID)
 	if err != nil {
 		problem.Write(w, 500, "Update notification failed", err.Error())
 		return
 	}
-	problem.JSON(w, 200, notificationActionResponse{Success: true, UnreadCount: count})
+	response := notificationActionResponse{Success: true, UnreadCount: count}
+	opType := "unread"
+	if read {
+		opType = "read"
+	}
+	op, err := syncapi.InsertOperation(r.Context(), tx, p.WorkspaceID, "notification", id, opType, response, p.UserID)
+	if err != nil {
+		problem.Write(w, 500, "Update notification failed", err.Error())
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		problem.Write(w, 500, "Update notification failed", err.Error())
+		return
+	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
+	problem.JSON(w, 200, response)
 }
 
 func (h Handler) Snooze(w http.ResponseWriter, r *http.Request) {
@@ -159,9 +198,15 @@ func (h Handler) Snooze(w http.ResponseWriter, r *http.Request) {
 		}
 		snoozeDate = &parsed
 	}
+	tx, err := h.DB.Begin(r.Context())
+	if err != nil {
+		problem.Write(w, 500, "Snooze notification failed", err.Error())
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
 	var id string
 	var snoozed, unsnoozed *time.Time
-	err := h.DB.QueryRow(r.Context(), `
+	err = tx.QueryRow(r.Context(), `
 		update notification
 		set snoozed_until_at=$1, unsnoozed_at=case when $1::timestamptz is null then now() else null end
 		where id=$2::uuid and user_id=$3
@@ -170,12 +215,23 @@ func (h Handler) Snooze(w http.ResponseWriter, r *http.Request) {
 		writeNotificationUpdateErr(w, err)
 		return
 	}
-	count, err := h.unreadCount(r.Context(), p.UserID)
+	count, err := h.unreadCountTx(r.Context(), tx, p.UserID)
 	if err != nil {
 		problem.Write(w, 500, "Snooze notification failed", err.Error())
 		return
 	}
-	problem.JSON(w, 200, notificationActionResponse{Success: true, UnreadCount: count, Notification: &notificationSnoozeInfo{ID: id, SnoozedUntilAt: formatTime(snoozed), UnsnoozedAt: formatTime(unsnoozed)}})
+	response := notificationActionResponse{Success: true, UnreadCount: count, Notification: &notificationSnoozeInfo{ID: id, SnoozedUntilAt: formatTime(snoozed), UnsnoozedAt: formatTime(unsnoozed)}}
+	op, err := syncapi.InsertOperation(r.Context(), tx, p.WorkspaceID, "notification", id, "snoozed", response, p.UserID)
+	if err != nil {
+		problem.Write(w, 500, "Snooze notification failed", err.Error())
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		problem.Write(w, 500, "Snooze notification failed", err.Error())
+		return
+	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
+	problem.JSON(w, 200, response)
 }
 
 type scanner interface{ Scan(dest ...any) error }
@@ -197,6 +253,12 @@ func scanNotification(row scanner) (Notification, error) {
 func (h Handler) unreadCount(ctx context.Context, userID string) (int32, error) {
 	var count int32
 	err := h.DB.QueryRow(ctx, `select count(*)::int from notification where user_id=$1 and read_at is null and (snoozed_until_at is null or snoozed_until_at <= now() or (unsnoozed_at is not null and unsnoozed_at >= snoozed_until_at))`, userID).Scan(&count)
+	return count, err
+}
+
+func (h Handler) unreadCountTx(ctx context.Context, tx pgx.Tx, userID string) (int32, error) {
+	var count int32
+	err := tx.QueryRow(ctx, `select count(*)::int from notification where user_id=$1 and read_at is null and (snoozed_until_at is null or snoozed_until_at <= now() or (unsnoozed_at is not null and unsnoozed_at >= snoozed_until_at))`, userID).Scan(&count)
 	return count, err
 }
 

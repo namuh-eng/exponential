@@ -184,7 +184,7 @@ func (w SlackWorker) activeSlackCredential(ctx context.Context, integrationID st
 		return slackCredential{}, err
 	}
 	var credential slackCredential
-	if err := json.Unmarshal(payloadRaw, &credential); err != nil {
+	if err := decryptProviderCredentialJSON(ctx, w.DB, integrationID, "slack", payloadRaw, &credential); err != nil {
 		return slackCredential{}, err
 	}
 	if credential.BotToken == "" {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
 	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
+	"github.com/namuh-eng/exponential/apps/api/internal/webhooks"
 )
 
 type Handler struct{ DB *pgxpool.Pool }
@@ -111,6 +113,7 @@ func (h Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.List)
 	r.Post("/", h.Create)
+	r.Get("/{slug}/customer-requests.csv", h.ExportCustomerRequests)
 	r.Get("/{slug}", h.Get)
 	r.Patch("/{slug}", h.Update)
 	r.Delete("/{slug}", h.Delete)
@@ -122,7 +125,14 @@ func (h Handler) Routes() chi.Router {
 
 func (h Handler) List(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
-	projects, err := h.loadProjects(r.Context(), `p.workspace_id=$1::uuid`, p.WorkspaceID)
+	where := "p.workspace_id=$1::uuid"
+	args := []any{p.WorkspaceID}
+	if p.Role == "guest" && projectCustomerFilterRequested(r) {
+		problem.Write(w, 403, "Forbidden", "Guests cannot access customer request filters")
+		return
+	}
+	applyCustomerProjectFilters(r, &where, &args)
+	projects, err := h.loadProjects(r.Context(), where, args...)
 	if err != nil {
 		problem.Write(w, 500, "List projects failed", err.Error())
 		return
@@ -141,12 +151,35 @@ func (h Handler) Get(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Get project failed", err.Error())
 		return
 	}
-	detail, err := h.projectDetail(r.Context(), p.WorkspaceID, r.URL.Query().Get("workspaceSlug"), project)
+	detail, err := h.projectDetail(r.Context(), p.WorkspaceID, r.URL.Query().Get("workspaceSlug"), project, p.Role != "guest")
 	if err != nil {
 		problem.Write(w, 500, "Get project failed", err.Error())
 		return
 	}
 	problem.JSON(w, 200, detail)
+}
+
+func (h Handler) ExportCustomerRequests(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	if p.Role == "guest" {
+		problem.Write(w, 403, "Forbidden", "Guests cannot access customer requests")
+		return
+	}
+	project, err := h.findProject(r.Context(), p.WorkspaceID, chi.URLParam(r, "slug"))
+	if errors.Is(err, pgx.ErrNoRows) {
+		problem.Write(w, 404, "Project not found", "")
+		return
+	}
+	if err != nil {
+		problem.Write(w, 500, "Export customer requests failed", err.Error())
+		return
+	}
+	requests, err := h.projectCustomerRequests(r.Context(), project.ID)
+	if err != nil {
+		problem.Write(w, 500, "Export customer requests failed", err.Error())
+		return
+	}
+	writeProjectCustomerRequestsCSV(w, "project-"+project.Slug+"-customer-requests.csv", requests)
 }
 
 func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +310,8 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 	project.Teams = teams
 	project.AppliedTemplateID = appliedTemplateID
 	project.AppliedMilestones = appliedMilestones
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "project", project.ID, "created", project, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "project", project.ID, "created", project, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Create project failed", err.Error())
 		return
 	}
@@ -285,6 +319,10 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create project failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
+	go func() {
+		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "project.created", "", project)
+	}()
 	problem.JSON(w, 201, project)
 }
 
@@ -435,7 +473,8 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	updated.Teams = teams
 	updated.Progress = existing.Progress
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "project", updated.ID, "updated", updated, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "project", updated.ID, "updated", updated, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Update project failed", err.Error())
 		return
 	}
@@ -443,7 +482,8 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update project failed", err.Error())
 		return
 	}
-	detail, err := h.projectDetail(r.Context(), p.WorkspaceID, r.URL.Query().Get("workspaceSlug"), updated)
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
+	detail, err := h.projectDetail(r.Context(), p.WorkspaceID, r.URL.Query().Get("workspaceSlug"), updated, p.Role != "guest")
 	if err != nil {
 		problem.Write(w, 500, "Update project failed", err.Error())
 		return
@@ -472,7 +512,8 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete project failed", err.Error())
 		return
 	}
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "project", existing.ID, "deleted", existing, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "project", existing.ID, "deleted", existing, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Delete project failed", err.Error())
 		return
 	}
@@ -480,6 +521,7 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete project failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	problem.JSON(w, 200, map[string]bool{"success": true})
 }
 
@@ -673,7 +715,55 @@ func uniqueSlug(ctx context.Context, tx pgx.Tx, workspaceID, base, existingID st
 	}
 }
 
-func insertOperation(ctx context.Context, tx pgx.Tx, workspaceID, entityType, entityID, opType string, payload any, createdBy string) error {
+func projectCustomerFilterRequested(r *http.Request) bool {
+	for _, key := range []string{"customer_count", "customer", "customer_name", "customer_domain", "customer_tier", "customer_status", "important_customer_requests"} {
+		if strings.TrimSpace(r.URL.Query().Get(key)) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func applyCustomerProjectFilters(r *http.Request, where *string, args *[]any) {
+	query := r.URL.Query()
+	if countRaw := strings.TrimSpace(query.Get("customer_count")); countRaw != "" {
+		if count, err := strconv.Atoi(countRaw); err == nil {
+			*args = append(*args, count)
+			*where += fmt.Sprintf(" and (select count(distinct cr.customer_id) from project_customer_request pcr join customer_request cr on cr.id=pcr.customer_request_id where pcr.project_id=p.id) >= $%d", len(*args))
+		}
+	}
+	customer := strings.TrimSpace(query.Get("customer"))
+	if customer == "" {
+		customer = strings.TrimSpace(query.Get("customer_name"))
+	}
+	if customer == "" {
+		customer = strings.TrimSpace(query.Get("customer_domain"))
+	}
+	if customer != "" {
+		*args = append(*args, "%"+escapeLike(customer)+"%")
+		*where += fmt.Sprintf(" and exists (select 1 from project_customer_request pcr join customer_request cr on cr.id=pcr.customer_request_id join customer c on c.id=cr.customer_id where pcr.project_id=p.id and (c.name ilike $%d or c.domain ilike $%d))", len(*args), len(*args))
+	}
+	if tier := strings.TrimSpace(query.Get("customer_tier")); tier != "" {
+		*args = append(*args, tier)
+		*where += fmt.Sprintf(" and exists (select 1 from project_customer_request pcr join customer_request cr on cr.id=pcr.customer_request_id join customer c on c.id=cr.customer_id where pcr.project_id=p.id and c.tier=$%d)", len(*args))
+	}
+	if status := strings.TrimSpace(query.Get("customer_status")); status != "" {
+		*args = append(*args, status)
+		*where += fmt.Sprintf(" and exists (select 1 from project_customer_request pcr join customer_request cr on cr.id=pcr.customer_request_id join customer c on c.id=cr.customer_id where pcr.project_id=p.id and c.status=$%d)", len(*args))
+	}
+	if important := strings.TrimSpace(query.Get("important_customer_requests")); important == "true" || important == "1" {
+		*where += " and exists (select 1 from project_customer_request pcr join customer_request cr on cr.id=pcr.customer_request_id where pcr.project_id=p.id and cr.important=true)"
+	}
+}
+
+func escapeLike(value string) string {
+	value = strings.ReplaceAll(value, `\\`, `\\\\`)
+	value = strings.ReplaceAll(value, `%`, `\\%`)
+	value = strings.ReplaceAll(value, `_`, `\\_`)
+	return value
+}
+
+func insertOperation(ctx context.Context, tx pgx.Tx, workspaceID, entityType, entityID, opType string, payload any, createdBy string) (syncapi.Operation, error) {
 	return syncapi.InsertOperation(ctx, tx, workspaceID, entityType, entityID, opType, payload, createdBy)
 }
 

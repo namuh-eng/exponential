@@ -128,7 +128,42 @@ describe("Login page", () => {
     });
   });
 
-  it("keeps only Google active and marks the other methods coming soon", () => {
+  it("renders configured GitHub login and starts the first-party flow", async () => {
+    fetchMock.mockResolvedValueOnce(
+      providerCapabilities({ providers: { google: true, github: true } }),
+    );
+
+    render(<LoginPage />);
+    await waitForProviderProbe();
+
+    const githubButton = await screen.findByRole("button", {
+      name: /Continue with GitHub/,
+    });
+    expect(githubButton).toBeEnabled();
+
+    fireEvent.click(githubButton);
+
+    await waitFor(() => {
+      expect(assignMock).toHaveBeenCalledWith(
+        "/api/auth/github/start?callback_url=%2F",
+      );
+    });
+  });
+
+  it("hides GitHub login when the provider is not configured", async () => {
+    fetchMock.mockResolvedValueOnce(
+      providerCapabilities({ providers: { google: true, github: false } }),
+    );
+
+    render(<LoginPage />);
+    await waitForProviderProbe();
+
+    expect(
+      screen.queryByRole("button", { name: /Continue with GitHub/ }),
+    ).toBeNull();
+  });
+
+  it("keeps Google and SAML active while marking email and passkey coming soon", () => {
     render(<LoginPage />);
 
     expect(
@@ -139,11 +174,11 @@ describe("Login page", () => {
     ).toBeDisabled();
     expect(
       screen.getByRole("button", { name: /Continue with SAML SSO/ }),
-    ).toBeDisabled();
+    ).toBeEnabled();
     expect(
       screen.getByRole("button", { name: /Log in with passkey/ }),
     ).toBeDisabled();
-    expect(screen.getAllByText("coming soon").length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByText("coming soon").length).toBeGreaterThanOrEqual(2);
   });
 
   it("shows SAML when workspace policy disables Google and email/passkey", async () => {

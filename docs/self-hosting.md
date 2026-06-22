@@ -41,6 +41,7 @@ curl -fsSL "https://raw.githubusercontent.com/namuh-eng/exponential/${IMAGE_TAG}
 # Fill in the required secrets (see Required Environment below)
 openssl rand -hex 32  # paste as EXPONENTIAL_SESSION_SECRET
 openssl rand -hex 32  # paste as EXPONENTIAL_METRICS_TOKEN
+openssl rand -base64 32  # paste as EXPONENTIAL_PROVIDER_CREDENTIAL_ENCRYPTION_KEY
 $EDITOR .env
 
 docker compose -f docker-compose.images.yml up
@@ -63,6 +64,7 @@ cp .env.example .env
 
 openssl rand -hex 32 # EXPONENTIAL_SESSION_SECRET
 openssl rand -hex 32 # EXPONENTIAL_METRICS_TOKEN
+openssl rand -base64 32 # EXPONENTIAL_PROVIDER_CREDENTIAL_ENCRYPTION_KEY
 $EDITOR .env
 
 docker compose up --build
@@ -80,10 +82,12 @@ Before exposing the instance to your team, configure at least one of:
 
 - **Google sign-in** — set `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` (requires
   an HTTPS public URL for the OAuth redirect).
+- **GitHub sign-in** — set `AUTH_GITHUB_ID` and `AUTH_GITHUB_SECRET` (requires
+  an HTTPS public URL for the OAuth redirect).
 - **Magic-link email** — set `SENDER_EMAIL` with SES credentials, or
   `SENDER_EMAIL` + `OPENSEND_API_KEY` for Opensend.
 
-Without either, magic-link requests return `503` and there is no way to sign
+Without any of these, magic-link requests return `503` and there is no way to sign
 in. For a quick local trial without any email or OAuth setup, use the
 development stack instead (`docker compose -f docker-compose.dev.yml up
 --build`): in non-production mode the API returns the magic-link URL directly
@@ -99,8 +103,16 @@ For Compose, set these in `.env` before exposing the instance:
 | `DB_PASSWORD` | Password for bundled Postgres. | Generate a real password for shared hosts. |
 | `EXPONENTIAL_SESSION_SECRET` | HMAC secret for browser sessions. | `openssl rand -hex 32` |
 | `EXPONENTIAL_METRICS_TOKEN` | Token for production RED metrics. The Compose stack runs the API with `EXPONENTIAL_API_ENVIRONMENT=production`, so `/metrics/red` returns `404` until this is set and sent via `X-Metrics-Token`. | `openssl rand -hex 32` |
+| `EXPONENTIAL_PROVIDER_CREDENTIAL_ENCRYPTION_KEY` | AES-256-GCM key for third-party provider OAuth/API credentials stored in `provider_credential.encrypted_payload`. Required before connecting integrations; keep stable across deploys. | `openssl rand -base64 32` |
 | `NEXT_PUBLIC_APP_URL` | Browser-facing URL. | `https://issues.example.com` |
 | `EXPONENTIAL_APP_URL` | Server-side canonical app URL. | Usually same as `NEXT_PUBLIC_APP_URL`. |
+
+Existing plaintext `provider_credential.encrypted_payload` rows from older releases
+are decrypted only by the API's shared credential helper and lazily re-written as
+encrypted envelopes the next time the corresponding integration is used. Keep the
+same encryption key until all active integrations have been exercised or
+reconnected; rotating the key before that leaves existing encrypted credentials
+undecryptable.
 
 For local-only trials, `NEXT_PUBLIC_APP_URL` and `EXPONENTIAL_APP_URL` can stay
 at `http://localhost:7015`.
@@ -110,6 +122,7 @@ at `http://localhost:7015`.
 | Feature | Variables | Behavior when omitted |
 | --- | --- | --- |
 | Google sign-in | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | Google OAuth is unavailable. |
+| GitHub sign-in | `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` | GitHub OAuth is unavailable. |
 | Magic-link email (SMTP) | `SENDER_EMAIL`, `SMTP_HOST` (+ optional `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_TLS`) | Use this for any SMTP relay: Mailgun, Postmark, Gmail app password, your own mail server, or Mailhog in dev. |
 | Magic-link email (Opensend) | `SENDER_EMAIL`, `OPENSEND_API_KEY` (+ optional `OPENSEND_BASE_URL`) | — |
 | Magic-link email (SES) | `SENDER_EMAIL` with AWS credentials or instance/task role | — |
@@ -491,7 +504,7 @@ through a public CDN or proxy hostname.
 
 ### HTTPS via ACM (recommended for production)
 
-HTTPS is required for Google OAuth redirect URIs and is strongly recommended
+HTTPS is required for Google and GitHub OAuth redirect URIs and is strongly recommended
 for all production deployments. `preflight.sh` can wire an HTTPS:443 ALB
 listener and convert HTTP:80 to a permanent redirect when you supply an ACM
 certificate ARN.

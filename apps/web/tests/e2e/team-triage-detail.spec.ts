@@ -130,6 +130,7 @@ test.describe("Team triage detail review", () => {
         confirmed: true,
         priority: "urgent",
         estimate: 2,
+        dueDate: null,
         labelIds: ["label-bug"],
         cycleId: "cycle-1",
         projectId: "project-1",

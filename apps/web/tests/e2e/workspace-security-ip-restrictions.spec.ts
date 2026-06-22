@@ -197,9 +197,21 @@ test.describe("Workspace SAML and SCIM settings", () => {
       },
     );
     expect(discoveryResponse.status()).toBe(200);
-    await expect(discoveryResponse.json()).resolves.toEqual({
-      url: "https://idp.example.com/sso",
-    });
+    const discoveryPayload: unknown = await discoveryResponse.json();
+    const discoveryUrlValue =
+      typeof discoveryPayload === "object" &&
+      discoveryPayload !== null &&
+      "url" in discoveryPayload &&
+      typeof discoveryPayload.url === "string"
+        ? discoveryPayload.url
+        : "";
+    expect(discoveryUrlValue).not.toBe("");
+    const discoveryUrl = new URL(discoveryUrlValue);
+    expect(`${discoveryUrl.origin}${discoveryUrl.pathname}`).toBe(
+      "https://idp.example.com/sso",
+    );
+    expect(discoveryUrl.searchParams.get("SAMLRequest")).toBeTruthy();
+    expect(discoveryUrl.searchParams.get("RelayState")).toMatch(/^saml_/);
 
     await page.getByRole("button", { name: "Generate SCIM token" }).click();
     await expect(page.getByText(/New token \(copy once\)/)).toBeVisible();

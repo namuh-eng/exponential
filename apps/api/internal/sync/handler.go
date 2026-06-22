@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	stdsync "sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -31,6 +32,44 @@ type replayMessage struct {
 	Operations []Operation `json:"operations"`
 }
 
+type ReplayStatus struct {
+	RequestedVersion int64  `json:"requestedVersion"`
+	OperationCount   int    `json:"operationCount"`
+	ReplayedAt       string `json:"replayedAt"`
+}
+
+type statusMessage struct {
+	CurrentVersion int64         `json:"currentVersion"`
+	LastReplay     *ReplayStatus `json:"lastReplay,omitempty"`
+}
+
+var replayStatuses = struct {
+	stdsync.Mutex
+	byWorkspace map[string]ReplayStatus
+}{byWorkspace: map[string]ReplayStatus{}}
+
+func (h Handler) Status(w http.ResponseWriter, r *http.Request) {
+	principal, ok := auth.FromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	currentVersion, err := h.currentVersion(r.Context(), principal.WorkspaceID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	response := statusMessage{CurrentVersion: currentVersion}
+	replayStatuses.Lock()
+	if status, ok := replayStatuses.byWorkspace[principal.WorkspaceID]; ok {
+		copy := status
+		response.LastReplay = &copy
+	}
+	replayStatuses.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(response)
+}
+
 func (h Handler) WebSocket(w http.ResponseWriter, r *http.Request) {
 	principal, ok := auth.FromContext(r.Context())
 	if !ok {
@@ -50,6 +89,7 @@ func (h Handler) WebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = wsjsonWrite(r.Context(), conn, replayMessage{Type: "replay", Operations: ops})
+	recordReplayStatus(principal.WorkspaceID, lastVersion, len(ops))
 
 	subscription, _ := SubscribeOperations(r.Context(), principal.WorkspaceID)
 	if subscription != nil {
@@ -112,6 +152,18 @@ func (h Handler) loadOperations(ctx context.Context, workspaceID string, after i
 		ops = append(ops, op)
 	}
 	return ops, rows.Err()
+}
+
+func (h Handler) currentVersion(ctx context.Context, workspaceID string) (int64, error) {
+	var version int64
+	err := h.DB.QueryRow(ctx, `select coalesce(max(version), 0) from operation where workspace_id=$1::uuid`, workspaceID).Scan(&version)
+	return version, err
+}
+
+func recordReplayStatus(workspaceID string, requestedVersion int64, operationCount int) {
+	replayStatuses.Lock()
+	replayStatuses.byWorkspace[workspaceID] = ReplayStatus{RequestedVersion: requestedVersion, OperationCount: operationCount, ReplayedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	replayStatuses.Unlock()
 }
 
 func wsjsonWrite(ctx context.Context, conn *websocket.Conn, value any) error {

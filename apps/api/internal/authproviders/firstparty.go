@@ -8,9 +8,10 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"net"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -22,6 +23,7 @@ import (
 	"github.com/namuh-eng/exponential/apps/api/internal/email"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
 	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/github"
 	"golang.org/x/oauth2/google"
 )
 
@@ -48,6 +50,47 @@ type googleClaims struct {
 	Name          string `json:"name"`
 	Picture       string `json:"picture"`
 }
+
+type githubAccountClaims struct {
+	ID        string
+	Email     string
+	Name      string
+	Login     string
+	AvatarURL string
+}
+
+type githubProfileResponse struct {
+	ID        githubID `json:"id"`
+	Login     string   `json:"login"`
+	Name      string   `json:"name"`
+	AvatarURL string   `json:"avatar_url"`
+}
+
+type githubEmailResponse struct {
+	Email    string `json:"email"`
+	Primary  bool   `json:"primary"`
+	Verified bool   `json:"verified"`
+}
+
+type githubID string
+
+func (id *githubID) UnmarshalJSON(raw []byte) error {
+	var asString string
+	if err := json.Unmarshal(raw, &asString); err == nil {
+		*id = githubID(strings.TrimSpace(asString))
+		return nil
+	}
+	var asNumber json.Number
+	if err := json.Unmarshal(raw, &asNumber); err != nil {
+		return err
+	}
+	*id = githubID(asNumber.String())
+	return nil
+}
+
+func (id githubID) String() string { return string(id) }
+
+var errGitHubVerifiedEmailMissing = errors.New("GitHub account did not include a verified primary email")
 
 type discordAccountClaims struct {
 	ID         string `json:"id"`
@@ -147,6 +190,74 @@ func (h Handler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, err := h.upsertOAuthUser(r.Context(), claims, token, rawIDToken)
+	if err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Create user session failed", err.Error())
+		return
+	}
+	sessionToken, expires, err := h.createBrowserSession(r, user.ID)
+	if err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Create user session failed", err.Error())
+		return
+	}
+	setSessionCookie(w, r, sessionToken, expires)
+	clearCookie(w, authStateCookieName)
+	http.Redirect(w, r, postAuthCompletionURL(r, callbackURL), http.StatusFound)
+}
+
+func (h Handler) StartGitHub(w http.ResponseWriter, r *http.Request) {
+	cfg, err := githubOAuthConfig(r)
+	if err != nil {
+		problem.JSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		return
+	}
+	callbackURL := safeCallbackPath(r.URL.Query().Get("callback_url"))
+	stateRaw := randomBase64URLAuth(24) + "|" + callbackURL
+	state := signAuthValue(stateRaw)
+	setTransientCookie(w, r, authStateCookieName, state, 10*time.Minute)
+	http.Redirect(w, r, cfg.AuthCodeURL(state), http.StatusFound)
+}
+
+func (h Handler) GitHubCallback(w http.ResponseWriter, r *http.Request) {
+	stateCookie, err := r.Cookie(authStateCookieName)
+	if err != nil {
+		problem.JSON(w, http.StatusBadRequest, map[string]string{"error": "Missing OAuth state."})
+		return
+	}
+	stateRaw, ok := verifyAuthValue(r.URL.Query().Get("state"))
+	if !ok || !hmac.Equal([]byte(r.URL.Query().Get("state")), []byte(stateCookie.Value)) {
+		problem.JSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid OAuth state."})
+		return
+	}
+	parts := strings.SplitN(stateRaw, "|", 2)
+	if len(parts) != 2 {
+		problem.JSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid OAuth state."})
+		return
+	}
+	callbackURL := safeCallbackPath(parts[1])
+	cfg, err := githubOAuthConfig(r)
+	if err != nil {
+		problem.JSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		return
+	}
+	token, err := cfg.Exchange(r.Context(), r.URL.Query().Get("code"))
+	if err != nil {
+		problem.Write(w, http.StatusUnauthorized, "GitHub OAuth exchange failed", err.Error())
+		return
+	}
+	claims, err := fetchGitHubAccount(r.Context(), http.DefaultClient, token.AccessToken)
+	if err != nil {
+		if errors.Is(err, errGitHubVerifiedEmailMissing) {
+			problem.JSON(w, http.StatusUnauthorized, map[string]string{"error": "GitHub account email is not verified."})
+			return
+		}
+		problem.Write(w, http.StatusBadGateway, "GitHub profile fetch failed", err.Error())
+		return
+	}
+	if strings.TrimSpace(claims.Email) == "" {
+		problem.JSON(w, http.StatusUnauthorized, map[string]string{"error": "GitHub account email is not verified."})
+		return
+	}
+	user, err := h.upsertGitHubOAuthUser(r.Context(), claims, token)
 	if err != nil {
 		problem.Write(w, http.StatusInternalServerError, "Create user session failed", err.Error())
 		return
@@ -405,6 +516,34 @@ func (h Handler) upsertOAuthUser(ctx context.Context, claims googleClaims, token
 	return user, err
 }
 
+func (h Handler) upsertGitHubOAuthUser(ctx context.Context, claims githubAccountClaims, token *oauth2.Token) (authUser, error) {
+	name := strings.TrimSpace(claims.Name)
+	if name == "" {
+		name = strings.TrimSpace(claims.Login)
+	}
+	if name == "" {
+		name = strings.Split(claims.Email, "@")[0]
+	}
+	var image *string
+	if strings.TrimSpace(claims.AvatarURL) != "" {
+		avatarURL := strings.TrimSpace(claims.AvatarURL)
+		image = &avatarURL
+	}
+	user, err := h.upsertEmailUser(ctx, claims.Email, name)
+	if err != nil {
+		return user, err
+	}
+	_, _ = h.DB.Exec(ctx, `update "user" set image=coalesce($2,image), email_verified=true, updated_at=now() where id=$1`, user.ID, image)
+	accountID := "github:" + claims.ID
+	refreshToken, _ := token.Extra("refresh_token").(string)
+	scope, _ := token.Extra("scope").(string)
+	if strings.TrimSpace(scope) == "" {
+		scope = "read:user user:email"
+	}
+	_, err = h.DB.Exec(ctx, `insert into account (id,account_id,provider_id,user_id,access_token,refresh_token,access_token_expires_at,scope,created_at,updated_at) values ($1,$2,'github',$3,$4,$5,$6,$7,now(),now()) on conflict (id) do update set user_id=excluded.user_id, access_token=excluded.access_token, refresh_token=coalesce(nullif(excluded.refresh_token,''), account.refresh_token), access_token_expires_at=excluded.access_token_expires_at, scope=excluded.scope, updated_at=now()`, accountID, claims.ID, user.ID, token.AccessToken, refreshToken, token.Expiry, scope)
+	return user, err
+}
+
 func (h Handler) upsertEmailUser(ctx context.Context, email, name string) (authUser, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -434,6 +573,94 @@ func googleOAuthConfig(r *http.Request) (*oauth2.Config, error) {
 		return nil, fmt.Errorf("Google OAuth is not configured")
 	}
 	return &oauth2.Config{ClientID: clientID, ClientSecret: clientSecret, Endpoint: google.Endpoint, RedirectURL: appURL(r) + "/api/auth/google/callback", Scopes: []string{oidc.ScopeOpenID, "email", "profile"}}, nil
+}
+
+func githubOAuthConfig(r *http.Request) (*oauth2.Config, error) {
+	clientID := strings.TrimSpace(os.Getenv("AUTH_GITHUB_ID"))
+	clientSecret := strings.TrimSpace(os.Getenv("AUTH_GITHUB_SECRET"))
+	if clientID == "" || clientSecret == "" {
+		return nil, fmt.Errorf("GitHub OAuth is not configured")
+	}
+	endpoint := github.Endpoint
+	if value := strings.TrimRight(strings.TrimSpace(os.Getenv("GITHUB_OAUTH_BASE_URL")), "/"); value != "" {
+		endpoint = oauth2.Endpoint{AuthURL: value + "/login/oauth/authorize", TokenURL: value + "/login/oauth/access_token"}
+	}
+	return &oauth2.Config{ClientID: clientID, ClientSecret: clientSecret, Endpoint: endpoint, RedirectURL: appURL(r) + "/api/auth/github/callback", Scopes: []string{"read:user", "user:email"}}, nil
+}
+
+func githubAPIBaseURL() string {
+	if v := strings.TrimSpace(os.Getenv("GITHUB_API_BASE_URL")); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	return "https://api.github.com"
+}
+
+func fetchGitHubAccount(ctx context.Context, client *http.Client, accessToken string) (githubAccountClaims, error) {
+	profile, err := fetchGitHubProfile(ctx, client, accessToken)
+	if err != nil {
+		return githubAccountClaims{}, err
+	}
+	email, err := fetchGitHubVerifiedPrimaryEmail(ctx, client, accessToken)
+	if err != nil {
+		return githubAccountClaims{}, err
+	}
+	return githubAccountClaims{ID: profile.ID.String(), Email: email, Name: profile.Name, Login: profile.Login, AvatarURL: profile.AvatarURL}, nil
+}
+
+func fetchGitHubProfile(ctx context.Context, client *http.Client, accessToken string) (githubProfileResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, githubAPIBaseURL()+"/user", nil)
+	if err != nil {
+		return githubProfileResponse{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return githubProfileResponse{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return githubProfileResponse{}, fmt.Errorf("GitHub profile returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var profile githubProfileResponse
+	decoder := json.NewDecoder(resp.Body)
+	decoder.UseNumber()
+	if err := decoder.Decode(&profile); err != nil {
+		return githubProfileResponse{}, err
+	}
+	if strings.TrimSpace(profile.ID.String()) == "" {
+		return githubProfileResponse{}, fmt.Errorf("GitHub profile did not include an id")
+	}
+	return profile, nil
+}
+
+func fetchGitHubVerifiedPrimaryEmail(ctx context.Context, client *http.Client, accessToken string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, githubAPIBaseURL()+"/user/emails", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return "", fmt.Errorf("GitHub emails returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var emails []githubEmailResponse
+	if err := json.NewDecoder(resp.Body).Decode(&emails); err != nil {
+		return "", err
+	}
+	for _, candidate := range emails {
+		if candidate.Primary && candidate.Verified && strings.TrimSpace(candidate.Email) != "" {
+			return strings.ToLower(strings.TrimSpace(candidate.Email)), nil
+		}
+	}
+	return "", errGitHubVerifiedEmailMissing
 }
 
 func discordOAuthConfig(r *http.Request) (*oauth2.Config, error) {

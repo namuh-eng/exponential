@@ -2,16 +2,22 @@
 
 import { useAppShellContext } from "@/app/(app)/app-shell";
 import {
+  SYNC_OPERATIONS_EVENT,
+  type SyncOperationsEvent,
+} from "@/app/(app)/sync-subscription";
+import {
   IssueProperties,
   type IssuePropertyUpdate,
 } from "@/components/issue-properties";
 import { SidebarFavoriteButton } from "@/components/sidebar-favorite-button";
+import { createBrowserApiClient } from "@/lib/browser-api-client";
 import { LAST_ISSUE_STORAGE_KEY } from "@/lib/command-palette";
 import {
   normalizeIssueDescriptionHtml,
   richTextHtmlToPlainText,
 } from "@/lib/issue-description";
 import { withWorkspaceSlug } from "@/lib/workspace-paths";
+import type { components } from "@namuh-eng/expn-sdk";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -22,6 +28,8 @@ import {
   useRef,
   useState,
 } from "react";
+
+const apiClient = createBrowserApiClient();
 
 interface IssueReaction {
   emoji: string;
@@ -37,6 +45,8 @@ interface IssueCommentAttachment {
   size: number;
   downloadUrl: string | null;
 }
+
+type FigmaSource = components["schemas"]["FigmaSource"];
 
 interface WorkspaceMemberOption {
   userId: string;
@@ -110,6 +120,24 @@ interface IssueExternalSource {
   integrationId: string;
 }
 
+interface IssueCustomerRequest {
+  id: string;
+  customerId: string;
+  customer: {
+    id: string;
+    name: string;
+    domain: string | null;
+    tier?: string | null;
+    status?: string | null;
+  };
+  title: string;
+  body: string | null;
+  important: boolean;
+  source: string | null;
+  sourceUrl: string | null;
+  createdAt: string;
+}
+
 interface IssueDetail {
   id: string;
   identifier: string;
@@ -163,8 +191,10 @@ interface IssueDetail {
     error?: string | null;
   };
   comments: IssueComment[];
+  figmaSources: FigmaSource[];
   subIssues: IssueSubIssue[];
   sources: IssueExternalSource[];
+  customerRequests: IssueCustomerRequest[];
   createdAt: string;
   updatedAt: string;
 }
@@ -438,7 +468,13 @@ function getHistoryEventDescription(event: IssueHistoryEvent): string {
             ? " from Microsoft Teams"
             : event.metadata.source === "sentry_issue"
               ? " from Sentry"
-              : "";
+              : event.metadata.source === "github_issue"
+                ? " from GitHub"
+                : event.metadata.source === "salesforce_case"
+                  ? " from Salesforce"
+                  : event.metadata.source === "zendesk_ticket"
+                    ? " from Zendesk"
+                    : "";
       return `${actorName} created this issue${legacySuffix}${sourceSuffix}`;
     }
     case "updated":
@@ -502,6 +538,45 @@ function getSentrySourceLink(event: IssueHistoryEvent): string | null {
   }
   return typeof sentry.webUrl === "string" && sentry.webUrl.length > 0
     ? sentry.webUrl
+    : null;
+}
+
+function getGitHubSourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "github_issue") {
+    return null;
+  }
+  const github = event.metadata.github;
+  if (!isRecord(github)) {
+    return null;
+  }
+  return typeof github.url === "string" && github.url.length > 0
+    ? github.url
+    : null;
+}
+
+function getSalesforceSourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "salesforce_case") {
+    return null;
+  }
+  const salesforce = event.metadata.salesforce;
+  if (!isRecord(salesforce)) {
+    return null;
+  }
+  return typeof salesforce.caseUrl === "string" && salesforce.caseUrl.length > 0
+    ? salesforce.caseUrl
+    : null;
+}
+
+function getZendeskSourceLink(event: IssueHistoryEvent): string | null {
+  if (event.metadata.source !== "zendesk_ticket") {
+    return null;
+  }
+  const zendesk = event.metadata.zendesk;
+  if (!isRecord(zendesk)) {
+    return null;
+  }
+  return typeof zendesk.ticketUrl === "string" && zendesk.ticketUrl.length > 0
+    ? zendesk.ticketUrl
     : null;
 }
 
@@ -636,6 +711,88 @@ function CommentReactions({
   );
 }
 
+function getFigmaKindLabel(kind: FigmaSource["kind"]): string {
+  switch (kind) {
+    case "proto":
+      return "Prototype";
+    case "design":
+      return "Design";
+    case "file":
+      return "File";
+  }
+}
+
+function FigmaPreviewCard({
+  source,
+  refreshing,
+  onRefresh,
+}: {
+  source: FigmaSource;
+  refreshing: boolean;
+  onRefresh: (sourceId: string) => void;
+}) {
+  const label = getFigmaKindLabel(source.kind);
+  const title = source.name?.trim() || `Figma ${label.toLowerCase()}`;
+  const timestamp = source.refreshedAt ?? source.capturedAt;
+
+  const safeThumbnailUrl =
+    source.thumbnailUrl?.startsWith("https://") === true
+      ? source.thumbnailUrl
+      : null;
+
+  return (
+    <div className="tty-row overflow-hidden border border-[var(--color-border)] bg-[var(--color-content-bg)]">
+      {safeThumbnailUrl ? (
+        <img
+          src={safeThumbnailUrl}
+          alt=""
+          className="h-28 w-full object-cover"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+        />
+      ) : null}
+      <div className="p-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+              Figma {label}
+            </div>
+            <a
+              href={source.normalizedUrl || source.url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 block truncate text-[14px] font-medium text-[var(--color-text-primary)] hover:text-[var(--color-accent)]"
+            >
+              {title}
+            </a>
+            <div className="mt-1 truncate text-[12px] text-[var(--color-text-secondary)]">
+              {source.nodeId
+                ? `${source.fileKey} · ${source.nodeId}`
+                : source.fileKey}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onRefresh(source.id)}
+            disabled={refreshing}
+            className="tty-row border border-[var(--color-border)] px-2 py-1 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {refreshing ? "Marking..." : "Mark seen"}
+          </button>
+        </div>
+        <div className="mt-3 text-[12px] text-[var(--color-text-secondary)]">
+          {source.refreshedAt ? "Seen" : "Captured"} {formatFullDate(timestamp)}
+        </div>
+        {source.lastError ? (
+          <div className="mt-2 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[12px] text-red-600 dark:text-red-300">
+            {source.lastError}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function IssueDetailView({
   issueId,
   compact = false,
@@ -687,6 +844,12 @@ export function IssueDetailView({
   );
   const [issueReactionPickerOpen, setIssueReactionPickerOpen] = useState(false);
   const [subscriptionSaving, setSubscriptionSaving] = useState(false);
+  const [refreshingFigmaSourceId, setRefreshingFigmaSourceId] = useState<
+    string | null
+  >(null);
+  const [figmaActionStatus, setFigmaActionStatus] = useState<string | null>(
+    null,
+  );
   const [descriptionDraft, setDescriptionDraft] = useState("");
   const [descriptionFocused, setDescriptionFocused] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
@@ -712,6 +875,13 @@ export function IssueDetailView({
   const [issueReactionNotice, setIssueReactionNotice] = useState<string | null>(
     null,
   );
+  const [customerName, setCustomerName] = useState("");
+  const [customerDomain, setCustomerDomain] = useState("");
+  const [customerRequestTitle, setCustomerRequestTitle] = useState("");
+  const [customerRequestBody, setCustomerRequestBody] = useState("");
+  const [customerRequestImportant, setCustomerRequestImportant] =
+    useState(false);
+  const [customerRequestSaving, setCustomerRequestSaving] = useState(false);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const descriptionRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -760,6 +930,9 @@ export function IssueDetailView({
             subscribed: false,
             watcherCount: 0,
           },
+          figmaSources: Array.isArray(json.figmaSources)
+            ? json.figmaSources
+            : [],
           discussionSummary: json.discussionSummary ?? {
             enabled: false,
             status: "disabled",
@@ -768,6 +941,7 @@ export function IssueDetailView({
             sourceCommentCount: 0,
           },
           sources: json.sources ?? [],
+          customerRequests: json.customerRequests ?? [],
         });
         setDescriptionDraft(
           normalizeIssueDescriptionHtml(json.description) ?? "",
@@ -787,6 +961,22 @@ export function IssueDetailView({
   useEffect(() => {
     void fetchHistory();
   }, [fetchHistory]);
+
+  useEffect(() => {
+    const handleSync = (event: Event) => {
+      const operations = (event as SyncOperationsEvent).detail.operations;
+      if (
+        operations.some((operation) =>
+          ["issue", "comment"].includes(operation.entity_type),
+        )
+      ) {
+        void fetchIssue();
+        void fetchHistory();
+      }
+    };
+    window.addEventListener(SYNC_OPERATIONS_EVENT, handleSync);
+    return () => window.removeEventListener(SYNC_OPERATIONS_EVENT, handleSync);
+  }, [fetchHistory, fetchIssue]);
 
   useEffect(() => {
     let cancelled = false;
@@ -923,8 +1113,79 @@ export function IssueDetailView({
           : current,
       );
       void fetchHistory();
+      if (field === "description") {
+        void fetchIssue();
+      }
     } finally {
       setSavingField(null);
+    }
+  }
+
+  async function handleCreateCustomerRequest() {
+    if (!issue || customerRequestSaving) {
+      return;
+    }
+    const trimmedCustomerName = customerName.trim();
+    const trimmedTitle = customerRequestTitle.trim();
+    if (!trimmedCustomerName || !trimmedTitle) {
+      setActionStatus("Customer and request title are required.");
+      return;
+    }
+    setCustomerRequestSaving(true);
+    setActionStatus(null);
+    try {
+      const customerRes = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: trimmedCustomerName,
+          domain: customerDomain.trim() || null,
+          source: "manual",
+        }),
+      });
+      if (!customerRes.ok) {
+        throw new Error("Create customer failed");
+      }
+      const customer = (await customerRes.json()) as {
+        id: string;
+        name: string;
+        domain: string | null;
+      };
+      const requestRes = await fetch(`/api/customers/${customer.id}/requests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: trimmedTitle,
+          body: customerRequestBody.trim() || null,
+          important: customerRequestImportant,
+          issueId: issue.id,
+          source: "manual",
+        }),
+      });
+      if (!requestRes.ok) {
+        throw new Error("Create request failed");
+      }
+      const request = (await requestRes.json()) as IssueCustomerRequest;
+      setIssue((current) =>
+        current
+          ? {
+              ...current,
+              customerRequests: [request, ...current.customerRequests],
+            }
+          : current,
+      );
+      setCustomerName("");
+      setCustomerDomain("");
+      setCustomerRequestTitle("");
+      setCustomerRequestBody("");
+      setCustomerRequestImportant(false);
+      setActionStatus("Customer request linked.");
+    } catch (err) {
+      setActionStatus(
+        err instanceof Error ? err.message : "Customer request failed",
+      );
+    } finally {
+      setCustomerRequestSaving(false);
     }
   }
 
@@ -1366,6 +1627,39 @@ export function IssueDetailView({
       );
     } finally {
       setSubscriptionSaving(false);
+    }
+  }
+
+  async function handleFigmaRefresh(sourceId: string) {
+    if (!issue || refreshingFigmaSourceId) {
+      return;
+    }
+
+    setRefreshingFigmaSourceId(sourceId);
+    setFigmaActionStatus(null);
+    try {
+      const { data, error } = await apiClient.POST(
+        "/issues/{id}/figma-sources/{sourceId}/refresh",
+        { params: { path: { id: issue.id, sourceId } } },
+      );
+      if (error !== undefined || data === undefined) {
+        throw new Error("Failed to mark Figma source as seen");
+      }
+      setIssue((current) =>
+        current
+          ? {
+              ...current,
+              figmaSources: current.figmaSources.map((source) =>
+                source.id === sourceId ? data : source,
+              ),
+            }
+          : current,
+      );
+      setFigmaActionStatus("Figma source marked as seen.");
+    } catch {
+      setFigmaActionStatus("Figma source could not be updated.");
+    } finally {
+      setRefreshingFigmaSourceId(null);
     }
   }
 
@@ -1828,6 +2122,40 @@ export function IssueDetailView({
               </div>
             </section>
 
+            {issue.figmaSources.length > 0 ? (
+              <section
+                className="tty-panel px-5 py-4"
+                aria-label="Figma previews"
+              >
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-[13px] font-medium text-[var(--color-text-secondary)]">
+                      Figma previews
+                    </h2>
+                    <p className="mt-1 text-[12px] text-[var(--color-text-secondary)]">
+                      Safe preview cards are generated from linked Figma files,
+                      designs, and prototypes.
+                    </p>
+                  </div>
+                  {figmaActionStatus ? (
+                    <span className="text-[12px] text-[var(--color-text-secondary)]">
+                      {figmaActionStatus}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {issue.figmaSources.map((source) => (
+                    <FigmaPreviewCard
+                      key={source.id}
+                      source={source}
+                      refreshing={refreshingFigmaSourceId === source.id}
+                      onRefresh={handleFigmaRefresh}
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
             <section className="tty-panel px-5 py-4">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-[13px] font-medium text-[var(--color-text-secondary)]">
@@ -2038,6 +2366,36 @@ export function IssueDetailView({
                             className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
                           >
                             View source issue in Sentry
+                          </a>
+                        ) : null}
+                        {getGitHubSourceLink(event) ? (
+                          <a
+                            href={getGitHubSourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source issue in GitHub
+                          </a>
+                        ) : null}
+                        {getSalesforceSourceLink(event) ? (
+                          <a
+                            href={getSalesforceSourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source case in Salesforce
+                          </a>
+                        ) : null}
+                        {getZendeskSourceLink(event) ? (
+                          <a
+                            href={getZendeskSourceLink(event) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                          >
+                            View source ticket in Zendesk
                           </a>
                         ) : null}
                         {getGitLabSourceLink(event) ? (
@@ -2501,6 +2859,102 @@ export function IssueDetailView({
                 }
               />
             )}
+          </div>
+
+          <div className="border-b border-[var(--color-border)] p-4">
+            <div className="editorial-section-title mb-3 text-[12px] uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+              Customer requests
+            </div>
+            <div className="space-y-2">
+              {issue.customerRequests.length === 0 ? (
+                <p className="text-[13px] text-[var(--color-text-secondary)]">
+                  No customer requests linked.
+                </p>
+              ) : (
+                issue.customerRequests.map((request) => (
+                  <div
+                    key={request.id}
+                    className="tty-row border border-[var(--color-border)] px-3 py-2 text-[13px]"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <Link
+                          href={withWorkspaceSlug(
+                            `/customers/${request.customerId}`,
+                            workspaceSlug,
+                          )}
+                          className="font-medium text-[var(--color-text-primary)] hover:underline"
+                        >
+                          {request.customer.name}
+                        </Link>
+                        <p className="mt-1 text-[var(--color-text-secondary)]">
+                          {request.important ? "★ " : ""}
+                          {request.title}
+                        </p>
+                      </div>
+                      <span className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-text-tertiary)]">
+                        {request.customer.domain ?? "customer"}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="mt-4 space-y-2 border-t border-[var(--color-border)] pt-3">
+              <input
+                value={customerName}
+                onChange={(event) => setCustomerName(event.target.value)}
+                placeholder="Customer name"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+              />
+              <input
+                value={customerDomain}
+                onChange={(event) => setCustomerDomain(event.target.value)}
+                placeholder="Domain (optional)"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+              />
+              <input
+                value={customerRequestTitle}
+                onChange={(event) =>
+                  setCustomerRequestTitle(event.target.value)
+                }
+                placeholder="Request title"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+              />
+              <textarea
+                value={customerRequestBody}
+                onChange={(event) => setCustomerRequestBody(event.target.value)}
+                placeholder="Request details (optional)"
+                rows={3}
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[13px] text-[var(--color-text-primary)]"
+              />
+              <label className="flex items-center gap-2 text-[12px] text-[var(--color-text-secondary)]">
+                <input
+                  type="checkbox"
+                  checked={customerRequestImportant}
+                  onChange={(event) =>
+                    setCustomerRequestImportant(event.target.checked)
+                  }
+                />
+                Mark important
+              </label>
+              <button
+                type="button"
+                onClick={handleCreateCustomerRequest}
+                disabled={customerRequestSaving}
+                className="tty-button-primary w-full px-3 py-2 text-[12px] disabled:opacity-50"
+              >
+                {customerRequestSaving ? "Linking…" : "Create and link request"}
+              </button>
+              {issue.customerRequests.length > 0 ? (
+                <a
+                  href={`/api/issues/${encodeURIComponent(issue.identifier)}/customer-requests.csv`}
+                  className="block text-center text-[12px] text-[var(--color-accent)] hover:underline"
+                >
+                  Export CSV
+                </a>
+              ) : null}
+            </div>
           </div>
 
           {issue.sources.length > 0 ? (

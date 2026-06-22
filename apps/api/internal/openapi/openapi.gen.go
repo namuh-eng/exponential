@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ const (
 const (
 	AgentRunStatusCompleted   AgentRunStatus = "completed"
 	AgentRunStatusNeedsReview AgentRunStatus = "needs_review"
+	AgentRunStatusFailed      AgentRunStatus = "failed"
 	AgentRunStatusQueued      AgentRunStatus = "queued"
 	AgentRunStatusRunning     AgentRunStatus = "running"
 )
@@ -123,6 +125,13 @@ const (
 	DocumentFolderRequestColorPink   DocumentFolderRequestColor = "pink"
 	DocumentFolderRequestColorPurple DocumentFolderRequestColor = "purple"
 	DocumentFolderRequestColorYellow DocumentFolderRequestColor = "yellow"
+)
+
+// Defines values for GitHubRegisterRequestRepositorySelection.
+const (
+	GitHubRegisterRequestRepositorySelectionAll      GitHubRegisterRequestRepositorySelection = "all"
+	GitHubRegisterRequestRepositorySelectionSelected GitHubRegisterRequestRepositorySelection = "selected"
+	GitHubRegisterRequestRepositorySelectionUnknown  GitHubRegisterRequestRepositorySelection = "unknown"
 )
 
 // Defines values for InitiativeHealth.
@@ -544,9 +553,9 @@ const (
 
 // Defines values for UpdateInitiativeRequestUpdateHealth.
 const (
-	UpdateInitiativeRequestUpdateHealthAtRisk   UpdateInitiativeRequestUpdateHealth = "atRisk"
-	UpdateInitiativeRequestUpdateHealthOffTrack UpdateInitiativeRequestUpdateHealth = "offTrack"
-	UpdateInitiativeRequestUpdateHealthOnTrack  UpdateInitiativeRequestUpdateHealth = "onTrack"
+	AtRisk   UpdateInitiativeRequestUpdateHealth = "atRisk"
+	OffTrack UpdateInitiativeRequestUpdateHealth = "offTrack"
+	OnTrack  UpdateInitiativeRequestUpdateHealth = "onTrack"
 )
 
 // Defines values for UpdateWorkspaceApiSettingsRequestPermissionLevel.
@@ -694,10 +703,23 @@ const (
 
 // Defines values for WorkspaceImportExportActionRequestAction.
 const (
-	PrepareProvider WorkspaceImportExportActionRequestAction = "prepare_provider"
-	PreviewCsv      WorkspaceImportExportActionRequestAction = "preview_csv"
-	RequestExport   WorkspaceImportExportActionRequestAction = "request_export"
-	StartCsvImport  WorkspaceImportExportActionRequestAction = "start_csv_import"
+	ConfigureJira     WorkspaceImportExportActionRequestAction = "configure_jira"
+	PauseJiraSync     WorkspaceImportExportActionRequestAction = "pause_jira_sync"
+	PrepareProvider   WorkspaceImportExportActionRequestAction = "prepare_provider"
+	PreviewCsv        WorkspaceImportExportActionRequestAction = "preview_csv"
+	PreviewJiraImport WorkspaceImportExportActionRequestAction = "preview_jira_import"
+	RequestExport     WorkspaceImportExportActionRequestAction = "request_export"
+	ResumeJiraSync    WorkspaceImportExportActionRequestAction = "resume_jira_sync"
+	RetryJiraImport   WorkspaceImportExportActionRequestAction = "retry_jira_import"
+	StartCsvImport    WorkspaceImportExportActionRequestAction = "start_csv_import"
+	StartJiraImport   WorkspaceImportExportActionRequestAction = "start_jira_import"
+	SyncJiraProject   WorkspaceImportExportActionRequestAction = "sync_jira_project"
+)
+
+// Defines values for WorkspaceImportExportActionRequestDeployment.
+const (
+	Cloud  WorkspaceImportExportActionRequestDeployment = "cloud"
+	Server WorkspaceImportExportActionRequestDeployment = "server"
 )
 
 // Defines values for WorkspaceImportExportActionRequestProvider.
@@ -867,6 +889,7 @@ type AgentRun struct {
 	Id           string    `json:"id"`
 	Logs         []string  `json:"logs"`
 	Output       string    `json:"output"`
+	FailureReason *string   `json:"failureReason,omitempty"`
 	Owner        string    `json:"owner"`
 	Prompt       string    `json:"prompt"`
 	PromptConfig struct {
@@ -885,8 +908,10 @@ type AgentRunStatus string
 
 // AgentRunListResponse defines model for AgentRunListResponse.
 type AgentRunListResponse struct {
-	CanCreateRuns bool       `json:"canCreateRuns"`
-	Runs          []AgentRun `json:"runs"`
+	CanCreateRuns      bool       `json:"canCreateRuns"`
+	DisabledReason     *string    `json:"disabledReason,omitempty"`
+	ProviderConfigured bool       `json:"providerConfigured"`
+	Runs               []AgentRun `json:"runs"`
 }
 
 // AgentRunResponse defines model for AgentRunResponse.
@@ -900,6 +925,8 @@ type AgentSuggestion struct {
 	Id                string                `json:"id"`
 	IsExternalContext *bool                 `json:"isExternalContext,omitempty"`
 	Status            AgentSuggestionStatus `json:"status"`
+	ReviewedAt        *time.Time            `json:"reviewedAt,omitempty"`
+	ReviewedBy        *string               `json:"reviewedBy,omitempty"`
 	Summary           string                `json:"summary"`
 	Target            string                `json:"target"`
 	Title             string                `json:"title"`
@@ -1150,6 +1177,31 @@ type CreateCommentRequest struct {
 type CreateCustomEmojiRequest struct {
 	ImageUrl string `json:"imageUrl"`
 	Name     string `json:"name"`
+}
+
+// CreateCustomerRequest defines model for CreateCustomerRequest.
+type CreateCustomerRequest struct {
+	Domain  *string  `json:"domain"`
+	Name    string   `json:"name"`
+	OwnerId *string  `json:"ownerId"`
+	Revenue *float32 `json:"revenue"`
+	Size    *int     `json:"size"`
+	Source  *string  `json:"source"`
+	Status  *string  `json:"status"`
+	Tier    *string  `json:"tier"`
+}
+
+// CreateCustomerRequestRequest defines model for CreateCustomerRequestRequest.
+type CreateCustomerRequestRequest struct {
+	Body             *string `json:"body"`
+	ExternalId       *string `json:"externalId"`
+	ExternalProvider *string `json:"externalProvider"`
+	Important        *bool   `json:"important,omitempty"`
+	IssueId          *string `json:"issueId"`
+	ProjectId        *string `json:"projectId"`
+	Source           *string `json:"source"`
+	SourceUrl        *string `json:"sourceUrl"`
+	Title            string  `json:"title"`
 }
 
 // CreateCycleRequest defines model for CreateCycleRequest.
@@ -1421,6 +1473,82 @@ type CustomEmojiResponse struct {
 	Emoji CustomEmoji `json:"emoji"`
 }
 
+// Customer defines model for Customer.
+type Customer struct {
+	CreatedAt    time.Time          `json:"createdAt"`
+	Domain       *string            `json:"domain"`
+	Id           openapi_types.UUID `json:"id"`
+	IssueCount   int                `json:"issueCount"`
+	Name         string             `json:"name"`
+	OwnerId      *string            `json:"ownerId"`
+	ProjectCount int                `json:"projectCount"`
+	RequestCount int                `json:"requestCount"`
+	Revenue      *float32           `json:"revenue"`
+	Size         *int               `json:"size"`
+	Source       *string            `json:"source"`
+	Status       *string            `json:"status"`
+	Tier         *string            `json:"tier"`
+	UpdatedAt    time.Time          `json:"updatedAt"`
+	WorkspaceId  openapi_types.UUID `json:"workspaceId"`
+}
+
+// CustomerDetailResponse defines model for CustomerDetailResponse.
+type CustomerDetailResponse struct {
+	Customer Customer                `json:"customer"`
+	Issues   []CustomerLinkedIssue   `json:"issues"`
+	Projects []CustomerLinkedProject `json:"projects"`
+	Requests []CustomerRequest       `json:"requests"`
+}
+
+// CustomerLinkedIssue defines model for CustomerLinkedIssue.
+type CustomerLinkedIssue struct {
+	Id         openapi_types.UUID `json:"id"`
+	Identifier string             `json:"identifier"`
+	TeamKey    string             `json:"teamKey"`
+	Title      string             `json:"title"`
+}
+
+// CustomerLinkedProject defines model for CustomerLinkedProject.
+type CustomerLinkedProject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Name string             `json:"name"`
+	Slug string             `json:"slug"`
+}
+
+// CustomerListResponse defines model for CustomerListResponse.
+type CustomerListResponse struct {
+	Customers []Customer `json:"customers"`
+}
+
+// CustomerRequest defines model for CustomerRequest.
+type CustomerRequest struct {
+	Body             *string                 `json:"body"`
+	CreatedAt        time.Time               `json:"createdAt"`
+	CreatedByUserId  *string                 `json:"createdByUserId"`
+	Customer         CustomerSummary         `json:"customer"`
+	CustomerId       openapi_types.UUID      `json:"customerId"`
+	ExternalId       *string                 `json:"externalId"`
+	ExternalProvider *string                 `json:"externalProvider"`
+	Id               openapi_types.UUID      `json:"id"`
+	Important        bool                    `json:"important"`
+	LinkedIssues     []CustomerLinkedIssue   `json:"linkedIssues"`
+	LinkedProjects   []CustomerLinkedProject `json:"linkedProjects"`
+	Source           *string                 `json:"source"`
+	SourceUrl        *string                 `json:"sourceUrl"`
+	Title            string                  `json:"title"`
+	UpdatedAt        time.Time               `json:"updatedAt"`
+	WorkspaceId      openapi_types.UUID      `json:"workspaceId"`
+}
+
+// CustomerSummary defines model for CustomerSummary.
+type CustomerSummary struct {
+	Domain *string            `json:"domain"`
+	Id     openapi_types.UUID `json:"id"`
+	Name   string             `json:"name"`
+	Status *string            `json:"status"`
+	Tier   *string            `json:"tier"`
+}
+
 // Cycle defines model for Cycle.
 type Cycle struct {
 	AutoRollover        bool               `json:"auto_rollover"`
@@ -1536,6 +1664,65 @@ type DocumentTemplateRequest struct {
 // DocumentTemplateResponse defines model for DocumentTemplateResponse.
 type DocumentTemplateResponse struct {
 	Template DocumentTemplate `json:"template"`
+}
+
+// GitHubAccount defines model for GitHubAccount.
+type GitHubAccount struct {
+	Id    string `json:"id"`
+	Login string `json:"login"`
+	Type  string `json:"type"`
+}
+
+// GitHubConfigurationRequiredResponse defines model for GitHubConfigurationRequiredResponse.
+type GitHubConfigurationRequiredResponse struct {
+	Error   string `json:"error"`
+	Message string `json:"message"`
+}
+
+// GitHubConnectResponse defines model for GitHubConnectResponse.
+type GitHubConnectResponse struct {
+	InstallationUrl string `json:"installationUrl"`
+	State           string `json:"state"`
+	WorkspaceSlug   string `json:"workspaceSlug"`
+}
+
+// GitHubRegisterRequest defines model for GitHubRegisterRequest.
+type GitHubRegisterRequest struct {
+	Account             GitHubAccount                            `json:"account"`
+	InstallationId      string                                   `json:"installationId"`
+	Metadata            *map[string]interface{}                  `json:"metadata,omitempty"`
+	Permissions         map[string]string                        `json:"permissions"`
+	Repositories        []GitHubRepository                       `json:"repositories"`
+	RepositorySelection GitHubRegisterRequestRepositorySelection `json:"repositorySelection"`
+	SetupAction         *string                                  `json:"setupAction,omitempty"`
+}
+
+// GitHubRegisterRequestRepositorySelection defines model for GitHubRegisterRequest.RepositorySelection.
+type GitHubRegisterRequestRepositorySelection string
+
+// GitHubRegisterResponse defines model for GitHubRegisterResponse.
+type GitHubRegisterResponse struct {
+	Account        GitHubAccount      `json:"account"`
+	Connected      bool               `json:"connected"`
+	InstallationId string             `json:"installationId"`
+	IntegrationId  openapi_types.UUID `json:"integrationId"`
+	Repositories   []GitHubRepository `json:"repositories"`
+}
+
+// GitHubRepository defines model for GitHubRepository.
+type GitHubRepository struct {
+	Active   bool   `json:"active"`
+	FullName string `json:"fullName"`
+	Id       string `json:"id"`
+	Name     string `json:"name"`
+	Private  bool   `json:"private"`
+}
+
+// GitHubWebhookResponse defines model for GitHubWebhookResponse.
+type GitHubWebhookResponse struct {
+	Duplicate bool    `json:"duplicate"`
+	Ignored   *string `json:"ignored"`
+	Ok        bool    `json:"ok"`
 }
 
 // GitLabSetupRequest defines model for GitLabSetupRequest.
@@ -1690,6 +1877,7 @@ type Integration struct {
 	Actions          IntegrationActions           `json:"actions"`
 	ConnectedAt      *time.Time                   `json:"connectedAt"`
 	Description      string                       `json:"description"`
+	Details          map[string]interface{}       `json:"details"`
 	DisplayName      *string                      `json:"displayName"`
 	ExternalId       *string                      `json:"externalId"`
 	Health           IntegrationHealth            `json:"health"`
@@ -1747,6 +1935,57 @@ type IntegrationListResponse struct {
 type IntegrationSetupRequirement struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
+}
+
+// IntercomConfigurationRequiredResponse defines model for IntercomConfigurationRequiredResponse.
+type IntercomConfigurationRequiredResponse struct {
+	Error   string `json:"error"`
+	Message string `json:"message"`
+}
+
+// IntercomConnectResponse defines model for IntercomConnectResponse.
+type IntercomConnectResponse struct {
+	AuthorizationUrl string `json:"authorizationUrl"`
+	State            string `json:"state"`
+	WorkspaceSlug    string `json:"workspaceSlug"`
+}
+
+// IntercomIssue defines model for IntercomIssue.
+type IntercomIssue struct {
+	Assignee   string             `json:"assignee"`
+	Id         openapi_types.UUID `json:"id"`
+	Identifier string             `json:"identifier"`
+	Status     string             `json:"status"`
+	Title      string             `json:"title"`
+	WebUrl     string             `json:"webUrl"`
+}
+
+// IntercomIssueActionRequest defines model for IntercomIssueActionRequest.
+type IntercomIssueActionRequest struct {
+	AppId                *string                `json:"appId,omitempty"`
+	CompanyId            *string                `json:"companyId,omitempty"`
+	ContactEmail         *string                `json:"contactEmail,omitempty"`
+	ContactId            *string                `json:"contactId,omitempty"`
+	ConversationId       *string                `json:"conversationId,omitempty"`
+	Description          *string                `json:"description,omitempty"`
+	IssueId              *string                `json:"issueId,omitempty"`
+	TeamId               *openapi_types.UUID    `json:"teamId,omitempty"`
+	Title                *string                `json:"title,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// IntercomIssueActionResponse defines model for IntercomIssueActionResponse.
+type IntercomIssueActionResponse struct {
+	Issue   *IntercomIssue          `json:"issue"`
+	Message *string                 `json:"message,omitempty"`
+	Meta    *map[string]interface{} `json:"meta,omitempty"`
+	Ok      bool                    `json:"ok"`
+}
+
+// IntercomIssueSearchResponse defines model for IntercomIssueSearchResponse.
+type IntercomIssueSearchResponse struct {
+	Issues []IntercomIssue `json:"issues"`
+	Ok     bool            `json:"ok"`
 }
 
 // InviteResult defines model for InviteResult.
@@ -3079,6 +3318,29 @@ type UpdateCommentRequest struct {
 	Body string `json:"body"`
 }
 
+// UpdateCustomerRequest defines model for UpdateCustomerRequest.
+type UpdateCustomerRequest struct {
+	Domain  *string  `json:"domain"`
+	Name    *string  `json:"name,omitempty"`
+	OwnerId *string  `json:"ownerId"`
+	Revenue *float32 `json:"revenue"`
+	Size    *int     `json:"size"`
+	Source  *string  `json:"source"`
+	Status  *string  `json:"status"`
+	Tier    *string  `json:"tier"`
+}
+
+// UpdateCustomerRequestRequest defines model for UpdateCustomerRequestRequest.
+type UpdateCustomerRequestRequest struct {
+	Body             *string `json:"body"`
+	ExternalId       *string `json:"externalId"`
+	ExternalProvider *string `json:"externalProvider"`
+	Important        *bool   `json:"important,omitempty"`
+	Source           *string `json:"source"`
+	SourceUrl        *string `json:"sourceUrl"`
+	Title            *string `json:"title,omitempty"`
+}
+
 // UpdateCycleRequest defines model for UpdateCycleRequest.
 type UpdateCycleRequest struct {
 	AutoRollover *bool   `json:"auto_rollover,omitempty"`
@@ -3555,17 +3817,32 @@ type WorkspaceExportsResponse struct {
 
 // WorkspaceImportExportActionRequest defines model for WorkspaceImportExportActionRequest.
 type WorkspaceImportExportActionRequest struct {
-	Action               WorkspaceImportExportActionRequestAction    `json:"action"`
-	Csv                  *string                                     `json:"csv,omitempty"`
-	DefaultTeamId        *openapi_types.UUID                         `json:"defaultTeamId,omitempty"`
-	FileName             *string                                     `json:"fileName,omitempty"`
-	Mapping              *map[string]interface{}                     `json:"mapping,omitempty"`
-	Provider             *WorkspaceImportExportActionRequestProvider `json:"provider,omitempty"`
-	AdditionalProperties map[string]interface{}                      `json:"-"`
+	Action             WorkspaceImportExportActionRequestAction      `json:"action"`
+	BaseUrl            *string                                       `json:"baseUrl,omitempty"`
+	Csv                *string                                       `json:"csv,omitempty"`
+	DefaultTeamId      *openapi_types.UUID                           `json:"defaultTeamId,omitempty"`
+	Deployment         *WorkspaceImportExportActionRequestDeployment `json:"deployment,omitempty"`
+	Email              *openapi_types.Email                          `json:"email,omitempty"`
+	FileName           *string                                       `json:"fileName,omitempty"`
+	ForwardSyncEnabled *bool                                         `json:"forwardSyncEnabled,omitempty"`
+	ImportComments     *bool                                         `json:"importComments,omitempty"`
+	ImportLabels       *bool                                         `json:"importLabels,omitempty"`
+	Mapping            *map[string]interface{}                       `json:"mapping,omitempty"`
+	ProjectKey         *string                                       `json:"projectKey,omitempty"`
+	Provider           *WorkspaceImportExportActionRequestProvider   `json:"provider,omitempty"`
+	StatusMapping      *map[string]openapi_types.UUID                `json:"statusMapping,omitempty"`
+	TeamId             *openapi_types.UUID                           `json:"teamId,omitempty"`
+
+	// Token API token or personal access token for authenticating with the provider. Write-only: never returned in responses.
+	Token                *string                `json:"token,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
 }
 
 // WorkspaceImportExportActionRequestAction defines model for WorkspaceImportExportActionRequest.Action.
 type WorkspaceImportExportActionRequestAction string
+
+// WorkspaceImportExportActionRequestDeployment defines model for WorkspaceImportExportActionRequest.Deployment.
+type WorkspaceImportExportActionRequestDeployment string
 
 // WorkspaceImportExportActionRequestProvider defines model for WorkspaceImportExportActionRequest.Provider.
 type WorkspaceImportExportActionRequestProvider string
@@ -3752,9 +4029,49 @@ type GetAuthProviderCapabilitiesParams struct {
 	CallbackUrl *string `form:"callbackUrl,omitempty" json:"callbackUrl,omitempty"`
 }
 
+// LinkCustomerRequestIssueJSONBody defines parameters for LinkCustomerRequestIssue.
+type LinkCustomerRequestIssueJSONBody struct {
+	IssueId string `json:"issueId"`
+}
+
+// LinkCustomerRequestProjectJSONBody defines parameters for LinkCustomerRequestProject.
+type LinkCustomerRequestProjectJSONBody struct {
+	ProjectId string `json:"projectId"`
+}
+
+// ListCustomersParams defines parameters for ListCustomers.
+type ListCustomersParams struct {
+	Q      *string `form:"q,omitempty" json:"q,omitempty"`
+	Tier   *string `form:"tier,omitempty" json:"tier,omitempty"`
+	Status *string `form:"status,omitempty" json:"status,omitempty"`
+}
+
 // DeleteIntegrationParams defines parameters for DeleteIntegration.
 type DeleteIntegrationParams struct {
 	Provider string `form:"provider" json:"provider"`
+}
+
+// GithubSetupCallbackParams defines parameters for GithubSetupCallback.
+type GithubSetupCallbackParams struct {
+	InstallationId *string `form:"installation_id,omitempty" json:"installation_id,omitempty"`
+	SetupAction    *string `form:"setup_action,omitempty" json:"setup_action,omitempty"`
+	State          *string `form:"state,omitempty" json:"state,omitempty"`
+}
+
+// IngestGitHubWebhookJSONBody defines parameters for IngestGitHubWebhook.
+type IngestGitHubWebhookJSONBody map[string]interface{}
+
+// IngestGitHubWebhookParams defines parameters for IngestGitHubWebhook.
+type IngestGitHubWebhookParams struct {
+	XHubSignature256 string `json:"X-Hub-Signature-256"`
+	XGitHubDelivery  string `json:"X-GitHub-Delivery"`
+	XGitHubEvent     string `json:"X-GitHub-Event"`
+}
+
+// IntercomOAuthCallbackParams defines parameters for IntercomOAuthCallback.
+type IntercomOAuthCallbackParams struct {
+	Code  *string `form:"code,omitempty" json:"code,omitempty"`
+	State *string `form:"state,omitempty" json:"state,omitempty"`
 }
 
 // SentryOAuthCallbackParams defines parameters for SentryOAuthCallback.
@@ -3919,6 +4236,24 @@ type ToggleCommentReactionJSONRequestBody = ReactionRequest
 // CreateCustomEmojiJSONRequestBody defines body for CreateCustomEmoji for application/json ContentType.
 type CreateCustomEmojiJSONRequestBody = CreateCustomEmojiRequest
 
+// UpdateCustomerRequestJSONRequestBody defines body for UpdateCustomerRequest for application/json ContentType.
+type UpdateCustomerRequestJSONRequestBody = UpdateCustomerRequestRequest
+
+// LinkCustomerRequestIssueJSONRequestBody defines body for LinkCustomerRequestIssue for application/json ContentType.
+type LinkCustomerRequestIssueJSONRequestBody LinkCustomerRequestIssueJSONBody
+
+// LinkCustomerRequestProjectJSONRequestBody defines body for LinkCustomerRequestProject for application/json ContentType.
+type LinkCustomerRequestProjectJSONRequestBody LinkCustomerRequestProjectJSONBody
+
+// CreateCustomerJSONRequestBody defines body for CreateCustomer for application/json ContentType.
+type CreateCustomerJSONRequestBody = CreateCustomerRequest
+
+// UpdateCustomerJSONRequestBody defines body for UpdateCustomer for application/json ContentType.
+type UpdateCustomerJSONRequestBody = UpdateCustomerRequest
+
+// CreateCustomerRequestJSONRequestBody defines body for CreateCustomerRequest for application/json ContentType.
+type CreateCustomerRequestJSONRequestBody = CreateCustomerRequestRequest
+
 // CreateDocumentFolderJSONRequestBody defines body for CreateDocumentFolder for application/json ContentType.
 type CreateDocumentFolderJSONRequestBody = DocumentFolderRequest
 
@@ -3940,11 +4275,32 @@ type CreateInitiativeJSONRequestBody = CreateInitiativeRequest
 // UpdateInitiativeJSONRequestBody defines body for UpdateInitiative for application/json ContentType.
 type UpdateInitiativeJSONRequestBody = UpdateInitiativeRequest
 
+// RegisterGitHubIntegrationJSONRequestBody defines body for RegisterGitHubIntegration for application/json ContentType.
+type RegisterGitHubIntegrationJSONRequestBody = GitHubRegisterRequest
+
+// IngestGitHubWebhookJSONRequestBody defines body for IngestGitHubWebhook for application/json ContentType.
+type IngestGitHubWebhookJSONRequestBody IngestGitHubWebhookJSONBody
+
 // SetupGitLabIntegrationJSONRequestBody defines body for SetupGitLabIntegration for application/json ContentType.
 type SetupGitLabIntegrationJSONRequestBody = GitLabSetupRequest
 
 // UpdateGitLabWorkflowAutomationJSONRequestBody defines body for UpdateGitLabWorkflowAutomation for application/json ContentType.
 type UpdateGitLabWorkflowAutomationJSONRequestBody = GitLabWorkflowRequest
+
+// CreateIssueFromIntercomJSONRequestBody defines body for CreateIssueFromIntercom for application/json ContentType.
+type CreateIssueFromIntercomJSONRequestBody = IntercomIssueActionRequest
+
+// LinkIntercomIssueJSONRequestBody defines body for LinkIntercomIssue for application/json ContentType.
+type LinkIntercomIssueJSONRequestBody = IntercomIssueActionRequest
+
+// SearchIntercomLinkableIssuesJSONRequestBody defines body for SearchIntercomLinkableIssues for application/json ContentType.
+type SearchIntercomLinkableIssuesJSONRequestBody = IntercomIssueActionRequest
+
+// GetIntercomLinkedIssueStatusJSONRequestBody defines body for GetIntercomLinkedIssueStatus for application/json ContentType.
+type GetIntercomLinkedIssueStatusJSONRequestBody = IntercomIssueActionRequest
+
+// UnlinkIntercomIssueJSONRequestBody defines body for UnlinkIntercomIssue for application/json ContentType.
+type UnlinkIntercomIssueJSONRequestBody = IntercomIssueActionRequest
 
 // CreateIssueFromSentryJSONRequestBody defines body for CreateIssueFromSentry for application/json ContentType.
 type CreateIssueFromSentryJSONRequestBody = SentryIssueActionRequest
@@ -4477,6 +4833,194 @@ func (a AccountSecurityResponse) MarshalJSON() ([]byte, error) {
 	object["sessions"], err = json.Marshal(a.Sessions)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling 'sessions': %w", err)
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for IntercomIssueActionRequest. Returns the specified
+// element and whether it was found
+func (a IntercomIssueActionRequest) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for IntercomIssueActionRequest
+func (a *IntercomIssueActionRequest) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for IntercomIssueActionRequest to handle AdditionalProperties
+func (a *IntercomIssueActionRequest) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["appId"]; found {
+		err = json.Unmarshal(raw, &a.AppId)
+		if err != nil {
+			return fmt.Errorf("error reading 'appId': %w", err)
+		}
+		delete(object, "appId")
+	}
+
+	if raw, found := object["companyId"]; found {
+		err = json.Unmarshal(raw, &a.CompanyId)
+		if err != nil {
+			return fmt.Errorf("error reading 'companyId': %w", err)
+		}
+		delete(object, "companyId")
+	}
+
+	if raw, found := object["contactEmail"]; found {
+		err = json.Unmarshal(raw, &a.ContactEmail)
+		if err != nil {
+			return fmt.Errorf("error reading 'contactEmail': %w", err)
+		}
+		delete(object, "contactEmail")
+	}
+
+	if raw, found := object["contactId"]; found {
+		err = json.Unmarshal(raw, &a.ContactId)
+		if err != nil {
+			return fmt.Errorf("error reading 'contactId': %w", err)
+		}
+		delete(object, "contactId")
+	}
+
+	if raw, found := object["conversationId"]; found {
+		err = json.Unmarshal(raw, &a.ConversationId)
+		if err != nil {
+			return fmt.Errorf("error reading 'conversationId': %w", err)
+		}
+		delete(object, "conversationId")
+	}
+
+	if raw, found := object["description"]; found {
+		err = json.Unmarshal(raw, &a.Description)
+		if err != nil {
+			return fmt.Errorf("error reading 'description': %w", err)
+		}
+		delete(object, "description")
+	}
+
+	if raw, found := object["issueId"]; found {
+		err = json.Unmarshal(raw, &a.IssueId)
+		if err != nil {
+			return fmt.Errorf("error reading 'issueId': %w", err)
+		}
+		delete(object, "issueId")
+	}
+
+	if raw, found := object["teamId"]; found {
+		err = json.Unmarshal(raw, &a.TeamId)
+		if err != nil {
+			return fmt.Errorf("error reading 'teamId': %w", err)
+		}
+		delete(object, "teamId")
+	}
+
+	if raw, found := object["title"]; found {
+		err = json.Unmarshal(raw, &a.Title)
+		if err != nil {
+			return fmt.Errorf("error reading 'title': %w", err)
+		}
+		delete(object, "title")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for IntercomIssueActionRequest to handle AdditionalProperties
+func (a IntercomIssueActionRequest) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.AppId != nil {
+		object["appId"], err = json.Marshal(a.AppId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'appId': %w", err)
+		}
+	}
+
+	if a.CompanyId != nil {
+		object["companyId"], err = json.Marshal(a.CompanyId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'companyId': %w", err)
+		}
+	}
+
+	if a.ContactEmail != nil {
+		object["contactEmail"], err = json.Marshal(a.ContactEmail)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'contactEmail': %w", err)
+		}
+	}
+
+	if a.ContactId != nil {
+		object["contactId"], err = json.Marshal(a.ContactId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'contactId': %w", err)
+		}
+	}
+
+	if a.ConversationId != nil {
+		object["conversationId"], err = json.Marshal(a.ConversationId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'conversationId': %w", err)
+		}
+	}
+
+	if a.Description != nil {
+		object["description"], err = json.Marshal(a.Description)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'description': %w", err)
+		}
+	}
+
+	if a.IssueId != nil {
+		object["issueId"], err = json.Marshal(a.IssueId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'issueId': %w", err)
+		}
+	}
+
+	if a.TeamId != nil {
+		object["teamId"], err = json.Marshal(a.TeamId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'teamId': %w", err)
+		}
+	}
+
+	if a.Title != nil {
+		object["title"], err = json.Marshal(a.Title)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'title': %w", err)
+		}
 	}
 
 	for fieldName, field := range a.AdditionalProperties {
@@ -6573,6 +7117,14 @@ func (a *WorkspaceImportExportActionRequest) UnmarshalJSON(b []byte) error {
 		delete(object, "action")
 	}
 
+	if raw, found := object["baseUrl"]; found {
+		err = json.Unmarshal(raw, &a.BaseUrl)
+		if err != nil {
+			return fmt.Errorf("error reading 'baseUrl': %w", err)
+		}
+		delete(object, "baseUrl")
+	}
+
 	if raw, found := object["csv"]; found {
 		err = json.Unmarshal(raw, &a.Csv)
 		if err != nil {
@@ -6589,12 +7141,52 @@ func (a *WorkspaceImportExportActionRequest) UnmarshalJSON(b []byte) error {
 		delete(object, "defaultTeamId")
 	}
 
+	if raw, found := object["deployment"]; found {
+		err = json.Unmarshal(raw, &a.Deployment)
+		if err != nil {
+			return fmt.Errorf("error reading 'deployment': %w", err)
+		}
+		delete(object, "deployment")
+	}
+
+	if raw, found := object["email"]; found {
+		err = json.Unmarshal(raw, &a.Email)
+		if err != nil {
+			return fmt.Errorf("error reading 'email': %w", err)
+		}
+		delete(object, "email")
+	}
+
 	if raw, found := object["fileName"]; found {
 		err = json.Unmarshal(raw, &a.FileName)
 		if err != nil {
 			return fmt.Errorf("error reading 'fileName': %w", err)
 		}
 		delete(object, "fileName")
+	}
+
+	if raw, found := object["forwardSyncEnabled"]; found {
+		err = json.Unmarshal(raw, &a.ForwardSyncEnabled)
+		if err != nil {
+			return fmt.Errorf("error reading 'forwardSyncEnabled': %w", err)
+		}
+		delete(object, "forwardSyncEnabled")
+	}
+
+	if raw, found := object["importComments"]; found {
+		err = json.Unmarshal(raw, &a.ImportComments)
+		if err != nil {
+			return fmt.Errorf("error reading 'importComments': %w", err)
+		}
+		delete(object, "importComments")
+	}
+
+	if raw, found := object["importLabels"]; found {
+		err = json.Unmarshal(raw, &a.ImportLabels)
+		if err != nil {
+			return fmt.Errorf("error reading 'importLabels': %w", err)
+		}
+		delete(object, "importLabels")
 	}
 
 	if raw, found := object["mapping"]; found {
@@ -6605,12 +7197,44 @@ func (a *WorkspaceImportExportActionRequest) UnmarshalJSON(b []byte) error {
 		delete(object, "mapping")
 	}
 
+	if raw, found := object["projectKey"]; found {
+		err = json.Unmarshal(raw, &a.ProjectKey)
+		if err != nil {
+			return fmt.Errorf("error reading 'projectKey': %w", err)
+		}
+		delete(object, "projectKey")
+	}
+
 	if raw, found := object["provider"]; found {
 		err = json.Unmarshal(raw, &a.Provider)
 		if err != nil {
 			return fmt.Errorf("error reading 'provider': %w", err)
 		}
 		delete(object, "provider")
+	}
+
+	if raw, found := object["statusMapping"]; found {
+		err = json.Unmarshal(raw, &a.StatusMapping)
+		if err != nil {
+			return fmt.Errorf("error reading 'statusMapping': %w", err)
+		}
+		delete(object, "statusMapping")
+	}
+
+	if raw, found := object["teamId"]; found {
+		err = json.Unmarshal(raw, &a.TeamId)
+		if err != nil {
+			return fmt.Errorf("error reading 'teamId': %w", err)
+		}
+		delete(object, "teamId")
+	}
+
+	if raw, found := object["token"]; found {
+		err = json.Unmarshal(raw, &a.Token)
+		if err != nil {
+			return fmt.Errorf("error reading 'token': %w", err)
+		}
+		delete(object, "token")
 	}
 
 	if len(object) != 0 {
@@ -6637,6 +7261,13 @@ func (a WorkspaceImportExportActionRequest) MarshalJSON() ([]byte, error) {
 		return nil, fmt.Errorf("error marshaling 'action': %w", err)
 	}
 
+	if a.BaseUrl != nil {
+		object["baseUrl"], err = json.Marshal(a.BaseUrl)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'baseUrl': %w", err)
+		}
+	}
+
 	if a.Csv != nil {
 		object["csv"], err = json.Marshal(a.Csv)
 		if err != nil {
@@ -6651,10 +7282,45 @@ func (a WorkspaceImportExportActionRequest) MarshalJSON() ([]byte, error) {
 		}
 	}
 
+	if a.Deployment != nil {
+		object["deployment"], err = json.Marshal(a.Deployment)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'deployment': %w", err)
+		}
+	}
+
+	if a.Email != nil {
+		object["email"], err = json.Marshal(a.Email)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'email': %w", err)
+		}
+	}
+
 	if a.FileName != nil {
 		object["fileName"], err = json.Marshal(a.FileName)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling 'fileName': %w", err)
+		}
+	}
+
+	if a.ForwardSyncEnabled != nil {
+		object["forwardSyncEnabled"], err = json.Marshal(a.ForwardSyncEnabled)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'forwardSyncEnabled': %w", err)
+		}
+	}
+
+	if a.ImportComments != nil {
+		object["importComments"], err = json.Marshal(a.ImportComments)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'importComments': %w", err)
+		}
+	}
+
+	if a.ImportLabels != nil {
+		object["importLabels"], err = json.Marshal(a.ImportLabels)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'importLabels': %w", err)
 		}
 	}
 
@@ -6665,10 +7331,38 @@ func (a WorkspaceImportExportActionRequest) MarshalJSON() ([]byte, error) {
 		}
 	}
 
+	if a.ProjectKey != nil {
+		object["projectKey"], err = json.Marshal(a.ProjectKey)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'projectKey': %w", err)
+		}
+	}
+
 	if a.Provider != nil {
 		object["provider"], err = json.Marshal(a.Provider)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling 'provider': %w", err)
+		}
+	}
+
+	if a.StatusMapping != nil {
+		object["statusMapping"], err = json.Marshal(a.StatusMapping)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'statusMapping': %w", err)
+		}
+	}
+
+	if a.TeamId != nil {
+		object["teamId"], err = json.Marshal(a.TeamId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'teamId': %w", err)
+		}
+	}
+
+	if a.Token != nil {
+		object["token"], err = json.Marshal(a.Token)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'token': %w", err)
 		}
 	}
 
@@ -7009,6 +7703,45 @@ type ServerInterface interface {
 
 	// (DELETE /custom-emojis/{id})
 	DeleteCustomEmoji(w http.ResponseWriter, r *http.Request, id string)
+	// Customer request route namespace; mutate concrete request resources by id.
+	// (GET /customer-requests)
+	CustomerRequestsNamespace(w http.ResponseWriter, r *http.Request)
+	// Delete a customer request
+	// (DELETE /customer-requests/{requestID})
+	DeleteCustomerRequest(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID)
+	// Update a customer request
+	// (PATCH /customer-requests/{requestID})
+	UpdateCustomerRequest(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID)
+	// Link a customer request to an issue
+	// (POST /customer-requests/{requestID}/issues)
+	LinkCustomerRequestIssue(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID)
+	// Unlink a customer request from an issue
+	// (DELETE /customer-requests/{requestID}/issues/{issueID})
+	UnlinkCustomerRequestIssue(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID, issueID string)
+	// Link a customer request to a project
+	// (POST /customer-requests/{requestID}/projects)
+	LinkCustomerRequestProject(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID)
+	// Unlink a customer request from a project
+	// (DELETE /customer-requests/{requestID}/projects/{projectID})
+	UnlinkCustomerRequestProject(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID, projectID string)
+	// List customers in the authenticated workspace
+	// (GET /customers)
+	ListCustomers(w http.ResponseWriter, r *http.Request, params ListCustomersParams)
+	// Create a customer in the authenticated workspace
+	// (POST /customers)
+	CreateCustomer(w http.ResponseWriter, r *http.Request)
+	// Get a customer with requests and linked work
+	// (GET /customers/{customerID})
+	GetCustomer(w http.ResponseWriter, r *http.Request, customerID openapi_types.UUID)
+	// Update a customer
+	// (PATCH /customers/{customerID})
+	UpdateCustomer(w http.ResponseWriter, r *http.Request, customerID openapi_types.UUID)
+	// Create a customer request and optionally link it to work
+	// (POST /customers/{customerID}/requests)
+	CreateCustomerRequest(w http.ResponseWriter, r *http.Request, customerID openapi_types.UUID)
+	// Export a customer's requests as CSV
+	// (GET /customers/{customerID}/requests.csv)
+	ExportCustomerRequestsForCustomer(w http.ResponseWriter, r *http.Request, customerID openapi_types.UUID)
 	// Create a disposable public demo browser session and seed the demo workspace if needed.
 	// (GET /demo/session)
 	CreateDemoSession(w http.ResponseWriter, r *http.Request)
@@ -7067,6 +7800,21 @@ type ServerInterface interface {
 	// (POST /integrations/discord/disconnect)
 	DisconnectDiscordIntegration(w http.ResponseWriter, r *http.Request)
 
+	// (POST /integrations/github/connect)
+	ConnectGitHubIntegration(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/github/disconnect)
+	DisconnectGitHubIntegration(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/github/register)
+	RegisterGitHubIntegration(w http.ResponseWriter, r *http.Request)
+
+	// (GET /integrations/github/setup/callback)
+	GithubSetupCallback(w http.ResponseWriter, r *http.Request, params GithubSetupCallbackParams)
+
+	// (POST /integrations/github/webhook)
+	IngestGitHubWebhook(w http.ResponseWriter, r *http.Request, params IngestGitHubWebhookParams)
+
 	// (GET /integrations/gitlab)
 	GetGitLabIntegration(w http.ResponseWriter, r *http.Request)
 
@@ -7081,6 +7829,30 @@ type ServerInterface interface {
 
 	// (POST /integrations/gitlab/workflows)
 	UpdateGitLabWorkflowAutomation(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/intercom/connect)
+	ConnectIntercomIntegration(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/intercom/disconnect)
+	DisconnectIntercomIntegration(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/intercom/issues/create)
+	CreateIssueFromIntercom(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/intercom/issues/link)
+	LinkIntercomIssue(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/intercom/issues/search)
+	SearchIntercomLinkableIssues(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/intercom/issues/status)
+	GetIntercomLinkedIssueStatus(w http.ResponseWriter, r *http.Request)
+
+	// (POST /integrations/intercom/issues/unlink)
+	UnlinkIntercomIssue(w http.ResponseWriter, r *http.Request)
+
+	// (GET /integrations/intercom/oauth/callback)
+	IntercomOAuthCallback(w http.ResponseWriter, r *http.Request, params IntercomOAuthCallbackParams)
 
 	// (POST /integrations/microsoft-teams/connect)
 	ConnectMicrosoftTeamsIntegration(w http.ResponseWriter, r *http.Request)
@@ -7147,6 +7919,9 @@ type ServerInterface interface {
 
 	// (POST /issues/{id}/comments)
 	CreateIssueComment(w http.ResponseWriter, r *http.Request, id string)
+	// Export customer requests linked to an issue as CSV
+	// (GET /issues/{id}/customer-requests.csv)
+	ExportCustomerRequestsForIssue(w http.ResponseWriter, r *http.Request, id string)
 
 	// (GET /issues/{id}/discussion-summary)
 	GetIssueDiscussionSummary(w http.ResponseWriter, r *http.Request, id string)
@@ -7294,6 +8069,9 @@ type ServerInterface interface {
 
 	// (PATCH /projects/{slug})
 	UpdateProject(w http.ResponseWriter, r *http.Request, slug string)
+	// Export customer requests linked to a project as CSV
+	// (GET /projects/{slug}/customer-requests.csv)
+	ExportCustomerRequestsForProject(w http.ResponseWriter, r *http.Request, slug string)
 	// Create a project milestone
 	// (POST /projects/{slug}/milestones)
 	CreateProjectMilestone(w http.ResponseWriter, r *http.Request, slug string)
@@ -7755,6 +8533,84 @@ func (_ Unimplemented) DeleteCustomEmoji(w http.ResponseWriter, r *http.Request,
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Customer request route namespace; mutate concrete request resources by id.
+// (GET /customer-requests)
+func (_ Unimplemented) CustomerRequestsNamespace(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete a customer request
+// (DELETE /customer-requests/{requestID})
+func (_ Unimplemented) DeleteCustomerRequest(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update a customer request
+// (PATCH /customer-requests/{requestID})
+func (_ Unimplemented) UpdateCustomerRequest(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Link a customer request to an issue
+// (POST /customer-requests/{requestID}/issues)
+func (_ Unimplemented) LinkCustomerRequestIssue(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Unlink a customer request from an issue
+// (DELETE /customer-requests/{requestID}/issues/{issueID})
+func (_ Unimplemented) UnlinkCustomerRequestIssue(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID, issueID string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Link a customer request to a project
+// (POST /customer-requests/{requestID}/projects)
+func (_ Unimplemented) LinkCustomerRequestProject(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Unlink a customer request from a project
+// (DELETE /customer-requests/{requestID}/projects/{projectID})
+func (_ Unimplemented) UnlinkCustomerRequestProject(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID, projectID string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List customers in the authenticated workspace
+// (GET /customers)
+func (_ Unimplemented) ListCustomers(w http.ResponseWriter, r *http.Request, params ListCustomersParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a customer in the authenticated workspace
+// (POST /customers)
+func (_ Unimplemented) CreateCustomer(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get a customer with requests and linked work
+// (GET /customers/{customerID})
+func (_ Unimplemented) GetCustomer(w http.ResponseWriter, r *http.Request, customerID openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update a customer
+// (PATCH /customers/{customerID})
+func (_ Unimplemented) UpdateCustomer(w http.ResponseWriter, r *http.Request, customerID openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a customer request and optionally link it to work
+// (POST /customers/{customerID}/requests)
+func (_ Unimplemented) CreateCustomerRequest(w http.ResponseWriter, r *http.Request, customerID openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Export a customer's requests as CSV
+// (GET /customers/{customerID}/requests.csv)
+func (_ Unimplemented) ExportCustomerRequestsForCustomer(w http.ResponseWriter, r *http.Request, customerID openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Create a disposable public demo browser session and seed the demo workspace if needed.
 // (GET /demo/session)
 func (_ Unimplemented) CreateDemoSession(w http.ResponseWriter, r *http.Request) {
@@ -7852,6 +8708,31 @@ func (_ Unimplemented) DisconnectDiscordIntegration(w http.ResponseWriter, r *ht
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// (POST /integrations/github/connect)
+func (_ Unimplemented) ConnectGitHubIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/github/disconnect)
+func (_ Unimplemented) DisconnectGitHubIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/github/register)
+func (_ Unimplemented) RegisterGitHubIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /integrations/github/setup/callback)
+func (_ Unimplemented) GithubSetupCallback(w http.ResponseWriter, r *http.Request, params GithubSetupCallbackParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/github/webhook)
+func (_ Unimplemented) IngestGitHubWebhook(w http.ResponseWriter, r *http.Request, params IngestGitHubWebhookParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // (GET /integrations/gitlab)
 func (_ Unimplemented) GetGitLabIntegration(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -7874,6 +8755,46 @@ func (_ Unimplemented) IngestGitLabWebhook(w http.ResponseWriter, r *http.Reques
 
 // (POST /integrations/gitlab/workflows)
 func (_ Unimplemented) UpdateGitLabWorkflowAutomation(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/intercom/connect)
+func (_ Unimplemented) ConnectIntercomIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/intercom/disconnect)
+func (_ Unimplemented) DisconnectIntercomIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/intercom/issues/create)
+func (_ Unimplemented) CreateIssueFromIntercom(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/intercom/issues/link)
+func (_ Unimplemented) LinkIntercomIssue(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/intercom/issues/search)
+func (_ Unimplemented) SearchIntercomLinkableIssues(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/intercom/issues/status)
+func (_ Unimplemented) GetIntercomLinkedIssueStatus(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /integrations/intercom/issues/unlink)
+func (_ Unimplemented) UnlinkIntercomIssue(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /integrations/intercom/oauth/callback)
+func (_ Unimplemented) IntercomOAuthCallback(w http.ResponseWriter, r *http.Request, params IntercomOAuthCallbackParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7987,6 +8908,12 @@ func (_ Unimplemented) UpdateIssue(w http.ResponseWriter, r *http.Request, id st
 
 // (POST /issues/{id}/comments)
 func (_ Unimplemented) CreateIssueComment(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Export customer requests linked to an issue as CSV
+// (GET /issues/{id}/customer-requests.csv)
+func (_ Unimplemented) ExportCustomerRequestsForIssue(w http.ResponseWriter, r *http.Request, id string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8242,6 +9169,12 @@ func (_ Unimplemented) GetProject(w http.ResponseWriter, r *http.Request, slug s
 
 // (PATCH /projects/{slug})
 func (_ Unimplemented) UpdateProject(w http.ResponseWriter, r *http.Request, slug string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Export customer requests linked to a project as CSV
+// (GET /projects/{slug}/customer-requests.csv)
+func (_ Unimplemented) ExportCustomerRequestsForProject(w http.ResponseWriter, r *http.Request, slug string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9420,6 +10353,423 @@ func (siw *ServerInterfaceWrapper) DeleteCustomEmoji(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// CustomerRequestsNamespace operation middleware
+func (siw *ServerInterfaceWrapper) CustomerRequestsNamespace(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CustomerRequestsNamespace(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteCustomerRequest operation middleware
+func (siw *ServerInterfaceWrapper) DeleteCustomerRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "requestID" -------------
+	var requestID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "requestID", chi.URLParam(r, "requestID"), &requestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "requestID", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteCustomerRequest(w, r, requestID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateCustomerRequest operation middleware
+func (siw *ServerInterfaceWrapper) UpdateCustomerRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "requestID" -------------
+	var requestID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "requestID", chi.URLParam(r, "requestID"), &requestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "requestID", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateCustomerRequest(w, r, requestID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LinkCustomerRequestIssue operation middleware
+func (siw *ServerInterfaceWrapper) LinkCustomerRequestIssue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "requestID" -------------
+	var requestID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "requestID", chi.URLParam(r, "requestID"), &requestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "requestID", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LinkCustomerRequestIssue(w, r, requestID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnlinkCustomerRequestIssue operation middleware
+func (siw *ServerInterfaceWrapper) UnlinkCustomerRequestIssue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "requestID" -------------
+	var requestID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "requestID", chi.URLParam(r, "requestID"), &requestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "requestID", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "issueID" -------------
+	var issueID string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "issueID", chi.URLParam(r, "issueID"), &issueID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "issueID", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnlinkCustomerRequestIssue(w, r, requestID, issueID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LinkCustomerRequestProject operation middleware
+func (siw *ServerInterfaceWrapper) LinkCustomerRequestProject(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "requestID" -------------
+	var requestID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "requestID", chi.URLParam(r, "requestID"), &requestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "requestID", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LinkCustomerRequestProject(w, r, requestID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnlinkCustomerRequestProject operation middleware
+func (siw *ServerInterfaceWrapper) UnlinkCustomerRequestProject(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "requestID" -------------
+	var requestID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "requestID", chi.URLParam(r, "requestID"), &requestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "requestID", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "projectID" -------------
+	var projectID string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectID", chi.URLParam(r, "projectID"), &projectID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectID", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnlinkCustomerRequestProject(w, r, requestID, projectID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCustomers operation middleware
+func (siw *ServerInterfaceWrapper) ListCustomers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCustomersParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "tier" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "tier", r.URL.Query(), &params.Tier)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tier", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "status", r.URL.Query(), &params.Status)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCustomers(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCustomer operation middleware
+func (siw *ServerInterfaceWrapper) CreateCustomer(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCustomer(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCustomer operation middleware
+func (siw *ServerInterfaceWrapper) GetCustomer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "customerID" -------------
+	var customerID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "customerID", chi.URLParam(r, "customerID"), &customerID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "customerID", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCustomer(w, r, customerID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateCustomer operation middleware
+func (siw *ServerInterfaceWrapper) UpdateCustomer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "customerID" -------------
+	var customerID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "customerID", chi.URLParam(r, "customerID"), &customerID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "customerID", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateCustomer(w, r, customerID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCustomerRequest operation middleware
+func (siw *ServerInterfaceWrapper) CreateCustomerRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "customerID" -------------
+	var customerID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "customerID", chi.URLParam(r, "customerID"), &customerID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "customerID", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCustomerRequest(w, r, customerID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExportCustomerRequestsForCustomer operation middleware
+func (siw *ServerInterfaceWrapper) ExportCustomerRequestsForCustomer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "customerID" -------------
+	var customerID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "customerID", chi.URLParam(r, "customerID"), &customerID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "customerID", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportCustomerRequestsForCustomer(w, r, customerID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateDemoSession operation middleware
 func (siw *ServerInterfaceWrapper) CreateDemoSession(w http.ResponseWriter, r *http.Request) {
 
@@ -9891,6 +11241,199 @@ func (siw *ServerInterfaceWrapper) DisconnectDiscordIntegration(w http.ResponseW
 	handler.ServeHTTP(w, r)
 }
 
+// ConnectGitHubIntegration operation middleware
+func (siw *ServerInterfaceWrapper) ConnectGitHubIntegration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConnectGitHubIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DisconnectGitHubIntegration operation middleware
+func (siw *ServerInterfaceWrapper) DisconnectGitHubIntegration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisconnectGitHubIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RegisterGitHubIntegration operation middleware
+func (siw *ServerInterfaceWrapper) RegisterGitHubIntegration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RegisterGitHubIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GithubSetupCallback operation middleware
+func (siw *ServerInterfaceWrapper) GithubSetupCallback(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GithubSetupCallbackParams
+
+	// ------------- Optional query parameter "installation_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "installation_id", r.URL.Query(), &params.InstallationId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "setup_action" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "setup_action", r.URL.Query(), &params.SetupAction)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "setup_action", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "state", r.URL.Query(), &params.State)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GithubSetupCallback(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// IngestGitHubWebhook operation middleware
+func (siw *ServerInterfaceWrapper) IngestGitHubWebhook(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params IngestGitHubWebhookParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Hub-Signature-256" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Hub-Signature-256")]; found {
+		var XHubSignature256 string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Hub-Signature-256", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Hub-Signature-256", valueList[0], &XHubSignature256, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Hub-Signature-256", Err: err})
+			return
+		}
+
+		params.XHubSignature256 = XHubSignature256
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Hub-Signature-256 is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Hub-Signature-256", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-GitHub-Delivery" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-GitHub-Delivery")]; found {
+		var XGitHubDelivery string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-GitHub-Delivery", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-GitHub-Delivery", valueList[0], &XGitHubDelivery, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-GitHub-Delivery", Err: err})
+			return
+		}
+
+		params.XGitHubDelivery = XGitHubDelivery
+
+	} else {
+		err := fmt.Errorf("Header parameter X-GitHub-Delivery is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-GitHub-Delivery", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-GitHub-Event" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-GitHub-Event")]; found {
+		var XGitHubEvent string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-GitHub-Event", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-GitHub-Event", valueList[0], &XGitHubEvent, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-GitHub-Event", Err: err})
+			return
+		}
+
+		params.XGitHubEvent = XGitHubEvent
+
+	} else {
+		err := fmt.Errorf("Header parameter X-GitHub-Event is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-GitHub-Event", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IngestGitHubWebhook(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetGitLabIntegration operation middleware
 func (siw *ServerInterfaceWrapper) GetGitLabIntegration(w http.ResponseWriter, r *http.Request) {
 
@@ -9987,6 +11530,151 @@ func (siw *ServerInterfaceWrapper) UpdateGitLabWorkflowAutomation(w http.Respons
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateGitLabWorkflowAutomation(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConnectIntercomIntegration operation middleware
+func (siw *ServerInterfaceWrapper) ConnectIntercomIntegration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConnectIntercomIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DisconnectIntercomIntegration operation middleware
+func (siw *ServerInterfaceWrapper) DisconnectIntercomIntegration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisconnectIntercomIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateIssueFromIntercom operation middleware
+func (siw *ServerInterfaceWrapper) CreateIssueFromIntercom(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateIssueFromIntercom(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LinkIntercomIssue operation middleware
+func (siw *ServerInterfaceWrapper) LinkIntercomIssue(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LinkIntercomIssue(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchIntercomLinkableIssues operation middleware
+func (siw *ServerInterfaceWrapper) SearchIntercomLinkableIssues(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchIntercomLinkableIssues(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetIntercomLinkedIssueStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetIntercomLinkedIssueStatus(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetIntercomLinkedIssueStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnlinkIntercomIssue operation middleware
+func (siw *ServerInterfaceWrapper) UnlinkIntercomIssue(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnlinkIntercomIssue(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// IntercomOAuthCallback operation middleware
+func (siw *ServerInterfaceWrapper) IntercomOAuthCallback(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params IntercomOAuthCallbackParams
+
+	// ------------- Optional query parameter "code" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "code", r.URL.Query(), &params.Code)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "code", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "state", r.URL.Query(), &params.State)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IntercomOAuthCallback(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10627,6 +12315,37 @@ func (siw *ServerInterfaceWrapper) CreateIssueComment(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateIssueComment(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExportCustomerRequestsForIssue operation middleware
+func (siw *ServerInterfaceWrapper) ExportCustomerRequestsForIssue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportCustomerRequestsForIssue(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12015,6 +13734,37 @@ func (siw *ServerInterfaceWrapper) UpdateProject(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateProject(w, r, slug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExportCustomerRequestsForProject operation middleware
+func (siw *ServerInterfaceWrapper) ExportCustomerRequestsForProject(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "slug" -------------
+	var slug string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "slug", chi.URLParam(r, "slug"), &slug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "slug", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportCustomerRequestsForProject(w, r, slug)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -14931,6 +16681,45 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Delete(options.BaseURL+"/custom-emojis/{id}", wrapper.DeleteCustomEmoji)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/customer-requests", wrapper.CustomerRequestsNamespace)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/customer-requests/{requestID}", wrapper.DeleteCustomerRequest)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/customer-requests/{requestID}", wrapper.UpdateCustomerRequest)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/customer-requests/{requestID}/issues", wrapper.LinkCustomerRequestIssue)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/customer-requests/{requestID}/issues/{issueID}", wrapper.UnlinkCustomerRequestIssue)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/customer-requests/{requestID}/projects", wrapper.LinkCustomerRequestProject)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/customer-requests/{requestID}/projects/{projectID}", wrapper.UnlinkCustomerRequestProject)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/customers", wrapper.ListCustomers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/customers", wrapper.CreateCustomer)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/customers/{customerID}", wrapper.GetCustomer)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/customers/{customerID}", wrapper.UpdateCustomer)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/customers/{customerID}/requests", wrapper.CreateCustomerRequest)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/customers/{customerID}/requests.csv", wrapper.ExportCustomerRequestsForCustomer)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/demo/session", wrapper.CreateDemoSession)
 	})
 	r.Group(func(r chi.Router) {
@@ -14988,6 +16777,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/integrations/discord/disconnect", wrapper.DisconnectDiscordIntegration)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/github/connect", wrapper.ConnectGitHubIntegration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/github/disconnect", wrapper.DisconnectGitHubIntegration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/github/register", wrapper.RegisterGitHubIntegration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/integrations/github/setup/callback", wrapper.GithubSetupCallback)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/github/webhook", wrapper.IngestGitHubWebhook)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/integrations/gitlab", wrapper.GetGitLabIntegration)
 	})
 	r.Group(func(r chi.Router) {
@@ -15001,6 +16805,30 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/integrations/gitlab/workflows", wrapper.UpdateGitLabWorkflowAutomation)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/intercom/connect", wrapper.ConnectIntercomIntegration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/intercom/disconnect", wrapper.DisconnectIntercomIntegration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/intercom/issues/create", wrapper.CreateIssueFromIntercom)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/intercom/issues/link", wrapper.LinkIntercomIssue)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/intercom/issues/search", wrapper.SearchIntercomLinkableIssues)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/intercom/issues/status", wrapper.GetIntercomLinkedIssueStatus)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations/intercom/issues/unlink", wrapper.UnlinkIntercomIssue)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/integrations/intercom/oauth/callback", wrapper.IntercomOAuthCallback)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/integrations/microsoft-teams/connect", wrapper.ConnectMicrosoftTeamsIntegration)
@@ -15067,6 +16895,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/issues/{id}/comments", wrapper.CreateIssueComment)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/issues/{id}/customer-requests.csv", wrapper.ExportCustomerRequestsForIssue)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/issues/{id}/discussion-summary", wrapper.GetIssueDiscussionSummary)
@@ -15214,6 +17045,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/projects/{slug}", wrapper.UpdateProject)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{slug}/customer-requests.csv", wrapper.ExportCustomerRequestsForProject)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/projects/{slug}/milestones", wrapper.CreateProjectMilestone)
@@ -16303,6 +18137,392 @@ func (response DeleteCustomEmojidefaultApplicationProblemPlusJSONResponse) Visit
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type CustomerRequestsNamespaceRequestObject struct {
+}
+
+type CustomerRequestsNamespaceResponseObject interface {
+	VisitCustomerRequestsNamespaceResponse(w http.ResponseWriter) error
+}
+
+type CustomerRequestsNamespacedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CustomerRequestsNamespacedefaultApplicationProblemPlusJSONResponse) VisitCustomerRequestsNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteCustomerRequestRequestObject struct {
+	RequestID openapi_types.UUID `json:"requestID"`
+}
+
+type DeleteCustomerRequestResponseObject interface {
+	VisitDeleteCustomerRequestResponse(w http.ResponseWriter) error
+}
+
+type DeleteCustomerRequest200JSONResponse struct {
+	Success *bool `json:"success,omitempty"`
+}
+
+func (response DeleteCustomerRequest200JSONResponse) VisitDeleteCustomerRequestResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteCustomerRequestdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteCustomerRequestdefaultApplicationProblemPlusJSONResponse) VisitDeleteCustomerRequestResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateCustomerRequestRequestObject struct {
+	RequestID openapi_types.UUID `json:"requestID"`
+	Body      *UpdateCustomerRequestJSONRequestBody
+}
+
+type UpdateCustomerRequestResponseObject interface {
+	VisitUpdateCustomerRequestResponse(w http.ResponseWriter) error
+}
+
+type UpdateCustomerRequest200JSONResponse CustomerRequest
+
+func (response UpdateCustomerRequest200JSONResponse) VisitUpdateCustomerRequestResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCustomerRequestdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateCustomerRequestdefaultApplicationProblemPlusJSONResponse) VisitUpdateCustomerRequestResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type LinkCustomerRequestIssueRequestObject struct {
+	RequestID openapi_types.UUID `json:"requestID"`
+	Body      *LinkCustomerRequestIssueJSONRequestBody
+}
+
+type LinkCustomerRequestIssueResponseObject interface {
+	VisitLinkCustomerRequestIssueResponse(w http.ResponseWriter) error
+}
+
+type LinkCustomerRequestIssue200JSONResponse CustomerRequest
+
+func (response LinkCustomerRequestIssue200JSONResponse) VisitLinkCustomerRequestIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type LinkCustomerRequestIssuedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response LinkCustomerRequestIssuedefaultApplicationProblemPlusJSONResponse) VisitLinkCustomerRequestIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UnlinkCustomerRequestIssueRequestObject struct {
+	RequestID openapi_types.UUID `json:"requestID"`
+	IssueID   string             `json:"issueID"`
+}
+
+type UnlinkCustomerRequestIssueResponseObject interface {
+	VisitUnlinkCustomerRequestIssueResponse(w http.ResponseWriter) error
+}
+
+type UnlinkCustomerRequestIssue200JSONResponse CustomerRequest
+
+func (response UnlinkCustomerRequestIssue200JSONResponse) VisitUnlinkCustomerRequestIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UnlinkCustomerRequestIssuedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UnlinkCustomerRequestIssuedefaultApplicationProblemPlusJSONResponse) VisitUnlinkCustomerRequestIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type LinkCustomerRequestProjectRequestObject struct {
+	RequestID openapi_types.UUID `json:"requestID"`
+	Body      *LinkCustomerRequestProjectJSONRequestBody
+}
+
+type LinkCustomerRequestProjectResponseObject interface {
+	VisitLinkCustomerRequestProjectResponse(w http.ResponseWriter) error
+}
+
+type LinkCustomerRequestProject200JSONResponse CustomerRequest
+
+func (response LinkCustomerRequestProject200JSONResponse) VisitLinkCustomerRequestProjectResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type LinkCustomerRequestProjectdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response LinkCustomerRequestProjectdefaultApplicationProblemPlusJSONResponse) VisitLinkCustomerRequestProjectResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UnlinkCustomerRequestProjectRequestObject struct {
+	RequestID openapi_types.UUID `json:"requestID"`
+	ProjectID string             `json:"projectID"`
+}
+
+type UnlinkCustomerRequestProjectResponseObject interface {
+	VisitUnlinkCustomerRequestProjectResponse(w http.ResponseWriter) error
+}
+
+type UnlinkCustomerRequestProject200JSONResponse CustomerRequest
+
+func (response UnlinkCustomerRequestProject200JSONResponse) VisitUnlinkCustomerRequestProjectResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UnlinkCustomerRequestProjectdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UnlinkCustomerRequestProjectdefaultApplicationProblemPlusJSONResponse) VisitUnlinkCustomerRequestProjectResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListCustomersRequestObject struct {
+	Params ListCustomersParams
+}
+
+type ListCustomersResponseObject interface {
+	VisitListCustomersResponse(w http.ResponseWriter) error
+}
+
+type ListCustomers200JSONResponse CustomerListResponse
+
+func (response ListCustomers200JSONResponse) VisitListCustomersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListCustomersdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListCustomersdefaultApplicationProblemPlusJSONResponse) VisitListCustomersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateCustomerRequestObject struct {
+	Body *CreateCustomerJSONRequestBody
+}
+
+type CreateCustomerResponseObject interface {
+	VisitCreateCustomerResponse(w http.ResponseWriter) error
+}
+
+type CreateCustomer201JSONResponse Customer
+
+func (response CreateCustomer201JSONResponse) VisitCreateCustomerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCustomerdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateCustomerdefaultApplicationProblemPlusJSONResponse) VisitCreateCustomerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetCustomerRequestObject struct {
+	CustomerID openapi_types.UUID `json:"customerID"`
+}
+
+type GetCustomerResponseObject interface {
+	VisitGetCustomerResponse(w http.ResponseWriter) error
+}
+
+type GetCustomer200JSONResponse CustomerDetailResponse
+
+func (response GetCustomer200JSONResponse) VisitGetCustomerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetCustomerdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetCustomerdefaultApplicationProblemPlusJSONResponse) VisitGetCustomerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateCustomerRequestObject struct {
+	CustomerID openapi_types.UUID `json:"customerID"`
+	Body       *UpdateCustomerJSONRequestBody
+}
+
+type UpdateCustomerResponseObject interface {
+	VisitUpdateCustomerResponse(w http.ResponseWriter) error
+}
+
+type UpdateCustomer200JSONResponse Customer
+
+func (response UpdateCustomer200JSONResponse) VisitUpdateCustomerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateCustomerdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateCustomerdefaultApplicationProblemPlusJSONResponse) VisitUpdateCustomerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateCustomerRequestRequestObject struct {
+	CustomerID openapi_types.UUID `json:"customerID"`
+	Body       *CreateCustomerRequestJSONRequestBody
+}
+
+type CreateCustomerRequestResponseObject interface {
+	VisitCreateCustomerRequestResponse(w http.ResponseWriter) error
+}
+
+type CreateCustomerRequest201JSONResponse CustomerRequest
+
+func (response CreateCustomerRequest201JSONResponse) VisitCreateCustomerRequestResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCustomerRequestdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateCustomerRequestdefaultApplicationProblemPlusJSONResponse) VisitCreateCustomerRequestResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ExportCustomerRequestsForCustomerRequestObject struct {
+	CustomerID openapi_types.UUID `json:"customerID"`
+}
+
+type ExportCustomerRequestsForCustomerResponseObject interface {
+	VisitExportCustomerRequestsForCustomerResponse(w http.ResponseWriter) error
+}
+
+type ExportCustomerRequestsForCustomer200TextcsvResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response ExportCustomerRequestsForCustomer200TextcsvResponse) VisitExportCustomerRequestsForCustomerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "text/csv")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type ExportCustomerRequestsForCustomerdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ExportCustomerRequestsForCustomerdefaultApplicationProblemPlusJSONResponse) VisitExportCustomerRequestsForCustomerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type CreateDemoSessionRequestObject struct {
 }
 
@@ -16860,6 +19080,158 @@ func (response DisconnectDiscordIntegrationdefaultApplicationProblemPlusJSONResp
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type ConnectGitHubIntegrationRequestObject struct {
+}
+
+type ConnectGitHubIntegrationResponseObject interface {
+	VisitConnectGitHubIntegrationResponse(w http.ResponseWriter) error
+}
+
+type ConnectGitHubIntegration200JSONResponse GitHubConnectResponse
+
+func (response ConnectGitHubIntegration200JSONResponse) VisitConnectGitHubIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ConnectGitHubIntegration412JSONResponse GitHubConfigurationRequiredResponse
+
+func (response ConnectGitHubIntegration412JSONResponse) VisitConnectGitHubIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(412)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ConnectGitHubIntegrationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ConnectGitHubIntegrationdefaultApplicationProblemPlusJSONResponse) VisitConnectGitHubIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DisconnectGitHubIntegrationRequestObject struct {
+}
+
+type DisconnectGitHubIntegrationResponseObject interface {
+	VisitDisconnectGitHubIntegrationResponse(w http.ResponseWriter) error
+}
+
+type DisconnectGitHubIntegration200JSONResponse SuccessResponse
+
+func (response DisconnectGitHubIntegration200JSONResponse) VisitDisconnectGitHubIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DisconnectGitHubIntegrationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DisconnectGitHubIntegrationdefaultApplicationProblemPlusJSONResponse) VisitDisconnectGitHubIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RegisterGitHubIntegrationRequestObject struct {
+	Body *RegisterGitHubIntegrationJSONRequestBody
+}
+
+type RegisterGitHubIntegrationResponseObject interface {
+	VisitRegisterGitHubIntegrationResponse(w http.ResponseWriter) error
+}
+
+type RegisterGitHubIntegration200JSONResponse GitHubRegisterResponse
+
+func (response RegisterGitHubIntegration200JSONResponse) VisitRegisterGitHubIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RegisterGitHubIntegrationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RegisterGitHubIntegrationdefaultApplicationProblemPlusJSONResponse) VisitRegisterGitHubIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GithubSetupCallbackRequestObject struct {
+	Params GithubSetupCallbackParams
+}
+
+type GithubSetupCallbackResponseObject interface {
+	VisitGithubSetupCallbackResponse(w http.ResponseWriter) error
+}
+
+type GithubSetupCallback302Response struct {
+}
+
+func (response GithubSetupCallback302Response) VisitGithubSetupCallbackResponse(w http.ResponseWriter) error {
+	w.WriteHeader(302)
+	return nil
+}
+
+type GithubSetupCallbackdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GithubSetupCallbackdefaultApplicationProblemPlusJSONResponse) VisitGithubSetupCallbackResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IngestGitHubWebhookRequestObject struct {
+	Params IngestGitHubWebhookParams
+	Body   *IngestGitHubWebhookJSONRequestBody
+}
+
+type IngestGitHubWebhookResponseObject interface {
+	VisitIngestGitHubWebhookResponse(w http.ResponseWriter) error
+}
+
+type IngestGitHubWebhook202JSONResponse GitHubWebhookResponse
+
+func (response IngestGitHubWebhook202JSONResponse) VisitIngestGitHubWebhookResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type IngestGitHubWebhookdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response IngestGitHubWebhookdefaultApplicationProblemPlusJSONResponse) VisitIngestGitHubWebhookResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type GetGitLabIntegrationRequestObject struct {
 }
 
@@ -16997,6 +19369,244 @@ type UpdateGitLabWorkflowAutomationdefaultApplicationProblemPlusJSONResponse str
 }
 
 func (response UpdateGitLabWorkflowAutomationdefaultApplicationProblemPlusJSONResponse) VisitUpdateGitLabWorkflowAutomationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ConnectIntercomIntegrationRequestObject struct {
+}
+
+type ConnectIntercomIntegrationResponseObject interface {
+	VisitConnectIntercomIntegrationResponse(w http.ResponseWriter) error
+}
+
+type ConnectIntercomIntegration200JSONResponse IntercomConnectResponse
+
+func (response ConnectIntercomIntegration200JSONResponse) VisitConnectIntercomIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ConnectIntercomIntegration412JSONResponse IntercomConfigurationRequiredResponse
+
+func (response ConnectIntercomIntegration412JSONResponse) VisitConnectIntercomIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(412)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ConnectIntercomIntegrationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ConnectIntercomIntegrationdefaultApplicationProblemPlusJSONResponse) VisitConnectIntercomIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DisconnectIntercomIntegrationRequestObject struct {
+}
+
+type DisconnectIntercomIntegrationResponseObject interface {
+	VisitDisconnectIntercomIntegrationResponse(w http.ResponseWriter) error
+}
+
+type DisconnectIntercomIntegration200JSONResponse SuccessResponse
+
+func (response DisconnectIntercomIntegration200JSONResponse) VisitDisconnectIntercomIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DisconnectIntercomIntegrationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DisconnectIntercomIntegrationdefaultApplicationProblemPlusJSONResponse) VisitDisconnectIntercomIntegrationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateIssueFromIntercomRequestObject struct {
+	Body *CreateIssueFromIntercomJSONRequestBody
+}
+
+type CreateIssueFromIntercomResponseObject interface {
+	VisitCreateIssueFromIntercomResponse(w http.ResponseWriter) error
+}
+
+type CreateIssueFromIntercom200JSONResponse IntercomIssueActionResponse
+
+func (response CreateIssueFromIntercom200JSONResponse) VisitCreateIssueFromIntercomResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateIssueFromIntercomdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateIssueFromIntercomdefaultApplicationProblemPlusJSONResponse) VisitCreateIssueFromIntercomResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type LinkIntercomIssueRequestObject struct {
+	Body *LinkIntercomIssueJSONRequestBody
+}
+
+type LinkIntercomIssueResponseObject interface {
+	VisitLinkIntercomIssueResponse(w http.ResponseWriter) error
+}
+
+type LinkIntercomIssue200JSONResponse IntercomIssueActionResponse
+
+func (response LinkIntercomIssue200JSONResponse) VisitLinkIntercomIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type LinkIntercomIssuedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response LinkIntercomIssuedefaultApplicationProblemPlusJSONResponse) VisitLinkIntercomIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SearchIntercomLinkableIssuesRequestObject struct {
+	Body *SearchIntercomLinkableIssuesJSONRequestBody
+}
+
+type SearchIntercomLinkableIssuesResponseObject interface {
+	VisitSearchIntercomLinkableIssuesResponse(w http.ResponseWriter) error
+}
+
+type SearchIntercomLinkableIssues200JSONResponse IntercomIssueSearchResponse
+
+func (response SearchIntercomLinkableIssues200JSONResponse) VisitSearchIntercomLinkableIssuesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SearchIntercomLinkableIssuesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SearchIntercomLinkableIssuesdefaultApplicationProblemPlusJSONResponse) VisitSearchIntercomLinkableIssuesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetIntercomLinkedIssueStatusRequestObject struct {
+	Body *GetIntercomLinkedIssueStatusJSONRequestBody
+}
+
+type GetIntercomLinkedIssueStatusResponseObject interface {
+	VisitGetIntercomLinkedIssueStatusResponse(w http.ResponseWriter) error
+}
+
+type GetIntercomLinkedIssueStatus200JSONResponse IntercomIssueActionResponse
+
+func (response GetIntercomLinkedIssueStatus200JSONResponse) VisitGetIntercomLinkedIssueStatusResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetIntercomLinkedIssueStatusdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetIntercomLinkedIssueStatusdefaultApplicationProblemPlusJSONResponse) VisitGetIntercomLinkedIssueStatusResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UnlinkIntercomIssueRequestObject struct {
+	Body *UnlinkIntercomIssueJSONRequestBody
+}
+
+type UnlinkIntercomIssueResponseObject interface {
+	VisitUnlinkIntercomIssueResponse(w http.ResponseWriter) error
+}
+
+type UnlinkIntercomIssue200JSONResponse IntercomIssueActionResponse
+
+func (response UnlinkIntercomIssue200JSONResponse) VisitUnlinkIntercomIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UnlinkIntercomIssuedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UnlinkIntercomIssuedefaultApplicationProblemPlusJSONResponse) VisitUnlinkIntercomIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IntercomOAuthCallbackRequestObject struct {
+	Params IntercomOAuthCallbackParams
+}
+
+type IntercomOAuthCallbackResponseObject interface {
+	VisitIntercomOAuthCallbackResponse(w http.ResponseWriter) error
+}
+
+type IntercomOAuthCallback302Response struct {
+}
+
+func (response IntercomOAuthCallback302Response) VisitIntercomOAuthCallbackResponse(w http.ResponseWriter) error {
+	w.WriteHeader(302)
+	return nil
+}
+
+type IntercomOAuthCallbackdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response IntercomOAuthCallbackdefaultApplicationProblemPlusJSONResponse) VisitIntercomOAuthCallbackResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(response.StatusCode)
 
@@ -17663,6 +20273,45 @@ type CreateIssueCommentdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response CreateIssueCommentdefaultApplicationProblemPlusJSONResponse) VisitCreateIssueCommentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ExportCustomerRequestsForIssueRequestObject struct {
+	Id string `json:"id"`
+}
+
+type ExportCustomerRequestsForIssueResponseObject interface {
+	VisitExportCustomerRequestsForIssueResponse(w http.ResponseWriter) error
+}
+
+type ExportCustomerRequestsForIssue200TextcsvResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response ExportCustomerRequestsForIssue200TextcsvResponse) VisitExportCustomerRequestsForIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "text/csv")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type ExportCustomerRequestsForIssuedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ExportCustomerRequestsForIssuedefaultApplicationProblemPlusJSONResponse) VisitExportCustomerRequestsForIssueResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(response.StatusCode)
 
@@ -19113,6 +21762,45 @@ type UpdateProjectdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response UpdateProjectdefaultApplicationProblemPlusJSONResponse) VisitUpdateProjectResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ExportCustomerRequestsForProjectRequestObject struct {
+	Slug string `json:"slug"`
+}
+
+type ExportCustomerRequestsForProjectResponseObject interface {
+	VisitExportCustomerRequestsForProjectResponse(w http.ResponseWriter) error
+}
+
+type ExportCustomerRequestsForProject200TextcsvResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response ExportCustomerRequestsForProject200TextcsvResponse) VisitExportCustomerRequestsForProjectResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "text/csv")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type ExportCustomerRequestsForProjectdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ExportCustomerRequestsForProjectdefaultApplicationProblemPlusJSONResponse) VisitExportCustomerRequestsForProjectResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(response.StatusCode)
 
@@ -22190,6 +24878,45 @@ type StrictServerInterface interface {
 
 	// (DELETE /custom-emojis/{id})
 	DeleteCustomEmoji(ctx context.Context, request DeleteCustomEmojiRequestObject) (DeleteCustomEmojiResponseObject, error)
+	// Customer request route namespace; mutate concrete request resources by id.
+	// (GET /customer-requests)
+	CustomerRequestsNamespace(ctx context.Context, request CustomerRequestsNamespaceRequestObject) (CustomerRequestsNamespaceResponseObject, error)
+	// Delete a customer request
+	// (DELETE /customer-requests/{requestID})
+	DeleteCustomerRequest(ctx context.Context, request DeleteCustomerRequestRequestObject) (DeleteCustomerRequestResponseObject, error)
+	// Update a customer request
+	// (PATCH /customer-requests/{requestID})
+	UpdateCustomerRequest(ctx context.Context, request UpdateCustomerRequestRequestObject) (UpdateCustomerRequestResponseObject, error)
+	// Link a customer request to an issue
+	// (POST /customer-requests/{requestID}/issues)
+	LinkCustomerRequestIssue(ctx context.Context, request LinkCustomerRequestIssueRequestObject) (LinkCustomerRequestIssueResponseObject, error)
+	// Unlink a customer request from an issue
+	// (DELETE /customer-requests/{requestID}/issues/{issueID})
+	UnlinkCustomerRequestIssue(ctx context.Context, request UnlinkCustomerRequestIssueRequestObject) (UnlinkCustomerRequestIssueResponseObject, error)
+	// Link a customer request to a project
+	// (POST /customer-requests/{requestID}/projects)
+	LinkCustomerRequestProject(ctx context.Context, request LinkCustomerRequestProjectRequestObject) (LinkCustomerRequestProjectResponseObject, error)
+	// Unlink a customer request from a project
+	// (DELETE /customer-requests/{requestID}/projects/{projectID})
+	UnlinkCustomerRequestProject(ctx context.Context, request UnlinkCustomerRequestProjectRequestObject) (UnlinkCustomerRequestProjectResponseObject, error)
+	// List customers in the authenticated workspace
+	// (GET /customers)
+	ListCustomers(ctx context.Context, request ListCustomersRequestObject) (ListCustomersResponseObject, error)
+	// Create a customer in the authenticated workspace
+	// (POST /customers)
+	CreateCustomer(ctx context.Context, request CreateCustomerRequestObject) (CreateCustomerResponseObject, error)
+	// Get a customer with requests and linked work
+	// (GET /customers/{customerID})
+	GetCustomer(ctx context.Context, request GetCustomerRequestObject) (GetCustomerResponseObject, error)
+	// Update a customer
+	// (PATCH /customers/{customerID})
+	UpdateCustomer(ctx context.Context, request UpdateCustomerRequestObject) (UpdateCustomerResponseObject, error)
+	// Create a customer request and optionally link it to work
+	// (POST /customers/{customerID}/requests)
+	CreateCustomerRequest(ctx context.Context, request CreateCustomerRequestRequestObject) (CreateCustomerRequestResponseObject, error)
+	// Export a customer's requests as CSV
+	// (GET /customers/{customerID}/requests.csv)
+	ExportCustomerRequestsForCustomer(ctx context.Context, request ExportCustomerRequestsForCustomerRequestObject) (ExportCustomerRequestsForCustomerResponseObject, error)
 	// Create a disposable public demo browser session and seed the demo workspace if needed.
 	// (GET /demo/session)
 	CreateDemoSession(ctx context.Context, request CreateDemoSessionRequestObject) (CreateDemoSessionResponseObject, error)
@@ -22248,6 +24975,21 @@ type StrictServerInterface interface {
 	// (POST /integrations/discord/disconnect)
 	DisconnectDiscordIntegration(ctx context.Context, request DisconnectDiscordIntegrationRequestObject) (DisconnectDiscordIntegrationResponseObject, error)
 
+	// (POST /integrations/github/connect)
+	ConnectGitHubIntegration(ctx context.Context, request ConnectGitHubIntegrationRequestObject) (ConnectGitHubIntegrationResponseObject, error)
+
+	// (POST /integrations/github/disconnect)
+	DisconnectGitHubIntegration(ctx context.Context, request DisconnectGitHubIntegrationRequestObject) (DisconnectGitHubIntegrationResponseObject, error)
+
+	// (POST /integrations/github/register)
+	RegisterGitHubIntegration(ctx context.Context, request RegisterGitHubIntegrationRequestObject) (RegisterGitHubIntegrationResponseObject, error)
+
+	// (GET /integrations/github/setup/callback)
+	GithubSetupCallback(ctx context.Context, request GithubSetupCallbackRequestObject) (GithubSetupCallbackResponseObject, error)
+
+	// (POST /integrations/github/webhook)
+	IngestGitHubWebhook(ctx context.Context, request IngestGitHubWebhookRequestObject) (IngestGitHubWebhookResponseObject, error)
+
 	// (GET /integrations/gitlab)
 	GetGitLabIntegration(ctx context.Context, request GetGitLabIntegrationRequestObject) (GetGitLabIntegrationResponseObject, error)
 
@@ -22262,6 +25004,30 @@ type StrictServerInterface interface {
 
 	// (POST /integrations/gitlab/workflows)
 	UpdateGitLabWorkflowAutomation(ctx context.Context, request UpdateGitLabWorkflowAutomationRequestObject) (UpdateGitLabWorkflowAutomationResponseObject, error)
+
+	// (POST /integrations/intercom/connect)
+	ConnectIntercomIntegration(ctx context.Context, request ConnectIntercomIntegrationRequestObject) (ConnectIntercomIntegrationResponseObject, error)
+
+	// (POST /integrations/intercom/disconnect)
+	DisconnectIntercomIntegration(ctx context.Context, request DisconnectIntercomIntegrationRequestObject) (DisconnectIntercomIntegrationResponseObject, error)
+
+	// (POST /integrations/intercom/issues/create)
+	CreateIssueFromIntercom(ctx context.Context, request CreateIssueFromIntercomRequestObject) (CreateIssueFromIntercomResponseObject, error)
+
+	// (POST /integrations/intercom/issues/link)
+	LinkIntercomIssue(ctx context.Context, request LinkIntercomIssueRequestObject) (LinkIntercomIssueResponseObject, error)
+
+	// (POST /integrations/intercom/issues/search)
+	SearchIntercomLinkableIssues(ctx context.Context, request SearchIntercomLinkableIssuesRequestObject) (SearchIntercomLinkableIssuesResponseObject, error)
+
+	// (POST /integrations/intercom/issues/status)
+	GetIntercomLinkedIssueStatus(ctx context.Context, request GetIntercomLinkedIssueStatusRequestObject) (GetIntercomLinkedIssueStatusResponseObject, error)
+
+	// (POST /integrations/intercom/issues/unlink)
+	UnlinkIntercomIssue(ctx context.Context, request UnlinkIntercomIssueRequestObject) (UnlinkIntercomIssueResponseObject, error)
+
+	// (GET /integrations/intercom/oauth/callback)
+	IntercomOAuthCallback(ctx context.Context, request IntercomOAuthCallbackRequestObject) (IntercomOAuthCallbackResponseObject, error)
 
 	// (POST /integrations/microsoft-teams/connect)
 	ConnectMicrosoftTeamsIntegration(ctx context.Context, request ConnectMicrosoftTeamsIntegrationRequestObject) (ConnectMicrosoftTeamsIntegrationResponseObject, error)
@@ -22328,6 +25094,9 @@ type StrictServerInterface interface {
 
 	// (POST /issues/{id}/comments)
 	CreateIssueComment(ctx context.Context, request CreateIssueCommentRequestObject) (CreateIssueCommentResponseObject, error)
+	// Export customer requests linked to an issue as CSV
+	// (GET /issues/{id}/customer-requests.csv)
+	ExportCustomerRequestsForIssue(ctx context.Context, request ExportCustomerRequestsForIssueRequestObject) (ExportCustomerRequestsForIssueResponseObject, error)
 
 	// (GET /issues/{id}/discussion-summary)
 	GetIssueDiscussionSummary(ctx context.Context, request GetIssueDiscussionSummaryRequestObject) (GetIssueDiscussionSummaryResponseObject, error)
@@ -22475,6 +25244,9 @@ type StrictServerInterface interface {
 
 	// (PATCH /projects/{slug})
 	UpdateProject(ctx context.Context, request UpdateProjectRequestObject) (UpdateProjectResponseObject, error)
+	// Export customer requests linked to a project as CSV
+	// (GET /projects/{slug}/customer-requests.csv)
+	ExportCustomerRequestsForProject(ctx context.Context, request ExportCustomerRequestsForProjectRequestObject) (ExportCustomerRequestsForProjectResponseObject, error)
 	// Create a project milestone
 	// (POST /projects/{slug}/milestones)
 	CreateProjectMilestone(ctx context.Context, request CreateProjectMilestoneRequestObject) (CreateProjectMilestoneResponseObject, error)
@@ -23575,6 +26347,384 @@ func (sh *strictHandler) DeleteCustomEmoji(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// CustomerRequestsNamespace operation middleware
+func (sh *strictHandler) CustomerRequestsNamespace(w http.ResponseWriter, r *http.Request) {
+	var request CustomerRequestsNamespaceRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CustomerRequestsNamespace(ctx, request.(CustomerRequestsNamespaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CustomerRequestsNamespace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CustomerRequestsNamespaceResponseObject); ok {
+		if err := validResponse.VisitCustomerRequestsNamespaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteCustomerRequest operation middleware
+func (sh *strictHandler) DeleteCustomerRequest(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID) {
+	var request DeleteCustomerRequestRequestObject
+
+	request.RequestID = requestID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteCustomerRequest(ctx, request.(DeleteCustomerRequestRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteCustomerRequest")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteCustomerRequestResponseObject); ok {
+		if err := validResponse.VisitDeleteCustomerRequestResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateCustomerRequest operation middleware
+func (sh *strictHandler) UpdateCustomerRequest(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID) {
+	var request UpdateCustomerRequestRequestObject
+
+	request.RequestID = requestID
+
+	var body UpdateCustomerRequestJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateCustomerRequest(ctx, request.(UpdateCustomerRequestRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateCustomerRequest")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateCustomerRequestResponseObject); ok {
+		if err := validResponse.VisitUpdateCustomerRequestResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// LinkCustomerRequestIssue operation middleware
+func (sh *strictHandler) LinkCustomerRequestIssue(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID) {
+	var request LinkCustomerRequestIssueRequestObject
+
+	request.RequestID = requestID
+
+	var body LinkCustomerRequestIssueJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.LinkCustomerRequestIssue(ctx, request.(LinkCustomerRequestIssueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "LinkCustomerRequestIssue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LinkCustomerRequestIssueResponseObject); ok {
+		if err := validResponse.VisitLinkCustomerRequestIssueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UnlinkCustomerRequestIssue operation middleware
+func (sh *strictHandler) UnlinkCustomerRequestIssue(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID, issueID string) {
+	var request UnlinkCustomerRequestIssueRequestObject
+
+	request.RequestID = requestID
+	request.IssueID = issueID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UnlinkCustomerRequestIssue(ctx, request.(UnlinkCustomerRequestIssueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UnlinkCustomerRequestIssue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UnlinkCustomerRequestIssueResponseObject); ok {
+		if err := validResponse.VisitUnlinkCustomerRequestIssueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// LinkCustomerRequestProject operation middleware
+func (sh *strictHandler) LinkCustomerRequestProject(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID) {
+	var request LinkCustomerRequestProjectRequestObject
+
+	request.RequestID = requestID
+
+	var body LinkCustomerRequestProjectJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.LinkCustomerRequestProject(ctx, request.(LinkCustomerRequestProjectRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "LinkCustomerRequestProject")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LinkCustomerRequestProjectResponseObject); ok {
+		if err := validResponse.VisitLinkCustomerRequestProjectResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UnlinkCustomerRequestProject operation middleware
+func (sh *strictHandler) UnlinkCustomerRequestProject(w http.ResponseWriter, r *http.Request, requestID openapi_types.UUID, projectID string) {
+	var request UnlinkCustomerRequestProjectRequestObject
+
+	request.RequestID = requestID
+	request.ProjectID = projectID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UnlinkCustomerRequestProject(ctx, request.(UnlinkCustomerRequestProjectRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UnlinkCustomerRequestProject")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UnlinkCustomerRequestProjectResponseObject); ok {
+		if err := validResponse.VisitUnlinkCustomerRequestProjectResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCustomers operation middleware
+func (sh *strictHandler) ListCustomers(w http.ResponseWriter, r *http.Request, params ListCustomersParams) {
+	var request ListCustomersRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCustomers(ctx, request.(ListCustomersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCustomers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCustomersResponseObject); ok {
+		if err := validResponse.VisitListCustomersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateCustomer operation middleware
+func (sh *strictHandler) CreateCustomer(w http.ResponseWriter, r *http.Request) {
+	var request CreateCustomerRequestObject
+
+	var body CreateCustomerJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateCustomer(ctx, request.(CreateCustomerRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateCustomer")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCustomerResponseObject); ok {
+		if err := validResponse.VisitCreateCustomerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCustomer operation middleware
+func (sh *strictHandler) GetCustomer(w http.ResponseWriter, r *http.Request, customerID openapi_types.UUID) {
+	var request GetCustomerRequestObject
+
+	request.CustomerID = customerID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCustomer(ctx, request.(GetCustomerRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCustomer")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCustomerResponseObject); ok {
+		if err := validResponse.VisitGetCustomerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateCustomer operation middleware
+func (sh *strictHandler) UpdateCustomer(w http.ResponseWriter, r *http.Request, customerID openapi_types.UUID) {
+	var request UpdateCustomerRequestObject
+
+	request.CustomerID = customerID
+
+	var body UpdateCustomerJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateCustomer(ctx, request.(UpdateCustomerRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateCustomer")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateCustomerResponseObject); ok {
+		if err := validResponse.VisitUpdateCustomerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateCustomerRequest operation middleware
+func (sh *strictHandler) CreateCustomerRequest(w http.ResponseWriter, r *http.Request, customerID openapi_types.UUID) {
+	var request CreateCustomerRequestRequestObject
+
+	request.CustomerID = customerID
+
+	var body CreateCustomerRequestJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateCustomerRequest(ctx, request.(CreateCustomerRequestRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateCustomerRequest")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCustomerRequestResponseObject); ok {
+		if err := validResponse.VisitCreateCustomerRequestResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExportCustomerRequestsForCustomer operation middleware
+func (sh *strictHandler) ExportCustomerRequestsForCustomer(w http.ResponseWriter, r *http.Request, customerID openapi_types.UUID) {
+	var request ExportCustomerRequestsForCustomerRequestObject
+
+	request.CustomerID = customerID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportCustomerRequestsForCustomer(ctx, request.(ExportCustomerRequestsForCustomerRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportCustomerRequestsForCustomer")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportCustomerRequestsForCustomerResponseObject); ok {
+		if err := validResponse.VisitExportCustomerRequestsForCustomerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CreateDemoSession operation middleware
 func (sh *strictHandler) CreateDemoSession(w http.ResponseWriter, r *http.Request) {
 	var request CreateDemoSessionRequestObject
@@ -24096,6 +27246,144 @@ func (sh *strictHandler) DisconnectDiscordIntegration(w http.ResponseWriter, r *
 	}
 }
 
+// ConnectGitHubIntegration operation middleware
+func (sh *strictHandler) ConnectGitHubIntegration(w http.ResponseWriter, r *http.Request) {
+	var request ConnectGitHubIntegrationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ConnectGitHubIntegration(ctx, request.(ConnectGitHubIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConnectGitHubIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ConnectGitHubIntegrationResponseObject); ok {
+		if err := validResponse.VisitConnectGitHubIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DisconnectGitHubIntegration operation middleware
+func (sh *strictHandler) DisconnectGitHubIntegration(w http.ResponseWriter, r *http.Request) {
+	var request DisconnectGitHubIntegrationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisconnectGitHubIntegration(ctx, request.(DisconnectGitHubIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisconnectGitHubIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisconnectGitHubIntegrationResponseObject); ok {
+		if err := validResponse.VisitDisconnectGitHubIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RegisterGitHubIntegration operation middleware
+func (sh *strictHandler) RegisterGitHubIntegration(w http.ResponseWriter, r *http.Request) {
+	var request RegisterGitHubIntegrationRequestObject
+
+	var body RegisterGitHubIntegrationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RegisterGitHubIntegration(ctx, request.(RegisterGitHubIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RegisterGitHubIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RegisterGitHubIntegrationResponseObject); ok {
+		if err := validResponse.VisitRegisterGitHubIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GithubSetupCallback operation middleware
+func (sh *strictHandler) GithubSetupCallback(w http.ResponseWriter, r *http.Request, params GithubSetupCallbackParams) {
+	var request GithubSetupCallbackRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GithubSetupCallback(ctx, request.(GithubSetupCallbackRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GithubSetupCallback")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GithubSetupCallbackResponseObject); ok {
+		if err := validResponse.VisitGithubSetupCallbackResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// IngestGitHubWebhook operation middleware
+func (sh *strictHandler) IngestGitHubWebhook(w http.ResponseWriter, r *http.Request, params IngestGitHubWebhookParams) {
+	var request IngestGitHubWebhookRequestObject
+
+	request.Params = params
+
+	var body IngestGitHubWebhookJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.IngestGitHubWebhook(ctx, request.(IngestGitHubWebhookRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "IngestGitHubWebhook")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(IngestGitHubWebhookResponseObject); ok {
+		if err := validResponse.VisitIngestGitHubWebhookResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetGitLabIntegration operation middleware
 func (sh *strictHandler) GetGitLabIntegration(w http.ResponseWriter, r *http.Request) {
 	var request GetGitLabIntegrationRequestObject
@@ -24225,6 +27513,235 @@ func (sh *strictHandler) UpdateGitLabWorkflowAutomation(w http.ResponseWriter, r
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateGitLabWorkflowAutomationResponseObject); ok {
 		if err := validResponse.VisitUpdateGitLabWorkflowAutomationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ConnectIntercomIntegration operation middleware
+func (sh *strictHandler) ConnectIntercomIntegration(w http.ResponseWriter, r *http.Request) {
+	var request ConnectIntercomIntegrationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ConnectIntercomIntegration(ctx, request.(ConnectIntercomIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConnectIntercomIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ConnectIntercomIntegrationResponseObject); ok {
+		if err := validResponse.VisitConnectIntercomIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DisconnectIntercomIntegration operation middleware
+func (sh *strictHandler) DisconnectIntercomIntegration(w http.ResponseWriter, r *http.Request) {
+	var request DisconnectIntercomIntegrationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisconnectIntercomIntegration(ctx, request.(DisconnectIntercomIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisconnectIntercomIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisconnectIntercomIntegrationResponseObject); ok {
+		if err := validResponse.VisitDisconnectIntercomIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateIssueFromIntercom operation middleware
+func (sh *strictHandler) CreateIssueFromIntercom(w http.ResponseWriter, r *http.Request) {
+	var request CreateIssueFromIntercomRequestObject
+
+	var body CreateIssueFromIntercomJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateIssueFromIntercom(ctx, request.(CreateIssueFromIntercomRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateIssueFromIntercom")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateIssueFromIntercomResponseObject); ok {
+		if err := validResponse.VisitCreateIssueFromIntercomResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// LinkIntercomIssue operation middleware
+func (sh *strictHandler) LinkIntercomIssue(w http.ResponseWriter, r *http.Request) {
+	var request LinkIntercomIssueRequestObject
+
+	var body LinkIntercomIssueJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.LinkIntercomIssue(ctx, request.(LinkIntercomIssueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "LinkIntercomIssue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LinkIntercomIssueResponseObject); ok {
+		if err := validResponse.VisitLinkIntercomIssueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SearchIntercomLinkableIssues operation middleware
+func (sh *strictHandler) SearchIntercomLinkableIssues(w http.ResponseWriter, r *http.Request) {
+	var request SearchIntercomLinkableIssuesRequestObject
+
+	var body SearchIntercomLinkableIssuesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchIntercomLinkableIssues(ctx, request.(SearchIntercomLinkableIssuesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchIntercomLinkableIssues")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchIntercomLinkableIssuesResponseObject); ok {
+		if err := validResponse.VisitSearchIntercomLinkableIssuesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetIntercomLinkedIssueStatus operation middleware
+func (sh *strictHandler) GetIntercomLinkedIssueStatus(w http.ResponseWriter, r *http.Request) {
+	var request GetIntercomLinkedIssueStatusRequestObject
+
+	var body GetIntercomLinkedIssueStatusJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetIntercomLinkedIssueStatus(ctx, request.(GetIntercomLinkedIssueStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetIntercomLinkedIssueStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetIntercomLinkedIssueStatusResponseObject); ok {
+		if err := validResponse.VisitGetIntercomLinkedIssueStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UnlinkIntercomIssue operation middleware
+func (sh *strictHandler) UnlinkIntercomIssue(w http.ResponseWriter, r *http.Request) {
+	var request UnlinkIntercomIssueRequestObject
+
+	var body UnlinkIntercomIssueJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UnlinkIntercomIssue(ctx, request.(UnlinkIntercomIssueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UnlinkIntercomIssue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UnlinkIntercomIssueResponseObject); ok {
+		if err := validResponse.VisitUnlinkIntercomIssueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// IntercomOAuthCallback operation middleware
+func (sh *strictHandler) IntercomOAuthCallback(w http.ResponseWriter, r *http.Request, params IntercomOAuthCallbackParams) {
+	var request IntercomOAuthCallbackRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.IntercomOAuthCallback(ctx, request.(IntercomOAuthCallbackRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "IntercomOAuthCallback")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(IntercomOAuthCallbackResponseObject); ok {
+		if err := validResponse.VisitIntercomOAuthCallbackResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -24840,6 +28357,32 @@ func (sh *strictHandler) CreateIssueComment(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateIssueCommentResponseObject); ok {
 		if err := validResponse.VisitCreateIssueCommentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExportCustomerRequestsForIssue operation middleware
+func (sh *strictHandler) ExportCustomerRequestsForIssue(w http.ResponseWriter, r *http.Request, id string) {
+	var request ExportCustomerRequestsForIssueRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportCustomerRequestsForIssue(ctx, request.(ExportCustomerRequestsForIssueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportCustomerRequestsForIssue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportCustomerRequestsForIssueResponseObject); ok {
+		if err := validResponse.VisitExportCustomerRequestsForIssueResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -26232,6 +29775,32 @@ func (sh *strictHandler) UpdateProject(w http.ResponseWriter, r *http.Request, s
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateProjectResponseObject); ok {
 		if err := validResponse.VisitUpdateProjectResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExportCustomerRequestsForProject operation middleware
+func (sh *strictHandler) ExportCustomerRequestsForProject(w http.ResponseWriter, r *http.Request, slug string) {
+	var request ExportCustomerRequestsForProjectRequestObject
+
+	request.Slug = slug
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportCustomerRequestsForProject(ctx, request.(ExportCustomerRequestsForProjectRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportCustomerRequestsForProject")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportCustomerRequestsForProjectResponseObject); ok {
+		if err := validResponse.VisitExportCustomerRequestsForProjectResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

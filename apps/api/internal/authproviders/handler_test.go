@@ -1,6 +1,10 @@
 package authproviders
 
 import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -34,6 +38,130 @@ func TestAccountProviderCapability(t *testing.T) {
 	got := accountProviderCapability(false, "GitHub")
 	if got.Configured || got.DevLinking || got.UnavailableReason == nil {
 		t.Fatalf("capability = %#v", got)
+	}
+}
+
+func TestProviderCapabilitiesReportsGitHubConfiguration(t *testing.T) {
+	t.Setenv("NODE_ENV", "production")
+	t.Setenv("AUTH_GITHUB_ID", "")
+	t.Setenv("AUTH_GITHUB_SECRET", "")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/provider-capabilities", nil)
+	rec := httptest.NewRecorder()
+	Handler{}.ProviderCapabilities(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var missing capabilitiesResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &missing); err != nil {
+		t.Fatal(err)
+	}
+	githubMissing, ok := missing.Providers["github"].(map[string]any)
+	if !ok || githubMissing["configured"] != false {
+		t.Fatalf("missing github capability = %#v", missing.Providers["github"])
+	}
+
+	t.Setenv("AUTH_GITHUB_ID", "github-id")
+	t.Setenv("AUTH_GITHUB_SECRET", "github-secret")
+	rec = httptest.NewRecorder()
+	Handler{}.ProviderCapabilities(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var configured capabilitiesResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &configured); err != nil {
+		t.Fatal(err)
+	}
+	githubConfigured, ok := configured.Providers["github"].(map[string]any)
+	if !ok || githubConfigured["configured"] != true {
+		t.Fatalf("configured github capability = %#v", configured.Providers["github"])
+	}
+}
+
+func TestStartGitHubRedirectsWithSignedState(t *testing.T) {
+	t.Setenv("AUTH_GITHUB_ID", "github-id")
+	t.Setenv("AUTH_GITHUB_SECRET", "github-secret")
+	t.Setenv("GITHUB_OAUTH_BASE_URL", "https://github.example")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/github/start?callback_url=/team/ABC", nil)
+	rec := httptest.NewRecorder()
+	Handler{}.StartGitHub(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	location := rec.Header().Get("Location")
+	if !strings.HasPrefix(location, "https://github.example/login/oauth/authorize?") {
+		t.Fatalf("location = %q", location)
+	}
+	if !strings.Contains(location, "client_id=github-id") || !strings.Contains(location, "scope=read%3Auser+user%3Aemail") {
+		t.Fatalf("location missing client or scope: %q", location)
+	}
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Name != authStateCookieName {
+		t.Fatalf("cookies = %#v", cookies)
+	}
+	state := cookies[0].Value
+	if raw, ok := verifyAuthValue(state); !ok || !strings.HasSuffix(raw, "|/team/ABC") {
+		t.Fatalf("state raw = %q ok=%v", raw, ok)
+	}
+}
+
+func TestGitHubCallbackRejectsInvalidState(t *testing.T) {
+	t.Setenv("AUTH_GITHUB_ID", "github-id")
+	t.Setenv("AUTH_GITHUB_SECRET", "github-secret")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/github/callback?state=invalid&code=code", nil)
+	req.AddCookie(&http.Cookie{Name: authStateCookieName, Value: signAuthValue("nonce|/")})
+	rec := httptest.NewRecorder()
+	Handler{}.GitHubCallback(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestFetchGitHubAccountRequiresVerifiedPrimaryEmail(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer access-token" {
+			t.Fatalf("authorization = %q", r.Header.Get("Authorization"))
+		}
+		switch r.URL.Path {
+		case "/user":
+			_, _ = w.Write([]byte(`{"id":12345,"login":"octocat","name":"Mona","avatar_url":"https://avatars.example/octocat.png"}`))
+		case "/user/emails":
+			_, _ = w.Write([]byte(`[{"email":"octo@example.com","primary":true,"verified":true},{"email":"other@example.com","primary":false,"verified":true}]`))
+		default:
+			t.Fatalf("unexpected path = %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+	t.Setenv("GITHUB_API_BASE_URL", server.URL)
+
+	claims, err := fetchGitHubAccount(context.Background(), server.Client(), "access-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claims.ID != "12345" || claims.Email != "octo@example.com" || claims.Login != "octocat" || claims.Name != "Mona" {
+		t.Fatalf("claims = %#v", claims)
+	}
+}
+
+func TestFetchGitHubAccountRejectsUnverifiedPrimaryEmail(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/user":
+			_, _ = w.Write([]byte(`{"id":12345,"login":"octocat"}`))
+		case "/user/emails":
+			_, _ = w.Write([]byte(`[{"email":"octo@example.com","primary":true,"verified":false}]`))
+		default:
+			t.Fatalf("unexpected path = %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+	t.Setenv("GITHUB_API_BASE_URL", server.URL)
+
+	_, err := fetchGitHubAccount(context.Background(), server.Client(), "access-token")
+	if err == nil || !strings.Contains(err.Error(), "verified primary email") {
+		t.Fatalf("err = %v", err)
 	}
 }
 
@@ -126,5 +254,35 @@ func TestSetSessionCookieClearsParentDomainVariants(t *testing.T) {
 	}
 	if cookies[3].Value != "signed-token" || cookies[3].Domain != "" {
 		t.Fatalf("session cookie = %#v", cookies[3])
+	}
+}
+
+func TestReadSAMLWorkspaceSettingsIncludesMetadata(t *testing.T) {
+	settings := readSAMLWorkspaceSettings([]byte(`{"security":{"saml":{"enabled":true,"domains":["Example.com"],"idpSsoUrl":"https://idp.example.com/sso","entityId":"https://idp.example.com/entity","certificate":"CERT","metadataXml":"<xml/>"}}}`))
+	if !settings.Enabled || settings.IDPSSOURL != "https://idp.example.com/sso" || settings.IDPEntityID != "https://idp.example.com/entity" || settings.MetadataXML == "" || len(settings.Domains) != 1 || settings.Domains[0] != "example.com" {
+		t.Fatalf("settings = %#v", settings)
+	}
+}
+
+func TestSAMLResponseRequiresStrongSignature(t *testing.T) {
+	strong := base64.StdEncoding.EncodeToString([]byte(`<Response><Signature><SignedInfo><SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/></SignedInfo></Signature></Response>`))
+	if !samlResponseUsesStrongSignature(strong) {
+		t.Fatal("expected rsa-sha256 signature to be accepted")
+	}
+	weak := base64.StdEncoding.EncodeToString([]byte(`<Response><Signature><SignedInfo><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/></SignedInfo></Signature></Response>`))
+	if samlResponseUsesStrongSignature(weak) {
+		t.Fatal("expected rsa-sha1 signature to be rejected")
+	}
+}
+
+func TestSafeSAMLCallbackPathAllowsSameOriginAbsoluteURL(t *testing.T) {
+	t.Setenv("PUBLIC_BASE_URL", "https://app.example")
+	req := httptest.NewRequest("POST", "https://app.example/api/auth/saml/discovery", nil)
+	got := safeSAMLCallbackPath(req, "https://app.example/acme/inbox?view=all")
+	if got != "/acme/inbox?view=all" {
+		t.Fatalf("callback = %q", got)
+	}
+	if got := safeSAMLCallbackPath(req, "https://evil.example/acme/inbox"); got != "/" {
+		t.Fatalf("cross-origin callback = %q", got)
 	}
 }

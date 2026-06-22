@@ -36,6 +36,10 @@ export type { components, paths } from "./generated.js";
 
 export {
   syncWebSocketUrl,
+  createLocalStorageVersionStore,
+  subscribeToSync,
+  type SyncSubscription,
+  type SyncVersionStore,
   type SyncMessage,
   type SyncOperation,
 } from "./sync.js";

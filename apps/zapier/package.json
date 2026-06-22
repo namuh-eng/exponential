@@ -1,0 +1,22 @@
+{
+  "name": "@namuh-eng/expn-zapier",
+  "version": "0.1.0",
+  "description": "Zapier Platform app contract for Exponential triggers and actions.",
+  "type": "module",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@namuh-eng/expn-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.4"
+  }
+}

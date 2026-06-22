@@ -1,7 +1,6 @@
 package authproviders
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -51,6 +50,8 @@ func (h Handler) Routes() chi.Router {
 	r.Get("/provider-capabilities", h.ProviderCapabilities)
 	r.Get("/google/start", h.StartGoogle)
 	r.Get("/google/callback", h.GoogleCallback)
+	r.Get("/github/start", h.StartGitHub)
+	r.Get("/github/callback", h.GitHubCallback)
 	r.Get("/discord/start", h.StartDiscord)
 	r.Get("/discord/callback", h.DiscordCallback)
 	r.Get("/microsoft/start", h.StartMicrosoft)
@@ -59,6 +60,8 @@ func (h Handler) Routes() chi.Router {
 	r.Get("/magic-link/callback", h.MagicLinkCallback)
 	r.Post("/sign-out", h.SignOut)
 	r.Post("/saml/discovery", h.SAMLDiscovery)
+	r.Post("/saml/acs", h.SAMLACS)
+	r.Get("/saml/metadata", h.SAMLMetadata)
 	return r
 }
 
@@ -84,7 +87,7 @@ func (h Handler) ProviderCapabilities(w http.ResponseWriter, r *http.Request) {
 		"github":        accountProviderCapability(oauthConfigured("AUTH_GITHUB_ID", "AUTH_GITHUB_SECRET"), "GitHub"),
 		"gitlab":        accountProviderCapability(oauthConfigured("AUTH_GITLAB_ID", "AUTH_GITLAB_SECRET"), "GitLab"),
 		"slack":         accountProviderCapability(oauthConfigured("AUTH_SLACK_ID", "AUTH_SLACK_SECRET"), "Slack"),
-		"discord":      accountProviderCapability(oauthConfigured("AUTH_DISCORD_ID", "AUTH_DISCORD_SECRET"), "Discord"),
+		"discord":       accountProviderCapability(oauthConfigured("AUTH_DISCORD_ID", "AUTH_DISCORD_SECRET"), "Discord"),
 		"microsoft":     accountProviderCapability(oauthConfigured("AUTH_MICROSOFT_ID", "AUTH_MICROSOFT_SECRET"), "Microsoft"),
 		"passkey":       emailPasskeyAllowed && passkeyAuthEnabled(),
 		"googleAllowed": googleAllowed,
@@ -95,7 +98,8 @@ func (h Handler) ProviderCapabilities(w http.ResponseWriter, r *http.Request) {
 }
 
 type samlDiscoveryRequest struct {
-	Email string `json:"email"`
+	Email       string `json:"email"`
+	CallbackURL string `json:"callbackURL"`
 }
 
 func (h Handler) SAMLDiscovery(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +113,7 @@ func (h Handler) SAMLDiscovery(w http.ResponseWriter, r *http.Request) {
 		problem.JSON(w, 400, map[string]string{"error": "Enter a valid email address."})
 		return
 	}
-	discoveredURL, err := h.discoverSAMLURL(r.Context(), domain)
+	discoveredURL, err := h.samlDiscoveryRedirect(r.Context(), r, domain, input.CallbackURL)
 	if err != nil {
 		problem.Write(w, 500, "Discover SAML URL failed", err.Error())
 		return
@@ -282,29 +286,6 @@ func extractEmailDomain(email string) string {
 		return ""
 	}
 	return domain
-}
-
-func (h Handler) discoverSAMLURL(ctx context.Context, domain string) (string, error) {
-	rows, err := h.DB.Query(ctx, `select coalesce(settings,'{}'::jsonb) from workspace`)
-	if err != nil {
-		return "", err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var raw []byte
-		if err := rows.Scan(&raw); err != nil {
-			return "", err
-		}
-		settings := readSAMLDiscoverySettings(raw)
-		if !settings.enabled || settings.url == "" || !containsString(settings.domains, domain) {
-			continue
-		}
-		parsed, err := url.Parse(settings.url)
-		if err == nil && parsed.Host != "" && (parsed.Scheme == "http" || parsed.Scheme == "https") {
-			return parsed.String(), nil
-		}
-	}
-	return "", rows.Err()
 }
 
 type samlDiscoverySettings struct {

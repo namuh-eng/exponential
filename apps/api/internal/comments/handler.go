@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/namuh-eng/exponential/apps/api/internal/auth"
+	"github.com/namuh-eng/exponential/apps/api/internal/figma"
 	"github.com/namuh-eng/exponential/apps/api/internal/problem"
 	syncapi "github.com/namuh-eng/exponential/apps/api/internal/sync"
 	"github.com/namuh-eng/exponential/apps/api/internal/webhooks"
@@ -94,11 +95,16 @@ func (h Handler) CreateForIssue(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create comment failed", err.Error())
 		return
 	}
+	if err := figma.SyncSources(r.Context(), tx, figma.SyncTarget{WorkspaceID: p.WorkspaceID, IssueID: issueID, CommentID: comment.ID, ContainerType: "comment"}, body); err != nil {
+		problem.Write(w, 500, "Create comment failed", err.Error())
+		return
+	}
 	if err := h.markDiscussionStale(r.Context(), tx, issueID); err != nil {
 		problem.Write(w, 500, "Create comment failed", err.Error())
 		return
 	}
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "comment", comment.ID, "created", comment, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "comment", comment.ID, "created", comment, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Create comment failed", err.Error())
 		return
 	}
@@ -110,6 +116,7 @@ func (h Handler) CreateForIssue(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Create comment failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	go func() {
 		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "comment.created", "", comment)
 	}()
@@ -147,11 +154,16 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update comment failed", err.Error())
 		return
 	}
+	if err := figma.SyncSources(r.Context(), tx, figma.SyncTarget{WorkspaceID: p.WorkspaceID, IssueID: comment.IssueID, CommentID: comment.ID, ContainerType: "comment"}, body); err != nil {
+		problem.Write(w, 500, "Update comment failed", err.Error())
+		return
+	}
 	if err := h.markDiscussionStale(r.Context(), tx, comment.IssueID); err != nil {
 		problem.Write(w, 500, "Update comment failed", err.Error())
 		return
 	}
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "comment", comment.ID, "updated", comment, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "comment", comment.ID, "updated", comment, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Update comment failed", err.Error())
 		return
 	}
@@ -159,6 +171,7 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Update comment failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	go func() {
 		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "comment.updated", "", comment)
 	}()
@@ -194,7 +207,8 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete comment failed", err.Error())
 		return
 	}
-	if err := insertOperation(r.Context(), tx, p.WorkspaceID, "comment", comment.ID, "deleted", comment, p.UserID); err != nil {
+	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "comment", comment.ID, "deleted", comment, p.UserID)
+	if err != nil {
 		problem.Write(w, 500, "Delete comment failed", err.Error())
 		return
 	}
@@ -202,6 +216,7 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, 500, "Delete comment failed", err.Error())
 		return
 	}
+	syncapi.PublishOperations(r.Context(), []syncapi.Operation{op})
 	go func() {
 		_ = webhooks.EnqueueEvent(context.Background(), h.DB, p.WorkspaceID, "comment.deleted", "", comment)
 	}()
@@ -401,7 +416,7 @@ func scanReactions(rows pgx.Rows, issueShape bool) ([]ReactionSummary, error) {
 	return summary, rows.Err()
 }
 
-func insertOperation(ctx context.Context, tx pgx.Tx, workspaceID, entityType, entityID, opType string, payload any, createdBy string) error {
+func insertOperation(ctx context.Context, tx pgx.Tx, workspaceID, entityType, entityID, opType string, payload any, createdBy string) (syncapi.Operation, error) {
 	return syncapi.InsertOperation(ctx, tx, workspaceID, entityType, entityID, opType, payload, createdBy)
 }
 

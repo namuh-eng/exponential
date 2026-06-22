@@ -32,6 +32,18 @@ func TestSettingsMarkDemo(t *testing.T) {
 	}
 }
 
+func TestDemoInitiativeSeedsUseCanonicalHealthValues(t *testing.T) {
+	for _, initiative := range demoInitiatives {
+		if !validDemoInitiativeHealth(initiative.Health) {
+			t.Fatalf("%s health %q is not an API initiative health value", initiative.Name, initiative.Health)
+		}
+	}
+}
+
+func validDemoInitiativeHealth(value string) bool {
+	return value == "onTrack" || value == "atRisk" || value == "offTrack" || value == "unknown"
+}
+
 func TestSideEffectPathBlocksHighRiskDemoSurfaces(t *testing.T) {
 	blocked := []struct {
 		method string

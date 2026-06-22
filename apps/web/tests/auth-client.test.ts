@@ -39,6 +39,21 @@ describe("headless auth client", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("starts GitHub OAuth through the first-party Go API", async () => {
+    const { signIn } = await import("@/lib/auth-client");
+
+    const result = await signIn.social({
+      provider: "github",
+      callbackURL: "http://localhost:7015/team/ABC?view=list",
+    });
+
+    expect(result?.data?.url).toBe(
+      "/api/auth/github/start?callback_url=%2Fteam%2FABC%3Fview%3Dlist",
+    );
+    expect(result?.data?.redirect).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("starts a first-party magic-link login", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,

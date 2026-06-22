@@ -32,6 +32,7 @@ type PreflightResponse = { checks?: PreflightCheck[] };
 type ProviderCapabilities = {
   providers?: {
     google?: ProviderCapabilityValue;
+    github?: ProviderCapabilityValue;
     passkey?: boolean;
     googleAllowed?: boolean;
     emailPasskey?: boolean;
@@ -928,6 +929,7 @@ export function AuthPage({
     initialGoogleConfigured,
   );
   const [googleAllowed, setGoogleAllowed] = useState(true);
+  const [githubConfigured, setGithubConfigured] = useState(false);
   const [passkeyConfigured, setPasskeyConfigured] = useState<boolean | null>(
     true,
   );
@@ -1033,6 +1035,7 @@ export function AuthPage({
         const data = (await response.json()) as ProviderCapabilities;
         setGoogleConfigured(isProviderEnabled(data.providers?.google));
         setGoogleAllowed(data.providers?.googleAllowed !== false);
+        setGithubConfigured(isProviderEnabled(data.providers?.github));
         setPasskeyConfigured(
           data.providers?.emailPasskey !== false &&
             data.providers?.passkey === true,
@@ -1049,6 +1052,7 @@ export function AuthPage({
         }
         setGoogleConfigured(false);
         setGoogleAllowed(true);
+        setGithubConfigured(false);
         setPasskeyConfigured(true);
         setEmailConfigured(true);
         setGoogleDisabledByWorkspace(false);
@@ -1136,6 +1140,46 @@ export function AuthPage({
       }
     } catch {
       setError("Google sign-in failed. Try again or use another method.");
+      setLoading(false);
+    }
+  }
+
+  async function handleGithubLogin() {
+    if (githubConfigured !== true) {
+      setError(
+        "GitHub sign-in is not configured. Use Google, email, or SAML SSO instead.",
+      );
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const callbackPath = getSafeCallbackPath();
+      const result = (await signIn.social({
+        provider: "github",
+        callbackURL: getAbsoluteCallbackUrl(callbackPath),
+      })) as SocialSignInResult | undefined;
+
+      if (result?.error) {
+        const isMissingProvider =
+          result.error.status === 404 ||
+          result.error.code === "PROVIDER_NOT_FOUND";
+        setError(
+          isMissingProvider
+            ? "GitHub sign-in is not configured. Use Google, email, or SAML SSO instead."
+            : (result.error.message ??
+                "GitHub sign-in failed. Try again or use another method."),
+        );
+        setLoading(false);
+        return;
+      }
+
+      if (result?.data?.url) {
+        window.location.assign(result.data.url);
+      }
+    } catch {
+      setError("GitHub sign-in failed. Try again or use another method.");
       setLoading(false);
     }
   }
@@ -1408,6 +1452,42 @@ export function AuthPage({
                   </button>
                 )}
 
+                {githubConfigured && (
+                  <button
+                    type="button"
+                    aria-label="Continue with GitHub"
+                    onClick={handleGithubLogin}
+                    disabled={loading}
+                    className="flex items-center gap-3 border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-3 py-3 text-[13px] text-[var(--auth-text)] transition-colors hover:bg-[var(--auth-secondary-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      role="img"
+                      aria-label="GitHub"
+                    >
+                      <path d="M12 2C6.477 2 2 6.486 2 12.021c0 4.428 2.865 8.184 6.839 9.504.5.092.682-.217.682-.482 0-.237-.009-.867-.014-1.703-2.782.605-3.369-1.343-3.369-1.343-.455-1.158-1.11-1.466-1.11-1.466-.908-.621.069-.609.069-.609 1.004.071 1.532 1.033 1.532 1.033.892 1.53 2.341 1.088 2.91.832.091-.647.349-1.088.635-1.338-2.221-.253-4.555-1.113-4.555-4.953 0-1.094.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.847a9.55 9.55 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.203 2.398.1 2.651.64.7 1.028 1.594 1.028 2.688 0 3.85-2.338 4.697-4.566 4.946.359.31.678.921.678 1.856 0 1.34-.012 2.421-.012 2.75 0 .267.18.579.688.481A10.025 10.025 0 0 0 22 12.021C22 6.486 17.523 2 12 2Z" />
+                    </svg>
+                    <span className="flex flex-col gap-0.5">
+                      <span>Continue with GitHub</span>
+                      <span
+                        aria-hidden="true"
+                        className="text-[10.5px] text-[var(--auth-faint)]"
+                      >
+                        oauth · verified email
+                      </span>
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className="ml-auto text-[10.5px] text-[var(--auth-faint)]"
+                    >
+                      gh
+                    </span>
+                  </button>
+                )}
+
                 {passkeyConfigured !== false && (
                   <button
                     type="button"
@@ -1464,7 +1544,6 @@ export function AuthPage({
                   setPasskeyPending(false);
                   setError("");
                 }}
-                disabled
                 className="flex w-full items-center gap-3 border border-[var(--auth-secondary-border)] bg-[var(--auth-input-bg)] px-3 py-2.5 text-[13px] text-[var(--auth-text)] transition-colors hover:bg-[var(--auth-secondary-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span aria-hidden="true" className="text-[var(--auth-prompt)]">
@@ -1488,9 +1567,6 @@ export function AuthPage({
                   <path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z" />
                 </svg>
                 <span>Continue with SAML SSO</span>
-                <span className="ml-auto shrink-0 border border-[var(--auth-secondary-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-[var(--auth-muted)]">
-                  coming soon
-                </span>
               </button>
 
               {mode === "login" && passkeyConfigured !== false && (

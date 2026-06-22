@@ -96,6 +96,20 @@ export type WorkspaceApiKeyRecord = {
   };
 };
 
+export type WorkspaceAirbyteTokenRecord = {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  scopes: string[];
+  createdAt: string;
+  lastUsedAt: string | null;
+  creator: {
+    name: string;
+    email: string;
+    image: string | null;
+  };
+};
+
 export type McpAuditLogEntry = {
   id: string;
   toolName: string;
@@ -114,10 +128,12 @@ export type ApiSettingsPayload = {
     graphql: string;
     oauthApplications: string;
     webhooks: string;
+    airbyte: string;
   };
   oauthApplications: OAuthApplicationRecord[];
   webhooks: WorkspaceWebhookRecord[];
   apiKeys: WorkspaceApiKeyRecord[];
+  airbyteTokens: WorkspaceAirbyteTokenRecord[];
   mcpAuditLog: McpAuditLogEntry[];
 };
 
@@ -125,6 +141,7 @@ export const GRAPHQL_DOCS_URL = "https://exponential.app/developers/graphql";
 export const OAUTH_APPLICATIONS_DOCS_URL =
   "https://exponential.app/developers/oauth-2-0-authentication";
 export const WEBHOOKS_DOCS_URL = "https://exponential.app/developers/webhooks";
+export const AIRBYTE_DOCS_URL = "/docs/airbyte";
 
 const WEBHOOK_EVENT_TYPES = new Set<WebhookEventType>([
   "issue.created",

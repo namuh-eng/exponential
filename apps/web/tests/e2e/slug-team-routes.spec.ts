@@ -42,7 +42,7 @@ test.describe("Slug-prefixed team issue routes", () => {
     await expect(page).toHaveURL(/\/foreverbrowsing\/team\/ENG\/all$/);
     await expectNoMainPane404(page);
 
-    await page.goto("/team/ENG/all");
+    await page.goto("/team/ENG/all", { waitUntil: "domcontentloaded" });
     await expect(page).toHaveURL(/\/foreverbrowsing\/team\/ENG\/all$/);
     await expectNoMainPane404(page);
   });

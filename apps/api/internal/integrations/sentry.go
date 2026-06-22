@@ -618,7 +618,7 @@ func (h Handler) completeSentryInstall(ctx context.Context, install sentryOAuthI
 		return err
 	}
 	credential := map[string]any{"accessToken": token.AccessToken, "refreshToken": token.RefreshToken, "tokenType": token.TokenType, "scope": token.Scope, "orgSlug": org.Slug}
-	credentialRaw, err := json.Marshal(credential)
+	credentialRaw, err := encryptedProviderCredentialJSON(credential)
 	if err != nil {
 		return err
 	}
