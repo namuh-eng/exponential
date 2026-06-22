@@ -97,7 +97,7 @@ name and update both source and tests in the same commit.
 
 ```sh
 make test                  # Vitest, fast — skips DB suites
-make test-e2e              # Playwright; needs `npm run dev` running
+make test-e2e              # Playwright; needs `bun run dev` running
 make check                 # Biome (lint + format) + tsc
 make all                   # check + test
 ```

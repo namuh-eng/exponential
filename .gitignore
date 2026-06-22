@@ -23,6 +23,7 @@ ONBOARDING-PLAN.md
 # Runtime state — generated during execution, not source files
 .scratch/
 *.lock
+!bun.lock
 build-progress.txt
 .onboard-answers.tmp
 inspect-progress.txt
@@ -40,7 +41,7 @@ test.txt
 .cpd-report/
 cpd-checklist.md
 
-.pnpm-store/
+.bun/
 apps/web/.turbo/
 apps/web/tests/e2e/.auth/
 .turbo/

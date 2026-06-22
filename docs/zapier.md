@@ -46,8 +46,8 @@ Issue and project actions accept the same IDs and enum values as the public API.
 ## Local validation
 
 ```bash
-pnpm --filter @namuh-eng/expn-zapier test
-pnpm --filter @namuh-eng/expn-zapier typecheck
+bun run --filter @namuh-eng/expn-zapier test
+bun run --filter @namuh-eng/expn-zapier typecheck
 ```
 
 Run `make check` and `make test` before merging API or contract changes.

@@ -46,7 +46,7 @@ is historical context for the Go split, not a current-state source of truth.
 - `make test` - Go API tests plus Vitest unit/component tests.
 - `make test-e2e` - Playwright E2E; requires the local dev stack/server.
 - `make all` - `make check` plus `make test`.
-- `pnpm dev` - starts the web app via `@exponential/web` on port `7015` after
+- `bun run dev` - starts the web app via `@exponential/web` on port `7015` after
   database preflight.
 - `docker compose -f docker-compose.dev.yml up --build` - starts local
   Postgres, Redis, API, web, and Mailhog.

@@ -99,10 +99,10 @@ The local stdio server remains available for clients that prefer spawning a
 process. It calls the generated TypeScript SDK against the Go API.
 
 ```bash
-pnpm install
+bun install
 EXPONENTIAL_TOKEN=pat_your_token \
 EXPONENTIAL_API_URL=http://localhost:7016/v1 \
-pnpm --filter @exponential/mcp exec exponential-mcp
+bun run --filter @exponential/mcp mcp
 ```
 
 Example local client configuration:
@@ -111,8 +111,8 @@ Example local client configuration:
 {
   "mcpServers": {
     "exponential": {
-      "command": "pnpm",
-      "args": ["--filter", "@exponential/mcp", "exec", "exponential-mcp"],
+      "command": "bun",
+      "args": ["--filter", "@exponential/mcp", "run", "mcp"],
       "env": {
         "EXPONENTIAL_TOKEN": "pat_your_token",
         "EXPONENTIAL_API_URL": "http://localhost:7016/v1"
@@ -142,7 +142,7 @@ Example local inspector command:
 ```bash
 EXPONENTIAL_TOKEN=pat_your_token \
 EXPONENTIAL_API_URL=http://localhost:7016/v1 \
-npx @modelcontextprotocol/inspector pnpm --filter @exponential/mcp exec exponential-mcp
+npx @modelcontextprotocol/inspector bun run --filter @exponential/mcp mcp
 ```
 
 ## Errors

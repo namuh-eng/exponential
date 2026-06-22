@@ -28,8 +28,7 @@ PUBLIC_BASE_URL=http://localhost:$((7100 + suffix))
 EXPONENTIAL_API_URL=http://localhost:$((7200 + suffix))/v1
 EOF
 
-corepack enable || true
-pnpm install --frozen-lockfile
+bun install --frozen-lockfile
 
 cd apps/api
 go mod download

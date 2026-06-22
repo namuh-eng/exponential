@@ -12,22 +12,22 @@ check: check-header typecheck lint api-build api-dockerfile ecs-task-definitions
 # TypeScript type checking
 typecheck:
 	@. ./hack/run_silent.sh && \
-	run_silent "TypeCheck passed" "pnpm typecheck"
+	run_silent "TypeCheck passed" "bun run typecheck"
 
 # Lint and format check (Biome)
 lint:
 	@. ./hack/run_silent.sh && \
-	run_silent "Lint & Format passed" "pnpm lint"
+	run_silent "Lint & Format passed" "bun run lint"
 
 # Go API build
 api-build:
 	@. ./hack/run_silent.sh && \
-	run_silent "Go API build passed" "pnpm api:build"
+	run_silent "Go API build passed" "bun run api:build"
 
 # Go API tests
 api-test:
 	@. ./hack/run_silent.sh && \
-	run_silent "Go API tests passed" "pnpm api:test"
+	run_silent "Go API tests passed" "bun run api:test"
 
 # API Dockerfile production shape
 api-dockerfile:
@@ -77,7 +77,7 @@ migrations:
 # Ensure Next.js remains UI-only.
 web-api-empty:
 	@. ./hack/run_silent.sh && \
-	run_silent "Web API route directory is empty" "pnpm web-api-empty"
+	run_silent "Web API route directory is empty" "bun run web-api-empty"
 
 # Ensure migrated web runtime slices consume the generated SDK instead of
 # hard-coded endpoint fetches.
@@ -92,20 +92,20 @@ web-runtime-boundaries:
 
 # Auto-fix lint and format issues
 fix:
-	pnpm lint:fix
+	bun run lint:fix
 
 format:
-	pnpm format
+	bun run format
 
 # Unit tests (Vitest) — only shows failures, summary on success
 test: test-header api-test
 	@. ./hack/run_silent.sh && \
-	run_silent_with_test_count "Unit Tests passed" "TZ=Asia/Seoul pnpm test" "vitest"
+	run_silent_with_test_count "Unit Tests passed" "TZ=Asia/Seoul bun run test" "vitest"
 
 # E2E tests (Playwright — requires dev server running)
 test-e2e:
 	@. ./hack/run_silent.sh && \
-	run_silent_with_test_count "E2E Tests passed" "pnpm test:e2e" "playwright"
+	run_silent_with_test_count "E2E Tests passed" "bun run test:e2e" "playwright"
 
 # Headers
 check-header:
@@ -125,23 +125,23 @@ test-verbose:
 
 # Copy-paste detection (jscpd)
 cpd:
-	pnpm cpd
+	bun run cpd
 
 # Dev server
 dev:
-	pnpm dev
+	bun run dev
 
 # Production build
 build:
-	pnpm build
+	bun run build
 
 # Clean build artifacts
 clean:
 	rm -rf apps/web/.next apps/web/dist node_modules/.cache apps/web/node_modules/.cache
 
-# Start Postgres + Redis for local development (run alongside pnpm dev)
+# Start Postgres + Redis for local development (run alongside bun run dev)
 dev-services:
-	pnpm --filter @exponential/web dev-services
+	bun run --filter @exponential/web dev-services
 
 # Stop development services
 dev-services-down:
@@ -167,13 +167,13 @@ deploy-oauth-secrets:
 OP_RUN = op run --env-file=.env.1password --
 
 dev-op:
-	$(OP_RUN) pnpm dev
+	$(OP_RUN) bun run dev
 
 build-op:
-	$(OP_RUN) pnpm build
+	$(OP_RUN) bun run build
 
 start-op:
-	$(OP_RUN) pnpm start
+	$(OP_RUN) bun run start
 
 # Sync local .env values up to the 1Password vault (one-shot).
 op-bootstrap:

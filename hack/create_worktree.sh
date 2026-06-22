@@ -17,7 +17,7 @@
 #   - copies agent config dirs (.claude/.codex/.agents) if present
 #   - symlinks every .env / .env.* file (except .env.example) from the main repo
 #   - symlinks .mcp.json if present
-#   - runs `pnpm install` so the worktree is ready to use
+#   - runs `bun install` so the worktree is ready to use
 #
 # Note: the web dev server port comes from your env (default 7015, API 7016).
 # Set the port in the worktree's own .env (replace the symlink) if you want to
@@ -155,9 +155,9 @@ fi
 
 # Install dependencies. Bail (and clean up) if install fails so we never leave a
 # broken worktree behind.
-echo "🔧 Installing dependencies (pnpm install)..."
-if ! (cd "$WORKTREE_PATH" && pnpm install); then
-    echo "❌ pnpm install failed. Cleaning up worktree..."
+echo "🔧 Installing dependencies (bun install)..."
+if ! (cd "$WORKTREE_PATH" && bun install); then
+    echo "❌ bun install failed. Cleaning up worktree..."
     git worktree remove --force "$WORKTREE_PATH"
     git branch -D "$LOCAL_BRANCH_NAME" 2>/dev/null || true
     exit 1
@@ -170,7 +170,7 @@ echo "🔀 Branch: ${LOCAL_BRANCH_NAME}"
 echo ""
 echo "To work in this worktree:"
 echo "  cd ${WORKTREE_PATH}"
-echo "  pnpm dev"
+echo "  bun run dev"
 echo ""
 echo "To remove this worktree later:"
 echo "  git worktree remove ${WORKTREE_PATH}"

@@ -6,7 +6,7 @@
     ".next",
     "dist",
     "drizzle",
-    "package-lock.json",
+    "bun.lock",
     "tests/e2e"
   ],
   "format": ["typescript", "typescriptx"],

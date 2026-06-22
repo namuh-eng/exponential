@@ -39,9 +39,9 @@
       "apps/web/test-results",
       "apps/web/playwright-report",
       "apps/web/tests/e2e/.auth",
-      "pnpm-lock.yaml",
-      ".pnpm-store",
-      "**/.pnpm-store",
+      "bun.lock",
+      ".bun",
+      "**/.bun",
       ".turbo",
       "**/.turbo"
     ]

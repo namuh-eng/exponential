@@ -25,7 +25,7 @@ Prerequisites:
 
 - AWS CLI is authenticated to the production account.
 - Docker is running and can build Linux amd64 images.
-- Node and pnpm are available through the repo toolchain.
+- Node and Bun are available through the repo toolchain.
 - `.env` contains the ECS, target-group, subnet, security-group, public URL,
   and Secrets Manager ARN values created by `scripts/prepare-ecs-deploy-env.sh`.
 - The current branch and commit are the exact revision you intend to deploy.

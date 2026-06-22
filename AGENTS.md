@@ -15,7 +15,7 @@ Project-specific instructions for AI coding agents working in this repo. Read th
 - `make test` — Go API tests + Vitest unit tests.
 - `make test-e2e` — Playwright E2E. Run before manual testing for QA.
 - `make all` — check + test.
-- `npm run dev` / `pnpm dev` — start the app via workspace scripts.
+- `bun run dev` — start the app via workspace scripts.
 - `docker compose -f docker-compose.dev.yml up -d` — local Postgres, Redis, API, web, Mailhog.
 
 ## Repository Layout
@@ -69,12 +69,12 @@ curl http://localhost:7015/api/healthz
 
 SDK:
 ```bash
-pnpm --filter @namuh-eng/expn-sdk test
+bun run --filter @namuh-eng/expn-sdk test
 ```
 
 CLI:
 ```bash
-pnpm --filter @namuh-eng/expn-cli test
+bun run --filter @namuh-eng/expn-cli test
 ```
 
 ## Environment

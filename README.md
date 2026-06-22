@@ -167,7 +167,7 @@ creation, and billing mutations.
 ```bash
 git clone https://github.com/namuh-eng/exponential.git
 cd exponential
-pnpm install
+bun install
 cp .env.example .env
 docker compose -f docker-compose.dev.yml up --build
 ```
@@ -186,10 +186,10 @@ export EXPONENTIAL_TOKEN=pat_your_token
 export EXPONENTIAL_API_URL=http://localhost:7016/v1
 
 # CLI
-pnpm --filter @namuh-eng/expn-cli cli -- issue ls --json
+bun run --filter @namuh-eng/expn-cli cli -- issue ls --json
 
 # Local MCP server (read-only, stdio)
-pnpm --filter @exponential/mcp exec exponential-mcp
+bun run --filter @exponential/mcp mcp
 curl -H "Authorization: Bearer $EXPONENTIAL_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
@@ -240,7 +240,7 @@ make check      # typecheck, lint/format, API build, OpenAPI, deploy guards
 make test       # Go API tests + Vitest unit tests
 make test-e2e   # Playwright E2E with the dev stack
 make all        # check + test
-make dev        # pnpm dev
+make dev        # bun run dev
 make build      # production build
 ```
 

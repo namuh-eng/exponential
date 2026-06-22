@@ -43,7 +43,7 @@ scripts/generate-go-openapi.py
 3. Regenerate the TypeScript SDK:
 
 ```bash
-pnpm --filter @namuh-eng/expn-sdk generate
+bun run --filter @namuh-eng/expn-sdk generate
 ```
 
 4. Run the guard suite:

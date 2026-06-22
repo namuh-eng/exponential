@@ -45,7 +45,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `EXPONENTIAL_AGENT_PROVIDER=workspace PLAYWRIGHT_TEST=true PORT=${port} pnpm dev`,
+    command: `EXPONENTIAL_AGENT_PROVIDER=workspace PLAYWRIGHT_TEST=true PORT=${port} bun run dev`,
     port,
     reuseExistingServer: process.env.CI !== "true",
   },

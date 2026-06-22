@@ -33,8 +33,10 @@ jobs:
           # Fetch full history so changelog generation can walk all commits
           fetch-depth: 0
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -65,19 +67,19 @@ jobs:
           fi
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Verify SDK
         run: |
-          pnpm --filter @namuh-eng/expn-sdk typecheck
-          pnpm --filter @namuh-eng/expn-sdk test
-          pnpm --filter @namuh-eng/expn-sdk build
+          bun run --filter @namuh-eng/expn-sdk typecheck
+          bun run --filter @namuh-eng/expn-sdk test
+          bun run --filter @namuh-eng/expn-sdk build
 
       - name: Verify CLI
         run: |
-          pnpm --filter @namuh-eng/expn-cli typecheck
-          pnpm --filter @namuh-eng/expn-cli test
-          pnpm --filter @namuh-eng/expn-cli build
+          bun run --filter @namuh-eng/expn-cli typecheck
+          bun run --filter @namuh-eng/expn-cli test
+          bun run --filter @namuh-eng/expn-cli build
 
       - name: Smoke-test expn --version
         run: |
@@ -91,9 +93,7 @@ jobs:
 
       - name: Pack release tarballs
         run: |
-          mkdir -p .release
-          pnpm --filter @namuh-eng/expn-sdk pack --pack-destination "$PWD/.release"
-          pnpm --filter @namuh-eng/expn-cli pack --pack-destination "$PWD/.release"
+          node scripts/pack-release-tarballs.mjs .release
           ls -la .release
 
       - name: Publish to npm

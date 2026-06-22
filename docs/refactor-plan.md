@@ -87,7 +87,7 @@ Each phase is independently shippable. Do **not** start phase N+1 until phase N 
 ### Phase 0 — Scaffolding (½ day)
 
 - [ ] Create monorepo layout: `apps/`, `packages/`, `infra/`
-- [ ] Set up `pnpm` workspaces (or keep `npm` if simpler — pick one, stick with it)
+- [ ] Set up workspace package manager (or keep `npm` if simpler — pick one, stick with it)
 - [x] Move existing Next.js code into `apps/web/` (keep working, no behavior change)
 - [ ] Initialize `apps/api/` as Go module: `chi`, `pgx`, `sqlc`, `zap` (logging), `viper` (config)
 - [ ] Wire up `docker-compose.dev.yml` with: postgres, redis, api, web
@@ -193,7 +193,7 @@ Codex flagged these. Treat as risk areas:
 
 | Concern | Choice | Why |
 |---|---|---|
-| Monorepo | pnpm workspaces + Turborepo | Lightest, fast caching |
+| Monorepo | Bun workspaces + Turborepo | Lightest, fast caching |
 | Go HTTP | chi | Stdlib-style routing, no magic |
 | Go DB | pgx + sqlc | Fastest, type-safe, no ORM tax |
 | Go config | viper + env | Standard |

@@ -31,15 +31,14 @@ Before making changes, skim:
 ## Prerequisites
 
 - Node.js 20+
-- pnpm 10.24.0, via Corepack or your package manager
+- Bun 1.3.14
 - Go, for `apps/api`
 - Docker Desktop, for the local Postgres/Redis/API/web stack
 - Playwright Chromium, for E2E tests
 
 ```bash
-corepack enable
-pnpm install
-pnpm exec playwright install chromium
+bun install
+bun x playwright install chromium
 ```
 
 ## Local Development
@@ -66,10 +65,10 @@ Use this when you want faster web/API iteration from your shell.
 cp .env.example .env
 make dev-services
 EXPONENTIAL_API_DATABASE_URL=$DATABASE_URL go run ./apps/api/cmd/migrate
-pnpm dev
+bun run dev
 ```
 
-`pnpm dev` starts the web app on port `7015` and preflights the database before
+`bun run dev` starts the web app on port `7015` and preflights the database before
 binding. Only set `SKIP_DB_PREFLIGHT=true` when intentionally debugging a
 route that does not need the database.
 
@@ -169,22 +168,22 @@ thing as a deployed and live-verified change.
 ## Test Guide
 
 - Go API tests: `cd apps/api && go test ./...` or `make test`.
-- Vitest unit/component tests: `pnpm test` or `make test`.
-- SDK tests: `pnpm --filter @namuh-eng/expn-sdk test`.
-- CLI tests: `pnpm --filter @namuh-eng/expn-cli test`.
+- Vitest unit/component tests: `bun run test` or `make test`.
+- SDK tests: `bun run --filter @namuh-eng/expn-sdk test`.
+- CLI tests: `bun run --filter @namuh-eng/expn-cli test`.
 - Playwright E2E: `make test-e2e`, with the dev stack running.
 
 Run a single E2E file from the web package when iterating:
 
 ```bash
-pnpm --filter @exponential/web test:e2e -- tests/e2e/smoke.spec.ts
+bun run --filter @exponential/web test:e2e -- tests/e2e/smoke.spec.ts
 ```
 
 Use Playwright debug or headed mode when a browser interaction is unclear:
 
 ```bash
-pnpm --filter @exponential/web exec playwright test --debug
-pnpm --filter @exponential/web exec playwright test --headed
+bun run --filter @exponential/web test:e2e -- --debug
+bun run --filter @exponential/web test:e2e -- --headed
 ```
 
 ## Code Style
@@ -255,7 +254,7 @@ migrations:
 ```bash
 make dev-services
 EXPONENTIAL_API_DATABASE_URL=$DATABASE_URL go run ./apps/api/cmd/migrate
-pnpm dev
+bun run dev
 ```
 
 ### E2E Auth Is Failing
