@@ -24,6 +24,10 @@ describe("landing page", () => {
     render(await LandingPage());
 
     expect(screen.queryByRole("link", { name: "github" })).toBeNull();
+    expect(screen.getByRole("link", { name: "pricing" })).toHaveAttribute(
+      "href",
+      "/pricing",
+    );
     expect(screen.queryByLabelText("GitHub stars")).toBeNull();
     expect(screen.getByLabelText("Source availability").textContent).toBe(
       "source available",

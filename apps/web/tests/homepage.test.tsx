@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/link", () => ({
@@ -30,6 +30,14 @@ describe("public homepage route", () => {
     expect(
       screen.getByRole("link", { name: "Start building" }).getAttribute("href"),
     ).toBe("/signup");
+    const publicNav = screen.getByRole("navigation", {
+      name: "Public marketing",
+    });
+    const pricingButton = within(publicNav).getByRole("link", {
+      name: "Pricing",
+    });
+    expect(pricingButton).toHaveAttribute("href", "/pricing");
+    expect(pricingButton.className).toContain("min-h-8");
     expect(
       screen
         .getAllByRole("link", { name: "Log in" })
