@@ -906,7 +906,7 @@ export default function IntegrationsSettingsPage() {
           className="fixed inset-0 z-50 flex h-full max-h-none w-full max-w-none items-center justify-center bg-black/60 p-4"
           open
         >
-          <div className="w-full max-w-[560px] rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] p-6 shadow-xl">
+          <div className="max-h-[calc(100vh-2rem)] w-full max-w-[560px] overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] p-6 shadow-xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2

@@ -122,7 +122,9 @@ test.describe("Settings API OAuth applications", () => {
     await page.getByRole("button", { name: "Create webhook" }).click();
 
     await expect(page.getByText("Webhook created.")).toBeVisible();
-    await expect(page.getByText(webhookName, { exact: true })).toBeVisible();
+    await expect(
+      page.getByText(webhookName, { exact: true }).first(),
+    ).toBeVisible();
     await expect(
       page.getByText("Subscription scope: Issue created, Issue deleted"),
     ).toBeVisible();

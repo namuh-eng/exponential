@@ -16,6 +16,10 @@ test.describe("Account security and access", () => {
 
     // Create a second session for the same authenticated test user so the page
     // has a non-current session that can be revoked without logging itself out.
+    const browserSessionCookieBefore = (await page.context().cookies()).find(
+      (cookie) => cookie.name === "exponential_session",
+    )?.value;
+    expect(browserSessionCookieBefore).toBeTruthy();
     const sessionResponse = await page.request.post(
       "/api/test/create-session",
       {
@@ -23,6 +27,10 @@ test.describe("Account security and access", () => {
       },
     );
     expect(sessionResponse.status()).toBe(200);
+    const browserSessionCookieAfter = (await page.context().cookies()).find(
+      (cookie) => cookie.name === "exponential_session",
+    )?.value;
+    expect(browserSessionCookieAfter).toBe(browserSessionCookieBefore);
 
     const clearAppsResponse = await page.request.delete(
       "/api/test/authorized-application",

@@ -40,6 +40,15 @@ type team struct {
 	Key  string `json:"key"`
 }
 
+type demoInitiativeSeed struct {
+	ID, Name, Status, Health string
+}
+
+var demoInitiatives = []demoInitiativeSeed{
+	{"77777777-0000-4000-8000-000000000001", "Make hosted evaluation effortless", "active", "onTrack"},
+	{"77777777-0000-4000-8000-000000000002", "Operator-grade self hosting", "planned", "atRisk"},
+}
+
 type sessionResponse struct {
 	Success     bool      `json:"success"`
 	SessionURL  string    `json:"sessionUrl"`
@@ -456,13 +465,7 @@ func seedProjectsInitiatives(ctx context.Context, tx pgx.Tx, workspaceID string,
 			return err
 		}
 	}
-	initiatives := []struct {
-		ID, Name, Status, Health string
-	}{
-		{"77777777-0000-4000-8000-000000000001", "Make hosted evaluation effortless", "active", "on_track"},
-		{"77777777-0000-4000-8000-000000000002", "Operator-grade self hosting", "planned", "at_risk"},
-	}
-	for _, in := range initiatives {
+	for _, in := range demoInitiatives {
 		if _, err := tx.Exec(ctx, `insert into initiative (id,name,description,status,health,owner_id,workspace_id,timeframe,created_at,updated_at) values ($1::uuid,$2,'Seeded public demo initiative.',$3::initiative_status,$4,'demo-founder',$5::uuid,'H1 Launch',$6,$6)`, in.ID, in.Name, in.Status, in.Health, workspaceID, now.AddDate(0, 0, -18)); err != nil {
 			return err
 		}
