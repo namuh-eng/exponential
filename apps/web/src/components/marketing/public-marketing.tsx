@@ -12,7 +12,6 @@ const navItems = [
   { href: "/homepage", label: "Product" },
   { href: "/changelog", label: "Resources" },
   { href: "/customers", label: "Customers" },
-  { href: "/pricing", label: "Pricing" },
   { href: "/changelog", label: "Now" },
   { href: "/login", label: "Contact" },
 ];
@@ -28,7 +27,7 @@ export function MarketingShell({
     <PublicPageFrame>
       <main className="mx-auto w-full max-w-7xl px-6 py-8 sm:px-10 lg:px-12">
         <nav
-          className="tty-status-bar justify-between border px-3 py-2"
+          className="tty-status-bar flex-wrap justify-between border px-3 py-2"
           aria-label="Public marketing"
         >
           <Link
@@ -49,7 +48,10 @@ export function MarketingShell({
               </Link>
             ))}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
+            <CommandLink href="/pricing" className="min-h-8">
+              Pricing
+            </CommandLink>
             <CommandLink href="/login" variant="ghost" className="min-h-8">
               Log in
             </CommandLink>
