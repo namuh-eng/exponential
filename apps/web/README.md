@@ -9,7 +9,7 @@ traffic reaches it through same-origin `/api/*` rewrites.
 From the repo root:
 
 ```bash
-pnpm install
+bun install
 cp .env.example .env
 docker compose -f docker-compose.dev.yml up --build
 ```
@@ -19,7 +19,7 @@ For host-run web development with local services:
 ```bash
 make dev-services
 EXPONENTIAL_API_DATABASE_URL=$DATABASE_URL go run ./apps/api/cmd/migrate
-pnpm dev
+bun run dev
 ```
 
 The web app runs on `http://localhost:7015` by default. The dev script runs a
@@ -48,9 +48,9 @@ intentionally debugging a route that does not need the database.
 ## Tests
 
 ```bash
-pnpm --filter @exponential/web typecheck
-pnpm --filter @exponential/web test
-pnpm --filter @exponential/web test:e2e
+bun run --filter @exponential/web typecheck
+bun run --filter @exponential/web test
+bun run --filter @exponential/web test:e2e
 ```
 
 Repo-level gates:

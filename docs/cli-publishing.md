@@ -33,10 +33,11 @@ workflow with `dry_run: false`.
 
 The workflow:
 
-1. Installs dependencies with pnpm.
+1. Installs dependencies with Bun.
 2. Typechecks, tests, and builds `@namuh-eng/expn-sdk`.
 3. Typechecks, tests, and builds `@namuh-eng/expn-cli`.
-4. Creates release tarballs with `pnpm pack`.
+4. Creates release tarballs with `scripts/pack-release-tarballs.mjs`, which rewrites
+   `workspace:*` dependencies to the package version inside the tarball.
 5. Publishes the SDK tarball first, then the CLI tarball.
 
 ## Local package verification
@@ -44,11 +45,9 @@ The workflow:
 From a source checkout:
 
 ```bash
-pnpm --filter @namuh-eng/expn-sdk build
-pnpm --filter @namuh-eng/expn-cli build
-mkdir -p .release
-pnpm --filter @namuh-eng/expn-sdk pack --pack-destination "$PWD/.release"
-pnpm --filter @namuh-eng/expn-cli pack --pack-destination "$PWD/.release"
+bun run --filter @namuh-eng/expn-sdk build
+bun run --filter @namuh-eng/expn-cli build
+node scripts/pack-release-tarballs.mjs .release
 ```
 
 Inspect the tarballs:

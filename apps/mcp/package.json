@@ -7,7 +7,8 @@
     "exponential-mcp": "bin/exponential-mcp"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "mcp": "bin/exponential-mcp"
   },
   "dependencies": {
     "@exponential/mcp-server": "workspace:*",

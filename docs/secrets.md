@@ -72,9 +72,9 @@ make op-doctor                                   # verify every reference resolv
 Day-to-day:
 
 ```sh
-make dev-op       # = op run --env-file=.env.1password -- pnpm dev
-make build-op     # = op run --env-file=.env.1password -- pnpm build
-make start-op     # = op run --env-file=.env.1password -- pnpm start
+make dev-op       # = op run --env-file=.env.1password -- bun run dev
+make build-op     # = op run --env-file=.env.1password -- bun run build
+make start-op     # = op run --env-file=.env.1password -- bun run start
 
 # Ad-hoc:
 op run --env-file=.env.1password -- <anything>
@@ -132,7 +132,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: 1password/install-cli-action@v2
-      - run: op run --env-file=.env.1password -- pnpm build
+      - run: op run --env-file=.env.1password -- bun run build
 ```
 
 The service account token is the only difference vs. local — `op run` picks

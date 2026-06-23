@@ -103,11 +103,10 @@ services:
     stdin_open: true
     tty: true
     restart: unless-stopped
-    command: sh -c "corepack enable && pnpm install --frozen-lockfile=false && cd apps/web && node scripts/check-dev-db.mjs && pnpm exec next dev --webpack --hostname 0.0.0.0"
+    command: sh -c "npm install --global bun@1.3.14 && bun install --frozen-lockfile=false && cd apps/web && node scripts/check-dev-db.mjs && ../../node_modules/.bin/next dev --webpack --hostname 0.0.0.0 --port $${PORT:-7015}"
     environment:
       NODE_ENV: development
       NODE_OPTIONS: "--max-old-space-size=4096"
-      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
       PLAYWRIGHT_TEST: "true"
       PORT: 7015
       SKIP_DB_PREFLIGHT: "true"
@@ -153,7 +152,7 @@ services:
       - "${WEB_PORT:-7015}:7015"
     volumes:
       - .:/workspace
-      - pnpm_store:/root/.local/share/pnpm/store
+      - bun_cache:/root/.bun/install/cache
       - web_node_modules:/workspace/node_modules
       - web_app_node_modules:/workspace/apps/web/node_modules
       - web_next:/workspace/apps/web/.next
@@ -207,7 +206,7 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
-  pnpm_store:
+  bun_cache:
   web_node_modules:
   web_app_node_modules:
   web_next:

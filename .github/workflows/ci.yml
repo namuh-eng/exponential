@@ -1,5 +1,5 @@
 # ABOUTME: PR validation workflow — runs on every PR to staging/main and on push to those branches.
-# ABOUTME: All required jobs were verified green on the staging branch before this workflow was added.
+# ABOUTME: Uses Bun for JavaScript workspace package management and scripts.
 # ABOUTME: web-typecheck is non-blocking (continue-on-error: true) due to pre-existing TypeScript
 # ABOUTME: errors in apps/web (integrations page, issue-detail-view) caused by SDK module-resolution
 # ABOUTME: issues. Once those are fixed, remove continue-on-error and move the step to required.
@@ -96,23 +96,32 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
 
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "pnpm"
+
+      - name: Cache Bun packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Biome lint + format check
-        run: pnpm lint
+        run: bun run lint
 
       - name: Web API-route empty guard
-        run: pnpm web-api-empty
+        run: bun run web-api-empty
 
       - name: Web SDK-usage guard
         run: node scripts/check-web-sdk-usage.mjs
@@ -125,7 +134,7 @@ jobs:
         # @exponential/web vitest is excluded here because its test files share
         # the pre-existing TypeScript errors that block compilation; they are
         # covered by the non-blocking web-typecheck job below.
-        run: TZ=Asia/Seoul pnpm test --filter '!@exponential/web'
+        run: TZ=Asia/Seoul bun run test --filter '!@exponential/web'
 
   # ---------------------------------------------------------------------------
   # Job 3 (NON-BLOCKING): TypeScript typecheck for the full monorepo.
@@ -139,7 +148,7 @@ jobs:
   # errors stemming from the same root cause.
   #
   # ACTION REQUIRED: once the pre-existing SDK resolution issue is fixed and
-  # `pnpm typecheck` exits 0 across the monorepo, remove `continue-on-error`
+  # `bun run typecheck` exits 0 across the monorepo, remove `continue-on-error`
   # from this job so it becomes a required gate.
   # ---------------------------------------------------------------------------
   web-typecheck:
@@ -151,17 +160,26 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
 
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "pnpm"
+
+      - name: Cache Bun packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: TypeScript typecheck (full monorepo)
-        run: pnpm typecheck
+        run: bun run typecheck

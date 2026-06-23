@@ -58,7 +58,7 @@ function DatabaseBootstrapError() {
           {DATABASE_BOOTSTRAP_SETUP_COMMANDS.map((command) => (
             <div key={command}>{command}</div>
           ))}
-          <div>PLAYWRIGHT_TEST=true npm run dev -- -p 7015</div>
+          <div>PLAYWRIGHT_TEST=true bun run dev -- -p 7015</div>
         </div>
         <p className="mt-5 text-sm text-[var(--editorial-ink-3)]">
           If you use a custom database, set DATABASE_URL in .env.local and make

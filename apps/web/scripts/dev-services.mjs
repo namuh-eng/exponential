@@ -47,7 +47,7 @@ function printDockerUnavailable(result) {
     "     Then run: EXPONENTIAL_API_DATABASE_URL=$DATABASE_URL go run ./apps/api/cmd/migrate",
   );
   console.error(
-    "  3. If parity QA is only verifying the missing-DB path, leave DB stopped and run pnpm dev; it must fail before binding a listener.",
+    "  3. If parity QA is only verifying the missing-DB path, leave DB stopped and run bun run dev; it must fail before binding a listener.",
   );
   console.error(
     "\nDo not bypass this with SKIP_DB_PREFLIGHT unless you are intentionally debugging routes that do not need the database.\n",

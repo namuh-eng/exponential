@@ -32,7 +32,7 @@ export EXPONENTIAL_TOKEN=pat_your_token
 Regenerate after changing `packages/proto/openapi.yaml`:
 
 ```bash
-pnpm --filter @namuh-eng/expn-sdk generate
+bun run --filter @namuh-eng/expn-sdk generate
 ```
 
 The generated types are written to `packages/sdk/src/generated.ts`. Do not edit
@@ -47,9 +47,9 @@ scripts/generate-go-openapi.py
 ## Validation
 
 ```bash
-pnpm --filter @namuh-eng/expn-sdk typecheck
-pnpm --filter @namuh-eng/expn-sdk test
-pnpm --filter @namuh-eng/expn-sdk build
+bun run --filter @namuh-eng/expn-sdk typecheck
+bun run --filter @namuh-eng/expn-sdk test
+bun run --filter @namuh-eng/expn-sdk build
 ```
 
 The repo-level `make check` command also verifies OpenAPI coverage, generated

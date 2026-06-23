@@ -106,7 +106,7 @@ try {
       `Missing required table${missingTables.length === 1 ? "" : "s"}: ${missingTables.join(", ")}`,
     );
     console.error(
-      "Apply the Go SQL migrations before pnpm dev so authenticated routes and Playwright test sessions can work:",
+      "Apply the Go SQL migrations before bun run dev so authenticated routes and Playwright test sessions can work:",
     );
     printSetup();
     console.error(
@@ -120,7 +120,7 @@ try {
   await pool.end().catch(() => undefined);
   console.error(`\nLocal database is unavailable: ${redact(connectionString)}`);
   console.error(
-    "Start the dev database and apply the Go SQL migrations before pnpm dev:",
+    "Start the dev database and apply the Go SQL migrations before bun run dev:",
   );
   printSetup();
   console.error(

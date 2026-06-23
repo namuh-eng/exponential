@@ -20,18 +20,17 @@ fi
 rm -rf .release
 mkdir -p .release
 
-pnpm install --frozen-lockfile
+bun install --frozen-lockfile
 
-pnpm --filter @namuh-eng/expn-sdk typecheck
-pnpm --filter @namuh-eng/expn-sdk test
-pnpm --filter @namuh-eng/expn-sdk build
+bun run --filter @namuh-eng/expn-sdk typecheck
+bun run --filter @namuh-eng/expn-sdk test
+bun run --filter @namuh-eng/expn-sdk build
 
-pnpm --filter @namuh-eng/expn-cli typecheck
-pnpm --filter @namuh-eng/expn-cli test
-pnpm --filter @namuh-eng/expn-cli build
+bun run --filter @namuh-eng/expn-cli typecheck
+bun run --filter @namuh-eng/expn-cli test
+bun run --filter @namuh-eng/expn-cli build
 
-pnpm --filter @namuh-eng/expn-sdk pack --pack-destination "$PWD/.release"
-pnpm --filter @namuh-eng/expn-cli pack --pack-destination "$PWD/.release"
+node scripts/pack-release-tarballs.mjs .release
 
 sdk_tarballs=(.release/namuh-eng-expn-sdk-*.tgz)
 cli_tarballs=(.release/namuh-eng-expn-cli-*.tgz)

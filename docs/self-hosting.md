@@ -300,7 +300,7 @@ For MCP v0, configure clients to spawn the local stdio command. It exposes only
 read-only tools and does not run an HTTP listener:
 
 ```bash
-pnpm --filter @exponential/mcp exec exponential-mcp
+bun run --filter @exponential/mcp mcp
 ```
 
 See [CLI usage](cli.md) and [MCP v0](mcp.md).

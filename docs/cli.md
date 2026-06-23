@@ -16,8 +16,8 @@ npm install -g @namuh-eng/expn-cli
 From a source checkout:
 
 ```bash
-pnpm install
-pnpm --filter @namuh-eng/expn-cli cli -- --help
+bun install
+bun run --filter @namuh-eng/expn-cli cli -- --help
 ```
 
 When the workspace package is linked or installed, the binary name is:

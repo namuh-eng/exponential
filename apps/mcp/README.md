@@ -14,7 +14,7 @@ From the repo root:
 ```bash
 EXPONENTIAL_TOKEN=pat_your_token \
 EXPONENTIAL_API_URL=http://localhost:7016/v1 \
-pnpm --filter @exponential/mcp exec exponential-mcp
+bun run --filter @exponential/mcp mcp
 ```
 
 Configure MCP clients to spawn this stdio command. Do not commit PAT values into
@@ -30,9 +30,9 @@ client config files.
 ## Validation
 
 ```bash
-pnpm --filter @exponential/mcp typecheck
-pnpm --filter @exponential/mcp-server typecheck
-pnpm --filter @exponential/mcp-server test
+bun run --filter @exponential/mcp typecheck
+bun run --filter @exponential/mcp-server typecheck
+bun run --filter @exponential/mcp-server test
 ```
 
 Repo-level `make check` typechecks the workspace and validates the broader API
