@@ -1,6 +1,6 @@
 .PHONY: check test test-e2e typecheck lint format fix all dev build clean cpd api-build api-test api-dockerfile ecs-task-definitions ecs-render deploy-scripts smoke-script openapi-coverage openapi-strict sqlc-generated migrations web-api-empty web-sdk-usage web-runtime-boundaries
 .PHONY: check-header test-header check-verbose test-verbose
-.PHONY: dev-services dev-services-down deploy deploy-oauth-secrets
+.PHONY: dev-services dev-services-down dev-api dev-full codegen deploy deploy-oauth-secrets
 .PHONY: dev-op build-op start-op op-bootstrap op-doctor
 
 # Full validation: check + test
@@ -142,6 +142,23 @@ clean:
 # Start Postgres + Redis for local development (run alongside pnpm dev)
 dev-services:
 	pnpm --filter @exponential/web dev-services
+
+# Run the Go API in host mode with hot reload (air). Pairs with `make dev`.
+# Set NO_RELOAD=1 to skip the watcher and use plain `go run`.
+dev-api:
+	bash scripts/dev-api.sh
+
+# One command for the full host stack: Docker services + migrations, the Go API
+# (hot reload), and the Next.js web app, all together. Ctrl-C stops API + web.
+dev-full:
+	bash scripts/dev-full.sh
+
+# Regenerate all contract-derived code: sqlc queries, Go OpenAPI strict-server
+# stubs, and the TypeScript SDK. Requires sqlc, python3 + PyYAML, and pnpm.
+codegen:
+	cd apps/api && sqlc generate
+	python3 scripts/generate-go-openapi.py
+	pnpm --filter @namuh-eng/expn-sdk generate
 
 # Stop development services
 dev-services-down:

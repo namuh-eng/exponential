@@ -15,8 +15,12 @@ Project-specific instructions for AI coding agents working in this repo. Read th
 - `make test` — Go API tests + Vitest unit tests.
 - `make test-e2e` — Playwright E2E. Run before manual testing for QA.
 - `make all` — check + test.
-- `npm run dev` / `pnpm dev` — start the app via workspace scripts.
+- `npm run dev` / `pnpm dev` — start the web app only (no Go API; `/api/*` proxies will 502 without the API running).
+- `make dev-full` — full host stack in one command: Docker services + migrations, Go API (`:7016`), and web (`:7015`).
+- `make dev-api` — Go API in host mode with hot reload (`air`; falls back to `go run` if `air` is not installed).
+- `make codegen` — regenerate sqlc queries + Go OpenAPI stubs + TS SDK after changing `openapi.yaml` or SQL.
 - `docker compose -f docker-compose.dev.yml up -d` — local Postgres, Redis, API, web, Mailhog.
+- Pre-commit hook (lefthook) auto-runs `biome --write` + `gofmt -w` on staged files; it is not a substitute for `make check`.
 
 ## Repository Layout
 - `apps/api/` — Go API, auth, handlers, OpenAPI strict server stubs, sqlc queries, migrations runner.

@@ -47,11 +47,21 @@ is historical context for the Go split, not a current-state source of truth.
 - `make test-e2e` - Playwright E2E; requires the local dev stack/server.
 - `make all` - `make check` plus `make test`.
 - `pnpm dev` - starts the web app via `@exponential/web` on port `7015` after
-  database preflight.
+  database preflight. Web only - the Go API is not started, so `/api/*` proxies
+  502 until the API is running separately.
+- `make dev-full` - one command for the full host stack: Docker services +
+  migrations, the Go API (`7016`), and web (`7015`) together.
+- `make dev-api` - Go API in host mode with hot reload via `air` (falls back to
+  `go run` when `air` is not installed).
+- `make codegen` - regenerate sqlc queries, Go OpenAPI stubs, and the TS SDK
+  after changing `openapi.yaml` or SQL queries.
 - `docker compose -f docker-compose.dev.yml up --build` - starts local
   Postgres, Redis, API, web, and Mailhog.
 - `make dev-services` - starts local Postgres/Redis services for host-run dev.
 - `make build` - production build through Turborepo.
+
+A lefthook pre-commit hook auto-formats staged files (`biome --write`,
+`gofmt -w`); it does not replace `make check`.
 
 Default local ports:
 
