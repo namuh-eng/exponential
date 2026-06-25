@@ -368,6 +368,10 @@ func (h Handler) SalesforceProjectLink(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, http.StatusInternalServerError, "Link Salesforce case failed", err.Error())
 		return
 	}
+	if err := h.queueSalesforceCaseProjectStatus(r.Context(), install, project, input.Case); err != nil {
+		problem.Write(w, http.StatusInternalServerError, "Queue Salesforce project status sync failed", err.Error())
+		return
+	}
 	_ = h.recordSalesforceEvent(r.Context(), install, "case_project_linked", "info", "Salesforce case linked to Exponential project.", map[string]any{"projectId": project.ID, "caseId": input.Case.ID, "caseNumber": input.Case.Number})
 	response := project.salesforceResponse()
 	response.CaseID = input.Case.ID
@@ -699,6 +703,26 @@ func (h Handler) queueSalesforceCaseStatusTx(ctx context.Context, tx pgx.Tx, ins
 	return err
 }
 
+func (h Handler) queueSalesforceCaseProjectStatus(ctx context.Context, install salesforceInstallRecord, project salesforceProjectRow, caseRef salesforceCaseRef) error {
+	payload := map[string]any{
+		"type":        "sync_project_status",
+		"caseId":      caseRef.ID,
+		"caseNumber":  caseRef.Number,
+		"projectId":   project.ID,
+		"projectName": project.Name,
+		"projectSlug": project.Slug,
+		"status":      project.Status,
+		"priority":    project.Priority,
+		"projectUrl":  project.salesforceResponse().WebURL,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	_, err = h.DB.Exec(ctx, `insert into provider_job (workspace_id, workspace_integration_id, provider, kind, status, payload, scheduled_at, updated_at) values ($1::uuid,$2::uuid,'salesforce','outbound_delivery','queued',$3::jsonb,now(),now())`, install.WorkspaceID, install.IntegrationID, raw)
+	return err
+}
+
 func salesforceIssueDescriptionHTML(description string, caseRef salesforceCaseRef) string {
 	description = strings.TrimSpace(description)
 	if description == "" {
@@ -913,6 +937,7 @@ func exchangeSalesforceOAuth(ctx context.Context, client *http.Client, clientID,
 	if err := json.NewDecoder(resp.Body).Decode(&token); err != nil {
 		return salesforceOAuthResponse{}, err
 	}
+
 	return token, nil
 }
 
@@ -942,6 +967,7 @@ func fetchSalesforceUserInfo(ctx context.Context, client *http.Client, token sal
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		return salesforceUserInfo{}, err
 	}
+
 	if info.OrganizationID == "" {
 		return salesforceUserInfo{}, fmt.Errorf("Salesforce userinfo did not include organization_id")
 	}

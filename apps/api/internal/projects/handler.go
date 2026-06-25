@@ -471,6 +471,10 @@ func (h Handler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if err := h.queueSalesforceProjectAutomations(r.Context(), tx, p.WorkspaceID, existing, updated); err != nil {
+		problem.Write(w, 500, "Queue Salesforce project sync failed", err.Error())
+		return
+	}
 	updated.Teams = teams
 	updated.Progress = existing.Progress
 	op, err := insertOperation(r.Context(), tx, p.WorkspaceID, "project", updated.ID, "updated", updated, p.UserID)

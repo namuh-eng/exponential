@@ -5568,7 +5568,7 @@ components:
       type: object
       required: [provider, name, description, id, status, displayName, externalId, connectedAt, setupRequirement, actions, health, details]
       properties:
-        provider: { type: string, enum: [github, gitlab, jira, slack, sentry, zendesk, discord, microsoft_teams, google_sheets, figma] }
+        provider: { type: string, enum: [github, gitlab, jira, slack, sentry, salesforce, zendesk, discord, microsoft_teams, google_sheets, figma] }
         name: { type: string }
         description: { type: string }
         id: { type: [string, 'null'], format: uuid }

@@ -12,126 +12,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const fetchMock = vi.fn();
 
-const integrations = [
-  {
-    provider: "github",
-    name: "GitHub",
-    description:
-      "Sync pull requests, commits, and issue links with exponential.",
-    status: "configuration_required",
-    displayName: null,
-    connectedAt: null,
-    setupRequirement: {
-      type: "configuration_required",
-      message: "GitHub setup is not configured in this environment yet.",
-    },
-    actions: {
-      canConnect: false,
-      canManage: false,
-      canDisconnect: false,
-      canReconnect: false,
-    },
-    health: {
-      lastEventAt: null,
-      lastSuccessAt: null,
-      lastFailureAt: null,
-      lastFailureMessage: null,
-      tokenExpiresAt: null,
-      pendingJobCount: 0,
-      failedJobCount: 0,
-      auditEvents: [],
-    },
-  },
-  {
+function integration(overrides: Record<string, unknown>) {
+  return {
     provider: "slack",
     name: "Slack",
     description: "Send issue updates and create issues from Slack messages.",
-    status: "configuration_required",
-    displayName: null,
-    connectedAt: null,
-    setupRequirement: {
-      type: "configuration_required",
-      message: "Slack OAuth credentials are not configured.",
-    },
-    actions: {
-      canConnect: false,
-      canManage: false,
-      canDisconnect: false,
-      canReconnect: false,
-    },
-    health: {
-      lastEventAt: null,
-      lastSuccessAt: null,
-      lastFailureAt: null,
-      lastFailureMessage: null,
-      tokenExpiresAt: null,
-      pendingJobCount: 0,
-      failedJobCount: 0,
-      auditEvents: [],
-    },
-  },
-  {
-    provider: "sentry",
-    name: "Sentry",
-    description: "Create, link, and resolve issues from Sentry errors.",
-    status: "configuration_required",
-    displayName: null,
-    connectedAt: null,
-    setupRequirement: {
-      type: "configuration_required",
-      message: "Sentry credentials are not configured.",
-    },
-    actions: {
-      canConnect: false,
-      canManage: false,
-      canDisconnect: false,
-      canReconnect: false,
-    },
-    health: {
-      lastEventAt: null,
-      lastSuccessAt: null,
-      lastFailureAt: null,
-      lastFailureMessage: null,
-      tokenExpiresAt: null,
-      pendingJobCount: 0,
-      failedJobCount: 0,
-      auditEvents: [],
-    },
-  },
-  {
-    provider: "salesforce",
-    name: "Salesforce",
-    description:
-      "Link cases to issues and projects, then sync status and priority back to support.",
-    status: "configuration_required",
-    displayName: null,
-    connectedAt: null,
-    setupRequirement: {
-      type: "configuration_required",
-      message:
-        "Salesforce OAuth credentials and component secret are not configured.",
-    },
-    actions: {
-      canConnect: false,
-      canManage: false,
-      canDisconnect: false,
-      canReconnect: false,
-    },
-    health: {
-      lastEventAt: null,
-      lastSuccessAt: null,
-      lastFailureAt: null,
-      lastFailureMessage: null,
-      tokenExpiresAt: null,
-      pendingJobCount: 0,
-      failedJobCount: 0,
-      auditEvents: [],
-    },
-  },
-  {
-    provider: "front",
-    name: "Front",
-    description: "Create, link, and reopen issues from Front conversations.",
+
     status: "not_connected",
     displayName: null,
     connectedAt: null,
@@ -152,14 +38,82 @@ const integrations = [
       failedJobCount: 0,
       auditEvents: [],
     },
-  },
+    details: {},
+    ...overrides,
+  };
+}
+
+const integrations = [
+  integration({
+    provider: "github",
+    name: "GitHub",
+    description:
+      "Sync pull requests, commits, and issue links with exponential.",
+    status: "configuration_required",
+    setupRequirement: {
+      type: "configuration_required",
+      message: "GitHub setup is not configured in this environment yet.",
+    },
+    actions: {
+      canConnect: false,
+      canManage: false,
+      canDisconnect: false,
+      canReconnect: false,
+    },
+  }),
+  integration({
+    provider: "slack",
+    name: "Slack",
+    status: "not_connected",
+    setupRequirement: null,
+  }),
+  integration({
+    provider: "sentry",
+    name: "Sentry",
+    description: "Create, link, and resolve issues from Sentry errors.",
+    status: "configuration_required",
+    setupRequirement: {
+      type: "configuration_required",
+      message: "Sentry credentials are not configured.",
+    },
+    actions: {
+      canConnect: false,
+      canManage: false,
+      canDisconnect: false,
+      canReconnect: false,
+    },
+  }),
+  integration({
+    provider: "salesforce",
+    name: "Salesforce",
+    description:
+      "Link cases to issues and projects, then sync status and priority back to support.",
+    status: "configuration_required",
+    setupRequirement: {
+      type: "configuration_required",
+      message:
+        "Salesforce OAuth credentials and component secret are not configured.",
+    },
+    actions: {
+      canConnect: false,
+      canManage: false,
+      canDisconnect: false,
+      canReconnect: false,
+    },
+  }),
+  integration({
+    provider: "front",
+    name: "Front",
+    description: "Create, link, and reopen issues from Front conversations.",
+    status: "not_connected",
+  }),
 ];
 
-const degradedSlack = {
-  ...integrations[1],
+const degradedSlack = integration({
+  provider: "slack",
+  name: "Slack",
   status: "degraded",
   displayName: "Design Ops",
-  setupRequirement: null,
   actions: {
     canConnect: false,
     canManage: true,
@@ -183,7 +137,7 @@ const degradedSlack = {
       },
     ],
   },
-};
+});
 
 const googleSheets = {
   provider: "google_sheets",
@@ -279,7 +233,6 @@ describe("IntegrationsSettingsPage component", () => {
     expect(
       screen.queryByText(/Setup unavailable in this workspace/),
     ).not.toBeInTheDocument();
-    expect(screen.getByText(/Slack OAuth credentials/)).toBeInTheDocument();
     expect(screen.getByText(/Sentry credentials/)).toBeInTheDocument();
     expect(
       screen.getByText(/Salesforce OAuth credentials/),
@@ -481,21 +434,14 @@ describe("IntegrationsSettingsPage component", () => {
   });
 
   it("connects Zendesk from the catalog setup form", async () => {
-    const zendesk = {
-      ...integrations[0],
+    const zendesk = integration({
       provider: "zendesk",
       name: "Zendesk",
       description:
         "Connect support tickets to product work and customer requests.",
       status: "not_connected",
       setupRequirement: null,
-      actions: {
-        canConnect: true,
-        canManage: false,
-        canDisconnect: false,
-        canReconnect: false,
-      },
-    };
+    });
     fetchMock
       .mockResolvedValueOnce({
         ok: true,

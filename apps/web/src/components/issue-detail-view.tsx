@@ -2378,26 +2378,32 @@ export function IssueDetailView({
                             View source issue in GitHub
                           </a>
                         ) : null}
-                        {getSalesforceSourceLink(event) ? (
-                          <a
-                            href={getSalesforceSourceLink(event) ?? undefined}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
-                          >
-                            View source case in Salesforce
-                          </a>
-                        ) : null}
-                        {getZendeskSourceLink(event) ? (
-                          <a
-                            href={getZendeskSourceLink(event) ?? undefined}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
-                          >
-                            View source ticket in Zendesk
-                          </a>
-                        ) : null}
+                        {(() => {
+                          const salesforceLink = getSalesforceSourceLink(event);
+                          return salesforceLink ? (
+                            <a
+                              href={salesforceLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                            >
+                              View source case in Salesforce
+                            </a>
+                          ) : null;
+                        })()}
+                        {(() => {
+                          const zendeskLink = getZendeskSourceLink(event);
+                          return zendeskLink ? (
+                            <a
+                              href={zendeskLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-2 inline-flex text-[12px] text-[var(--color-accent)] hover:underline"
+                            >
+                              View source ticket in Zendesk
+                            </a>
+                          ) : null;
+                        })()}
                         {getGitLabSourceLink(event) ? (
                           <a
                             href={getGitLabSourceLink(event) ?? undefined}

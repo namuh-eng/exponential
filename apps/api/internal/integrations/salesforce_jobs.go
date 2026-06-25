@@ -161,6 +161,9 @@ func salesforceCasePatchBody(payload map[string]any) map[string]any {
 	if issueURL := strings.TrimSpace(stringValue(payload["issueUrl"])); issueURL != "" {
 		body[salesforceIssueURLField()] = issueURL
 	}
+	if projectURL := strings.TrimSpace(stringValue(payload["projectUrl"])); projectURL != "" {
+		body[salesforceProjectURLField()] = projectURL
+	}
 	if followUp := strings.TrimSpace(stringValue(payload["followUp"])); followUp != "" {
 		body[salesforceFollowUpField()] = followUp
 	}
@@ -186,6 +189,13 @@ func salesforceIssueURLField() string {
 		return v
 	}
 	return "Exponential_Issue_URL__c"
+}
+
+func salesforceProjectURLField() string {
+	if v := strings.TrimSpace(getenvSalesforceField("SALESFORCE_PROJECT_URL_FIELD")); v != "" {
+		return v
+	}
+	return "Exponential_Project_URL__c"
 }
 
 func salesforceFollowUpField() string {
