@@ -8,9 +8,13 @@ import {
   within,
 } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import TeamIssuesPage from "@/app/(app)/team/[key]/all/page";
+import { TeamIssuesClient } from "@/app/(app)/team/[key]/team-issues-client";
 import { useParams, useRouter } from "next/navigation";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+// The page default is now a server component; drive the client view directly
+// with no seed so it falls back to its mocked /api fetch.
+const TeamIssuesPage = () => <TeamIssuesClient initialData={null} />;
 
 // Mock next/navigation
 vi.mock("next/navigation", () => ({

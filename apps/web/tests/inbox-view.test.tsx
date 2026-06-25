@@ -15,7 +15,11 @@ vi.mock("next/navigation", () => ({
   useParams: () => ({}),
 }));
 
-import InboxPage from "@/app/(app)/inbox/page";
+import { InboxClient } from "@/components/inbox-client";
+
+// InboxPage is now an async server component; drive the client view directly
+// with no seed so it falls back to its mocked /api/notifications fetch.
+const InboxPage = () => <InboxClient />;
 
 const mockInboxData = {
   notifications: [

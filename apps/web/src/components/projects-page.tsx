@@ -9,7 +9,7 @@ import { ProjectRow } from "@/components/project-row";
 import { TeamRouteErrorState } from "@/components/team-route-error-state";
 import { useProjectViewState } from "@/hooks/use-project-view-state";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface ProjectTemplateOption {
   id: string;
@@ -47,6 +47,10 @@ type ApiProjectData = Partial<Omit<ProjectData, "progress">> & {
   created_at?: string;
 };
 
+export interface ProjectsResponse {
+  projects: ApiProjectData[];
+}
+
 type ProjectStatus = ProjectData["status"];
 type StatusFilter =
   | "all"
@@ -72,14 +76,20 @@ function compareTargetDates(left: string | null, right: string | null): number {
 export function ProjectsPage({
   initialTeamKey,
   initialTeamKeyFromRoute = false,
+  initialProjects = null,
 }: {
   initialTeamKey?: string;
   initialTeamKeyFromRoute?: boolean;
+  initialProjects?: ProjectsResponse | null;
 } = {}) {
   const params = useParams<{ key?: string }>();
   const routeTeamKey = initialTeamKeyFromRoute ? params.key : undefined;
   const teamKey = initialTeamKey ?? routeTeamKey ?? null;
-  const [projects, setProjects] = useState<ProjectData[]>([]);
+  const [projects, setProjects] = useState<ProjectData[]>(
+    initialProjects !== null
+      ? (initialProjects.projects ?? []).map(normalizeProjectData)
+      : [],
+  );
   const [activeTeam, setActiveTeam] = useState<{
     id: string;
     key: string;
@@ -92,7 +102,7 @@ export function ProjectsPage({
     ProjectTemplateOption[]
   >([]);
   const [labelFilterId, setLabelFilterId] = useState("all");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(initialProjects === null);
   const [loadState, setLoadState] = useState<"ready" | "not-found" | "error">(
     "ready",
   );
@@ -100,6 +110,8 @@ export function ProjectsPage({
   const { state: viewState, updateState } = useProjectViewState(
     teamKey ? `team:${teamKey}` : "workspace",
   );
+
+  const seededRef = useRef(initialProjects !== null);
 
   const fetchProjects = useCallback(async () => {
     setLoading(true);
@@ -167,6 +179,10 @@ export function ProjectsPage({
   }, [teamKey]);
 
   useEffect(() => {
+    if (seededRef.current) {
+      seededRef.current = false;
+      return;
+    }
     fetchProjects();
   }, [fetchProjects]);
 

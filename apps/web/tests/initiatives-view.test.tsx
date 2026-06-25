@@ -6,7 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import InitiativesPage from "@/app/(app)/initiatives/page";
+import { InitiativesClient } from "@/app/(app)/initiatives/initiatives-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockInitiatives = [
@@ -49,7 +49,7 @@ describe("InitiativesPage component", () => {
       }),
     );
 
-    render(<InitiativesPage />);
+    render(<InitiativesClient initialData={null} />);
     expect(screen.getByText("Loading...")).toBeInTheDocument();
 
     await waitFor(() => {
@@ -69,7 +69,7 @@ describe("InitiativesPage component", () => {
       }),
     );
 
-    render(<InitiativesPage />);
+    render(<InitiativesClient initialData={null} />);
     await waitFor(() => screen.getByText("Core Overhaul"));
 
     fireEvent.click(screen.getByText("Planned"));
@@ -111,7 +111,7 @@ describe("InitiativesPage component", () => {
         }),
     );
 
-    render(<InitiativesPage />);
+    render(<InitiativesClient initialData={null} />);
     await waitFor(() => screen.getByText("Core Overhaul"));
 
     fireEvent.click(screen.getByText("New initiative"));
@@ -150,7 +150,7 @@ describe("InitiativesPage component", () => {
       }),
     );
 
-    render(<InitiativesPage />);
+    render(<InitiativesClient initialData={null} />);
 
     const button = await screen.findByRole("button", {
       name: /initiatives disabled/i,
@@ -174,7 +174,7 @@ describe("InitiativesPage component", () => {
       }),
     );
 
-    render(<InitiativesPage />);
+    render(<InitiativesClient initialData={null} />);
     await waitFor(() => screen.getByText("Initiatives"));
 
     fireEvent.keyDown(document, { key: "n" });

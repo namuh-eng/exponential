@@ -18,7 +18,11 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-import TeamBoardPage from "@/app/(app)/team/[key]/board/page";
+import { TeamBoardClient } from "@/app/(app)/team/[key]/board-client";
+
+// The page default is now an async server component; drive the client view
+// directly with no seed so it falls back to its mocked /api fetch.
+const TeamBoardPage = () => <TeamBoardClient initialData={null} />;
 
 const mockBoardData = {
   team: { id: "team-1", name: "Engineering", key: "ENG" },

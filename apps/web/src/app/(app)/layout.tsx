@@ -180,6 +180,17 @@ export default async function AppLayout({
       notFound();
     }
 
+    // /workspaces/current and /teams both depend only on ws.workspaceId, so
+    // issue them together and overlap the round trips. /current still gates IP
+    // access and the source-path rewrite below, so it is awaited first; the
+    // teams request rides along and is awaited once the gates pass.
+    const teamsPromise = client.GET("/teams", {
+      headers: { "x-workspace-id": ws.workspaceId },
+    });
+    // Avoid an unhandled rejection if a gate below redirects before teams is
+    // awaited (the result is simply discarded in that case).
+    teamsPromise.catch(() => {});
+
     const currentWorkspaceResult = await client.GET("/workspaces/current", {
       headers: { "x-workspace-id": ws.workspaceId },
     });
@@ -207,17 +218,14 @@ export default async function AppLayout({
       }
     }
 
-    const teams = requireApiData(
-      await client.GET("/teams", {
-        headers: { "x-workspace-id": ws.workspaceId },
+    const teams = requireApiData(await teamsPromise, "List teams").teams.map(
+      (team) => ({
+        id: team.id,
+        name: team.name,
+        key: team.key,
+        parentTeamId: null,
       }),
-      "List teams",
-    ).teams.map((team) => ({
-      id: team.id,
-      name: team.name,
-      key: team.key,
-      parentTeamId: null,
-    }));
+    );
 
     shellData = { ws, teams };
   } catch (error) {

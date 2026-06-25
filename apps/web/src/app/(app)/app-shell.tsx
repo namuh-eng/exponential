@@ -1,8 +1,5 @@
 "use client";
 
-import { AskAssistant } from "@/components/ask-assistant";
-import { CommandPalette } from "@/components/command-palette";
-import { CreateIssueModal } from "@/components/create-issue-modal";
 import { ExponentialMark } from "@/components/exponential-mark";
 import { Sidebar, type SidebarTeam } from "@/components/sidebar";
 import {
@@ -22,6 +19,7 @@ import {
 } from "@/lib/keyboard-shortcuts";
 import { stripWorkspaceSlug, withWorkspaceSlug } from "@/lib/workspace-paths";
 import { GripVertical, PanelLeftOpen } from "lucide-react";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import {
   createContext,
@@ -32,6 +30,25 @@ import {
   useState,
 } from "react";
 import { SyncSubscription } from "./sync-subscription";
+
+// These overlays are always mounted to listen for their open events/shortcuts
+// but render nothing until invoked. Code-splitting them out of the app-shell
+// bundle (and skipping SSR for closed overlays) shrinks the initial
+// hydration-blocking JS that gates first paint on every authenticated page.
+// Their listeners attach immediately after hydration, when their chunk loads.
+const AskAssistant = dynamic(
+  () => import("@/components/ask-assistant").then((m) => m.AskAssistant),
+  { ssr: false },
+);
+const CommandPalette = dynamic(
+  () => import("@/components/command-palette").then((m) => m.CommandPalette),
+  { ssr: false },
+);
+const CreateIssueModal = dynamic(
+  () =>
+    import("@/components/create-issue-modal").then((m) => m.CreateIssueModal),
+  { ssr: false },
+);
 
 interface AppShellProps {
   children: React.ReactNode;

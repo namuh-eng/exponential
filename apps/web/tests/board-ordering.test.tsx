@@ -8,8 +8,12 @@ import {
   within,
 } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import TeamBoardPage from "@/app/(app)/team/[key]/board/page";
+import { TeamBoardClient } from "@/app/(app)/team/[key]/board-client";
 import { useParams, useRouter } from "next/navigation";
+
+// The page default is now an async server component; drive the client view
+// directly with no seed so it falls back to its mocked /api fetch.
+const TeamBoardPage = () => <TeamBoardClient initialData={null} />;
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Mock next/navigation
