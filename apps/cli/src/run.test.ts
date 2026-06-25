@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { readConfig } from "./config.js";
 import { runCli } from "./run.js";
 
 type CapturedRequest = {
@@ -56,6 +57,8 @@ async function execute(input: {
   env?: NodeJS.ProcessEnv;
   isStdoutTTY?: boolean;
   fetch?: typeof fetch;
+  openUrl?: (url: string) => Promise<boolean> | boolean;
+  sleepMs?: (ms: number) => Promise<void>;
 }) {
   let stdout = "";
   let stderr = "";
@@ -77,6 +80,8 @@ async function execute(input: {
     env: input.env ?? env(),
     isStdoutTTY: input.isStdoutTTY ?? false,
     fetch: input.fetch ?? mockFetch,
+    openUrl: input.openUrl,
+    sleepMs: input.sleepMs,
     stdout: {
       write: (chunk) => {
         stdout += chunk;
@@ -161,6 +166,91 @@ describe("cli command runner", () => {
 
     expect(result.stdout).toContain("pat_...cret");
     expect(result.stdout).not.toContain("pat_supersecret");
+  });
+
+  it("runs device login, opens verification URL, and stores returned CLI token", async () => {
+    const testEnv = env({ EXPONENTIAL_TOKEN: undefined });
+    const opened: string[] = [];
+    const result = await execute({
+      argv: ["login"],
+      env: testEnv,
+      openUrl: (url) => {
+        opened.push(url);
+        return true;
+      },
+      sleepMs: async () => {},
+      fetch: async (requestInput, init) => {
+        const request =
+          requestInput instanceof Request
+            ? requestInput
+            : new Request(requestInput, init);
+        const url = new URL(request.url);
+        if (url.pathname === "/v1/auth/device/code") {
+          return jsonResponse({
+            device_code: "device-secret",
+            user_code: "123456",
+            verification_uri:
+              "https://app.example/auth/device?user_code=123456",
+            interval: 1,
+            expires_in: 60,
+          });
+        }
+        if (url.pathname === "/v1/auth/device/token") {
+          expect(await request.json()).toEqual({
+            device_code: "device-secret",
+          });
+          return jsonResponse({
+            access_token: "pat_device_secret",
+            token_type: "Bearer",
+            scope: "cli",
+          });
+        }
+        return jsonResponse({ error: "not_found" }, 404);
+      },
+    });
+
+    expect(result.code).toBe(0);
+    expect(opened).toEqual([
+      "https://app.example/auth/device?user_code=123456",
+    ]);
+    expect(result.stdout).toContain("123456");
+    expect(result.stdout).not.toContain("pat_device_secret");
+    expect(readConfig(testEnv)).toMatchObject({
+      token: "pat_device_secret",
+      baseUrl: "https://api.example/v1",
+    });
+  });
+
+  it("reports browser denial without writing a token", async () => {
+    const testEnv = env({ EXPONENTIAL_TOKEN: undefined });
+    const result = await execute({
+      argv: ["login"],
+      env: testEnv,
+      openUrl: () => false,
+      sleepMs: async () => {},
+      fetch: async (requestInput, init) => {
+        const request =
+          requestInput instanceof Request
+            ? requestInput
+            : new Request(requestInput, init);
+        const url = new URL(request.url);
+        if (url.pathname === "/v1/auth/device/code") {
+          return jsonResponse({
+            device_code: "device-secret",
+            user_code: "123456",
+            verification_uri:
+              "https://app.example/auth/device?user_code=123456",
+            interval: 1,
+            expires_in: 60,
+          });
+        }
+        return jsonResponse({ error: "access_denied" }, 403);
+      },
+    });
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("CLI login was denied");
+    expect(readConfig(testEnv).token).toBeUndefined();
   });
 
   it("runs doctor without leaking token values", async () => {
@@ -262,4 +352,10 @@ function responseFor(request: Request) {
   }
 
   return json({ title: "Not found" }, 404);
+}
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }

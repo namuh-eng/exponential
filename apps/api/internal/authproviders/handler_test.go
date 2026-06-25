@@ -222,6 +222,15 @@ func TestPostAuthCompletionURL(t *testing.T) {
 	}
 }
 
+func TestAppURLPrefersExplicitAppURL(t *testing.T) {
+	t.Setenv("EXPONENTIAL_APP_URL", "https://app.explicit")
+	t.Setenv("PUBLIC_BASE_URL", "https://public.example")
+	req := httptest.NewRequest("GET", "http://api.internal/api/auth/device/code", nil)
+	if got := appURL(req); got != "https://app.explicit" {
+		t.Fatalf("appURL = %q", got)
+	}
+}
+
 func TestSecureCookieUsesConfiguredHTTPSAppURL(t *testing.T) {
 	t.Setenv("PUBLIC_BASE_URL", "https://app.example")
 	req := httptest.NewRequest("GET", "http://internal-alb/api/auth/google/callback", nil)

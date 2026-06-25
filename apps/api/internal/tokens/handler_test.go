@@ -6,8 +6,8 @@ import (
 )
 
 func TestNormalizeScopes(t *testing.T) {
-	got := normalizeScopes([]string{"Read", "", "read", "write"})
-	if len(got) != 2 || got[0] != "read" || got[1] != "write" {
+	got := normalizeScopes([]string{"Read", "", "read", "write", "CLI"})
+	if len(got) != 3 || got[0] != "read" || got[1] != "write" || got[2] != "cli" {
 		t.Fatalf("scopes = %#v", got)
 	}
 }

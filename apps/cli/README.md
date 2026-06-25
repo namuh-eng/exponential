@@ -13,20 +13,19 @@ daily-driver alias; `exponential` remains available for scripts.
 
 ## Configure
 
-Use a personal access token from Exponential:
+Run the browser-based device login flow to store a CLI token:
 
 ```bash
-export EXPONENTIAL_TOKEN=pat_your_token
-export EXPONENTIAL_API_URL=https://your-exponential.example.com/v1
+expn login --api-url https://your-exponential.example.com/v1
 ```
 
 For local development or self-hosted Compose:
 
 ```bash
-export EXPONENTIAL_API_URL=http://localhost:7016/v1
+expn login --api-url http://localhost:7016/v1
 ```
 
-You can also store local config:
+Manual token fallback is still supported:
 
 ```bash
 expn login --token pat_your_token --api-url http://localhost:7016/v1
