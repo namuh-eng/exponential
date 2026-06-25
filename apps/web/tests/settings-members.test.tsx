@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
-import MembersPage from "@/app/(app)/settings/members/page";
+import { MembersClient as MembersPage } from "@/app/(app)/settings/members/members-client";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({

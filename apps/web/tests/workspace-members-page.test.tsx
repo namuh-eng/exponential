@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import MembersPage from "../src/app/(app)/settings/members/page";
+import { MembersClient as MembersPage } from "../src/app/(app)/settings/members/members-client";
 
 // Mock the components used in the page
 vi.mock("@/components/avatar", () => ({
