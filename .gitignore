@@ -50,3 +50,6 @@ apps/web/tests/e2e/.auth/
 # Session handoff scratch — local only
 .handoffs/
 .release/
+
+# air hot-reload build output (apps/api)
+apps/api/tmp/
