@@ -62,16 +62,43 @@ docker compose -f docker-compose.dev.yml up --build
 
 Use this when you want faster web/API iteration from your shell.
 
+The fastest path is a single command that starts the Docker infra services
+(Postgres/Redis + migrations), the Go API with hot reload, and the web app:
+
 ```bash
 cp .env.example .env
-make dev-services
-EXPONENTIAL_API_DATABASE_URL=$DATABASE_URL go run ./apps/api/cmd/migrate
-pnpm dev
+make dev-full
+```
+
+`make dev-full` runs the API on port `7016` and the web app on `7015`. Ctrl-C
+stops the API and web; the Docker services keep running (stop them with
+`make dev-services-down`).
+
+For hot reload of the Go API, install [air](https://github.com/air-verse/air)
+once (`go install github.com/air-verse/air@latest`). Without it, the API still
+runs but does not auto-restart on Go changes.
+
+If you prefer separate terminals, run the pieces yourself:
+
+```bash
+cp .env.example .env
+make dev-services   # Postgres + Redis + migrations
+make dev-api        # Go API on :7016 (hot reload via air)
+pnpm dev            # web app on :7015
 ```
 
 `pnpm dev` starts the web app on port `7015` and preflights the database before
 binding. Only set `SKIP_DB_PREFLIGHT=true` when intentionally debugging a
 route that does not need the database.
+
+### Regenerating Contract Code
+
+After changing `packages/proto/openapi.yaml` or SQL queries, regenerate the
+sqlc queries, Go OpenAPI stubs, and TypeScript SDK in one step:
+
+```bash
+make codegen
+```
 
 ### Optional 1Password Flow
 

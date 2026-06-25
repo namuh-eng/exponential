@@ -1,0 +1,13 @@
+# Pre-commit gate — fast, staged-files-only. Full validation still lives in
+# `make check`. Installed automatically on `pnpm install` (prepare script).
+pre-commit:
+  parallel: true
+  commands:
+    biome:
+      glob: "*.{js,jsx,ts,tsx,json,jsonc,css}"
+      run: pnpm biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      stage_fixed: true
+    gofmt:
+      glob: "*.go"
+      run: gofmt -w {staged_files}
+      stage_fixed: true

@@ -15,15 +15,19 @@
     "cpd": "pnpm --filter @exponential/web cpd",
     "api:build": "cd apps/api && go build ./...",
     "api:test": "cd apps/api && go test ./...",
-    "web-api-empty": "node scripts/check-web-api-empty.mjs"
+    "web-api-empty": "node scripts/check-web-api-empty.mjs",
+    "codegen": "make codegen",
+    "prepare": "lefthook install || true"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",
+    "lefthook": "^1.13.6",
     "turbo": "^2.6.1"
   },
   "pnpm": {
     "overrides": {
       "postcss": "^8.5.15"
-    }
+    },
+    "onlyBuiltDependencies": ["lefthook"]
   }
 }
