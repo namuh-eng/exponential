@@ -21,10 +21,19 @@ const PATH = flag("path", "/foreverbrowsing/settings");
 const JSON_OUT = flag("json", null);
 
 const parseCookies = (raw, host) =>
-  raw.split(";").map((s) => s.trim()).filter(Boolean).map((pair) => {
-    const eq = pair.indexOf("=");
-    return { name: pair.slice(0, eq).trim(), value: pair.slice(eq + 1).trim(), domain: host, path: "/" };
-  });
+  raw
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((pair) => {
+      const eq = pair.indexOf("=");
+      return {
+        name: pair.slice(0, eq).trim(),
+        value: pair.slice(eq + 1).trim(),
+        domain: host,
+        path: "/",
+      };
+    });
 
 async function main() {
   const host = new URL(BASE).hostname;
@@ -38,7 +47,10 @@ async function main() {
     try {
       const res = await req.response();
       const timing = req.timing();
-      const sizes = await res?.request().sizes?.().catch(() => null);
+      const sizes = await res
+        ?.request()
+        .sizes?.()
+        .catch(() => null);
       requests.push({
         url: req.url().replace(BASE, ""),
         type: req.resourceType(),
@@ -78,7 +90,9 @@ async function main() {
       domcl: n ? +(n.domContentLoadedEventEnd - n.startTime).toFixed(1) : null,
       load: n ? +(n.loadEventEnd - n.startTime).toFixed(1) : null,
       fcp: fcp ? +fcp.startTime.toFixed(1) : null,
-      transferKB: +(res.reduce((a, r) => a + (r.size || 0), 0) / 1024).toFixed(1),
+      transferKB: +(res.reduce((a, r) => a + (r.size || 0), 0) / 1024).toFixed(
+        1,
+      ),
       resources: res,
     };
   });
@@ -96,23 +110,42 @@ async function main() {
   }
 
   console.log(`\n=== Profile ${PATH} ===`);
-  console.log(`TTFB=${nav.ttfb}ms  FCP=${nav.fcp}ms  DOMContentLoaded=${nav.domcl}ms  load=${nav.load}ms  ready(main)=${readyMs}ms`);
-  console.log(`Total resources: ${nav.resources.length}, transfer ~${nav.transferKB}KB\n`);
+  console.log(
+    `TTFB=${nav.ttfb}ms  FCP=${nav.fcp}ms  DOMContentLoaded=${nav.domcl}ms  load=${nav.load}ms  ready(main)=${readyMs}ms`,
+  );
+  console.log(
+    `Total resources: ${nav.resources.length}, transfer ~${nav.transferKB}KB\n`,
+  );
   console.log("By resource type:");
-  for (const [t, v] of Object.entries(byType).sort((a, b) => b[1].kb - a[1].kb)) {
-    console.log(`  ${t.padEnd(10)} count=${String(v.count).padEnd(4)} ${v.kb.toFixed(1)}KB  sumDur=${v.ms.toFixed(0)}ms`);
+  for (const [t, v] of Object.entries(byType).sort(
+    (a, b) => b[1].kb - a[1].kb,
+  )) {
+    console.log(
+      `  ${t.padEnd(10)} count=${String(v.count).padEnd(4)} ${v.kb.toFixed(1)}KB  sumDur=${v.ms.toFixed(0)}ms`,
+    );
   }
   console.log("\nSlowest 15 requests (by duration):");
-  for (const r of [...nav.resources].sort((a, b) => b.dur - a.dur).slice(0, 15)) {
-    console.log(`  ${String(r.dur).padStart(7)}ms  start=${String(r.start).padStart(7)}  ${((r.size||0)/1024).toFixed(1).padStart(6)}KB  ${r.type.padEnd(8)} ${r.name.replace(BASE, "").slice(0, 80)}`);
+  for (const r of [...nav.resources]
+    .sort((a, b) => b.dur - a.dur)
+    .slice(0, 15)) {
+    console.log(
+      `  ${String(r.dur).padStart(7)}ms  start=${String(r.start).padStart(7)}  ${((r.size || 0) / 1024).toFixed(1).padStart(6)}KB  ${r.type.padEnd(8)} ${r.name.replace(BASE, "").slice(0, 80)}`,
+    );
   }
   console.log("\nFetch/XHR (client data) requests:");
-  for (const r of nav.resources.filter((r) => r.type === "fetch" || r.type === "xmlhttprequest")) {
-    console.log(`  ${String(r.dur).padStart(7)}ms  start=${String(r.start).padStart(7)}  ${r.name.replace(BASE, "").slice(0, 90)}`);
+  for (const r of nav.resources.filter(
+    (r) => r.type === "fetch" || r.type === "xmlhttprequest",
+  )) {
+    console.log(
+      `  ${String(r.dur).padStart(7)}ms  start=${String(r.start).padStart(7)}  ${r.name.replace(BASE, "").slice(0, 90)}`,
+    );
   }
 
   if (JSON_OUT) {
-    writeFileSync(JSON_OUT, JSON.stringify({ path: PATH, nav, requests }, null, 2));
+    writeFileSync(
+      JSON_OUT,
+      JSON.stringify({ path: PATH, nav, requests }, null, 2),
+    );
     console.log(`\nWrote ${JSON_OUT}`);
   }
 }

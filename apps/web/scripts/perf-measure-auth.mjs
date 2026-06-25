@@ -36,7 +36,7 @@ const SLUG = flag("slug", "foreverbrowsing");
 // Each route names a selector that marks its primary content as rendered.
 // `main` is a safe fallback that exists once the app shell hydrates.
 const ROUTES = [
-  { path: `/`, ready: "main, [data-app-shell], a[href*='/inbox']" },
+  { path: "/", ready: "main, [data-app-shell], a[href*='/inbox']" },
   { path: `/${SLUG}/inbox`, ready: "main" },
   { path: `/${SLUG}/my-issues/assigned`, ready: "main" },
   { path: `/${SLUG}/team/ENG/all`, ready: "main" },
@@ -53,7 +53,10 @@ const ROUTES = [
 
 function pct(sorted, p) {
   if (sorted.length === 0) return Number.NaN;
-  const idx = Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length));
+  const idx = Math.min(
+    sorted.length - 1,
+    Math.floor((p / 100) * sorted.length),
+  );
   return +sorted[idx].toFixed(1);
 }
 
@@ -80,7 +83,10 @@ async function measure(page, route) {
   // Wait for the primary content marker, then for the network to settle.
   let readyMs = Number.NaN;
   try {
-    await page.waitForSelector(route.ready, { timeout: 12000, state: "visible" });
+    await page.waitForSelector(route.ready, {
+      timeout: 12000,
+      state: "visible",
+    });
     readyMs = Date.now() - t0;
   } catch {
     readyMs = Date.now() - t0; // record elapsed even if selector never showed
@@ -139,7 +145,11 @@ async function main() {
         // record failure but keep going
       }
     }
-    const pick = (key) => samples.map((s) => s[key]).filter((v) => typeof v === "number").sort((a, b) => a - b);
+    const pick = (key) =>
+      samples
+        .map((s) => s[key])
+        .filter((v) => typeof v === "number")
+        .sort((a, b) => a - b);
     out.push({
       path: route.path,
       status: last?.status ?? null,
@@ -158,23 +168,35 @@ async function main() {
   await browser.close();
 
   const pad = (s, n) => String(s ?? "").padEnd(n);
-  console.log(`\n=== Authenticated page load (ms, browser) — base=${BASE} iters=${ITERS} ===`);
+  console.log(
+    `\n=== Authenticated page load (ms, browser) — base=${BASE} iters=${ITERS} ===`,
+  );
   console.log(
     `${pad("route", 30)}${pad("status", 7)}${pad("ttfb", 7)}${pad("fcp", 7)}${pad("domcl", 7)}${pad("load", 8)}${pad("ready50", 9)}${pad("ready90", 9)}${pad("settled", 9)}`,
   );
   out.sort((a, b) => (b.ready_p50 || 0) - (a.ready_p50 || 0));
   for (const r of out) {
-    const mark = (r.ready_p50 ?? Infinity) > 50 ? "  <-- >50ms" : "";
+    const mark =
+      (r.ready_p50 ?? Number.POSITIVE_INFINITY) > 50 ? "  <-- >50ms" : "";
     console.log(
       `${pad(r.path, 30)}${pad(r.status, 7)}${pad(r.ttfb, 7)}${pad(r.fcp, 7)}${pad(r.domcl, 7)}${pad(r.load, 8)}${pad(r.ready_p50, 9)}${pad(r.ready_p90, 9)}${pad(r.settled_p50, 9)}${mark}`,
     );
   }
-  const over = out.filter((r) => (r.ready_p50 ?? Infinity) > 50);
-  console.log(`\n${out.length} routes; ${over.length} over 50ms on "ready" (content visible).`);
-  console.log(`Columns: ttfb=server doc, fcp=first paint, ready=content-visible, settled=networkidle. Medians.`);
+  const over = out.filter(
+    (r) => (r.ready_p50 ?? Number.POSITIVE_INFINITY) > 50,
+  );
+  console.log(
+    `\n${out.length} routes; ${over.length} over 50ms on "ready" (content visible).`,
+  );
+  console.log(
+    "Columns: ttfb=server doc, fcp=first paint, ready=content-visible, settled=networkidle. Medians.",
+  );
 
   if (JSON_OUT) {
-    writeFileSync(JSON_OUT, JSON.stringify({ base: BASE, iters: ITERS, results: out }, null, 2));
+    writeFileSync(
+      JSON_OUT,
+      JSON.stringify({ base: BASE, iters: ITERS, results: out }, null, 2),
+    );
     console.log(`Wrote ${JSON_OUT}`);
   }
 }

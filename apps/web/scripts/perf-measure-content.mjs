@@ -34,7 +34,7 @@ const JSON_OUT = flag("json", null);
 const SLUG = flag("slug", "foreverbrowsing");
 
 const ROUTES = [
-  { path: `/` },
+  { path: "/" },
   { path: `/${SLUG}/inbox` },
   { path: `/${SLUG}/my-issues/assigned` },
   { path: `/${SLUG}/team/ENG/all` },
@@ -51,7 +51,10 @@ const ROUTES = [
 
 function pct(sorted, p) {
   if (sorted.length === 0) return Number.NaN;
-  const idx = Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length));
+  const idx = Math.min(
+    sorted.length - 1,
+    Math.floor((p / 100) * sorted.length),
+  );
   return +sorted[idx].toFixed(1);
 }
 
@@ -158,23 +161,35 @@ async function main() {
   await browser.close();
 
   const pad = (s, n) => String(s ?? "").padEnd(n);
-  console.log(`\n=== Authenticated CONTENT-visible (ms, browser) — base=${BASE} iters=${ITERS} ===`);
+  console.log(
+    `\n=== Authenticated CONTENT-visible (ms, browser) — base=${BASE} iters=${ITERS} ===`,
+  );
   console.log(
     `${pad("route", 32)}${pad("status", 7)}${pad("ttfb", 7)}${pad("fcp", 7)}${pad("content50", 11)}${pad("content90", 11)}${pad("settled", 9)}`,
   );
   out.sort((a, b) => (b.content_p50 || 0) - (a.content_p50 || 0));
   for (const r of out) {
-    const mark = (r.content_p50 ?? Infinity) > 50 ? "  <-- >50ms" : "";
+    const mark =
+      (r.content_p50 ?? Number.POSITIVE_INFINITY) > 50 ? "  <-- >50ms" : "";
     console.log(
       `${pad(r.path, 32)}${pad(r.status, 7)}${pad(r.ttfb, 7)}${pad(r.fcp, 7)}${pad(r.content_p50, 11)}${pad(r.content_p90, 11)}${pad(r.settled_p50, 9)}${mark}`,
     );
   }
-  const over = out.filter((r) => (r.content_p50 ?? Infinity) > 50);
-  console.log(`\n${out.length} routes; ${over.length} over 50ms on content-visible.`);
-  console.log(`content = <main> present AND no "Loading..." sentinel. Medians.`);
+  const over = out.filter(
+    (r) => (r.content_p50 ?? Number.POSITIVE_INFINITY) > 50,
+  );
+  console.log(
+    `\n${out.length} routes; ${over.length} over 50ms on content-visible.`,
+  );
+  console.log(
+    `content = <main> present AND no "Loading..." sentinel. Medians.`,
+  );
 
   if (JSON_OUT) {
-    writeFileSync(JSON_OUT, JSON.stringify({ base: BASE, iters: ITERS, results: out }, null, 2));
+    writeFileSync(
+      JSON_OUT,
+      JSON.stringify({ base: BASE, iters: ITERS, results: out }, null, 2),
+    );
     console.log(`Wrote ${JSON_OUT}`);
   }
 }
