@@ -9,15 +9,22 @@ import {
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import InboxPage from "@/app/(app)/inbox/page";
-import InitiativesPage from "@/app/(app)/initiatives/page";
-import MyIssuesTabPage from "@/app/(app)/my-issues/[tab]/page";
-import ProjectsPage from "@/app/(app)/projects/page";
-import TeamIssuesPage from "@/app/(app)/team/[key]/all/page";
-import TeamBoardPage from "@/app/(app)/team/[key]/board/page";
+import { InitiativesClient } from "@/app/(app)/initiatives/initiatives-client";
+import { MyIssuesClient } from "@/app/(app)/my-issues/[tab]/my-issues-client";
+import { TeamBoardClient } from "@/app/(app)/team/[key]/board-client";
 import TeamCyclesPage from "@/app/(app)/team/[key]/cycles/page";
+import { TeamIssuesClient } from "@/app/(app)/team/[key]/team-issues-client";
 import TeamTriagePage from "@/app/(app)/team/[key]/triage/page";
 import { EmptyState } from "@/components/empty-state";
+import { InboxClient } from "@/components/inbox-client";
+import { ProjectsPage } from "@/components/projects-page";
+
+// The team-issues, board, and inbox pages are now async server components; drive
+// the client views directly with no seed so they fall back to their mocked
+// /api fetches.
+const TeamIssuesPage = () => <TeamIssuesClient initialData={null} />;
+const TeamBoardPage = () => <TeamBoardClient initialData={null} />;
+const InboxPage = () => <InboxClient />;
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/team/ENG/all",
@@ -539,7 +546,7 @@ describe("Empty state pages", () => {
           },
         }),
     }) as unknown as typeof fetch;
-    render(<MyIssuesTabPage />);
+    render(<MyIssuesClient initialData={null} />);
     expect(
       await screen.findByText("No issues assigned", {}, { timeout: 2000 }),
     ).toBeDefined();
@@ -550,7 +557,7 @@ describe("Empty state pages", () => {
       ok: true,
       json: () => Promise.resolve({ initiatives: [] }),
     }) as unknown as typeof fetch;
-    render(<InitiativesPage />);
+    render(<InitiativesClient initialData={null} />);
     expect(
       await screen.findByText("No initiatives", {}, { timeout: 2000 }),
     ).toBeDefined();

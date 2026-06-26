@@ -10,7 +10,7 @@ import { NotificationRow } from "@/components/notification-row";
 import { withWorkspaceSlug } from "@/lib/workspace-paths";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const PRIORITY_SORT_ORDER: Record<string, number> = {
   urgent: 0,
@@ -41,6 +41,11 @@ interface Notification {
   createdAt: string;
   snoozedUntilAt: string | null;
   unsnoozedAt: string | null;
+}
+
+export interface NotificationsResponse {
+  notifications: Notification[];
+  unreadCount: number;
 }
 
 function emitNotificationChange(unreadCount: number) {
@@ -82,13 +87,19 @@ function parseInboxPreferences(value: unknown): InboxPreferences {
 
 export function InboxClient({
   initialSelectedId = null,
+  initialNotifications = null,
 }: {
   initialSelectedId?: string | null;
+  initialNotifications?: NotificationsResponse | null;
 }) {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifications, setNotifications] = useState<Notification[]>(
+    initialNotifications?.notifications ?? [],
+  );
+  const [unreadCount, setUnreadCount] = useState(
+    initialNotifications?.unreadCount ?? 0,
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(initialNotifications === null);
   const [preferences, setPreferences] = useState<InboxPreferences>(
     DEFAULT_INBOX_PREFERENCES,
   );
@@ -142,8 +153,46 @@ export function InboxClient({
     };
   }, []);
 
+  // Skip the first mount fetch when the server component seeded initialNotifications.
+  // Subsequent event-driven fetches (sync events, notification:changed) run normally.
+  const seededRef = useRef(initialNotifications !== null);
+
   useEffect(() => {
     let cancelled = false;
+
+    if (seededRef.current) {
+      seededRef.current = false;
+      // Seed the selected id from the already-loaded notifications list.
+      setSelectedId(
+        initialSelectedId ?? initialNotifications?.notifications[0]?.id ?? null,
+      );
+      // Register event listeners without triggering an initial fetch.
+      function handleNotificationEvent() {
+        void loadNotifications();
+      }
+      function handleSyncEvent(event: Event) {
+        const operations = (event as SyncOperationsEvent).detail.operations;
+        if (
+          operations.some((operation) =>
+            ["notification", "issue", "comment"].includes(
+              operation.entity_type,
+            ),
+          )
+        ) {
+          void loadNotifications();
+        }
+      }
+      window.addEventListener("notifications:changed", handleNotificationEvent);
+      window.addEventListener(SYNC_OPERATIONS_EVENT, handleSyncEvent);
+      return () => {
+        cancelled = true;
+        window.removeEventListener(
+          "notifications:changed",
+          handleNotificationEvent,
+        );
+        window.removeEventListener(SYNC_OPERATIONS_EVENT, handleSyncEvent);
+      };
+    }
 
     loadNotifications().then((nextNotifications) => {
       if (!cancelled) {
@@ -178,7 +227,7 @@ export function InboxClient({
       );
       window.removeEventListener(SYNC_OPERATIONS_EVENT, handleSyncEvent);
     };
-  }, [initialSelectedId, loadNotifications]);
+  }, [initialSelectedId, initialNotifications, loadNotifications]);
 
   const persistPreferences = useCallback(
     async (nextPreferences: InboxPreferences) => {

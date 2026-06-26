@@ -14,7 +14,7 @@ vi.mock("next/navigation", () => ({
   useParams: () => ({}),
 }));
 
-import InitiativesPage from "@/app/(app)/initiatives/page";
+import { InitiativesClient } from "@/app/(app)/initiatives/initiatives-client";
 
 const mockInitiativesData = {
   initiatives: [
@@ -90,7 +90,7 @@ describe("InitiativesPage", () => {
       json: async () => mockInitiativesData,
     } as Response);
 
-    render(<InitiativesPage />);
+    render(<InitiativesClient initialData={null} />);
 
     expect(await screen.findByText("Active Growth")).toBeInTheDocument();
     expect(screen.queryByText("Planned Future")).not.toBeInTheDocument();
@@ -102,7 +102,7 @@ describe("InitiativesPage", () => {
       json: async () => mockInitiativesData,
     } as Response);
 
-    render(<InitiativesPage />);
+    render(<InitiativesClient initialData={null} />);
     await screen.findByText("Active Growth");
 
     fireEvent.click(screen.getByRole("button", { name: "Planned" }));
@@ -117,7 +117,7 @@ describe("InitiativesPage", () => {
       json: async () => mockInitiativesData,
     } as Response);
 
-    render(<InitiativesPage />);
+    render(<InitiativesClient initialData={null} />);
     expect(
       await screen.findByLabelText("Search initiatives"),
     ).toBeInTheDocument();
@@ -169,7 +169,7 @@ describe("InitiativesPage", () => {
       json: async () => mockInitiativesData,
     } as Response);
 
-    render(<InitiativesPage />);
+    render(<InitiativesClient initialData={null} />);
 
     expect(await screen.findByText("Planned Future")).toBeInTheDocument();
     expect(screen.queryByText("Active Growth")).not.toBeInTheDocument();
@@ -187,7 +187,7 @@ describe("InitiativesPage", () => {
       json: async () => mockInitiativesData,
     } as Response);
 
-    render(<InitiativesPage />);
+    render(<InitiativesClient initialData={null} />);
     await screen.findByText("Active Growth");
 
     fireEvent.click(screen.getByRole("button", { name: /New initiative/ }));
@@ -229,7 +229,7 @@ describe("InitiativesPage", () => {
       json: async () => ({ initiatives: [] }),
     } as Response);
 
-    render(<InitiativesPage />);
+    render(<InitiativesClient initialData={null} />);
 
     expect(await screen.findByText("No initiatives")).toBeInTheDocument();
   });

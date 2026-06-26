@@ -14,9 +14,15 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => mockSearchParams,
 }));
 
-import ActiveTeamIssuesPage from "@/app/(app)/team/[key]/active/page";
-import TeamIssuesPage from "@/app/(app)/team/[key]/all/page";
-import BacklogTeamIssuesPage from "@/app/(app)/team/[key]/backlog/page";
+import { TeamIssuesClient } from "@/app/(app)/team/[key]/team-issues-client";
+
+// The page default is now a server component that seeds initialData; these tests
+// drive the client view directly with no seed, so it falls back to its /api
+// fetch (mocked per test). The active/backlog routes resolve to the same client
+// component, distinguished only by the mocked pathname.
+const TeamIssuesPage = () => <TeamIssuesClient initialData={null} />;
+const ActiveTeamIssuesPage = TeamIssuesPage;
+const BacklogTeamIssuesPage = TeamIssuesPage;
 
 const mockIssuesData = {
   team: { id: "team-1", name: "Engineering", key: "ENG" },

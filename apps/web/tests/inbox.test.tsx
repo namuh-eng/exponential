@@ -141,8 +141,8 @@ describe("Inbox page", () => {
       json: () => Promise.resolve({ notifications: [], unreadCount: 0 }),
     }) as unknown as typeof fetch;
 
-    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
-    render(<InboxPage />);
+    const { InboxClient } = await import("@/components/inbox-client");
+    render(<InboxClient />);
 
     await vi.waitFor(() => {
       expect(screen.getByText("You're all caught up")).toBeDefined();
@@ -173,8 +173,8 @@ describe("Inbox page", () => {
 
     cleanup();
     vi.resetModules();
-    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
-    render(<InboxPage />);
+    const { InboxClient } = await import("@/components/inbox-client");
+    render(<InboxClient />);
 
     await vi.waitFor(() => {
       expect(screen.queryByText("You're all caught up")).toBeNull();
@@ -207,8 +207,8 @@ describe("Inbox page", () => {
 
     cleanup();
     vi.resetModules();
-    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
-    render(<InboxPage />);
+    const { InboxClient } = await import("@/components/inbox-client");
+    render(<InboxClient />);
 
     await vi.waitFor(() => {
       expect(screen.getAllByText("ENG-136").length).toBeGreaterThan(0);
@@ -239,8 +239,8 @@ describe("Inbox page", () => {
 
     cleanup();
     vi.resetModules();
-    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
-    render(<InboxPage />);
+    const { InboxClient } = await import("@/components/inbox-client");
+    render(<InboxClient />);
 
     await vi.waitFor(() => {
       expect(screen.getByText("Inbox")).toBeDefined();
@@ -272,8 +272,8 @@ describe("Inbox page", () => {
 
     cleanup();
     vi.resetModules();
-    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
-    render(<InboxPage />);
+    const { InboxClient } = await import("@/components/inbox-client");
+    render(<InboxClient />);
 
     await vi.waitFor(() => {
       expect(
@@ -324,8 +324,8 @@ describe("Inbox page", () => {
 
     cleanup();
     vi.resetModules();
-    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
-    render(<InboxPage />);
+    const { InboxClient } = await import("@/components/inbox-client");
+    render(<InboxClient />);
 
     await vi.waitFor(() => {
       expect(screen.getAllByText("Unread issue").length).toBeGreaterThan(0);
@@ -379,8 +379,8 @@ describe("Inbox page", () => {
 
     cleanup();
     vi.resetModules();
-    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
-    const { container } = render(<InboxPage />);
+    const { InboxClient } = await import("@/components/inbox-client");
+    const { container } = render(<InboxClient />);
 
     await vi.waitFor(() => {
       expect(screen.getAllByText("Low priority issue").length).toBeGreaterThan(
@@ -434,8 +434,8 @@ describe("Inbox page", () => {
 
     cleanup();
     vi.resetModules();
-    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
-    render(<InboxPage />);
+    const { InboxClient } = await import("@/components/inbox-client");
+    render(<InboxClient />);
 
     await vi.waitFor(() => {
       expect(screen.getByText(/1 unread/)).toBeDefined();
@@ -481,8 +481,8 @@ describe("Inbox page", () => {
 
     cleanup();
     vi.resetModules();
-    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
-    render(<InboxPage />);
+    const { InboxClient } = await import("@/components/inbox-client");
+    render(<InboxClient />);
 
     await vi.waitFor(() => {
       expect(screen.getByText(/1 unread/)).toBeDefined();
@@ -528,8 +528,8 @@ describe("Inbox page", () => {
 
     cleanup();
     vi.resetModules();
-    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
-    render(<InboxPage />);
+    const { InboxClient } = await import("@/components/inbox-client");
+    render(<InboxClient />);
 
     await vi.waitFor(() => {
       expect(screen.getByText(/1 unread/)).toBeDefined();
@@ -572,8 +572,8 @@ describe("Inbox page", () => {
 
     cleanup();
     vi.resetModules();
-    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
-    render(<InboxPage />);
+    const { InboxClient } = await import("@/components/inbox-client");
+    render(<InboxClient />);
 
     await vi.waitFor(() => {
       expect(screen.getAllByText("Workspace notice").length).toBeGreaterThan(0);
@@ -617,8 +617,8 @@ describe("Inbox page", () => {
 
     cleanup();
     vi.resetModules();
-    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
-    render(<InboxPage />);
+    const { InboxClient } = await import("@/components/inbox-client");
+    render(<InboxClient />);
 
     await vi.waitFor(() => {
       expect(screen.getAllByText("Fix bug").length).toBeGreaterThan(0);
@@ -666,8 +666,8 @@ describe("Inbox page issue 196 controls", () => {
 
     cleanup();
     vi.resetModules();
-    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
-    render(<InboxPage />);
+    const { InboxClient } = await import("@/components/inbox-client");
+    render(<InboxClient />);
 
     await vi.waitFor(() => {
       expect(
@@ -731,8 +731,8 @@ describe("Inbox page issue 196 controls", () => {
 
     cleanup();
     vi.resetModules();
-    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
-    render(<InboxPage />);
+    const { InboxClient } = await import("@/components/inbox-client");
+    render(<InboxClient />);
 
     await vi.waitFor(() => {
       expect(screen.getByText(/2 unread/)).toBeDefined();
@@ -836,8 +836,8 @@ describe("Inbox page issue 196 controls", () => {
 
     cleanup();
     vi.resetModules();
-    const { default: InboxPage } = await import("@/app/(app)/inbox/page");
-    render(<InboxPage />);
+    const { InboxClient } = await import("@/components/inbox-client");
+    render(<InboxClient />);
 
     await vi.waitFor(() => {
       expect(

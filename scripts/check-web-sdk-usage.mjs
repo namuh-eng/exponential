@@ -115,11 +115,18 @@ for (const forbidden of [
   }
 }
 
+// The members surface is split: page.tsx is an RSC that seeds initial data via
+// the server SDK, and members-client.tsx holds the browser SDK client. Inspect
+// both so the guard tracks the real post-seeding layout.
 const membersSettingsPage = readFileSync(
   "apps/web/src/app/(app)/settings/members/page.tsx",
   "utf8",
 );
-if (!membersSettingsPage.includes("createBrowserApiClient")) {
+const membersSettingsClient = readFileSync(
+  "apps/web/src/app/(app)/settings/members/members-client.tsx",
+  "utf8",
+);
+if (!membersSettingsClient.includes("createBrowserApiClient")) {
   throw new Error(
     "MembersSettingsPage must consume the generated SDK browser client",
   );
@@ -130,7 +137,10 @@ for (const forbidden of [
   'fetch("/api/workspaces/members"',
   "fetch('/api/workspaces/members'",
 ]) {
-  if (membersSettingsPage.includes(forbidden)) {
+  if (
+    membersSettingsPage.includes(forbidden) ||
+    membersSettingsClient.includes(forbidden)
+  ) {
     throw new Error(
       `MembersSettingsPage still contains direct workspace members API fetch: ${forbidden}`,
     );
