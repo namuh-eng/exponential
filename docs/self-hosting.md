@@ -94,6 +94,35 @@ development stack instead (`docker compose -f docker-compose.dev.yml up
 in the sign-in response, and Mailhog (`http://localhost:8025`) captures any
 outbound mail.
 
+### OAuth redirect URLs
+
+The API does **not** hard-code any callback host. It derives the OAuth
+`redirect_uri` (and the post-login completion URL) from your configuration, in
+this precedence order:
+
+1. `PUBLIC_BASE_URL` — if set, used verbatim (trailing slash trimmed).
+2. `NEXT_PUBLIC_APP_URL` — used if `PUBLIC_BASE_URL` is empty.
+3. The incoming request's scheme + `Host` header — last-resort fallback.
+
+So the callback you must register with each provider is
+`<base>/api/auth/<provider>/callback`, where `<base>` is whatever the rule
+above resolves to. For a self-host at `https://issues.example.com` set
+`PUBLIC_BASE_URL=https://issues.example.com` and register:
+
+| Provider | Authorized redirect URI to register |
+| --- | --- |
+| Google | `https://issues.example.com/api/auth/google/callback` |
+| GitHub | `https://issues.example.com/api/auth/github/callback` |
+| Discord | `https://issues.example.com/api/auth/discord/callback` |
+| Microsoft | `https://issues.example.com/api/auth/microsoft/callback` |
+
+**Troubleshooting:** if sign-in redirects you to the wrong host (e.g. a
+different deployment's domain), the API answering your browser's `/api/*`
+requests has a different `PUBLIC_BASE_URL`/`NEXT_PUBLIC_APP_URL` than you
+expect. The Next.js web app proxies `/api/*` to `EXPONENTIAL_API_URL`; confirm
+that points at *your* API, and that *that* API's `PUBLIC_BASE_URL` matches the
+domain users actually reach the instance on.
+
 ## Required Environment
 
 For Compose, set these in `.env` before exposing the instance:
@@ -116,6 +145,20 @@ undecryptable.
 
 For local-only trials, `NEXT_PUBLIC_APP_URL` and `EXPONENTIAL_APP_URL` can stay
 at `http://localhost:7015`.
+
+> **Set the app URLs before exposing the instance.** No host is hard-coded — the
+> API derives every user-facing absolute URL from `EXPONENTIAL_APP_URL` (falling
+> back to `NEXT_PUBLIC_APP_URL`, then the request host). If both are unset the
+> code falls back to `http://localhost:7015`, which then leaks into **outbound
+> magic-link emails, Slack/Salesforce/Sentry webhook payload links, and OAuth
+> redirect URIs** with no startup warning. `NEXT_PUBLIC_APP_URL` is a
+> build-time (`NEXT_PUBLIC_`) value for the web app, so it must be present when
+> you build the image, not just at runtime. Likewise set `EXPONENTIAL_API_URL`
+> so the web app proxies `/api/*` to *your* API rather than the
+> `http://localhost:7016/v1` default, and `EXPONENTIAL_INBOUND_DOMAIN` /
+> `OPENSEND_BASE_URL` if you use inbound email or the Opensend mail provider —
+> both default to Namuh-hosted values (`team.exponential.app`,
+> `https://opensend.namuh.co`) when unset.
 
 ## Optional Features
 
