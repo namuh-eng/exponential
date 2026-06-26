@@ -25,6 +25,19 @@ ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
 TASK_OUT_DIR="${TASK_OUT_DIR:-dist/ecs-task-definitions}"
 DESIRED_COUNT="${DESIRED_COUNT:-1}"
 
+# Reclaim this deploy's locally-built images on exit. Once pushed to ECR they
+# are dead weight on the shared self-hosted Mac mini runner (per-commit tags,
+# never run locally), and `docker image prune` only reaps *dangling* images —
+# leaving these *tagged* copies to leak disk every deploy. Runs on EXIT so it
+# fires even if a later step fails. Best-effort: never fail the deploy.
+cleanup_local_images() {
+  command -v docker >/dev/null 2>&1 || return 0
+  docker image rm -f \
+    "$ECR_REGISTRY/${APP_NAME}-api:$IMAGE_TAG" \
+    "$ECR_REGISTRY/${APP_NAME}-web:$IMAGE_TAG" >/dev/null 2>&1 || true
+}
+trap cleanup_local_images EXIT
+
 require_env() {
   local name="$1"
   if [ -z "${!name:-}" ]; then
