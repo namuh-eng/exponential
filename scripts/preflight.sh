@@ -2,9 +2,11 @@
 # Pre-flight: provision AWS infrastructure (team tier - ECS Fargate + RDS private VPC + ElastiCache Redis)
 set -euo pipefail
 
-if [ -f .env ]; then
+ENV_FILE="${ENV_FILE:-.env}"
+export ENV_FILE
+if [ -f "$ENV_FILE" ]; then
   set -a
-  . ./.env
+  . "$ENV_FILE"
   set +a
 fi
 
@@ -30,7 +32,7 @@ set_env_file() {
 from pathlib import Path
 import os
 
-path = Path(".env")
+path = Path(os.environ.get("ENV_FILE", ".env"))
 key = os.environ["KEY"]
 value = os.environ["VALUE"]
 lines = path.read_text().splitlines() if path.exists() else []
@@ -303,7 +305,7 @@ RDS_ENDPOINT=$(aws rds describe-db-instances --db-instance-identifier ${APP_NAME
 echo "RDS Endpoint (private): $RDS_ENDPOINT"
 if [ -n "${DB_PASSWORD:-}" ]; then
   set_env_file DATABASE_URL "postgresql://postgres:${DB_PASSWORD}@${RDS_ENDPOINT}:5432/${APP_NAME}"
-elif grep -q '^DATABASE_URL=' .env 2>/dev/null; then
+elif grep -q '^DATABASE_URL=' "$ENV_FILE" 2>/dev/null; then
   echo "DATABASE_URL already exists; leaving it unchanged because DB_PASSWORD is not set."
 else
   echo "Set DB_PASSWORD so preflight can write DATABASE_URL." >&2
@@ -431,29 +433,33 @@ fi
 echo "Redis Endpoint (private): $REDIS_ENDPOINT:$REDIS_PORT"
 set_env_file REDIS_URL "redis://${REDIS_ENDPOINT}:${REDIS_PORT}"
 
-# 5. S3 Bucket (file attachments, avatars)
+# 5. Object storage (file attachments, avatars)
 echo ""
-echo "--- S3 Bucket ---"
-BUCKET_NAME="${APP_NAME}-assets-${REGION}"
-if aws s3api head-bucket --bucket $BUCKET_NAME --region $REGION 2>/dev/null; then
-  echo "S3 bucket exists: $BUCKET_NAME"
+echo "--- Object Storage ---"
+if [ -n "${S3_ENDPOINT:-}" ]; then
+  echo "Using external S3-compatible storage at ${S3_ENDPOINT} (bucket ${S3_BUCKET:-unset}); skipping AWS S3 bucket creation."
 else
-  aws s3api create-bucket --bucket $BUCKET_NAME --region $REGION \
-    --create-bucket-configuration LocationConstraint=$REGION 2>/dev/null || \
-    aws s3api create-bucket --bucket $BUCKET_NAME --region $REGION
-  aws s3api put-bucket-cors --bucket $BUCKET_NAME --region $REGION --cors-configuration '{
-    "CORSRules": [{
-      "AllowedHeaders": ["*"],
-      "AllowedMethods": ["GET", "PUT", "POST"],
-      "AllowedOrigins": ["*"],
-      "ExposeHeaders": ["ETag"],
-      "MaxAgeSeconds": 3600
-    }]
-  }'
-  echo "S3 bucket created: $BUCKET_NAME"
+  BUCKET_NAME="${APP_NAME}-assets-${REGION}"
+  if aws s3api head-bucket --bucket $BUCKET_NAME --region $REGION 2>/dev/null; then
+    echo "S3 bucket exists: $BUCKET_NAME"
+  else
+    aws s3api create-bucket --bucket $BUCKET_NAME --region $REGION \
+      --create-bucket-configuration LocationConstraint=$REGION 2>/dev/null || \
+      aws s3api create-bucket --bucket $BUCKET_NAME --region $REGION
+    aws s3api put-bucket-cors --bucket $BUCKET_NAME --region $REGION --cors-configuration '{
+      "CORSRules": [{
+        "AllowedHeaders": ["*"],
+        "AllowedMethods": ["GET", "PUT", "POST"],
+        "AllowedOrigins": ["*"],
+        "ExposeHeaders": ["ETag"],
+        "MaxAgeSeconds": 3600
+      }]
+    }'
+    echo "S3 bucket created: $BUCKET_NAME"
+  fi
+  grep -q '^S3_BUCKET=' "$ENV_FILE" || echo "S3_BUCKET=$BUCKET_NAME" >> "$ENV_FILE"
 fi
-grep -q '^S3_BUCKET=' .env || echo "S3_BUCKET=$BUCKET_NAME" >> .env
-grep -q '^AWS_REGION=' .env || echo "AWS_REGION=$REGION" >> .env
+grep -q '^AWS_REGION=' "$ENV_FILE" || echo "AWS_REGION=$REGION" >> "$ENV_FILE"
 
 # 6. ECR Repositories
 echo ""
@@ -698,7 +704,7 @@ del_env_file() {
 from pathlib import Path
 import os
 
-path = Path(".env")
+path = Path(os.environ.get("ENV_FILE", ".env"))
 key = os.environ["KEY"]
 if not path.exists():
     exit(0)

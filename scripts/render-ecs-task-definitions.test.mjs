@@ -152,3 +152,69 @@ for (const file of [
     "STRIPE_SECRET_KEY must be present when ARN is provided",
   );
 }
+// Opensend + R2 are optional: absent ARNs/vars must be pruned and must not throw.
+{
+  const rendered = renderTaskDefinitionFile(
+    "infra/ecs/api-task-definition.json",
+    env,
+  );
+  const parsed = JSON.parse(rendered);
+  const secretNames = parsed.containerDefinitions[0].secrets.map((s) => s.name);
+  for (const name of [
+    "OPENSEND_API_KEY",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+  ]) {
+    assert.ok(
+      !secretNames.includes(name),
+      `${name} must be absent when its ARN is undefined`,
+    );
+  }
+  const envNames = (parsed.containerDefinitions[0].environment ?? []).map(
+    (e) => e.name,
+  );
+  for (const name of ["EMAIL_PROVIDER", "SENDER_EMAIL", "OPENSEND_BASE_URL"]) {
+    assert.ok(
+      !envNames.includes(name),
+      `${name} must be absent from environment when undefined`,
+    );
+  }
+}
+
+// Opensend + R2 present: the matching secret and environment entries must render.
+{
+  const rendered = renderTaskDefinitionFile(
+    "infra/ecs/api-task-definition.json",
+    {
+      ...env,
+      EMAIL_PROVIDER: "opensend",
+      SENDER_EMAIL: "noreply@example.com",
+      OPENSEND_BASE_URL: "https://opensend.example",
+      OPENSEND_API_KEY_SECRET_ARN:
+        "arn:aws:secretsmanager:us-east-1:123456789012:secret:opensend",
+      R2_ACCESS_KEY_ID_SECRET_ARN:
+        "arn:aws:secretsmanager:us-east-1:123456789012:secret:r2-id",
+      R2_SECRET_ACCESS_KEY_SECRET_ARN:
+        "arn:aws:secretsmanager:us-east-1:123456789012:secret:r2-secret",
+    },
+  );
+  const parsed = JSON.parse(rendered);
+  const secretNames = parsed.containerDefinitions[0].secrets.map((s) => s.name);
+  for (const name of [
+    "OPENSEND_API_KEY",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+  ]) {
+    assert.ok(
+      secretNames.includes(name),
+      `${name} must be present when its ARN is provided`,
+    );
+  }
+  const envEntries = parsed.containerDefinitions[0].environment ?? [];
+  const emailProvider = envEntries.find((e) => e.name === "EMAIL_PROVIDER");
+  assert.equal(
+    emailProvider?.value,
+    "opensend",
+    "EMAIL_PROVIDER must render as opensend when provided",
+  );
+}

@@ -232,6 +232,27 @@ set_env METRICS_TOKEN_SECRET_ARN "$(secret_arn "${APP_NAME}/metrics-token" "$EXP
 set_env PROVIDER_CREDENTIAL_ENCRYPTION_KEY_SECRET_ARN "$(secret_arn "${APP_NAME}/provider-credential-encryption-key" "$EXPONENTIAL_PROVIDER_CREDENTIAL_ENCRYPTION_KEY")"
 set_env GOOGLE_CLIENT_ID_SECRET_ARN "$(secret_arn "${APP_NAME}/google-client-id" "${GOOGLE_CLIENT_ID:-${AUTH_GOOGLE_ID:-dev-google-client-id}}")"
 set_env GOOGLE_CLIENT_SECRET_SECRET_ARN "$(secret_arn "${APP_NAME}/google-client-secret" "${GOOGLE_CLIENT_SECRET:-${AUTH_GOOGLE_SECRET:-dev-google-client-secret}}")"
+# Opensend transactional email. Optional and all-or-none: when OPENSEND_API_KEY
+# is present we sync it to Secrets Manager and pin EMAIL_PROVIDER=opensend so the
+# Go API routes mail through the self-hosted service instead of SES. SENDER_EMAIL
+# (the verified From: address) must already be present in .env. OPENSEND_BASE_URL
+# only needs to be set when pointing at a non-default opensend deployment.
+if [ -n "${OPENSEND_API_KEY:-}${OPENSEND_API_KEY_SECRET_ARN:-}" ]; then
+  set_env OPENSEND_API_KEY_SECRET_ARN "$(existing_or_synced_secret_arn OPENSEND_API_KEY_SECRET_ARN "${APP_NAME}/opensend-api-key" "${OPENSEND_API_KEY:-}")"
+  set_env EMAIL_PROVIDER "${EMAIL_PROVIDER:-opensend}"
+  if [ -n "${OPENSEND_BASE_URL:-}" ]; then
+    set_env OPENSEND_BASE_URL "$OPENSEND_BASE_URL"
+  fi
+fi
+
+# Cloudflare R2 object storage (S3-compatible). The Go attachments client loads
+# the default AWS credential chain, so the R2 access token is stored under the
+# standard AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY secret names and the bucket
+# is reached via S3_ENDPOINT (set in .env to the R2 S3 API endpoint).
+if [ -n "${R2_ACCESS_KEY_ID:-}${R2_ACCESS_KEY_ID_SECRET_ARN:-}" ]; then
+  set_env R2_ACCESS_KEY_ID_SECRET_ARN "$(existing_or_synced_secret_arn R2_ACCESS_KEY_ID_SECRET_ARN "${APP_NAME}/r2-access-key-id" "${R2_ACCESS_KEY_ID:-}")"
+  set_env R2_SECRET_ACCESS_KEY_SECRET_ARN "$(existing_or_synced_secret_arn R2_SECRET_ACCESS_KEY_SECRET_ARN "${APP_NAME}/r2-secret-access-key" "${R2_SECRET_ACCESS_KEY:-}")"
+fi
 # Stripe secrets are optional. Self-hosted deployments that do not use billing
 # can omit STRIPE_WEBHOOK_SIGNING_SECRET and STRIPE_SECRET_KEY entirely.
 # When absent the Stripe webhook route returns 400 and billing features are

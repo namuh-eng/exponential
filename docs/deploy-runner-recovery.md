@@ -9,7 +9,7 @@ labels.
 1. Open the failed or queued Deploy workflow run.
 2. If `Check self-hosted deploy runner` failed, read its message. It is meant
    to fail before the self-hosted deploy job is scheduled.
-3. Confirm whether the Mac mini runner is online:
+3. Confirm whether the self-hosted deploy runner is online:
 
 ```sh
 gh api repos/namuh-eng/exponential/actions/runners \
@@ -18,13 +18,13 @@ gh api repos/namuh-eng/exponential/actions/runners \
 
 ## Break-glass from a credentialed laptop
 
-Use this path when production needs a deploy now and the Mac mini runner cannot
+Use this path when production needs a deploy now and the self-hosted runner cannot
 be restored quickly.
 
 Prerequisites:
 
 - AWS CLI is authenticated to the production account.
-- Docker is running and can build Linux amd64 images.
+- Docker is running and can build Linux images for the cluster's CPU architecture (arm64 by default).
 - Node and pnpm are available through the repo toolchain.
 - `.env` contains the ECS, target-group, subnet, security-group, public URL,
   and Secrets Manager ARN values created by `scripts/prepare-ecs-deploy-env.sh`.
@@ -79,7 +79,7 @@ The self-hosted lane continues to use the runner host's AWS credentials.
 
 ## Restore or re-register the self-hosted runner
 
-If the existing Mac mini runner is present but offline:
+If the existing self-hosted runner is present but offline:
 
 1. Log in to the host.
 2. Restart the runner launchd service for the Actions runner.
@@ -89,7 +89,7 @@ If the existing Mac mini runner is present but offline:
 If the runner must be recreated, register it from GitHub:
 
 1. Open **Settings -> Actions -> Runners -> New self-hosted runner**.
-2. Follow the macOS ARM64 setup steps on the Mac mini.
+2. Follow GitHub's runner setup steps on the runner host. The cluster runs arm64, so an arm64 runner builds images natively (fastest); an x86_64 runner works too but cross-builds arm64 under emulation.
 3. Run `./config.sh` with:
 
 ```sh
