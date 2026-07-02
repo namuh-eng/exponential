@@ -7,7 +7,7 @@
   "executionRoleArn": "${ECS_EXECUTION_ROLE_ARN}",
   "taskRoleArn": "${ECS_TASK_ROLE_ARN}",
   "runtimePlatform": {
-    "cpuArchitecture": "X86_64",
+    "cpuArchitecture": "ARM64",
     "operatingSystemFamily": "LINUX"
   },
   "containerDefinitions": [

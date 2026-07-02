@@ -7,7 +7,7 @@
   "executionRoleArn": "${ECS_EXECUTION_ROLE_ARN}",
   "taskRoleArn": "${ECS_TASK_ROLE_ARN}",
   "runtimePlatform": {
-    "cpuArchitecture": "X86_64",
+    "cpuArchitecture": "ARM64",
     "operatingSystemFamily": "LINUX"
   },
   "containerDefinitions": [
@@ -66,6 +66,18 @@
         {
           "name": "EXPONENTIAL_PROVIDER_CREDENTIAL_ENCRYPTION_KEY_ID",
           "value": "${PROVIDER_CREDENTIAL_ENCRYPTION_KEY_ID}"
+        },
+        {
+          "name": "EMAIL_PROVIDER",
+          "value": "${EMAIL_PROVIDER}"
+        },
+        {
+          "name": "SENDER_EMAIL",
+          "value": "${SENDER_EMAIL}"
+        },
+        {
+          "name": "OPENSEND_BASE_URL",
+          "value": "${OPENSEND_BASE_URL}"
         }
       ],
       "secrets": [
@@ -104,6 +116,18 @@
         {
           "name": "STRIPE_SECRET_KEY",
           "valueFrom": "${STRIPE_SECRET_KEY_SECRET_ARN}"
+        },
+        {
+          "name": "OPENSEND_API_KEY",
+          "valueFrom": "${OPENSEND_API_KEY_SECRET_ARN}"
+        },
+        {
+          "name": "AWS_ACCESS_KEY_ID",
+          "valueFrom": "${R2_ACCESS_KEY_ID_SECRET_ARN}"
+        },
+        {
+          "name": "AWS_SECRET_ACCESS_KEY",
+          "valueFrom": "${R2_SECRET_ACCESS_KEY_SECRET_ARN}"
         }
       ],
       "logConfiguration": {

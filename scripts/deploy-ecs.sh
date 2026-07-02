@@ -63,11 +63,39 @@ else
 fi
 unset _stripe_webhook_arn _stripe_key_arn _stripe_team_price _stripe_biz_price
 
+# Opensend email is optional. When EMAIL_PROVIDER=opensend the API additionally
+# needs the API-key secret ARN and a verified SENDER_EMAIL to render correctly.
+if [ "${EMAIL_PROVIDER:-}" = "opensend" ]; then
+  for name in OPENSEND_API_KEY_SECRET_ARN SENDER_EMAIL; do
+    require_env "$name"
+  done
+  echo "Deploying with opensend email provider."
+fi
+
+# Cloudflare R2 (or any S3-compatible endpoint) is optional but all-or-none: a
+# custom S3_ENDPOINT needs matching credential secrets, and the credential
+# secrets need an endpoint and bucket. Treat empty strings the same as absent.
+_r2_endpoint="${S3_ENDPOINT:-}"
+_r2_key_arn="${R2_ACCESS_KEY_ID_SECRET_ARN:-}"
+_r2_secret_arn="${R2_SECRET_ACCESS_KEY_SECRET_ARN:-}"
+if [ -n "$_r2_endpoint" ] || [ -n "$_r2_key_arn" ] || [ -n "$_r2_secret_arn" ]; then
+  for name in \
+    S3_ENDPOINT S3_BUCKET \
+    R2_ACCESS_KEY_ID_SECRET_ARN R2_SECRET_ACCESS_KEY_SECRET_ARN; do
+    require_env "$name"
+  done
+  echo "Deploying with S3-compatible object storage at ${S3_ENDPOINT}."
+fi
+unset _r2_endpoint _r2_key_arn _r2_secret_arn
+
 export AWS_ACCOUNT_ID REGION AWS_REGION="$REGION" IMAGE_TAG
 export NEXT_PUBLIC_EXPONENTIAL_VERSION NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH NEXT_PUBLIC_EXPONENTIAL_GIT_SHA NEXT_PUBLIC_EXPONENTIAL_GITHUB_URL
 export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
 export S3_BUCKET="${S3_BUCKET:-}"
 export S3_ENDPOINT="${S3_ENDPOINT:-}"
+export EMAIL_PROVIDER="${EMAIL_PROVIDER:-}" SENDER_EMAIL="${SENDER_EMAIL:-}" OPENSEND_BASE_URL="${OPENSEND_BASE_URL:-}"
+export OPENSEND_API_KEY_SECRET_ARN="${OPENSEND_API_KEY_SECRET_ARN:-}"
+export R2_ACCESS_KEY_ID_SECRET_ARN="${R2_ACCESS_KEY_ID_SECRET_ARN:-}" R2_SECRET_ACCESS_KEY_SECRET_ARN="${R2_SECRET_ACCESS_KEY_SECRET_ARN:-}"
 
 if [ -z "${WEB_INTERNAL_API_URL:-}" ]; then
   if [ -n "${ALB_DNS:-}" ]; then
@@ -115,9 +143,9 @@ if [ -z "${DEPLOY_SKIP_ECR_LOGIN:-}" ]; then
   aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 fi
 
-docker build --platform linux/amd64 -f infra/docker/api.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-api:$IMAGE_TAG" .
+docker build --platform linux/arm64 -f infra/docker/api.Dockerfile -t "$ECR_REGISTRY/${APP_NAME}-api:$IMAGE_TAG" .
 docker build \
-  --platform linux/amd64 \
+  --platform linux/arm64 \
   -f infra/docker/web.Dockerfile \
   --build-arg "NEXT_PUBLIC_EXPONENTIAL_VERSION=$NEXT_PUBLIC_EXPONENTIAL_VERSION" \
   --build-arg "NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH=$NEXT_PUBLIC_EXPONENTIAL_GIT_BRANCH" \

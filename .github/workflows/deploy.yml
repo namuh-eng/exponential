@@ -99,6 +99,15 @@ jobs:
       # Optional
       OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
       EXPONENTIAL_TRUSTED_PROXIES: ${{ vars.EXPONENTIAL_TRUSTED_PROXIES }}
+      # Email (opensend) + object storage (Cloudflare R2)
+      EMAIL_PROVIDER: ${{ vars.EMAIL_PROVIDER }}
+      SENDER_EMAIL: ${{ vars.SENDER_EMAIL }}
+      OPENSEND_BASE_URL: ${{ vars.OPENSEND_BASE_URL }}
+      OPENSEND_API_KEY_SECRET_ARN: ${{ vars.OPENSEND_API_KEY_SECRET_ARN }}
+      S3_BUCKET: ${{ vars.S3_BUCKET }}
+      S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+      R2_ACCESS_KEY_ID_SECRET_ARN: ${{ vars.R2_ACCESS_KEY_ID_SECRET_ARN }}
+      R2_SECRET_ACCESS_KEY_SECRET_ARN: ${{ vars.R2_SECRET_ACCESS_KEY_SECRET_ARN }}
 
       # Deploy-time toggles. Default to "safest path": smoke on, autoscaling on.
       # workflow_dispatch can flip these off via inputs.
@@ -208,6 +217,15 @@ jobs:
       # Optional
       OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
       EXPONENTIAL_TRUSTED_PROXIES: ${{ vars.EXPONENTIAL_TRUSTED_PROXIES }}
+      # Email (opensend) + object storage (Cloudflare R2)
+      EMAIL_PROVIDER: ${{ vars.EMAIL_PROVIDER }}
+      SENDER_EMAIL: ${{ vars.SENDER_EMAIL }}
+      OPENSEND_BASE_URL: ${{ vars.OPENSEND_BASE_URL }}
+      OPENSEND_API_KEY_SECRET_ARN: ${{ vars.OPENSEND_API_KEY_SECRET_ARN }}
+      S3_BUCKET: ${{ vars.S3_BUCKET }}
+      S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+      R2_ACCESS_KEY_ID_SECRET_ARN: ${{ vars.R2_ACCESS_KEY_ID_SECRET_ARN }}
+      R2_SECRET_ACCESS_KEY_SECRET_ARN: ${{ vars.R2_SECRET_ACCESS_KEY_SECRET_ARN }}
 
       # Deploy-time toggles. Match the self-hosted manual inputs.
       RUN_PROD_SMOKE: ${{ (inputs.skip_smoke || false) && 'false' || 'true' }}

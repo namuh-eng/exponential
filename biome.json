@@ -35,6 +35,8 @@
       "*.d.ts",
       "public",
       "target-docs",
+      ".gjc",
+      ".codegraph",
       "apps/web/.next",
       "apps/web/test-results",
       "apps/web/playwright-report",
